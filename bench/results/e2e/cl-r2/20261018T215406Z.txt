@@ -1,0 +1,35 @@
+# e2e-m8 cl-r2
+# utc=2026-10-18T21:54:06Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=9.32 11.84 14.61 10/1631 2988636
+# git_rev=b9ef9030
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=cl-r2
+# reader=daemon:<repo>/.claude/worktrees/agent-a6afeefd1474b60fc/target/release/gorca
+# backend=voicego
+# repeats=5
+# samples_per_series=1200
+# quick=false
+# loadavg_before=19.00 16.83 16.76 5/1684 2978292
+# loadavg_end=9.32 11.84 14.61 11/1634 2988633
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-CL CL.gone.enter P0 FAIL: heard "Dave, lunch?, link | Opened chat Dave (7)" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-CL.fail                 daemon/voicego            1            1            1  5 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-CL.gap                  daemon/voicego            0            0            0  5                  info  core ok, NVDA extras missing [steps]
+M8-CL.p0_not_pass          daemon/voicego            1            1            1  5                  info   [steps]
+M8-CL.pass                 daemon/voicego           17           17           17  5                  info   [steps]
+M8-CL.steps                daemon/voicego           18           18           18  5                  info   [steps]
+M8-CL.xfail                daemon/voicego            0            0            0  5                  info  expected-fail steps that fail (gap table) [steps]
+M8-CL.xpass                daemon/voicego            0            0            0  5                  info  expected-fail steps that pass: remove their xf() mark [steps]

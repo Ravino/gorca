@@ -431,9 +431,11 @@ fn where_am_i_uses_the_mirror_and_repeats_escalate() {
         "{fx:?}"
     );
     assert_eq!(spoken(&f.run(CoreCmd::InfoWhereAmI, 3)), ["S a v e"]);
-    assert_eq!(spoken(&f.run(CoreCmd::InfoWindowTitle, 1)), ["Downloads"]);
+    // The title is re-read from the window, not served from the mirror (a page changes its
+    // title without the frame announcing it); the reply answers.
+    assert_eq!(window_title_answer(&mut f, 1, "Downloads"), ["Downloads"]);
     assert_eq!(
-        spoken(&f.run(CoreCmd::InfoWindowTitle, 2)),
+        window_title_answer(&mut f, 2, "Downloads"),
         ["D o w n l o a d s"]
     );
     let info = spoken(&f.run(CoreCmd::DebugNodeInfo, 1));
@@ -1007,4 +1009,66 @@ fn the_punctuation_cycle_is_confirmed_in_the_speech_language() {
     assert_eq!(spoken(&fx), ["пунктуация: нет"]);
     let fx = f.run(CoreCmd::SpeechPunctuationCycle, 1);
     assert_eq!(spoken(&fx), ["пунктуация: некоторая"]);
+}
+
+/// Run `info.window_title`, expect one Interactive fetch of the window (node 2), answer it with
+/// the window named `title` and return what was spoken.
+fn window_title_answer(f: &mut Fx, repeat: u8, title: &str) -> Vec<String> {
+    let fx = f.run(CoreCmd::InfoWindowTitle, repeat);
+    assert!(
+        matches!(
+            fx.as_slice(),
+            [ReaderEffect::Fetch {
+                node,
+                class: gorca_rt::BudgetClass::Interactive,
+                ..
+            }] if *node == key(2)
+        ),
+        "{fx:?}"
+    );
+    let reply = QueryReply {
+        node: key(2),
+        epoch: f.epoch.current(),
+        kind: crate::reader::FetchKind::Info,
+        result: Ok(snap(2, Role::Window, title, Some(1))),
+    };
+    spoken(&f.reader.handle(ReaderMsg::Reply(reply), f.now))
+}
+
+#[test]
+fn window_title_is_fresh_after_a_page_changes_it_and_falls_back_to_the_cache() {
+    let mut f = fixture();
+    f.writer.apply(
+        SnapshotBatch {
+            nodes: vec![
+                snap(1, Role::Application, "Browser", None),
+                snap(2, Role::Window, "Inbox", Some(1)),
+                snap(3, Role::Button, "Save", Some(2)),
+            ],
+            ..Default::default()
+        },
+        gorca_mirror::ApplyOrigin::Push,
+    );
+    f.reader.handle(
+        ReaderMsg::Focus(crate::FocusLaneMsg::FocusChanged { node: key(3) }),
+        f.now,
+    );
+    f.reader.handle(ReaderMsg::Timer, f.now);
+    // The mirror still holds the old name, the window now has a new one.
+    assert_eq!(
+        window_title_answer(&mut f, 1, "Chat with Anna"),
+        ["Chat with Anna"]
+    );
+    // A timed-out read answers from the cache instead of staying silent.
+    f.run(CoreCmd::InfoWindowTitle, 1);
+    let reply = QueryReply {
+        node: key(2),
+        epoch: f.epoch.current(),
+        kind: crate::reader::FetchKind::Info,
+        result: Err(gorca_connector_api::BackendError::Timeout),
+    };
+    assert_eq!(
+        spoken(&f.reader.handle(ReaderMsg::Reply(reply), f.now)),
+        ["Inbox"]
+    );
 }

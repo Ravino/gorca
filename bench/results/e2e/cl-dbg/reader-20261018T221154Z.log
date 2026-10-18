@@ -1,0 +1,20 @@
+2026-10-18T22:11:58.935663Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T22:11:58.967249Z  INFO gorca_phase: phase="warm" wall_ms=31.461035999999996 waited_ms=29.824842 blocked_ms=3.190306 slept_ms=26.552958 rounds=2 probes=25 sampled_nodes=11 tagged_nodes=11 ready=true
+2026-10-18T22:11:58.967678Z  INFO gorca_phase: phase="locate" wall_ms=0.34722200000000003
+2026-10-18T22:11:58.967700Z  INFO gorca_phase: phase="create" wall_ms=0.002868
+2026-10-18T22:11:58.971200Z  INFO gorca_phase: phase="fetch" total_ms=3.413036 warm_ms=0.0 frontier_ms=0.193916 get_tree_ms=0.607378 roles_ms=0.529291 states_ms=0.534009 text_ms=0.56836 assemble_ms=0.008176 heaviest_get_tree_ms=0.156 calls=92 tree_bytes=4895 nodes=23
+2026-10-18T22:11:58.971365Z  INFO gorca_phase: phase="translate" wall_ms=0.077851 nodes=47
+2026-10-18T22:11:59.225147Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T22:11:59.519561Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T22:11:59.519608Z  INFO gorca_phase: phase="web_focus_root" keep_cursor=true prev_focus_in_doc=true
+2026-10-18T22:11:59.519662Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T22:11:59.519666Z  INFO gorca_phase: phase="web_focus_root" keep_cursor=true prev_focus_in_doc=false
+2026-10-18T22:12:00.313256Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T22:12:01.545789Z  INFO gorca_phase: phase="web_changed" cur=DocNodeId { slot: 36, gen_: 0 } sig_node=Some(DocNodeId { slot: 36, gen_: 0 }) attached=true
+2026-10-18T22:12:06.191085Z  INFO gorca_phase: phase="web_activate" cur=DocNodeId { slot: 40, gen_: 0 } displaced=None sig_node=Some(DocNodeId { slot: 40, gen_: 0 })
+2026-10-18T22:12:06.194315Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T22:12:06.238170Z  INFO gorca_phase: phase="web_changed" cur=DocNodeId { slot: 40, gen_: 0 } sig_node=Some(DocNodeId { slot: 40, gen_: 0 }) attached=true
+2026-10-18T22:12:06.289161Z  INFO gorca_phase: phase="live_msg" text=Opened chat Dave (1) assertive=false
+2026-10-18T22:12:07.826675Z  INFO gorca_phase: phase="web_activate" cur=DocNodeId { slot: 40, gen_: 0 } displaced=None sig_node=Some(DocNodeId { slot: 40, gen_: 0 })
+2026-10-18T22:12:07.855380Z  INFO gorca_phase: phase="web_changed" cur=DocNodeId { slot: 40, gen_: 0 } sig_node=Some(DocNodeId { slot: 40, gen_: 0 }) attached=true
+2026-10-18T22:12:07.906181Z  INFO gorca_phase: phase="live_msg" text=Opened chat Dave (2) assertive=false

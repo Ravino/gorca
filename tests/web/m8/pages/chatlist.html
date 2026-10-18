@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Chats</title></head>
+<body>
+<!--
+  A chat client shaped like Telegram Web: an account menu button first in the tab order, a list of
+  chats (links) and a list of pinned chats (role=button divs). Opening a chat changes
+  document.title and sets a status line. The list is re-rendered by the page on demand (the
+  buttons below stand in for the timer or the socket that does it in the real application):
+  "same" replaces every item with a fresh node of identical content, "bump" moves one chat to the
+  top with a new preview (its name changes), "insert" adds a chat at the top. After each
+  re-render the old nodes are gone, as in a virtual DOM that does not key its rows.
+-->
+<header>
+  <button type="button" id="menu">Account menu</button>
+  <button type="button" id="rr-same">Re-render same</button>
+  <button type="button" id="rr-bump">Re-render bump</button>
+  <button type="button" id="rr-insert">Re-render insert</button>
+  <button type="button" id="rr-gone">Re-render drop</button>
+  <button type="button" id="rr-focus">Re-render focused</button>
+  <button type="button" id="retitle">Retitle later</button>
+  <button type="button" id="tog" aria-pressed="false">Silence</button>
+  <button type="button" id="del">Delete</button>
+</header>
+<h1>Chats</h1>
+<ul id="chats" aria-label="Chat list"></ul>
+<div id="pinned" role="group" aria-label="Pinned chats"></div>
+<div id="status" role="status" aria-live="polite"></div>
+<script>
+const status = document.getElementById("status");
+let chats = [
+  { id: "alice", name: "Alice", preview: "see you soon" },
+  { id: "bob", name: "Bob", preview: "ok" },
+  { id: "carol", name: "Carol", preview: "thanks" },
+  { id: "dave", name: "Dave", preview: "lunch?" },
+];
+const pinned = [{ id: "notes", name: "Saved notes", preview: "todo" }, { id: "team", name: "Team", preview: "standup" }];
+let opened = 0;
+function open(c) {
+  document.title = c.name + " - M8 Chats";
+  status.textContent = "Opened chat " + c.name + " (" + (++opened) + ")";
+}
+function linkFor(c) {
+  const a = document.createElement("a");
+  a.href = "#/chat/" + c.id;
+  a.textContent = c.name + ", " + c.preview;
+  a.onclick = (e) => { e.preventDefault(); open(c); };
+  const li = document.createElement("li");
+  li.append(a);
+  return li;
+}
+function buttonFor(c) {
+  const d = document.createElement("div");
+  d.setAttribute("role", "button");
+  d.tabIndex = 0;
+  d.textContent = "Pinned " + c.name;
+  d.onclick = () => open(c);
+  d.onkeydown = (e) => { if (e.key === "Enter") open(c); };
+  return d;
+}
+function paint() {
+  document.getElementById("chats").replaceChildren(...chats.map(linkFor));
+  document.getElementById("pinned").replaceChildren(...pinned.map(buttonFor));
+}
+// Re-renders run 1200 ms after the click on the button that asks for them, so a step can put the
+// cursor in the list first (a click on the button moves focus to it).
+function later(f, ms) { setTimeout(f, ms || 1200); }
+document.getElementById("menu").onclick = () => { status.textContent = "Account menu opened"; };
+document.getElementById("rr-same").onclick = () => later(paint);
+document.getElementById("rr-bump").onclick = () => later(() => {
+  const i = chats.findIndex((c) => c.id === "carol");
+  const c = chats.splice(i, 1)[0];
+  c.preview = "new message " + Date.now() % 100;
+  chats.unshift(c);
+  paint();
+}, 2000);
+document.getElementById("rr-insert").onclick = () => later(() => {
+  chats.unshift({ id: "zed" + chats.length, name: "Zed", preview: "hello" });
+  paint();
+}, 2600);
+document.getElementById("rr-gone").onclick = () => later(() => {
+  // The chat list is rebuilt without Bob: whatever pointed at Bob is gone.
+  chats = chats.filter((c) => c.id !== "bob");
+  paint();
+}, 3500);
+// The page focuses a chat and re-renders the list in the same task, as a framework does when a
+// store update lands while the user is on an item: the focused node is destroyed and the
+// browser moves the focus to the document.
+document.getElementById("rr-focus").onclick = () => later(() => {
+  const a = document.querySelector('a[href="#/chat/bob"]');
+  if (a) a.focus();
+  setTimeout(paint, 700);
+});
+// A badge in the title (unread count), set by a timer while the user is elsewhere on the page.
+let unread = 0;
+document.getElementById("retitle").onclick = () => later(() => {
+  document.title = "Inbox (" + (++unread) + ") - M8 Chats";
+});
+// A toggle that relabels itself in answer to the click (Play to Pause): two Enters, two clicks.
+let silenced = 0;
+document.getElementById("tog").onclick = (e) => {
+  const b = e.currentTarget;
+  silenced++;
+  const on = b.textContent === "Silence";
+  b.textContent = on ? "Resume" : "Silence";
+  b.setAttribute("aria-pressed", on ? "true" : "false");
+  status.textContent = (on ? "Silenced" : "Resumed") + " (" + silenced + ")";
+};
+// A button that becomes a different action (Delete to Confirm delete): no pressed state flips.
+let dels = 0;
+document.getElementById("del").onclick = (e) => {
+  const b = e.currentTarget;
+  dels++;
+  if (b.textContent === "Delete") { b.textContent = "Confirm delete"; status.textContent = "Delete asked (" + dels + ")"; }
+  else { b.textContent = "Delete"; status.textContent = "Deleted (" + dels + ")"; }
+};
+paint();
+</script>
+</body>
+</html>

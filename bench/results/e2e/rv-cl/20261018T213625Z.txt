@@ -1,0 +1,36 @@
+# e2e-m8 rv-cl
+# utc=2026-10-18T21:36:25Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=19.23 19.13 17.29 5/1614 2893166
+# git_rev=b9ef9030
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=rv-cl
+# reader=daemon:<repo>/.claude/worktrees/agent-a6afeefd1474b60fc/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# quick=false
+# loadavg_before=19.15 18.36 16.72 10/1602 2878870
+# loadavg_end=19.23 19.13 17.29 12/1614 2893161
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-CL CL.bump.title P0 FAIL: heard "window title not available" 
+# note1=M8-CL CL.foc.enter P0 FAIL: heard "Account menu, button, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused | Account menu opened" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-CL.fail                 daemon/voicego            0            0            2  3 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-CL.gap                  daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-CL.p0_not_pass          daemon/voicego            0            0            2  3                  info   [steps]
+M8-CL.pass                 daemon/voicego           17           15           17  3                  info   [steps]
+M8-CL.steps                daemon/voicego           17           17           17  3                  info   [steps]
+M8-CL.xfail                daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-CL.xpass                daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]

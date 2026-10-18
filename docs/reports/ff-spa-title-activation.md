@@ -1,0 +1,141 @@
+# Firefox SPA: stale window title, Enter that goes to the wrong element
+
+Date: 2026-10-18. Reported by the daily user on Telegram Web (React-style SPA). Corpus page:
+`tests/web/m8/pages/chatlist.html`, scenario `M8-CL` (`crates/gorca-bench/src/e2e/m8_steps.rs`, fn `cl`).
+
+## 1. gorca+T speaks the old title
+
+Where the title comes from: `info.window_title` (`crates/gorca-core/src/commands/handlers.rs`,
+`ask_node` / `answer_node`, `commands/info.rs::window_title`). It walks the mirror ancestry of the
+focused node to the first `Window` or `Dialog` and speaks that snapshot's `name`.
+
+Root cause: the walk uses `MirrorDirectory::lookup`, which returns whatever snapshot the mirror
+holds, stale or not. A window name has no refresh path of its own. It only changes when an
+`accessible-name` event for the frame arrives *and* something later re-fetches the node, and
+Gecko fires `EVENT_NAME_CHANGE` for a title change on the document accessible
+(`refs/firefox/accessible/generic/RootAccessible.cpp`, `DOMTitleChanged`), not reliably on the
+frame. So the cached frame name can be as old as the last fetch. Alt+Tab is right because the Shell
+extension reads the compositor's live title.
+
+Fix: `gorca+T` re-reads the window node once (Interactive fetch, the connector's deadline), speaks
+the fresh name, and falls back to the cached name when the fetch fails or times out (never silent,
+never blocks). A mirror miss first fetches the focused node, then the window. The fetch result is
+applied to the mirror by the existing `ReaderFetch` path, so the cache heals too.
+
+Honest limit: in the private rig the old code also answered correctly (Firefox 153 delivered the
+frame name change there, `CL.fresh.title`, `CL.same.title`, `CL.ttl.say` pass with and without the
+fix). The live Telegram case could not be reproduced here; the fix removes the dependency on the
+event rather than proving the missing event. The unit test
+`window_title_is_fresh_after_a_page_changes_it_and_falls_back_to_the_cache` pins the contract.
+
+## 2. Enter "goes into the void", then the account menu opens
+
+Reproduced in the rig (`CL.foc.enter`, base run `cl-base2`: heard "Account menu, button | Account
+menu opened"). Sequence from the AT-SPI tail: focus on the chat link, the page re-renders the list
+(the focused node is destroyed), Firefox fires `Focus` on the **document** accessible, gorca treats
+that as "returned to the page" and `web_place`s the browse cursor at the **top of the page**; the
+next Enter clicks the first clickable thing there, the account menu button.
+
+Root cause 1 (the user's symptom): `web_on_focus` (browse/commands.rs) moved the cursor to the
+document root when the focus fell from a control of the same document to the document itself.
+Fix: that transition (previous focus node in this document, now the root, Browse mode) is the page
+destroying the focused node. Keep the cursor, say nothing. Return-to-the-page cases (tab or window
+switch) are unaffected because their previous focus is in another document or none.
+
+Root cause 2 (silent failure, latent): `DocAction::Click` errors were discarded (`spawn_action`
+only reported `Focus` failures), so a click on an object the page had already replaced did nothing
+and said nothing. The fix has three parts:
+
+* `action()` classifies "object does not exist" bus errors (`UnknownObject`, `Defunct`,
+  `NoSuchObject`) as the new `SourceError::Gone`.
+* On `Gone` for Click/Focus the source refreshes the target's parents (`GetChildren` plus the
+  identity ladder, up to 4 levels) and repeats the action **only if** the logical node continues in
+  a live object with a new path and the same role and (non-empty) name. Otherwise the answer is
+  `Gone` and nothing is clicked. Gecko paths are never reused (monotonic, seen in the rig: 152,
+  then 166), so a dead path cannot hit another element by accident; the guard covers identity
+  mis-pairing.
+* A failed Click raises `DocNotice::ActionFailed`; the Reader says "that item is gone" or "can't
+  activate that" (catalogue `web-item-gone`, `web-cant-activate`, en + ru).
+
+NVDA comparison: `browseMode.py::_activatePosition` resolves the object at the caret
+(`NVDAObjectAtStart`) and returns silently when there is none; its buffer lives in-process and is
+re-synced on every mutation, and a focus move to the document does not move the virtual caret.
+gorca now keeps the same caret behavior and, unlike NVDA, says so when the item is gone.
+
+## Tests
+
+* Unit: `commands::tests::window_title_*`, `browse::tests::focus_falling_to_the_document_*`,
+  `browse::tests::a_failed_click_is_said_never_silent`, `tests/fake_peer.rs` (click on a live
+  node, on a replaced node that follows identity, on a gone or re-contented node that is refused).
+* E2E `M8-CL` (15+ steps, 3 repeats, run `cl-fix1`): fresh Tab+Enter, after re-render, cursor
+  under re-render, bump to top, insert at top, focus destroyed (`CL.foc.enter`), item removed,
+  title after open, title after a timer retitle.
+
+## Review round r1 fixes (reviewer: ff-spa-title-activation-review.md)
+
+* F-0 (flaky keep-cursor): the rule no longer depends on having seen the earlier focus on the
+  link. A focus on the document root while browsing it keeps the cursor when the cursor sits on a
+  live non-root node of that document and was not just displaced. The decision is logged
+  (`web_focus_root keep_cursor=.. prev_focus_in_doc=..`). `M8-CL` ran 20 repeats at load 9 to 28
+  (labels `cl-r2`..`cl-r5`); `CL.foc.enter` never failed. Mechanism of the one earlier failure is
+  still unverified (the log did not record `prev_focus`); the new rule does not need it.
+* F-1 (duplicate names): the retry now needs an unambiguous match: same fresh DOM id, or exactly
+  one sibling with the same (role, tag, name) before and after. The reviewer's three-"Reply"
+  probe is a regression test (`duplicate_names_are_ambiguous_so_the_click_is_refused_not_shifted`).
+* F-2 (removed item, Enter clicks a neighbour): the cursor is marked displaced when position
+  restore moves it off a vanished node, or when the node under an unmoved cursor now holds other
+  content (the identity pass pairs a removed row with its neighbour, which is what really happened
+  in the rig: Bob's node became Dave's). The first Enter then speaks the new item and clicks
+  nothing; the second Enter clicks. E2E `CL.gone.enter` / `CL.gone.enter2` (the page now re-renders
+  after the cursor is placed; before, the key presses outlasted the 1.2 s timer and the test
+  navigated onto the neighbour itself). "That item is gone" end to end cannot be provoked in the
+  rig, because the mirror heals before the click; it is covered by `fake_peer.rs` and the
+  `a_failed_click_is_said_never_silent` unit test.
+* F-3 (route change): when the cursor's node was displaced, a document focus is announced and the
+  cursor starts at the top as before (`a_document_focus_after_the_cursor_node_vanished_...`).
+* F-0b (title unavailable): the last title read per application is the fallback when the chain
+  has no window or the fetch yields no snapshot.
+* F-5/F-6: a timed-out click says nothing; a node without a source id says "can't activate", not
+  "gone".
+* F-4: the removed `cl-title-nofix` run held one failing step (`CL.fresh.focus` silent on a cold
+  first step under load 11 to 19, one of two repeats). It should have been kept; I removed it in
+  error and will not repeat that. Everything else of those runs is recorded above.
+
+## Review round r2 fixes
+
+* R2-1 (own toggle eats Enter) with the security tightening: a content change under the cursor
+  is exempt from "displaced" only when it is the relabel of exactly the control we just clicked:
+  same cursor node, same control node, same role, a toggle-like control (button, toggle, check
+  box, radio, or pressed/checked/expanded), and within `CARET_FOLLOW` (700 ms) of the click.
+  Any other change (a different node swapped in, a role change, a link, a late change) still
+  marks the cursor displaced, so a page cannot redirect the next Enter silently. Tests:
+  `a_toggle_relabelled_after_the_users_own_click_clicks_again`,
+  `a_different_node_swapped_in_within_the_window_is_displacement`,
+  `the_clicked_control_changing_role_is_displacement_and_costs_the_click`,
+  `a_link_relabel_after_a_click_is_displacement`, `a_late_relabel_of_the_clicked_toggle_is_displacement`.
+  E2E `CL.tog.1..3`: Enter three times on a self-relabelling button clicks three times.
+* R2-2: the cursor content is noted after focus-driven placements too (and the mark is cleared).
+* R2-3: any command but Enter, a focus move and a document going away clear the mark.
+* R2-4: the one-shot unit test now asserts the second Enter does not announce again (the cursor
+  lands on plain text there; the click after an announcement is asserted by
+  `a_swap_after_a_focus_placement_is_announced_not_clicked`).
+* Runs: `r3-cl` (M8-CL x3, 21 steps, 0 failures) and `r3-nav` (TG, TG2, TG3, QN, SPA, APP, AF, BWG,
+  0 failures).
+
+## Review round r3 fix
+
+R3-1: the click records the target's pressed/checked/expanded states. A change under the cursor is
+exempt from "displaced" only if one of them flipped by the time it lands (plus the earlier
+conditions: same node and role, 700 ms). "Delete" to "Confirm delete" has no flip, so it is
+announced and the next Enter does not click blind (`a_relabel_to_another_action_without_a_state_flip_...`,
+e2e `CL.del.1..3`); a plain Play/Pause button without aria-pressed costs one extra Enter, the
+accepted safe direction. `CL.tog` now uses an `aria-pressed` toggle. Runs: `r4-cl3` (M8-CL x5, 24
+steps, 0 failures). `r4-cl` and `r4-cl2` are kept: the first used the wrong role for the Focus
+step, the second failed the toggle steps in 1 of 3 repeats (GrabFocus produced no focus event; a
+second Focus setup step was added and 5 clean repeats followed).
+
+## Not done / risks
+
+* The stale title was not reproduced; only the contract and fallback are tested.
+* Text that changes under an unmoved cursor (a live counter in a link) also makes the next Enter
+  announce first; the cost is one extra Enter, the benefit is never clicking unseen content.

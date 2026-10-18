@@ -1,0 +1,110 @@
+2026-10-18T20:41:41.277861Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T20:41:41.315321Z  INFO gorca_phase: phase="warm" wall_ms=37.232983999999995 waited_ms=34.092676000000004 blocked_ms=8.436891000000001 slept_ms=25.552815 rounds=2 probes=25 sampled_nodes=10 tagged_nodes=10 ready=true
+2026-10-18T20:41:41.316050Z  INFO gorca_phase: phase="locate" wall_ms=0.645341
+2026-10-18T20:41:41.316069Z  INFO gorca_phase: phase="create" wall_ms=0.002184
+2026-10-18T20:41:41.324029Z  INFO gorca_phase: phase="fetch" total_ms=7.912781000000001 warm_ms=0.0 frontier_ms=0.361468 get_tree_ms=4.071231 roles_ms=1.0273 states_ms=0.493189 text_ms=0.635047 assemble_ms=0.010747999999999999 heaviest_get_tree_ms=2.186 calls=88 tree_bytes=4638 nodes=22
+2026-10-18T20:41:41.324243Z  INFO gorca_phase: phase="translate" wall_ms=0.093386 nodes=44
+2026-10-18T20:41:41.576515Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:41:41.867728Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:41:42.647833Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:41:43.576355Z  INFO gorca_phase: phase="live_msg" text=Opened chat Alice (1) assertive=false
+2026-10-18T20:41:46.633411Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:41:48.800989Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:41:49.145419Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (2) assertive=false
+2026-10-18T20:41:50.831293Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:41:51.626754Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:41:56.466367Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:41:56.564838Z  INFO gorca_phase: phase="live_msg" text=Opened chat Alice (3) assertive=false
+2026-10-18T20:41:57.972506Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:41:58.768892Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:41:58.769007Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:03.965663Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:03.965794Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:04.059144Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (4) assertive=false
+2026-10-18T20:42:05.728593Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:06.571007Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:12.111970Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:12.112067Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:12.189427Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (5) assertive=false
+2026-10-18T20:42:13.617936Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:14.411467Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:15.612923Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:16.315072Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:18.088682Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:18.167391Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (6) assertive=false
+2026-10-18T20:42:19.589612Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:20.370636Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:20.370718Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:26.253695Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:26.350372Z  INFO gorca_phase: phase="live_msg" text=Opened chat Dave (7) assertive=false
+2026-10-18T20:42:32.460040Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T20:42:32.491812Z  INFO gorca_phase: phase="warm" wall_ms=31.561473 waited_ms=29.693009 blocked_ms=3.215157 slept_ms=26.397019 rounds=2 probes=25 sampled_nodes=10 tagged_nodes=10 ready=true
+2026-10-18T20:42:32.492129Z  INFO gorca_phase: phase="locate" wall_ms=0.261062
+2026-10-18T20:42:32.492151Z  INFO gorca_phase: phase="create" wall_ms=0.002692
+2026-10-18T20:42:32.494919Z  INFO gorca_phase: phase="fetch" total_ms=2.708883 warm_ms=0.0 frontier_ms=0.408812 get_tree_ms=0.556265 roles_ms=0.372624 states_ms=0.46317800000000003 text_ms=0.49055099999999996 assemble_ms=0.006776 heaviest_get_tree_ms=0.134 calls=88 tree_bytes=4638 nodes=22
+2026-10-18T20:42:32.495088Z  INFO gorca_phase: phase="translate" wall_ms=0.070369 nodes=44
+2026-10-18T20:42:32.748832Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:33.044621Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:33.834512Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:34.759206Z  INFO gorca_phase: phase="live_msg" text=Opened chat Alice (1) assertive=false
+2026-10-18T20:42:37.821469Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:40.014889Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:40.359559Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (2) assertive=false
+2026-10-18T20:42:42.034491Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:42.819079Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:47.652444Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:47.748396Z  INFO gorca_phase: phase="live_msg" text=Opened chat Alice (3) assertive=false
+2026-10-18T20:42:49.158140Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:49.945424Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:55.133382Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:55.227661Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (4) assertive=false
+2026-10-18T20:42:56.890931Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:42:57.683325Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:03.224640Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:03.301727Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (5) assertive=false
+2026-10-18T20:43:04.729830Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:05.524553Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:06.726797Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:07.425617Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:09.198166Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:09.275054Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (6) assertive=false
+2026-10-18T20:43:10.708939Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:11.498133Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:17.389843Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:17.482161Z  INFO gorca_phase: phase="live_msg" text=Opened chat Dave (7) assertive=false
+2026-10-18T20:43:23.720724Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T20:43:23.752259Z  INFO gorca_phase: phase="warm" wall_ms=31.412232 waited_ms=29.162477 blocked_ms=2.9689 slept_ms=26.119425000000003 rounds=2 probes=25 sampled_nodes=10 tagged_nodes=10 ready=true
+2026-10-18T20:43:23.752549Z  INFO gorca_phase: phase="locate" wall_ms=0.238261
+2026-10-18T20:43:23.752561Z  INFO gorca_phase: phase="create" wall_ms=0.0015799999999999998
+2026-10-18T20:43:23.754951Z  INFO gorca_phase: phase="fetch" total_ms=2.348199 warm_ms=0.0 frontier_ms=0.440669 get_tree_ms=0.598783 roles_ms=0.392531 states_ms=0.327753 text_ms=0.366854 assemble_ms=0.004739 heaviest_get_tree_ms=0.13999999999999999 calls=88 tree_bytes=4638 nodes=22
+2026-10-18T20:43:23.755060Z  INFO gorca_phase: phase="translate" wall_ms=0.053921000000000004 nodes=44
+2026-10-18T20:43:24.007733Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:24.303962Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:25.093488Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:26.026773Z  INFO gorca_phase: phase="live_msg" text=Opened chat Alice (1) assertive=false
+2026-10-18T20:43:29.079924Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:31.243751Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:31.588465Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (2) assertive=false
+2026-10-18T20:43:33.269310Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:34.059295Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:34.059415Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:38.895718Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:38.990971Z  INFO gorca_phase: phase="live_msg" text=Opened chat Alice (3) assertive=false
+2026-10-18T20:43:40.398437Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:41.186624Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:46.368000Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:46.463905Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (4) assertive=false
+2026-10-18T20:43:48.127169Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:48.917487Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:54.458244Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:54.536100Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (5) assertive=false
+2026-10-18T20:43:55.965500Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:56.750230Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:57.951187Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:43:58.652363Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:44:00.429829Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:44:00.508652Z  INFO gorca_phase: phase="live_msg" text=Opened chat Bob (6) assertive=false
+2026-10-18T20:44:01.939967Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:44:02.732726Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:44:08.622848Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T20:44:08.718128Z  INFO gorca_phase: phase="live_msg" text=Opened chat Dave (7) assertive=false

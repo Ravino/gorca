@@ -50,6 +50,8 @@ struct FNode {
 struct Tree {
     nodes: HashMap<u64, FNode>,
     next: u64,
+    /// Objects `Action.DoAction` ran on, in order.
+    acted: Vec<u64>,
 }
 
 type Shared = Arc<Mutex<Tree>>;
@@ -128,6 +130,19 @@ impl Acc {
     }
 }
 
+struct Act {
+    tree: Shared,
+    id: u64,
+}
+
+#[zbus::interface(name = "org.a11y.atspi.Action")]
+impl Act {
+    fn do_action(&self, _index: i32) -> bool {
+        self.tree.lock().unwrap().acted.push(self.id);
+        true
+    }
+}
+
 struct Txt {
     tree: Shared,
     id: u64,
@@ -203,6 +218,7 @@ impl Fake {
         let tree: Shared = Arc::new(Mutex::new(Tree {
             nodes: HashMap::new(),
             next: 1,
+            acted: Vec::new(),
         }));
         let mut servers = Vec::new();
         let mut clients = Vec::new();
@@ -255,6 +271,16 @@ impl Fake {
                 )
                 .await
                 .unwrap();
+            s.object_server()
+                .at(
+                    p.as_str(),
+                    Act {
+                        tree: Arc::clone(&self.tree),
+                        id,
+                    },
+                )
+                .await
+                .unwrap();
         }
     }
 
@@ -263,6 +289,8 @@ impl Fake {
         for s in &self.servers {
             let _ = s.object_server().remove::<Acc, _>(p.as_str()).await;
             let _ = s.object_server().remove::<Coll, _>(p.as_str()).await;
+            let _ = s.object_server().remove::<Act, _>(p.as_str()).await;
+            let _ = s.object_server().remove::<Txt, _>(p.as_str()).await;
         }
     }
 
@@ -1606,4 +1634,139 @@ mod frame_wake {
             "frames of a closed document were still scrolled into view: {after:?}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Actions on nodes the page replaced
+
+/// Ask the source for a click on `node` and return its answer.
+async fn click(b: &Browse, node: SrcNodeId) -> Result<(), gorca_doc_source_api::SourceError> {
+    let (reply, rx) = gorca_rt::oneshot::channel();
+    b.requests
+        .send(DocRequest::Action {
+            node,
+            act: gorca_model::DocAction::Click,
+            deadline: gorca_rt::Deadline(Instant::now() + Duration::from_secs(2)),
+            reply,
+        })
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), rx)
+        .await
+        .expect("the source answers")
+        .expect("reply sent")
+}
+
+async fn browse_list() -> (Browse, u64, Vec<u64>, Vec<SrcNodeId>) {
+    let (fake, conn) = Fake::start(2).await;
+    let (doc, ul, lis) = fake.list(3).await;
+    let mut b = start_browse(fake, conn, doc).await;
+    let first = until_settled(&mut b).await;
+    let ups = upserts_of(&first);
+    let ids = (0..3)
+        .map(|i| {
+            ups.iter()
+                .find(|n| n.name.as_deref() == Some(format!("item {i}").as_str()))
+                .map(|n| n.id)
+                .expect("list item mirrored")
+        })
+        .collect();
+    (b, ul, lis, ids)
+}
+
+#[tokio::test]
+async fn a_click_on_a_live_node_does_one_action_on_that_object() {
+    let (b, _ul, lis, ids) = browse_list().await;
+    click(&b, ids[1]).await.unwrap();
+    assert_eq!(b.fake.tree.lock().unwrap().acted, vec![lis[1]]);
+    b.shutdown.cancel();
+    let _ = b.task.await;
+}
+
+#[tokio::test]
+async fn a_click_on_a_replaced_node_follows_its_identity_to_the_live_object() {
+    let (b, ul, lis, ids) = browse_list().await;
+    // The page re-rendered the row: a brand-new object, same role, name and DOM id; no event has
+    // reached the source yet.
+    let fresh = b
+        .fake
+        .node(raw::LIST_ITEM, "item 1", "li", Some("item-1"))
+        .await;
+    b.fake.set_children(ul, vec![lis[0], fresh, lis[2]]);
+    b.fake.unregister(lis[1]).await;
+    click(&b, ids[1]).await.unwrap();
+    assert_eq!(
+        b.fake.tree.lock().unwrap().acted,
+        vec![fresh],
+        "the action reaches the new object, once"
+    );
+    b.shutdown.cancel();
+    let _ = b.task.await;
+}
+
+#[tokio::test]
+async fn a_click_never_lands_on_another_element_when_the_node_is_gone() {
+    // Replaced by an item with other content in the same slot: not the same item.
+    let (b, ul, lis, ids) = browse_list().await;
+    let other = b
+        .fake
+        .node(raw::LIST_ITEM, "item 1 (3 new messages)", "li", None)
+        .await;
+    b.fake.set_children(ul, vec![lis[0], other, lis[2]]);
+    b.fake.unregister(lis[1]).await;
+    let r = click(&b, ids[1]).await;
+    assert!(
+        matches!(r, Err(gorca_doc_source_api::SourceError::Gone)),
+        "{r:?}"
+    );
+    assert!(b.fake.tree.lock().unwrap().acted.is_empty());
+    b.shutdown.cancel();
+    let _ = b.task.await;
+
+    // Removed outright.
+    let (b, ul, lis, ids) = browse_list().await;
+    b.fake.set_children(ul, vec![lis[0], lis[2]]);
+    b.fake.unregister(lis[1]).await;
+    let r = click(&b, ids[1]).await;
+    assert!(
+        matches!(r, Err(gorca_doc_source_api::SourceError::Gone)),
+        "{r:?}"
+    );
+    assert!(b.fake.tree.lock().unwrap().acted.is_empty());
+    b.shutdown.cancel();
+    let _ = b.task.await;
+}
+
+#[tokio::test]
+async fn duplicate_names_are_ambiguous_so_the_click_is_refused_not_shifted() {
+    let (fake, conn) = Fake::start(2).await;
+    let (doc, ul, lis) = fake.list(3).await;
+    for li in &lis {
+        fake.rename(*li, "Reply");
+    }
+    let mut b = start_browse(fake, conn, doc).await;
+    let first = until_settled(&mut b).await;
+    let ids: Vec<SrcNodeId> = upserts_of(&first)
+        .iter()
+        .filter(|n| n.name.as_deref() == Some("Reply"))
+        .map(|n| n.id)
+        .collect();
+    assert_eq!(ids.len(), 3);
+    // The page drops the first reply and re-renders the other two as new objects without DOM
+    // ids. The user is on the second reply, which is now the first of the two new ones; the
+    // identity ladder pairs duplicates in sibling order, so it cannot be told from the third.
+    let f1 = b.fake.node(raw::LIST_ITEM, "Reply", "li", None).await;
+    let f2 = b.fake.node(raw::LIST_ITEM, "Reply", "li", None).await;
+    b.fake.set_children(ul, vec![f1, f2]);
+    for li in &lis {
+        b.fake.unregister(*li).await;
+    }
+    let r = click(&b, ids[1]).await;
+    assert!(
+        matches!(r, Err(gorca_doc_source_api::SourceError::Gone)),
+        "{r:?}"
+    );
+    assert!(b.fake.tree.lock().unwrap().acted.is_empty());
+    b.shutdown.cancel();
+    let _ = b.task.await;
 }

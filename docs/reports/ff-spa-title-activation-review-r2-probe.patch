@@ -1,0 +1,67 @@
+diff --git a/crates/gorca-core/src/browse/tests.rs b/crates/gorca-core/src/browse/tests.rs
+index 00aeec3e..1c4fdc7c 100644
+--- a/crates/gorca-core/src/browse/tests.rs
++++ b/crates/gorca-core/src/browse/tests.rs
+@@ -3105,3 +3105,37 @@ fn enter_after_the_cursor_item_vanished_says_the_new_item_before_clicking() {
+     let fx = r.key(CoreCmd::BrowseActivate);
+     let _ = fx;
+ }
++
++// REVIEW PROBE (not for merge): a toggle whose label changes after the user's own click.
++#[test]
++fn probe_review_toggle_label_change_does_not_eat_the_next_enter() {
++    let mut r = rig();
++    r.focus(1006);
++    let fx = r.key(CoreCmd::BrowseActivate);
++    assert!(effects_web(&fx).iter().any(|a| matches!(a, WebEffect::Act { act: DocAction::Click, .. })));
++    // The page answers the click: "Play" becomes "Pause" (same node, new name and text).
++    let mut link = src(6, Role::Link, Some(1006));
++    link.states |= StateSet::FOCUSABLE;
++    link.name = Some(Arc::from("Pause"));
++    r.tr.apply(&mut r.writer, vec![DocDelta::Upsert(vec![link, run(7, "Pause")]), DocDelta::Settled { batch: 3 }])
++        .unwrap();
++    r.writer.publish();
++    r.reader.handle(ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev: 3 }), r.now);
++    let fx = r.key(CoreCmd::BrowseActivate);
++    let clicked = effects_web(&fx).iter().any(|a| matches!(a, WebEffect::Act { act: DocAction::Click, .. }));
++    eprintln!("PROBE second enter clicked={clicked} spoken={:?}", spoken(&fx));
++    assert!(clicked, "second Enter on the user's own toggle must click");
++}
++
++// REVIEW PROBE (not for merge): a displaced mark outlives the user reading around it.
++#[test]
++fn probe_review_displaced_cleared_after_user_moves_away_and_back() {
++    let mut r = rig();
++    r.focus(1006);
++    drop_cursor_paragraph(&mut r, 2);
++    let a = r.key(CoreCmd::BrowseCursorNextLine);
++    let b = r.key(CoreCmd::BrowseCursorPrevLine);
++    eprintln!("PROBE moved: {:?} / {:?}", spoken(&a), spoken(&b));
++    let fx = r.key(CoreCmd::BrowseActivate);
++    eprintln!("PROBE enter spoken={:?} acts={:?}", spoken(&fx), effects_web(&fx));
++}
+diff --git a/crates/gorca-core/src/browse/tests.rs b/crates/gorca-core/src/browse/tests.rs
+index 00aeec3e..28facb2a 100644
+--- a/crates/gorca-core/src/browse/tests.rs
++++ b/crates/gorca-core/src/browse/tests.rs
+@@ -3105,3 +3105,20 @@ fn enter_after_the_cursor_item_vanished_says_the_new_item_before_clicking() {
+     let fx = r.key(CoreCmd::BrowseActivate);
+     let _ = fx;
+ }
++
++// REVIEW PROBE (not for merge): cursor placed by focus, then the node is re-used for another item.
++#[test]
++fn probe_review_swap_after_focus_placement_is_noticed() {
++    let mut r = rig();
++    r.focus(1006);
++    let mut link = src(6, Role::Link, Some(1006));
++    link.states |= StateSet::FOCUSABLE;
++    link.name = Some(Arc::from("Dave"));
++    r.tr.apply(&mut r.writer, vec![DocDelta::Upsert(vec![link, run(7, "Dave")]), DocDelta::Settled { batch: 3 }])
++        .unwrap();
++    r.writer.publish();
++    r.reader.handle(ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev: 3 }), r.now);
++    let fx = r.key(CoreCmd::BrowseActivate);
++    let clicked = effects_web(&fx).iter().any(|a| matches!(a, WebEffect::Act { act: DocAction::Click, .. }));
++    eprintln!("PROBE swap clicked={clicked} spoken={:?}", spoken(&fx));
++}

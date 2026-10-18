@@ -48,3 +48,5 @@ web-no-container = не в контейнере
 web-no-more-text-after-links = после блока ссылок нет текста
 web-not-in-cell = не в ячейке таблицы
 web-table-edge = край таблицы
+web-item-gone = этого элемента больше нет
+web-cant-activate = не удаётся активировать

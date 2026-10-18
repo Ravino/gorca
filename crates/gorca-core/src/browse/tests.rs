@@ -2996,3 +2996,271 @@ fn a_focus_in_the_browsers_own_interface_neither_waits_for_a_document_nor_says_a
         spoken(&fx)
     );
 }
+
+#[test]
+fn focus_falling_to_the_document_keeps_the_cursor_and_enter_still_clicks_the_item() {
+    let mut r = rig();
+    r.focus(1006);
+    let before = r.mode();
+    assert!(matches!(before, WebMode::Browse { .. }));
+    // The page re-rendered its list under the focused link: the browser parks the focus on the
+    // document. Nothing is announced and the cursor does not go to the top of the page.
+    let fx = r.focus(1001);
+    assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
+    assert_eq!(r.mode(), before);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    let acts = effects_web(&fx);
+    assert!(
+        acts.iter().any(|a| matches!(
+            a,
+            WebEffect::Act {
+                act: DocAction::Click,
+                ..
+            }
+        )),
+        "{acts:?}"
+    );
+}
+
+#[test]
+fn a_failed_click_is_said_never_silent() {
+    let mut r = rig();
+    r.focus(1006);
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::ActionFailed {
+            doc: DocId(1),
+            gone: true,
+        }),
+        r.now,
+    );
+    assert_eq!(spoken(&fx), ["that item is gone"]);
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::ActionFailed {
+            doc: DocId(1),
+            gone: false,
+        }),
+        r.now,
+    );
+    assert_eq!(spoken(&fx), ["can't activate that"]);
+    // Another document's failure is not ours to speak.
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::ActionFailed {
+            doc: DocId(9),
+            gone: true,
+        }),
+        r.now,
+    );
+    assert!(spoken(&fx).is_empty());
+}
+
+/// The page drops the paragraph (and the link) the cursor is in.
+fn drop_cursor_paragraph(r: &mut Rig, rev: u64) {
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            kids(1, &[2, 9, 11, 13]),
+            DocDelta::Removed(vec![
+                SrcNodeId(4),
+                SrcNodeId(5),
+                SrcNodeId(6),
+                SrcNodeId(7),
+                SrcNodeId(8),
+            ]),
+            DocDelta::Settled { batch: rev },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev }),
+        r.now,
+    );
+}
+
+#[test]
+fn a_document_focus_after_the_cursor_node_vanished_is_announced_as_before() {
+    let mut r = rig();
+    r.focus(1006);
+    // A route change: the view holding the cursor is replaced, then the browser parks the focus
+    // on the document. The cursor was moved by position restore, so this is a new place.
+    drop_cursor_paragraph(&mut r, 2);
+    let fx = r.focus(1001);
+    assert!(!spoken(&fx).is_empty(), "the document is announced");
+}
+
+#[test]
+fn enter_after_the_cursor_item_vanished_says_the_new_item_before_clicking() {
+    let mut r = rig();
+    r.focus(1006);
+    drop_cursor_paragraph(&mut r, 2);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(
+        effects_web(&fx)
+            .iter()
+            .all(|a| !matches!(a, WebEffect::Act { .. })),
+        "the first Enter only says where the cursor is"
+    );
+    assert!(!spoken(&fx).is_empty(), "the new item is spoken");
+    // Moving on and activating again clicks as usual (the announcement is one-shot).
+    let fx = r.key(CoreCmd::BrowseActivate);
+    // The cursor now sits on plain text: nothing to click, and nothing is announced twice.
+    assert!(spoken(&fx).is_empty(), "the announcement is one-shot");
+}
+
+fn click_of(fx: &ReaderEffects) -> bool {
+    effects_web(fx).iter().any(|a| {
+        matches!(
+            a,
+            WebEffect::Act {
+                act: DocAction::Click,
+                ..
+            }
+        )
+    })
+}
+
+/// The page re-uses the link node for another item (new name and text).
+fn relabel_link(r: &mut Rig, name: &str, rev: u64) {
+    let mut link = src(6, Role::Link, Some(1006));
+    link.states |= StateSet::FOCUSABLE;
+    link.name = Some(Arc::from(name));
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![link, run(7, name)]),
+            DocDelta::Settled { batch: rev },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev }),
+        r.now,
+    );
+}
+
+/// Turn the page's link node into another kind of control, before anything is clicked.
+fn make_control(r: &mut Rig, role: Role, name: &str, st: StateSet, rev: u64) {
+    let mut n = src(6, role, Some(1006));
+    n.states |= StateSet::FOCUSABLE | st;
+    n.name = Some(Arc::from(name));
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![n, run(7, name)]),
+            DocDelta::Settled { batch: rev },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev }),
+        r.now,
+    );
+}
+
+#[test]
+fn a_toggle_relabelled_after_the_users_own_click_clicks_again() {
+    let mut r = rig();
+    make_control(&mut r, Role::Button, "Play", StateSet::empty(), 3);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    make_control(&mut r, Role::Button, "Pause", StateSet::PRESSED, 4);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(
+        click_of(&fx),
+        "second Enter on the user's own toggle clicks"
+    );
+}
+
+#[test]
+fn the_clicked_control_changing_role_is_displacement_and_costs_the_click() {
+    let mut r = rig();
+    make_control(&mut r, Role::Button, "Play", StateSet::empty(), 3);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    // Same node, but now a different kind of control: not the toggle the user pressed.
+    make_control(&mut r, Role::Link, "Buy now", StateSet::empty(), 4);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(
+        !click_of(&fx),
+        "an unseen control is announced, not clicked"
+    );
+    assert!(!spoken(&fx).is_empty());
+}
+
+#[test]
+fn a_link_relabel_after_a_click_is_displacement() {
+    let mut r = rig();
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    relabel_link(&mut r, "Elsewhere", 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx));
+}
+
+#[test]
+fn a_different_node_swapped_in_within_the_window_is_displacement() {
+    let mut r = rig();
+    make_control(&mut r, Role::Button, "Play", StateSet::empty(), 3);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    // The page removes the control and the cursor settles on content that was never read.
+    drop_cursor_paragraph(&mut r, 4);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx));
+    assert!(!spoken(&fx).is_empty(), "the new place is announced");
+}
+
+#[test]
+fn a_late_relabel_of_the_clicked_toggle_is_displacement() {
+    let mut r = rig();
+    make_control(&mut r, Role::Button, "Play", StateSet::empty(), 3);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    r.now += super::CARET_FOLLOW + Duration::from_millis(50);
+    make_control(&mut r, Role::Button, "Pause", StateSet::PRESSED, 4);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(
+        !click_of(&fx),
+        "outside the window the change is not the click's answer"
+    );
+}
+
+#[test]
+fn a_swap_after_a_focus_placement_is_announced_not_clicked() {
+    let mut r = rig();
+    r.focus(1006);
+    relabel_link(&mut r, "Dave", 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx), "the unseen item is not clicked");
+    assert!(!spoken(&fx).is_empty(), "it is spoken instead");
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+}
+
+#[test]
+fn a_displacement_is_spent_by_moving_the_cursor() {
+    let mut r = rig();
+    r.focus(1006);
+    drop_cursor_paragraph(&mut r, 2);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    r.key(CoreCmd::BrowseCursorPrevLine);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(
+        spoken(&fx).is_empty(),
+        "Enter does not re-announce after the user moved"
+    );
+    assert!(r.reader.web.as_ref().is_some_and(|b| b.displaced.is_none()));
+}
+
+#[test]
+fn a_relabel_to_another_action_without_a_state_flip_is_announced_not_clicked() {
+    let mut r = rig();
+    make_control(&mut r, Role::Button, "Delete", StateSet::empty(), 2);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    make_control(&mut r, Role::Button, "Confirm delete", StateSet::empty(), 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx), "an unseen action is never clicked blind");
+    assert!(!spoken(&fx).is_empty(), "it is announced instead");
+}
