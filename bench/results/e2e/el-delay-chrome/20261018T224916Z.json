@@ -1,0 +1,17 @@
+{
+  "meta": {"utc": "2026-10-18T22:49:16Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "16.25 14.47 15.14 4/2181 3274627", "git_rev": "dbc4b11f", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "el-delay-chrome", "reader": "daemon:<repo>/target/release/gorca", "backend": "voicego", "repeats": "1", "samples_per_series": "1200", "quick": "false", "loadavg_before": "15.66 14.32 15.10 4/2209 3273638", "loadavg_end": "16.25 14.47 15.14 8/2181 3274624", "gates": "fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats", "reader_args": "--impersonate-orca", "ext_dir": "none", "extensions": "none"},
+  "rows": [
+    {"id": "M8-QN.key_ms.n", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 3, "min": 3, "max": 3, "runs": 1, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-QN.key_ms.p50", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 0.344483, "min": 0.344483, "max": 0.344483, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-QN.key_ms.p95", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 0.365745, "min": 0.365745, "max": 0.365745, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-QN.key_ms.p99", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 0.365745, "min": 0.365745, "max": 0.365745, "runs": 1, "unit": "ms", "op": "<=", "threshold": 5, "verdict": "PASS", "note": ""},
+    {"id": "M8-QN.key_ms.max", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 0.365745, "min": 0.365745, "max": 0.365745, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-QN.fail", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "steps that fail and are not marked expected-fail"},
+    {"id": "M8-QN.gap", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "core ok, NVDA extras missing"},
+    {"id": "M8-QN.p0_not_pass", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-QN.pass", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 3, "min": 3, "max": 3, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-QN.steps", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 3, "min": 3, "max": 3, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-QN.xfail", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "expected-fail steps that fail (gap table)"},
+    {"id": "M8-QN.xpass", "scenario": "M8-QN", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "expected-fail steps that pass: remove their xf() mark"}
+  ]
+}

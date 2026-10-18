@@ -1,0 +1,37 @@
+# e2e-m8 el-signal-private
+# utc=2026-10-18T22:54:08Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=16.37 14.89 15.03 2/2102 3303309
+# git_rev=dbc4b11f
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=el-signal-private
+# reader=daemon:<repo>/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=17.98 15.05 15.09 2/2130 3302581
+# loadavg_end=16.37 14.89 15.03 2/2102 3303306
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-QN QN.h.1 P0 FAIL: heard "heading level 2, Failed to connect to server." 
+# note1=M8-QN QN.h.2 P0 FAIL: heard "no next heading" 
+# note2=M8-QN QN.b.1 P0 FAIL: heard "button, Try again" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-QN.fail                 daemon/voicego            3            3            3  1 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-QN.gap                  daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-QN.p0_not_pass          daemon/voicego            3            3            3  1                  info   [steps]
+M8-QN.pass                 daemon/voicego            0            0            0  1                  info   [steps]
+M8-QN.steps                daemon/voicego            3            3            3  1                  info   [steps]
+M8-QN.xfail                daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-QN.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

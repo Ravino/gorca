@@ -1,0 +1,39 @@
+# e2e-m8 el-delay-chrome
+# utc=2026-10-18T22:49:16Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=16.25 14.47 15.14 4/2181 3274627
+# git_rev=dbc4b11f
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=el-delay-chrome
+# reader=daemon:<repo>/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=15.66 14.32 15.10 4/2209 3273638
+# loadavg_end=16.25 14.47 15.14 8/2181 3274624
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-QN.key_ms.n             daemon/voicego            3            3            3  1                  info   [samples]
+M8-QN.key_ms.p50           daemon/voicego        0.344        0.344        0.344  1                  info   [ms]
+M8-QN.key_ms.p95           daemon/voicego        0.366        0.366        0.366  1                  info   [ms]
+M8-QN.key_ms.p99           daemon/voicego        0.366        0.366        0.366  1 <=            5  PASS   [ms]
+M8-QN.key_ms.max           daemon/voicego        0.366        0.366        0.366  1                  info   [ms]
+M8-QN.fail                 daemon/voicego            0            0            0  1 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-QN.gap                  daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-QN.p0_not_pass          daemon/voicego            0            0            0  1                  info   [steps]
+M8-QN.pass                 daemon/voicego            3            3            3  1                  info   [steps]
+M8-QN.steps                daemon/voicego            3            3            3  1                  info   [steps]
+M8-QN.xfail                daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-QN.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

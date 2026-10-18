@@ -1,0 +1,29 @@
+# e2e-m8 el-electron44
+# utc=2026-10-18T22:47:53Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.65 13.61 14.96 5/2038 3261231
+# git_rev=dbc4b11f
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=el-electron44
+# reader=daemon:<repo>/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=14.40 13.89 15.12 2/2064 3254560
+# loadavg_end=12.65 13.61 14.96 6/2038 3261228
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-QN run failed: find_doc failed: {"ok":false,"error":"document not found","event":"reply","id":1}
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-QN.failed_runs          daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]

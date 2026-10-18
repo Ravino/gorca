@@ -1,0 +1,29 @@
+# e2e-m8 el-signal-force
+# utc=2026-10-18T23:00:29Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=11.19 14.18 14.76 1/2407 3324676
+# git_rev=dbc4b11f
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=el-signal-force
+# reader=daemon:<repo>/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=12.26 14.54 14.88 2/2402 3324356
+# loadavg_end=11.19 14.18 14.76 1/2407 3324673
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-QN run failed: focus failed: {"ok":false,"t_emit_ns":980960058264696,"event":"reply","id":3}
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-QN.failed_runs          daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]
