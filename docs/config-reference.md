@@ -133,7 +133,7 @@ inserted_text = true
 [editing]
 # Say "copied", "cut", "pasted", "undo" or "redo" after Ctrl+C, X, V, Z or Y in an editable field, when the text shows that it happened (copy only with a selection). (true or false)
 announce_clipboard = true
-# What an arrow or Home/End key does when the caret cannot move: a boundary cue (silent until sounds exist), read the unit again, or nothing. (one of "cue", "repeat" or "silent")
+# What an arrow, Home or End key does when the caret cannot move: any of "cue" (a boundary sound; silent until sounds exist) and "say" (a short word: start, end, top, bottom), for example ["cue", "say"]; [] or "off" is nothing; "repeat" reads the unit under the caret again. (list of strings)
 boundary = "cue"
 # How coarse a word is: fine (letters and digits, each punctuation mark apart), medium (option tokens like --color=auto, identifiers and file names stay whole; slashes and other punctuation separate), coarse (everything between blanks); auto lets the application decide (terminals use medium). (one of "auto", "fine", "medium" or "coarse")
 word = "auto"

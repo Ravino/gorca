@@ -60,6 +60,11 @@ pub enum Exp {
     /// Silence (the boundary cue: the key could not move the caret on this toolkit) or the
     /// inner expectation (the caret moved).
     OrSilent(Box<Exp>),
+    /// Either expectation.
+    Either(Box<Exp>, Box<Exp>),
+    /// The first utterance starts with this; what the edit brought back may follow (a web field
+    /// reports an undo as a replace and then an insert).
+    FirstPrefixed(&'static str),
     /// One utterance that starts with this (`cut, ` or `pasted, ` and the text).
     Prefixed(&'static str),
     /// Any non-empty speech.
@@ -166,11 +171,15 @@ pub fn expect(t: Target, chromium: bool, step: &str) -> Option<Exp> {
         "clip: Ctrl+X" => Exp::Prefixed("cut, "),
         "clip: Ctrl+V" => Exp::Prefixed("pasted, "),
         // GTK 3 entries and text views have no undo: nothing changes, nothing is claimed.
-        "clip: Ctrl+Z" if has_undo(t) => Exp::Prefixed("undo"),
-        "clip: Ctrl+Y" if has_redo_key(t) => Exp::Prefixed("redo"),
+        "clip: Ctrl+Z" if has_undo(t) => Exp::FirstPrefixed("undo"),
+        "clip: Ctrl+Y" if has_redo_key(t) => Exp::FirstPrefixed("redo"),
         "clip: Ctrl+Z" | "clip: Ctrl+Y" => Exp::Silent,
         "clip: restore" => Exp::Some,
         // The multi-line phase.
+        // A contenteditable counts its own block: all of it selected reads as the text.
+        "select all" if editable(t) => {
+            Exp::Either(Box::new(Exp::SelectAll), Box::new(Exp::Selected))
+        }
         "select all" => Exp::SelectAll,
         "type line 1" => names("one two"),
         "type paragraph" => names(PARA),
@@ -233,6 +242,14 @@ pub fn check(t: Target, chromium: bool, step: &str, got: &[String]) -> Option<Re
 fn check_exp(e: &Exp, got: &[String]) -> Result<(), String> {
     match e {
         Exp::OrSilent(inner) => check_exp(inner, got),
+        Exp::Either(a, b) => check_exp(a, got).or_else(|_| check_exp(b, got)),
+        Exp::FirstPrefixed(p) => {
+            if got.first().is_some_and(|s| s.starts_with(p)) {
+                Ok(())
+            } else {
+                Err(format!("(want {p:?} first)"))
+            }
+        }
         Exp::Exact(v) => {
             if v == got {
                 Ok(())
