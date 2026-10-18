@@ -1,0 +1,10 @@
+936696782738076 said "M8 News article, document"
+936696827428623 said "browse mode, link, Skip to main content"
+936697601426936 said "Skip to main content"
+936697901836298 said "heading level 1, Screen readers learn to keep up with the modern web"
+936698158477876 said "M8 News article document Skip to main content link"
+bus 2 /org/a11y/atspi/accessible/6 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/149 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/6 StateChanged:focused
+bus 2 /org/a11y/atspi/accessible/149 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/6 LoadComplete:

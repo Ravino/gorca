@@ -1,0 +1,20 @@
+937083661017953 said "M8 News article, document"
+937083704486432 said "browse mode, link, Skip to main content"
+937084478182833 said "Skip to main content"
+937084778527738 said "heading level 1, Screen readers learn to keep up with the modern web"
+937085034178174 said "M8 News article document Skip to main content link"
+937086421137688 said "Tab search button M8 News article tab list Close button New Tab button Close button"
+937086771385120 said "Browse with AI Back Forward Home Open tab in split view toolbar Back button unavailable Forward button unavailable Reload toolbar Reload button File button Address and search bar edit slash www slash a11y slash dot claude slash worktrees slash agent-a5693fce30a10ab7a slash tests slash web slash m8 slash pages slash news dot html Bookmark this tab button You button Chromium button"
+937087121958937 said "M8 News article document Skip to main content bullet"
+937087209635405 said "M8 News article document Skip to main content link bullet World"
+937087472489917 said "The Daily Gorca home Sections Search the site Account menu landmark The Daily Gorca home link"
+937087822970342 said "Politics link"
+937088173368359 said "Business link"
+937089683302455 said "link"
+937090033866669 said "i"
+937090384436386 said "6 min read 14 October 2026, 09:30"
+bus 2 /org/a11y/atspi/accessible/6 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/7 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/7 StateChanged:focused
+bus 2 /org/a11y/atspi/accessible/6 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/7 LoadComplete:

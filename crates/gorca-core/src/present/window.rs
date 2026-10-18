@@ -481,7 +481,10 @@ pub async fn fetch_window(io: &crate::review::ReviewIo, window: NodeKey) -> Wind
                     break;
                 }
                 spent += 1;
-                if expand(io, m, BudgetClass::Interactive, false).await.is_ok() {
+                if expand(io, m, BudgetClass::Interactive, false, None)
+                    .await
+                    .is_ok()
+                {
                     progressed = true;
                 }
             }
@@ -538,7 +541,7 @@ pub async fn fetch_level(io: &crate::review::ReviewIo, node: NodeKey) -> WindowI
         let snap = src.view(node).hit().map(|v| v.snap);
         let mut texts = Vec::new();
         if let Some(parent) = snap.as_ref().and_then(|s| s.parent) {
-            let _ = expand(io, parent, BudgetClass::Interactive, false).await;
+            let _ = expand(io, parent, BudgetClass::Interactive, false, None).await;
             if let Some(p) = src.view(parent).hit()
                 && let ChildList::Known(kids) = &p.snap.children
             {

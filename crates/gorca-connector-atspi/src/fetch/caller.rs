@@ -7,7 +7,7 @@
 //! reads the strategy sources and fails if they name either.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use gorca_dbus::{DbusError, call_method};
 use gorca_rt::Deadline;
@@ -47,6 +47,10 @@ pub struct Caller {
     bus_name: Arc<str>,
     /// Shadow mode (PW-11): `Some` refuses every call outside [`shadow::allowed`] and counts it.
     shadow: Option<Arc<AtomicU64>>,
+    /// The coordinate type of `Text` extents and points: `WINDOW`, or `SCREEN` for a toolkit whose
+    /// window-relative text extents are offset from its component extents. Set when the toolkit
+    /// is identified; shared by the clones of this caller.
+    text_coord: Arc<AtomicU32>,
 }
 
 impl Caller {
@@ -55,7 +59,19 @@ impl Caller {
             conn,
             bus_name,
             shadow: None,
+            text_coord: Arc::new(AtomicU32::new(COORD_WINDOW)),
         }
+    }
+
+    /// Quirk row `blink-text-extents-frame`: ask `Text` for screen coordinates (`screen`) or
+    /// window coordinates (the default).
+    pub fn set_text_screen_coords(&self, screen: bool) {
+        let c = if screen { COORD_SCREEN } else { COORD_WINDOW };
+        self.text_coord.store(c, Ordering::Relaxed);
+    }
+
+    fn text_coord(&self) -> u32 {
+        self.text_coord.load(Ordering::Relaxed)
     }
 
     /// Read-only: refuse (and count in `refused`) any call the shadow allowlist does not admit.
@@ -428,6 +444,9 @@ const COLLECTION: &str = "org.a11y.atspi.Collection";
 /// `ATSPI_COORD_TYPE_WINDOW`: the only coordinate type gorca ever requests (SF-4). `SCREEN` (0)
 /// is meaningless on Wayland and GTK4 answers it with the origin.
 const COORD_WINDOW: u32 = 1;
+/// `ATSPI_COORD_TYPE_SCREEN`: asked for text extents only where a toolkit's window-relative text
+/// extents are not in the frame of `Component.GetExtents` (`Toolkit::text_extents_use_screen_coords`).
+const COORD_SCREEN: u32 = 0;
 /// A `GetText` or `GetStringAtOffset` reply body larger than this is refused undecoded: the
 /// window is at most 16 Ki scalars (64 KiB) and a spoken unit is clipped far below that.
 const MAX_TEXT_REPLY_BYTES: usize = 256 * 1024;
@@ -653,7 +672,7 @@ impl Caller {
                 path,
                 TEXT,
                 "GetRangeExtents",
-                &(start, end, COORD_WINDOW),
+                &(start, end, self.text_coord()),
             )
             .await?;
         m.body()
@@ -676,7 +695,7 @@ impl Caller {
                 path,
                 TEXT,
                 "GetOffsetAtPoint",
-                &(x, y, COORD_WINDOW),
+                &(x, y, self.text_coord()),
             )
             .await?;
         m.body().deserialize::<i32>().map_err(DbusError::Zbus)

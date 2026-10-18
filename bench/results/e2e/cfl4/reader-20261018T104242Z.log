@@ -1,0 +1,33 @@
+2026-10-18T10:42:45.302896Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T10:42:45.305684Z  INFO gorca_phase: phase="locate" wall_ms=2.600913
+2026-10-18T10:42:45.305754Z  INFO gorca_phase: phase="create" wall_ms=0.003418
+2026-10-18T10:42:45.346733Z  INFO gorca_phase: phase="fetch" total_ms=40.919792 warm_ms=29.230238 frontier_ms=1.3585850000000002 get_tree_ms=1.925586 roles_ms=2.900532 states_ms=1.627403 text_ms=2.84143 assemble_ms=0.100048 heaviest_get_tree_ms=1.059 calls=626 tree_bytes=64295 nodes=249
+2026-10-18T10:42:45.347862Z  INFO gorca_phase: phase="translate" wall_ms=0.423237 nodes=249
+2026-10-18T10:42:57.364159Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T10:42:57.369704Z  INFO gorca_phase: phase="locate" wall_ms=5.378449000000001
+2026-10-18T10:42:57.369786Z  INFO gorca_phase: phase="create" wall_ms=0.005589
+2026-10-18T10:42:57.469714Z  INFO gorca_phase: phase="first_block" wall_ms=99.80235499999999 nodes=402
+2026-10-18T10:42:57.471272Z  INFO gorca_phase: phase="translate" wall_ms=1.045312 nodes=1705
+2026-10-18T10:42:57.542914Z  INFO gorca_phase: phase="fetch" total_ms=172.999205 warm_ms=62.231635 frontier_ms=16.116231000000003 get_tree_ms=6.022823 roles_ms=3.9803470000000005 states_ms=0.54201 text_ms=3.866005 assemble_ms=0.078916 heaviest_get_tree_ms=0.258 calls=1033 tree_bytes=92744 nodes=3008
+2026-10-18T10:43:15.661174Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T10:43:15.665834Z  INFO gorca_phase: phase="locate" wall_ms=4.559983
+2026-10-18T10:43:15.665896Z  INFO gorca_phase: phase="create" wall_ms=0.003422
+2026-10-18T10:43:15.766547Z  INFO gorca_phase: phase="first_block" wall_ms=100.606627 nodes=402
+2026-10-18T10:43:15.768133Z  INFO gorca_phase: phase="translate" wall_ms=1.131865 nodes=1705
+2026-10-18T10:43:15.840328Z  INFO gorca_phase: phase="fetch" total_ms=174.38512 warm_ms=60.686302 frontier_ms=16.475278 get_tree_ms=7.647629 roles_ms=3.781356 states_ms=0.258642 text_ms=4.345118 assemble_ms=0.06662599999999999 heaviest_get_tree_ms=0.5419999999999999 calls=1033 tree_bytes=92744 nodes=3008
+2026-10-18T10:43:34.303844Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T10:43:34.307866Z  INFO gorca_phase: phase="locate" wall_ms=3.9164309999999998
+2026-10-18T10:43:34.307905Z  INFO gorca_phase: phase="create" wall_ms=0.0022170000000000002
+2026-10-18T10:43:34.345576Z  INFO gorca_phase: phase="fetch" total_ms=37.63309 warm_ms=28.036628 frontier_ms=0.270956 get_tree_ms=2.3132029999999997 roles_ms=2.827581 states_ms=1.002833 text_ms=2.581953 assemble_ms=0.05629 heaviest_get_tree_ms=1.427 calls=626 tree_bytes=64295 nodes=249
+2026-10-18T10:43:34.346138Z  INFO gorca_phase: phase="translate" wall_ms=0.21212299999999998 nodes=249
+2026-10-18T10:43:48.112165Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T10:43:48.117559Z  INFO gorca_phase: phase="locate" wall_ms=5.303986999999999
+2026-10-18T10:43:48.117614Z  INFO gorca_phase: phase="create" wall_ms=0.006023
+2026-10-18T10:43:48.164794Z  INFO gorca_phase: phase="fetch" total_ms=47.130522 warm_ms=27.140755 frontier_ms=0.24022400000000002 get_tree_ms=1.9758750000000003 roles_ms=6.722761 states_ms=2.475899 text_ms=8.015034 assemble_ms=0.033381 heaviest_get_tree_ms=1.2080000000000002 calls=626 tree_bytes=64295 nodes=249
+2026-10-18T10:43:48.165368Z  INFO gorca_phase: phase="translate" wall_ms=0.215197 nodes=249
+2026-10-18T10:44:01.655973Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T10:44:01.662091Z  INFO gorca_phase: phase="locate" wall_ms=5.993928
+2026-10-18T10:44:01.662160Z  INFO gorca_phase: phase="create" wall_ms=0.004047
+2026-10-18T10:44:01.758777Z  INFO gorca_phase: phase="first_block" wall_ms=96.568384 nodes=402
+2026-10-18T10:44:01.760314Z  INFO gorca_phase: phase="translate" wall_ms=1.058853 nodes=1705
+2026-10-18T10:44:01.840370Z  INFO gorca_phase: phase="fetch" total_ms=178.158978 warm_ms=62.077192000000004 frontier_ms=16.478129000000003 get_tree_ms=7.6206190000000005 roles_ms=4.167561999999999 states_ms=0.173842 text_ms=3.987485 assemble_ms=0.150486 heaviest_get_tree_ms=0.281 calls=1033 tree_bytes=92744 nodes=3008

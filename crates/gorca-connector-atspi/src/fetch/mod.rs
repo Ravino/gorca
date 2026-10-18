@@ -296,6 +296,9 @@ impl AppServer {
                     let (toolkit, app_name) = found.unwrap_or_default();
                     settle_ms = settle_window_ms(&toolkit, &app_name, self.identity).await;
                     announce_info(&port, &toolkit, &app_name, verified, settle_ms);
+                    self.caller.set_text_screen_coords(
+                        Toolkit::classify(&toolkit, &app_name).text_extents_use_screen_coords(),
+                    );
                     // Quirk row `blink-wake-call`: once, at first sight (a re-announcement
                     // after Shell verification does not repeat it).
                     if Toolkit::classify(&toolkit, &app_name).needs_wake_call() {

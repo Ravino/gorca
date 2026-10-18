@@ -84,6 +84,10 @@ pub struct EditQuirks {
     /// How coarse a word is for this application (see [`WordLevel`]); the user's `[editing]
     /// word` setting wins over it.
     pub word_level: WordLevel,
+    /// Blink: every text run is also a `static` child that repeats the text its parent's own
+    /// `Text` already holds. Text readers (flat review) skip such children so a line is not said
+    /// twice. Gecko keeps text in the container only.
+    pub text_leaves_repeat_parent: bool,
 }
 
 /// Core text queries. Text is not part of the node snapshot.

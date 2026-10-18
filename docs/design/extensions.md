@@ -89,7 +89,7 @@ so the core keeps speaking.
 
 ## 4. The sandbox
 
-`wit/gorca-ext.wit` (package `gorca:ext@0.2.0`): `host` (`get-node`, `fetch`, `text`, `speak`,
+`wit/gorca-ext.wit` (package `gorca:ext@0.3.0`; the terminal interface gained `word-level`, `boundary` and `cue` in 0.3.0): `host` (`get-node`, `fetch`, `text`, `speak`,
 `get-setting`, `set-setting`, `log`) and `hooks` (`on-event`, `present`, `policy`, `nav-units`,
 `nav-match`, `command`) and `terminal` (`configure`, `step`, `snapshot`, `counters`; 0.2.0). Capabilities in the manifest gate `speak`, `settings` and `fetch:*`; an undeclared one is
 denied (`fetch` and `text` return `denied`, or `not-supported` when declared: they need an asynchronous

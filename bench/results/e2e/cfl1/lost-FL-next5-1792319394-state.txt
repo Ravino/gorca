@@ -1,0 +1,16 @@
+935918734402712 said "M8 News article - Google Chrome for Testing, M8 News article, document"
+935918793585910 said "browse mode, link, Skip to main content"
+935920863065922 said "Skip to main content"
+935921164355609 said "heading level 1, Screen readers learn to keep up with the modern web"
+935921418469154 said "M8 News article document"
+935922789009405 said "Tab search button M8 News article tab list Close button New Tab button Close button"
+935923139908950 said "Browse with AI Back Forward Home Open tab in split view toolbar Back button unavailable Forward button unavailable Reload toolbar Reload button File button Address and search bar edit slash www slash a11y slash dot claude slash worktrees slash agent-a5693fce30a10ab7a slash tests slash web slash m8 slash pages slash news dot html Bookmark this tab button You button Chromium button"
+935923490705437 said "Skip to main content Skip to main content"
+935923841997451 said "The Daily Gorca The Daily Gorca"
+935924192899650 said "bullet World link"
+935924543796334 said "bullet Politics link"
+bus 2 /org/a11y/atspi/accessible/6 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/10 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/6 StateChanged:focused
+bus 2 /org/a11y/atspi/accessible/10 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/6 LoadComplete:

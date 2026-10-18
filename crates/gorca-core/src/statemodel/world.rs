@@ -710,7 +710,7 @@ impl Sim {
         }
     }
 
-    fn type_key_stamped(&mut self, k: KeyKind, mods: Modifiers, epoch: gorca_model::Epoch) {
+    pub fn type_key_stamped(&mut self, k: KeyKind, mods: Modifiers, epoch: gorca_model::Epoch) {
         let at = self.now();
         let (keysym, unichar) = k.sym();
         self.handle(ReaderMsg::Key(KeyIntent {

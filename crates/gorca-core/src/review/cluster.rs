@@ -260,12 +260,36 @@ fn finalize(n: &BuildNode, kids: Vec<Zone>, surface: Option<Rect>) -> Vec<Zone> 
     {
         let mut z = z;
         z.kind = ZoneKind::Name;
+        z.rect = name_strip(z.rect, &kids);
         let mut out = Vec::with_capacity(kids.len() + 1);
         out.push(z);
         out.extend(kids);
         return out;
     }
     kids
+}
+
+/// Where a container's name sits: on the row of its first child, not at the middle of the
+/// container. A named container (a document, a landmark, a dialog) covers every row it holds, and
+/// its centre would put "News article document" between two unrelated rows (a different pair for
+/// every engine's layout); it is said where its content starts. Without a child on screen, or
+/// when the first child starts outside the container, it keeps its own rectangle.
+fn name_strip(own: Option<Rect>, kids: &[Zone]) -> Option<Rect> {
+    let own = own?;
+    let Some(first) = kids.iter().find_map(|k| k.rect) else {
+        return Some(own);
+    };
+    let top = i64::from(own.y);
+    let ky = i64::from(first.y);
+    if ky < top || ky >= top + i64::from(own.h) {
+        return Some(own);
+    }
+    Some(Rect {
+        x: own.x,
+        y: first.y,
+        w: own.w,
+        h: first.h,
+    })
 }
 
 fn union_rect(it: impl Iterator<Item = Rect>) -> Option<Rect> {
@@ -920,5 +944,72 @@ mod tests {
             std::time::Duration::from_millis(5)
         };
         assert!(took < bound, "{took:?}");
+    }
+
+    /// A named container (a document, a landmark) says its name where its content starts, not at
+    /// the middle of the rows it holds: "Main landmark" shares the first button's row even though
+    /// the landmark's centre is far below it (Blink and Gecko lay a page out differently, and the
+    /// centre fell between different rows in each).
+    #[test]
+    fn a_named_container_is_said_on_the_row_where_its_content_starts() {
+        let main = snap(2, Role::Landmark, "Main", Some(1), &[3, 4, 5]);
+        let nodes = vec![
+            root(&[2]),
+            bn(main, 1, r(0, 100, 800, 400)),
+            bn(btn(3, "A"), 2, r(20, 100, 60, 20)),
+            bn(btn(4, "B"), 2, r(20, 300, 60, 20)),
+            bn(btn(5, "C"), 2, r(20, 330, 60, 20)),
+        ];
+        let m = build_line_model(&input(nodes), &ReviewLimits::default());
+        assert_eq!(
+            texts(&m),
+            ["Main landmark A button", "B button", "C button"]
+        );
+    }
+
+    /// With no child on screen, or a first child outside the container, the name keeps the
+    /// container's own rectangle.
+    #[test]
+    fn a_name_without_a_child_row_keeps_its_own_rectangle() {
+        let own = Rect {
+            x: 0,
+            y: 100,
+            w: 800,
+            h: 400,
+        };
+        assert_eq!(name_strip(Some(own), &[]), Some(own));
+        let z = |y: i32| Zone {
+            node: key(9),
+            kind: ZoneKind::Object,
+            text: Arc::from("x"),
+            rect: Some(Rect {
+                x: 10,
+                y,
+                w: 20,
+                h: 10,
+            }),
+            name: None,
+            label_like: false,
+        };
+        assert_eq!(
+            name_strip(Some(own), &[z(40)]),
+            Some(own),
+            "above the container"
+        );
+        assert_eq!(
+            name_strip(Some(own), &[z(900)]),
+            Some(own),
+            "below the container"
+        );
+        assert_eq!(
+            name_strip(Some(own), &[z(130)]),
+            Some(Rect {
+                x: 0,
+                y: 130,
+                w: 800,
+                h: 10
+            })
+        );
+        assert_eq!(name_strip(None, &[z(130)]), None);
     }
 }

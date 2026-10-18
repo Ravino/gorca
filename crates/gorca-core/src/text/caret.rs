@@ -1706,11 +1706,24 @@ fn at_boundary(
             (false, TextDir::Prev) => msg!(TextBoundaryTop),
             (false, TextDir::Next) => msg!(TextBoundaryBottom),
         };
+        cx.stats.boundary_said += 1;
+        if b.repeat {
+            // One utterance: a second one would interrupt the word.
+            let say = say_of(key.0);
+            if let Lookup::Ready((how, text)) = unit_text(&t, say, at, cx.quirks) {
+                let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
+                pieces.push(Piece::phrase(&format!("{word},")));
+                pieces.push(Piece::unit(how, text));
+                let s = t.spoken(pieces, Reason::Boundary, epoch, Prio::Interrupt);
+                cx.say(s);
+                return CaretState::Idle { t };
+            }
+        }
         let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
         pieces.push(Piece::phrase(word));
         let s = t.spoken(pieces, Reason::Boundary, epoch, Prio::Interrupt);
         cx.say(s);
-        cx.stats.boundary_said += 1;
+        return CaretState::Idle { t };
     }
     if b.repeat {
         return present(t, say_of(key.0), at, Reason::Boundary, epoch, cx);

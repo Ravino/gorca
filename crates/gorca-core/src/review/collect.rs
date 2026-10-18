@@ -127,10 +127,20 @@ struct Ctx<'a, S: NavSource> {
     seen: HashSet<NodeKey>,
     node_misses: HashMap<NodeKey, Vec<NodeKey>>,
     direct: Vec<Miss>,
+    /// Engine row `text_leaves_repeat_parent`: `static` children of a text node are not walked.
+    skip_repeats: bool,
 }
 
 impl<S: NavSource> Ctx<'_, S> {
-    fn walk(&mut self, k: NodeKey, parent: Option<NodeKey>, depth: u16, web: Web) {
+    /// `text_parent`: the parent carries the text of its `static` children itself.
+    fn walk(
+        &mut self,
+        k: NodeKey,
+        parent: Option<NodeKey>,
+        depth: u16,
+        web: Web,
+        text_parent: bool,
+    ) {
         if self.out.truncated.is_some() || !self.seen.insert(k) {
             return;
         }
@@ -150,6 +160,17 @@ impl<S: NavSource> Ctx<'_, S> {
             Lookup::Hit(v) => v,
         };
         let s = &v.snap;
+        // A text run (a `static` leaf) under a text node repeats what the parent already says. A
+        // `static` that holds children is an inline element the parent only points to with a
+        // U+FFFC (a `<time>`, a `<span>`): its text is not in the parent and it stays.
+        if text_parent
+            && s.have.contains(PropMask::ROLE)
+            && s.role == Role::StaticText
+            && (matches!(&s.children, ChildList::Count(0))
+                || matches!(&s.children, ChildList::Known(k) if k.is_empty()))
+        {
+            return;
+        }
         if !s.have.contains(NEED) || v.stale.intersects(NEED) {
             match parent {
                 Some(p) => self.node_misses.entry(p).or_default().push(k),
@@ -221,8 +242,9 @@ impl<S: NavSource> Ctx<'_, S> {
         let stale_children = v.stale.contains(PropMask::CHILDREN);
         match &s.children {
             ChildList::Known(list) if !stale_children => {
+                let text_parent = self.skip_repeats && wants_lines(s);
                 for c in list {
-                    self.walk(*c, Some(k), depth.saturating_add(1), web);
+                    self.walk(*c, Some(k), depth.saturating_add(1), web, text_parent);
                 }
             }
             ChildList::Count(0) if !stale_children => {}
@@ -235,7 +257,19 @@ impl<S: NavSource> Ctx<'_, S> {
 
 /// Walk `surface` in `src`. Misses are deduplicated; two or more missing children of one parent
 /// become a single `Expand` of the parent.
+#[cfg(test)]
 pub fn collect<S: NavSource>(src: &S, surface: NodeKey, limits: ReviewLimits) -> Collected {
+    collect_with(src, surface, limits, false)
+}
+
+/// [`collect`] for an engine whose text nodes repeat their text in `static` children
+/// (`skip_repeats`, `EditQuirks::text_leaves_repeat_parent`).
+pub fn collect_with<S: NavSource>(
+    src: &S,
+    surface: NodeKey,
+    limits: ReviewLimits,
+    skip_repeats: bool,
+) -> Collected {
     let mut cx = Ctx {
         src,
         surface,
@@ -244,8 +278,9 @@ pub fn collect<S: NavSource>(src: &S, surface: NodeKey, limits: ReviewLimits) ->
         seen: HashSet::new(),
         node_misses: HashMap::new(),
         direct: Vec::new(),
+        skip_repeats,
     };
-    cx.walk(surface, None, 0, Web::Outside);
+    cx.walk(surface, None, 0, Web::Outside, false);
     let mut misses: Vec<Miss> = Vec::new();
     let mut seen: HashSet<Miss> = HashSet::new();
     let mut push = |m: Miss, misses: &mut Vec<Miss>| {
@@ -510,5 +545,82 @@ mod tests {
         let c = collect(&m, key(1), lim);
         assert_eq!(c.nodes.len(), 10);
         assert_eq!(c.truncated, Some(TruncWhy::NodeCap));
+    }
+
+    /// A Chromium-shaped page (docs/reports/chromium-flat-review.md): every node on screen has
+    /// SHOWING and VISIBLE, what is scrolled away has VISIBLE only, and a text node has `static`
+    /// children that repeat its text. The engine row drops those children; off screen stays out.
+    #[test]
+    fn a_blink_shaped_page_skips_repeating_static_leaves_and_off_screen_nodes() {
+        let visible_only = |mut s: NodeSnapshot| {
+            s.states = StateSet::VISIBLE;
+            s.have |= PropMask::STATES;
+            s
+        };
+        let text = |mut s: NodeSnapshot| {
+            s.interfaces = Ifaces::TEXT;
+            s
+        };
+        let page = Rect {
+            x: 0,
+            y: 143,
+            w: 1280,
+            h: 625,
+        };
+        let row = |y: i32| Rect {
+            x: 152,
+            y,
+            w: 300,
+            h: 23,
+        };
+        let mut m = MapSrc::default();
+        m.put_at(snap(1, Role::Window, "W", None, &[2]), page);
+        m.put_at(
+            snap(2, Role::DocumentWeb, "Page", Some(1), &[3, 5, 7, 8]),
+            page,
+        );
+        m.put_at(
+            text(snap(3, Role::Paragraph, "", Some(2), &[4, 9])),
+            row(200),
+        );
+        m.put_at(
+            text(snap(4, Role::StaticText, "Hello", Some(3), &[])),
+            row(200),
+        );
+        // A link: its own text, and a static leaf repeating it.
+        m.put_at(text(snap(5, Role::Link, "Home", Some(2), &[6])), row(240));
+        m.put_at(
+            text(snap(6, Role::StaticText, "Home", Some(5), &[])),
+            row(240),
+        );
+        // Scrolled away (below the document), and on screen without SHOWING.
+        m.put_at(
+            visible_only(text(snap(7, Role::Paragraph, "", Some(2), &[]))),
+            row(2_000),
+        );
+        // An inline element (a `<time>`) is a `static` with its own run: it stays, its run goes.
+        m.put_at(
+            text(snap(9, Role::StaticText, "", Some(3), &[10])),
+            row(200),
+        );
+        m.put_at(
+            text(snap(10, Role::StaticText, "Today", Some(9), &[])),
+            row(200),
+        );
+        m.put_at(
+            visible_only(text(snap(8, Role::Heading, "Title", Some(2), &[]))),
+            row(300),
+        );
+        let ids =
+            |c: &Collected| -> Vec<u64> { c.nodes.iter().map(|n| n.snap.key.local.0).collect() };
+        let plain = collect(&m, key(1), ReviewLimits::default());
+        assert_eq!(ids(&plain), [1, 2, 3, 4, 9, 10, 5, 6, 8]);
+        let row_on = collect_with(&m, key(1), ReviewLimits::default(), true);
+        assert_eq!(ids(&row_on), [1, 2, 3, 9, 5, 8]);
+        assert!(
+            !row_on.text_nodes.contains(&key(4)),
+            "no lines asked for a repeat"
+        );
+        assert!(row_on.misses.is_empty(), "{:?}", row_on.misses);
     }
 }

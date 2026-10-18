@@ -470,3 +470,34 @@ fn two_keys_typed_ahead_after_review_are_both_echoed_with_current_epochs() {
         );
     }
 }
+
+/// `keyboard.interrupt = "never"`: the press advances nothing, so leaving review advances the epoch
+/// itself (queued review speech is purged), and the echo of the key that left is current.
+#[test]
+fn with_interrupt_never_leaving_review_still_purges_and_the_echo_is_current() {
+    for node in [TERM, ENTRY] {
+        let mut s = Sim::new(true);
+        std::sync::Arc::make_mut(&mut s.r.cmd.effective)
+            .keyboard
+            .interrupt = gorca_config::InterruptPolicy::Never;
+        s.focus_to(node, true, 0);
+        s.settle(3000);
+        s.command(CoreCmd::ReviewCurLine, 1);
+        s.settle(3000);
+        s.spoken.clear();
+        let before = s.epoch.current();
+        s.type_key_stamped(KeyKind::Letter('x'), Modifiers::empty(), before);
+        s.settle(1000);
+        assert!(
+            s.epoch.current() > before,
+            "node {node}: the epoch advanced"
+        );
+        let Some(x) = s.spoken.iter().find(|u| u.text == "x") else {
+            panic!("node {node}: x was not echoed");
+        };
+        assert!(
+            x.epoch >= s.epoch.current(),
+            "node {node}: the echo is stale"
+        );
+    }
+}

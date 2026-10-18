@@ -44,6 +44,9 @@ crates/gorca-core/src/statemodel/regressions.rs | node {node} {cmd:?}: the echo 
 crates/gorca-core/src/statemodel/regressions.rs | node {node}: x echoed
 crates/gorca-core/src/statemodel/regressions.rs | node {node}: y was not echoed
 crates/gorca-core/src/statemodel/regressions.rs | node {node}: the echo of y (epoch {:?}) is stale, current {:?}
+crates/gorca-core/src/statemodel/regressions.rs | node {node}: the epoch advanced
+crates/gorca-core/src/statemodel/regressions.rs | node {node}: x was not echoed
+crates/gorca-core/src/statemodel/regressions.rs | node {node}: the echo is stale
 crates/gorca-core/src/terminal.rs | verification code
 crates/gorca-core/src/terminal.rs | contrase\u{f1}a
 crates/gorca-core/src/terminal.rs | \u{43f}\u{430}\u{440}\u{43e}\u{43b}
@@ -58,6 +61,7 @@ crates/gorca-core/src/terminal.rs | caret {o}
 crates/gorca-core/src/terminal.rs | screen {} chars caret {caret:?}
 crates/gorca-core/src/terminal.rs | screen failed
 crates/gorca-core/src/terminal.rs | node or app gone
+crates/gorca-core/src/text/caret.rs | {word},
 crates/gorca-core/src/text/mod.rs | app not followed
 crates/gorca-core/src/text/mod.rs | text object focused
 crates/gorca-core/src/text/mod.rs | not trackable

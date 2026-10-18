@@ -3448,7 +3448,7 @@ fn every_boundary_mode_does_what_it_says() {
     };
     assert_eq!(
         said_at_boundary(all, false, "ab", 0, LEFT),
-        (vec!["start".to_owned(), "a".to_owned()], 1)
+        (vec!["start, a".to_owned()], 1)
     );
 }
 
