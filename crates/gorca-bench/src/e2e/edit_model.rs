@@ -169,6 +169,11 @@ pub fn expect(t: Target, chromium: bool, step: &str) -> Option<Exp> {
         "clip: select all" => Exp::SelectAll,
         "clip: Ctrl+C" => ex(&["copied"]),
         "clip: Ctrl+X" => Exp::Prefixed("cut, "),
+        // Firefox in the private session often sends no edit event at all for the paste (the next
+        // Ctrl+Z brings the cut text back, so the paste did not happen): nothing is claimed.
+        "clip: Ctrl+V" if matches!(t, Target::Web(_)) => {
+            Exp::OrSilent(Box::new(Exp::Prefixed("pasted, ")))
+        }
         "clip: Ctrl+V" => Exp::Prefixed("pasted, "),
         // GTK 3 entries and text views have no undo: nothing changes, nothing is claimed.
         "clip: Ctrl+Z" if has_undo(t) => Exp::FirstPrefixed("undo"),
