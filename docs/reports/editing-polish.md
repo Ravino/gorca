@@ -109,3 +109,25 @@ edge time (240 ms instead of 100 ms).
 - Web targets of the ED matrix (Firefox, Chromium) were not run; the model applies the same expectations there.
 - Statemodel `caret-silent` now accepts a cue as the answer of a key that moved nothing, and `caret-unit` is only
   judged when something was spoken.
+
+## Review round 1 (docs/reports/editing-polish-verify.md) and the boundary decision
+
+- F-1: leaving review no longer advances the epoch a second time (`on_mode_epoch(.., false, ..)`), the key's own press
+  already did; the `intent.epoch` rewrite is gone. Regression with two presses stamped before the Reader runs.
+- F-2: no "copied" in a secret field; cut and paste in one say only "cut" / "pasted", never the text.
+- F-3: a one-scalar placeholder insert and the caret after a cut, undo or redo are the key's own; a cut or paste that
+  Firefox reports as a wholesale replace is confirmed once (tests with both event shapes).
+- F-4: terminals honour `boundary` (WIT `term-config.boundary`, `term-action.cue`).
+- F-5: clipboard keys explain edits for 250 ms only; undo and redo read the text that came back ("undo, text").
+- F-6: statemodel `cue-on-move`: a boundary cue is wrong for a key that moved the world caret.
+- F-7: WIT package is `gorca:ext@0.3.0` (pre-1.0 carries no ABI promise, noted at `WIT_PACKAGE`).
+- F-8: the SDK word splitter is cluster aware (ZWJ sequences, flags, skin tones, marks, phantom); cluster vectors are shared.
+- Owner decision: `[editing] boundary` is a combinable list like `speech.caps`: `"off"`, `"cue"` (default), `"say"`,
+  `"cue+say"`, `["cue","say"]`, plus the legacy `"repeat"`. "say" speaks start/end (Home, End, and any key in a one-line
+  field) or top/bottom (other keys of a text view): "начало", "конец", "начало текста", "конец текста" in Russian.
+  Terminals say start/end only. Tests per mode in core, ext-vte and the config.
+
+Gates after the round: fmt, clippy, 2289 tests pass, xtask deps/strings, build-ext; ED G3E/G3T/G4E/G4T/GEDIT/TEDIT and
+Firefox FFIN/FFTA/FFCE (only the known-failing BackSpace selection step), M3 quick, M6 VT/VH/VR/VF and VV pass.
+Firefox pastes in the private session often arrive with no edit event; the reader then claims nothing (model: silent or
+"pasted, ..."). An undo in a contenteditable is reported as replace plus insert and reads "undo" then the restored text.
