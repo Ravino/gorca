@@ -317,6 +317,17 @@ fn start_keys(session: &str, lane: Sender<Intent>) -> Result<()> {
         "type='signal',interface='org.freedesktop.a11y.KeyboardMonitor',member='KeyEvent'",
         t,
     )?;
+    // Mutter 48.7 crashes in rebuild_all_grabbed_modifiers on a grabber that never called
+    // SetKeyGrabs (NULL modifiers): an empty set (two empty arrays, 8 zero bytes) goes first.
+    c.call(
+        "org.freedesktop.a11y.Manager",
+        "/org/freedesktop/a11y/Manager",
+        "org.freedesktop.a11y.KeyboardMonitor",
+        "SetKeyGrabs",
+        Some("aua(uu)"),
+        &[0u8; 8],
+        t,
+    )?;
     c.call(
         "org.freedesktop.a11y.Manager",
         "/org/freedesktop/a11y/Manager",

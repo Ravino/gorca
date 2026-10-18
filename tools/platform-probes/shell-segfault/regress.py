@@ -15,6 +15,9 @@ the gorca-side equivalents):
   det        A active, A killed, B starts at once
   setg       A active, B starts while A holds the name: B must not call the manager at all
 
+NOTE: the stall modes SIGSTOP the whole Shell (all threads). That models a stopped process, not a
+main-thread-only stall; there Peer.Ping is still answered by GDBus' worker thread.
+
 Only PIDs started here and GORCA_SHELL_PID (recorded by the rig) are signalled, never by name.
 Pass = the private shell is alive after each run and the expected gorca behaviour holds.
 """
