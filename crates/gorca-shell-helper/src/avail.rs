@@ -31,6 +31,8 @@ pub enum ProbeResult {
     Denied,
     /// A call exceeded its deadline.
     Timeout,
+    /// The helper's pre-auth rate limit answered (first contact after a reload); the client retries once.
+    RateLimited,
     /// Any other failure (the helper vanished mid-probe, bad reply).
     Failed,
 }
@@ -216,19 +218,21 @@ impl AvailMachine {
                 self.misses = 0;
                 Vec::new()
             }
-            ProbeResult::Timeout | ProbeResult::Failed => match self.avail {
-                // A helper we were using stopped answering: keep the gate (C-3), look again later.
-                PointerAvail::Ready { .. } | PointerAvail::Unresponsive => {
-                    self.avail = PointerAvail::Unresponsive;
-                    vec![AvailEffect::ReprobeAfter(self.next_backoff())]
+            ProbeResult::Timeout | ProbeResult::Failed | ProbeResult::RateLimited => {
+                match self.avail {
+                    // A helper we were using stopped answering: keep the gate (C-3), look again later.
+                    PointerAvail::Ready { .. } | PointerAvail::Unresponsive => {
+                        self.avail = PointerAvail::Unresponsive;
+                        vec![AvailEffect::ReprobeAfter(self.next_backoff())]
+                    }
+                    // Never reached Ready: stay where we are; the poll and owner events retry.
+                    PointerAvail::Absent
+                    | PointerAvail::Squatted
+                    | PointerAvail::Denied
+                    | PointerAvail::TooOld { .. }
+                    | PointerAvail::NoCap => vec![AvailEffect::ReprobeAfter(self.next_backoff())],
                 }
-                // Never reached Ready: stay where we are; the poll and owner events retry.
-                PointerAvail::Absent
-                | PointerAvail::Squatted
-                | PointerAvail::Denied
-                | PointerAvail::TooOld { .. }
-                | PointerAvail::NoCap => vec![AvailEffect::ReprobeAfter(self.next_backoff())],
-            },
+            }
         }
     }
 }

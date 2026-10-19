@@ -693,7 +693,7 @@ async fn the_queue_holds_one_in_flight_plus_four_and_refuses_the_rest() {
     let fake = Fake::new(2, &["capture", "pointer"]);
     let (client, _srv, _conn) = ready_client(&bus, &fake).await;
     let client = Arc::new(client);
-    fake.with(|s| s.stall = Duration::from_millis(150));
+    fake.with(|s| s.stall = Duration::from_millis(50));
     let mut tasks = Vec::new();
     for i in 0..8 {
         let c = Arc::clone(&client);
@@ -796,4 +796,51 @@ async fn a_name_taken_after_the_check_never_receives_a_call() {
     );
     assert!(evil.with(|s| s.calls.is_empty()));
     drop(attacker);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shutdown_releases_a_held_button_on_the_shared_connection() {
+    let bus = bus_or_skip!();
+    let fake = Fake::new(2, &["capture", "pointer"]);
+    let srv = serve(&bus.address, &fake, &BOTH).await;
+    let conn = connect(&bus.address).await;
+    let (client, task) = ShellHelperClient::start(conn.clone());
+    let mut rx = client.availability();
+    wait_avail(&mut rx, PointerAvail::can_call, 5).await;
+    let o = client
+        .button(Button::Left, ButtonAct::Press, dl(300))
+        .await
+        .unwrap();
+    assert!(o.holds(Button::Left));
+    assert_eq!(fake.with(|s| s.held), 1);
+    // gorca shuts down; the connection stays open (it is shared), so the helper cannot see a name vanish
+    client.shutdown();
+    tokio::time::timeout(Duration::from_secs(2), task)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        fake.with(|s| s.held),
+        0,
+        "the held button must be released on shutdown"
+    );
+    assert!(fake.with(|s| s.calls.iter().any(|c| c == "PointerRelease")));
+    drop(conn);
+    drop(srv);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn caller_deadlines_are_clamped_to_500_ms() {
+    let bus = bus_or_skip!();
+    let fake = Fake::new(2, &["capture", "pointer"]);
+    let (client, _srv, _conn) = ready_client(&bus, &fake).await;
+    fake.with(|s| s.stall = Duration::from_millis(1500));
+    let t0 = Instant::now();
+    let r = client.position(dl(60_000)).await;
+    assert_eq!(r.unwrap_err(), PointerError::Timeout);
+    assert!(
+        t0.elapsed() < Duration::from_millis(800),
+        "waited {:?}",
+        t0.elapsed()
+    );
 }

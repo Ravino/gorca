@@ -57,3 +57,11 @@ Client rule: before trusting replies, check that the owner of `org.gorca.ShellHe
 
 Why PNG and not raw: GJS copies `(array)` in-parameters, so `Clutter.Stage.paint_to_buffer` / `Cogl.Texture.get_data`
 cannot fill a JS buffer (both "succeed" and leave it zeroed). `Shell.Screenshot.screenshot_area` is the safe path.
+
+Client notes (`gorca-shell-helper`, ADR-0025 MO-2): (1) the first call of a NEW bus connection goes through the helper's
+pre-auth buckets; right after an extension reload, or during a flood of strangers, the shared lookup bucket can answer
+`Error.Failed rate:` to the very first `Ping`. The client probe retries once after 250 ms and otherwise schedules its
+normal re-probe. (2) The gorca client shares one bus connection, so the helper never sees "gorca vanished"; on shutdown
+the client sends a best-effort `PointerRelease` (150 ms). The helper additionally releases when the holder's unique name
+vanishes (`NameOwnerChanged`, H-3) and after the 125 s backstop. (3) Callers' deadlines are clamped to 500 ms; every call
+goes to the verified unique name of the Shell's owner of the helper name, never to the well-known name.

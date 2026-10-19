@@ -44,6 +44,11 @@ pub const PROBE_STEP: Duration = Duration::from_millis(150);
 /// A call is abandoned this long after its caller's deadline; an answer before that clears the
 /// overdue state.
 pub const LATE_CAP: Duration = Duration::from_secs(2);
+/// Callers' deadlines are clamped to this (P-2): a pointer command never waits longer, whatever the caller asked.
+pub const MAX_CALL_DEADLINE: Duration = Duration::from_millis(500);
+/// A first call from a new connection can hit the helper's pre-auth rate limit right after a reload (the
+/// global lookup bucket is shared); the probe retries once after this pause (P-3).
+pub const RATE_RETRY: Duration = Duration::from_millis(250);
 /// Retry of the first subscription (the bus connection is fine but the proxy failed).
 const SETUP_RETRY: Duration = Duration::from_secs(5);
 
@@ -115,6 +120,7 @@ impl ShellHelperClient {
     }
 
     async fn submit(&self, op: Op, deadline: Deadline) -> Result<Reply, PointerError> {
+        let deadline = Deadline(deadline.0.min(Instant::now() + MAX_CALL_DEADLINE));
         let avail = *self.avail.borrow();
         match avail {
             PointerAvail::Ready { .. } => {}
@@ -323,10 +329,30 @@ impl Actor {
                 },
             }
         }
-        // Dropping the connection releases held buttons in the helper (H-3).
+        // The connection is shared and outlives this actor, so the helper never sees gorca vanish: release
+        // whatever is held, best effort (P-1). The helper also releases on its own after 125 s (H-3).
+        self.release_on_exit().await;
         self.verified = None;
         self.machine = AvailMachine::new();
         self.publish();
+    }
+
+    /// Best-effort `PointerRelease` (150 ms) so a locked drag does not outlive gorca.
+    async fn release_on_exit(&self) {
+        let Some(dest) = self.verified.clone() else {
+            return;
+        };
+        let d = Deadline(Instant::now() + PROBE_STEP);
+        let _ = call_method(
+            &self.conn,
+            d,
+            &dest,
+            HELPER_PATH,
+            HELPER_INTERFACE,
+            "PointerRelease",
+            &(),
+        )
+        .await;
     }
 
     async fn setup(&mut self, cancel: &CancellationToken) -> Option<DBusProxy<'static>> {
@@ -398,8 +424,22 @@ impl Actor {
         self.publish();
     }
 
-    /// `Ping` then `Capabilities`, 150 ms each.
+    /// `Ping` then `Capabilities`, 150 ms each; one retry after [`RATE_RETRY`] if the helper rate limits it.
     async fn probe(&self) -> ProbeResult {
+        let first = self.probe_once().await;
+        if first != ProbeResult::RateLimited {
+            return first;
+        }
+        tokio::time::sleep(RATE_RETRY).await;
+        let second = self.probe_once().await;
+        if second == ProbeResult::RateLimited {
+            ProbeResult::Failed
+        } else {
+            second
+        }
+    }
+
+    async fn probe_once(&self) -> ProbeResult {
         let Some(dest) = self.verified.clone() else {
             return ProbeResult::Failed;
         };
@@ -561,9 +601,9 @@ fn probe_failure(e: &DbusError) -> ProbeResult {
         DbusError::Zbus(zbus::Error::MethodError(name, desc, _)) => {
             match map_remote_error(name.as_str(), desc.as_deref().unwrap_or("")) {
                 PointerError::Denied => ProbeResult::Denied,
+                PointerError::RateLimited => ProbeResult::RateLimited,
                 PointerError::Locked
                 | PointerError::Busy
-                | PointerError::RateLimited
                 | PointerError::NoWindow
                 | PointerError::BadArgs(_)
                 | PointerError::NoLocation
