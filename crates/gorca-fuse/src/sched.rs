@@ -40,8 +40,8 @@ impl Hasher for FxHasher {
 
 pub(crate) type FxMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
 
-/// `(class, deepest first, node index)`: smaller fuses first.
-pub(crate) type DirtyKey = (u8, Reverse<u32>, u32);
+/// `(class, order inside the class, node index)`: smaller fuses first.
+pub(crate) type DirtyKey = (u8, u32, u32);
 
 #[derive(Clone, Copy, Debug)]
 struct Live {
@@ -171,8 +171,8 @@ mod tests {
         NodeIdx(i)
     }
 
-    fn k(class: u8, depth: u32, i: u32) -> DirtyKey {
-        (class, Reverse(depth), i)
+    fn k(class: u8, sub: u32, i: u32) -> DirtyKey {
+        (class, sub, i)
     }
 
     #[test]

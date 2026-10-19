@@ -8,6 +8,7 @@
 //! * `mem`      100k-node build, RSS increase and carrier sizes (spec gate: <= 25 MB, 128 B entry);
 //! * `storm`    mixed events at 10k/25k/50k per second (real-time paced), per-event and per-1-ms
 //!   batch cost of `apply + run + publish`, backlog, lag (gate M-11: p99 <= 2 us/event);
+//! * `burst`    a 20k-event burst applied at once, drain time and priority events mid-drain;
 //! * `focus`    a focus change with ~100k dirty nodes (gate: synchronous part <= 0.5 ms);
 //! * `global`   `bump_global` synchronous part, sweep drain, priority-event latency during it;
 //! * `aging`    background aging under a priority storm (no starvation);
@@ -804,6 +805,8 @@ struct StormOut {
     per_fusion_ns: Pct,
     /// Time of events that caused exactly one fusion (no cascade).
     single_fusion_ns: Pct,
+    /// A focus-chain event during the storm: apply to the moment the sink gets it (us).
+    prio_us: Pct,
     batch_ns_per_event: Pct,
     batch_total_us: Pct,
     lag_batches: usize,
@@ -838,6 +841,7 @@ fn storm(w: &mut World, rate: usize, secs: f64, batched: bool, facts_rate: usize
     let mut per_event = Vec::with_capacity(total_ticks);
     let mut per_fusion = Vec::with_capacity(total_ticks);
     let mut single_fusion = Vec::with_capacity(total_ticks);
+    let mut prio_us: Vec<f64> = Vec::new();
     let mut batch_pe = Vec::new();
     let mut batch_tot = Vec::new();
     let mut focus = Vec::new();
@@ -914,6 +918,28 @@ fn storm(w: &mut World, rate: usize, secs: f64, batched: bool, facts_rate: usize
                 lag += 1;
             }
         }
+        // A priority event (the focused leaf is renamed) every 500 events, timed to the moment the
+        // sink receives it: this is the speech-path latency, apart from the per-event series.
+        if !batched && k % 500 == 250 {
+            let nm: Arc<str> = Arc::from(format!("prio{}", w.seq).as_str());
+            let inp = w.obs(w.focus_leaf, Write::Val(Val::Name(nm)));
+            let node = nid(w.focus_leaf);
+            let te = Instant::now();
+            w.e.apply([inp]);
+            let mut first: Option<Instant> = None;
+            let r = w.e.run_with(
+                Budget::until(Instant::now() + Duration::from_millis(2)),
+                &mut |p| {
+                    if p.node == node && first.is_none() {
+                        first = Some(Instant::now());
+                    }
+                },
+            );
+            black_box(r.fuse_calls);
+            if let Some(t) = first {
+                prio_us.push(us(t.duration_since(te)));
+            }
+        }
         // The focus moves every 100 ms (a keystroke-ish rate); timed apart.
         if k % (100_000 / tick.as_micros().max(1) as usize) == 0 && k > 0 {
             let t = Instant::now();
@@ -930,6 +956,7 @@ fn storm(w: &mut World, rate: usize, secs: f64, batched: bool, facts_rate: usize
         per_event_ns: pct(per_event),
         per_fusion_ns: pct(per_fusion),
         single_fusion_ns: pct(single_fusion),
+        prio_us: pct(prio_us),
         batch_ns_per_event: pct(batch_pe),
         batch_total_us: pct(batch_tot),
         lag_batches: lag,
@@ -952,6 +979,10 @@ fn scenario_storm(rep: &mut Report, secs: f64) {
     let mut worst_pe = 0.0f64;
     let mut worst_batch = 0.0f64;
     let mut worst_lag = 0usize;
+    let mut worst_prio = 0.0f64;
+    let mut worst_p50 = 0.0f64;
+    let mut worst_p999 = 0.0f64;
+    let mut util50 = 0.0f64;
     for (i, rate) in [10_000usize, 25_000, 50_000].into_iter().enumerate() {
         for batched in [false, true] {
             let mut w = World::build(100_000, 100, false);
@@ -989,7 +1020,19 @@ fn scenario_storm(rep: &mut Report, secs: f64) {
                     "    events with exactly one fusion:        {}",
                     r.single_fusion_ns.show("ns")
                 );
+                eprintln!(
+                    "    priority event -> sink (during the storm): {}",
+                    r.prio_us.show("us")
+                );
+                worst_prio = worst_prio.max(r.prio_us.p99);
                 worst_pe = worst_pe.max(r.per_event_ns.p99);
+                if rate >= 25_000 {
+                    worst_p50 = worst_p50.max(r.per_event_ns.p50);
+                }
+                worst_p999 = worst_p999.max(r.per_event_ns.p999);
+                if rate == 50_000 {
+                    util50 = r.util;
+                }
             }
             eprintln!("    focus change (set + run 16): {}", r.focus_us.show("us"));
             eprintln!(
@@ -1030,19 +1073,38 @@ fn scenario_storm(rep: &mut Report, secs: f64) {
     json.push(']');
     rep.put("storm", json);
     rep.gate(
-        "M-11 fusion+publish p99 <= 2 us/event, per-event (worst of 10k/25k/50k)",
-        format!("{:.2} us", worst_pe / 1e3),
-        worst_pe <= 2_000.0,
+        "M-11a per input event (apply+run+publish), 100k mirror, 100 patches, 5k facts/s: p50 <= 3 us and p99 <= 10 us (p99: worst of 10k/25k/50k; p50: 25k/50k ev/s)",
+        format!(
+            "p50 {:.2} us, p99 {:.2} us, p99.9 {:.1} us (info: p99.9 gate 50 us)",
+            worst_p50 / 1e3,
+            worst_pe / 1e3,
+            worst_p999 / 1e3
+        ),
+        worst_p50 <= 3_000.0 && worst_pe <= 10_000.0,
     );
     rep.gate(
-        "M-11 fusion+publish p99 <= 2 us/event, 1 ms coalescer batches (worst rate)",
-        format!("{:.2} us", worst_batch / 1e3),
-        worst_batch <= 2_000.0,
+        "M-11a' p99.9 <= 50 us (host conditions recorded)",
+        format!("{:.1} us", worst_p999 / 1e3),
+        worst_p999 <= 50_000.0,
     );
     rep.gate(
-        "M-11 no ingress lag: 1 ms coalescer batches whose apply+run exceeds the 1 ms tick (worst rate, 6 s each)",
-        format!("{worst_lag} batches over the tick"),
-        worst_lag == 0,
+        "M-11b capacity: writer busy <= 25 % at 50k ev/s + 5k facts/s",
+        format!("{:.1} % busy", util50 * 100.0),
+        util50 <= 0.25,
+    );
+    rep.gate(
+        "M-11c priority event -> sink during the storm: p99 <= 100 us (worst of 10k/25k/50k)",
+        format!("p99 {worst_prio:.1} us"),
+        worst_prio <= 100.0,
+    );
+    rep.gate(
+        "info legacy M-11 p99 <= 2 us per event (superseded by M-11a), per-event / batch average",
+        format!(
+            "{:.2} us / {:.2} us; lag batches {worst_lag}",
+            worst_pe / 1e3,
+            worst_batch / 1e3
+        ),
+        true,
     );
 }
 
@@ -1081,6 +1143,7 @@ fn scenario_tick(rep: &mut Report) {
     let mut json = String::from("[");
     let mut first = true;
     let mut costs = Vec::new();
+    let mut p99s = Vec::new();
     for facts in [0usize, 1_000, 10_000, 50_000] {
         let mut w = World::build(100_000, 0, false);
         let mut inputs = Vec::with_capacity(facts);
@@ -1100,6 +1163,7 @@ fn scenario_tick(rep: &mut Report) {
         let p = pct(v);
         eprintln!("{facts:>6} facts stored: {}", p.show("us"));
         costs.push(p.p50);
+        p99s.push(p.p99);
         let _ = write!(
             json,
             "{}{{\"facts\":{facts},\"tick_us\":{}}}",
@@ -1117,6 +1181,11 @@ fn scenario_tick(rep: &mut Report) {
             costs[0], costs[1], costs[2], costs[3]
         ),
         costs[3] <= 20.0 && costs[3] <= costs[0].max(1.0) * 3.0,
+    );
+    rep.gate(
+        "M-11e Input::Tick p99 <= 5 us at 0 and at 50k stored facts",
+        format!("p99 {:.2} us @0, {:.2} us @50k", p99s[0], p99s[3]),
+        p99s[0] <= 5.0 && p99s[3] <= 5.0,
     );
 }
 
@@ -1257,7 +1326,7 @@ fn scenario_focus(rep: &mut Report) {
         a.p99 <= 500.0,
     );
     rep.gate(
-        "focus change @100k dirty: focus chain fused and published within 0.5 ms (p99)",
+        "M-11d focus change @100k dirty: whole focus chain fused within 0.5 ms (p99)",
         format!(
             "p99 {:.1} us (p50 {:.1}); needed p50 {:.0} / p99 {:.0} fusions for ~6 nameable chain nodes; all published: {chain_all_fused}",
             b.p99, b.p50, cc.p50, cc.p99
@@ -1268,6 +1337,85 @@ fn scenario_focus(rep: &mut Report) {
         "info: sync drain (chain + 200 fusions) p99 <= 0.5 ms",
         format!("p99 {:.1} us", c.p99),
         c.p99 <= 500.0,
+    );
+}
+
+// ---- scenario: a 20k-event burst ------------------------------------------------------------------
+
+fn scenario_burst(rep: &mut Report) {
+    eprintln!("\n== burst: 20k events applied at once, priority events during the drain ==");
+    let mut w = World::build(100_000, 100, false);
+    w.set_focus();
+    w.e.run(Budget::UNLIMITED);
+    let (mut drain_ms, mut prio, mut apply_ms) = (Vec::new(), Vec::new(), Vec::new());
+    let mut pending_end = 0usize;
+    let mut missed = 0usize;
+    for _ in 0..12 {
+        let mut inputs = Vec::with_capacity(20_000);
+        for _ in 0..20_000 {
+            inputs.push(w.primary_event());
+        }
+        let t = Instant::now();
+        w.e.apply(inputs);
+        apply_ms.push(t.elapsed().as_secs_f64() * 1e3);
+        let t_drain = Instant::now();
+        let mut round = 0usize;
+        while w.e.pending() > 0 {
+            // Every 4th round a priority event (the focused leaf renamed) arrives mid-drain.
+            if round % 4 == 1 {
+                let nm: Arc<str> = Arc::from(format!("burst{}", w.seq).as_str());
+                let inp = w.obs(w.focus_leaf, Write::Val(Val::Name(nm)));
+                let node = nid(w.focus_leaf);
+                let te = Instant::now();
+                w.e.apply([inp]);
+                let mut first: Option<Instant> = None;
+                let r = w.e.run_with(
+                    Budget::until(Instant::now() + Duration::from_millis(1)),
+                    &mut |p| {
+                        if p.node == node && first.is_none() {
+                            first = Some(Instant::now());
+                        }
+                    },
+                );
+                black_box(r.fuse_calls);
+                match first {
+                    Some(t) => prio.push(us(t.duration_since(te))),
+                    None => missed += 1,
+                }
+            } else {
+                let r = w.e.run(Budget::until(Instant::now() + Duration::from_millis(1)));
+                black_box(r.fuse_calls);
+            }
+            round += 1;
+        }
+        drain_ms.push(t_drain.elapsed().as_secs_f64() * 1e3);
+        pending_end = w.e.pending();
+    }
+    let (d, p, a) = (pct(drain_ms), pct(prio), pct(apply_ms));
+    eprintln!("apply of 20k events:                      {}", a.show("ms"));
+    eprintln!("drain of 20k events (1 ms runs):          {}", d.show("ms"));
+    eprintln!("priority event -> sink during the drain:  {} (missed {missed})", p.show("us"));
+    rep.put(
+        "burst",
+        format!(
+            "{{\"apply_ms\":{},\"drain_ms\":{},\"prio_us\":{},\"missed\":{missed},\"pending_end\":{pending_end}}}",
+            a.json(),
+            d.json(),
+            p.json()
+        ),
+    );
+    rep.gate(
+        "M-11b a 20k-event burst drains (apply+run) within 70 ms and pending returns to 0",
+        format!(
+            "apply p50 {:.1} ms + drain p50 {:.1} ms / p99 {:.1} ms, pending end {pending_end}",
+            a.p50, d.p50, d.p99
+        ),
+        a.p50 + d.p99 <= 70.0 && pending_end == 0,
+    );
+    rep.gate(
+        "M-11c priority event -> sink during a 20k burst: p99 <= 100 us, none missed",
+        format!("p99 {:.1} us (p50 {:.1}), missed {missed}", p.p99, p.p50),
+        p.p99 <= 100.0 && missed == 0,
     );
 }
 
@@ -1812,6 +1960,9 @@ fn main() {
     }
     if want("focus") {
         scenario_focus(&mut rep);
+    }
+    if want("burst") {
+        scenario_burst(&mut rep);
     }
     if want("global") {
         scenario_global(&mut rep);

@@ -201,9 +201,11 @@ pub struct ApplyReport {
     pub errors: Vec<IvmError>,
 }
 
-/// The class of every node outside the priority set (classes 0..=3 are the focus chain, the
-/// visible window and the nodes feeding each of them).
-const REST_CLASS: u8 = 4;
+/// Fusion classes, front to back: 0 the focused node and the descendants whose names it reads
+/// (deepest first, so they fuse before the name that reads them); 1 its ancestors, nearest first;
+/// 2 the visible window in reading order from the focus; 3 everything else (the backlog, deepest
+/// first, aging).
+const REST_CLASS: u8 = 3;
 
 /// Runs a node must wait in the dirty set before aging may pick it ahead of depth order.
 const AGE_RUNS: u64 = 3;
@@ -342,9 +344,8 @@ pub struct Ivm<Q: Quirks, P: PatchSource> {
     visible: Vec<NodeIdx>,
     /// The priority set: focus chain, visible window and the descendants that feed them (bounded
     /// by `Limits::max_priority`), computed top-down once per change.
-    /// Class of each member: 0 = focus chain, 1 = visible window, 2 = what feeds the focus chain,
-    /// 3 = what feeds the visible window. Every other node is `REST_CLASS`.
-    prio: HashMap<NodeIdx, u8>,
+    /// Class and position of each member (see `REST_CLASS`); every other node is in the last class.
+    prio: HashMap<NodeIdx, (u8, u32)>,
     /// Work of the last priority-set computation (nodes visited), for the cost tests.
     prio_work: usize,
     /// Silencing states by stable source name: a revoked, quarantined or paused source keeps its
@@ -769,6 +770,13 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         self.apply_prio();
     }
 
+    /// The non-primary sources behind the published entry of `node`, group by group (what the
+    /// silence mask consults).
+    #[doc(hidden)]
+    pub fn contrib_of(&self, node: NodeIdx) -> Vec<(Group, SourceId)> {
+        node_of(&self.nodes, node).map_or_else(Vec::new, |n| n.contrib().to_vec())
+    }
+
     /// Whether `node` is waiting to be re-fused.
     pub fn is_dirty(&self, node: NodeIdx) -> bool {
         self.dirty.contains(node)
@@ -804,8 +812,15 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     fn key_of(&self, n: NodeIdx) -> Option<DirtyKey> {
         let nd = node_of(&self.nodes, n)?;
-        let class = self.prio.get(&n).copied().unwrap_or(REST_CLASS);
-        Some((class, Reverse(nd.depth), n.0))
+        // Deepest first for the classes that must fuse children before the names that read them.
+        let deep_first = u32::MAX - nd.depth;
+        Some(match self.prio.get(&n) {
+            // Children before the names that read them: deepest first in classes 0 and 2. The
+            // ancestors (class 1) keep the order given, nearest first, which is deepest first too.
+            Some(&(class @ (0 | 2), _)) => (class, deep_first, n.0),
+            Some(&(class, pos)) => (class, pos, n.0),
+            None => (REST_CLASS, deep_first, n.0),
+        })
     }
 
     /// Whether `p` derives its name from its children (its effective role is named from content).
@@ -815,50 +830,56 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             .is_some_and(|e| self.profile.rules.content_named.has(e.sem.role))
     }
 
-    /// The priority set: the focus chain (class 0) and the visible window (class 1) themselves,
-    /// then the nodes that feed them (classes 2 and 3: the first `max_children` children of a
-    /// member that reads its children). Seeds fuse before feeders, so the node being spoken is
-    /// fused first and re-fused when a feeder changes. Bounded by `Limits::max_priority` visited
-    /// nodes (the excess falls to the normal class), so the cost does not depend on the tree.
-    fn compute_prio(&mut self) -> HashMap<NodeIdx, u8> {
+    /// The priority set, dependency ordered: the focused node (`focus[0]`) and the descendants it
+    /// reads (class 0), its ancestors in the order given, nearest first (class 1), then the visible
+    /// window, deepest first (class 2). Bounded by
+    /// `Limits::max_priority` members (the excess falls to the backlog class), so the cost does
+    /// not depend on the tree.
+    fn compute_prio(&mut self) -> HashMap<NodeIdx, (u8, u32)> {
         let limit = self.profile.limits.max_priority.max(1);
         let cap = self.profile.limits.max_children.max(1);
-        let mut set: HashMap<NodeIdx, u8> = HashMap::new();
+        let mut set: HashMap<NodeIdx, (u8, u32)> = HashMap::new();
         let mut work = 0usize;
-        let live = |n: &&NodeIdx| node_of(&self.nodes, **n).is_some();
-        for (class, seeds) in [(0u8, &self.focus), (1u8, &self.visible)] {
-            for n in seeds.iter().filter(live) {
-                work += 1;
-                if set.len() < limit {
-                    set.entry(*n).or_insert(class);
+        let live = |n: &NodeIdx| node_of(&self.nodes, *n).is_some();
+        let mut queue: VecDeque<NodeIdx> = VecDeque::new();
+        if let Some(&f) = self.focus.first().filter(|n| live(n)) {
+            set.insert(f, (0, 0));
+            queue.push_back(f);
+        }
+        // Class 0: what the focused node's name reads, breadth first, bounded.
+        while let Some(n) = queue.pop_front() {
+            work += 1;
+            if !self.reads_children(n) {
+                continue;
+            }
+            if let Some(nd) = node_of(&self.nodes, n) {
+                for c in nd.children.iter().take(cap) {
+                    if set.len() < limit && !set.contains_key(c) {
+                        set.insert(*c, (0, 0));
+                        queue.push_back(*c);
+                    }
                 }
             }
         }
-        for (class, seeds) in [(2u8, &self.focus), (3u8, &self.visible)] {
-            let mut queue: VecDeque<NodeIdx> = seeds.iter().filter(live).copied().collect();
-            while let Some(n) = queue.pop_front() {
-                if set.len() >= limit {
-                    break;
-                }
-                work += 1;
-                if !self.reads_children(n) {
-                    continue;
-                }
-                if let Some(nd) = node_of(&self.nodes, n) {
-                    for c in nd.children.iter().take(cap) {
-                        if set.len() < limit && !set.contains_key(c) {
-                            set.insert(*c, class);
-                            queue.push_back(*c);
-                        }
-                    }
-                }
+        for (i, n) in self.focus.iter().enumerate().skip(1) {
+            work += 1;
+            if live(n) && set.len() < limit {
+                set.entry(*n)
+                    .or_insert((1, u32::try_from(i).unwrap_or(u32::MAX)));
+            }
+        }
+        for (i, n) in self.visible.iter().enumerate() {
+            work += 1;
+            if live(n) && set.len() < limit {
+                set.entry(*n)
+                    .or_insert((2, u32::try_from(i).unwrap_or(u32::MAX)));
             }
         }
         self.prio_work = work;
         set
     }
 
-    /// Recompute the priority set and re-key only the dirty nodes whose class changed.
+    /// Recompute the priority set and re-key only the dirty nodes whose class or position changed.
     fn apply_prio(&mut self) {
         let new = self.compute_prio();
         let moved: Vec<NodeIdx> = self
@@ -882,7 +903,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     /// Whether `n` is in the focus chain or the visible window (or feeds one of them).
     #[doc(hidden)]
     pub fn priority_class(&self, n: NodeIdx) -> u8 {
-        self.prio.get(&n).copied().unwrap_or(REST_CLASS)
+        self.prio.get(&n).map_or(REST_CLASS, |c| c.0)
     }
 
     fn mark_dirty(&mut self, n: NodeIdx) {
@@ -1436,7 +1457,12 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             if budget.exhausted(rep.fuse_calls) {
                 break;
             }
-            let aged = if self.aged_total < self.fused_total / 4 {
+            // Aging takes a quarter of all fusions, but never the only slot of a run while
+            // priority work is waiting.
+            let priority_waiting = self.dirty.peek().is_some_and(|k| k.0 < REST_CLASS);
+            let aged = if self.aged_total < self.fused_total / 4
+                && !(priority_waiting && rep.fuse_calls == 0)
+            {
                 self.dirty.oldest(self.tick, AGE_RUNS)
             } else {
                 None
@@ -1712,6 +1738,11 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     /// FUSE from scratch over the current registers, tree and side table, by an independent code
     /// path (full binding pass, no caches, no dirty set). Entries carry `sem_rev` 0.
     pub fn full_check(&self) -> Vec<Option<SemEntry>> {
+        self.full_eval().1
+    }
+
+    /// The from-scratch S0 and entry of every node.
+    fn full_eval(&self) -> (Vec<Option<S0Node>>, Vec<Option<SemEntry>>) {
         let n = self.nodes.len();
         let live = Live {
             nodes: &self.nodes,
@@ -1808,14 +1839,33 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             drop(vs);
             out[i] = Some(fused.entry);
         }
-        out
+        (s0s, out)
     }
 
     /// F7: compare the published entries with [`Ivm::full_check`] (ignoring `sem_rev`). Returns
     /// the nodes that differ. Only meaningful once `pending() == 0`.
     pub fn verify(&self) -> Result<(), Vec<NodeIdx>> {
-        let full = self.full_check();
+        let (full_s0, full) = self.full_eval();
         let mut bad = Vec::new();
+        // The stored S0 (published entry + delta) must give back the real S0 over the groups
+        // selectors read.
+        let reads = self.patches.reads();
+        let mask = GroupMask(reads.parent.0 | reads.children.0);
+        for (i, s0) in full_s0.iter().enumerate() {
+            let Ok(idx) = u32::try_from(i) else { continue };
+            let view = s0_view_of(&self.nodes, NodeIdx(idx));
+            let ok = match (s0, view) {
+                (None, None) => true,
+                (Some(s0), Some(v)) => Group::ALL
+                    .iter()
+                    .filter(|g| mask.has(**g))
+                    .all(|g| &v.slot(*g) == s0.slot(*g)),
+                _ => false,
+            };
+            if !ok {
+                bad.push(NodeIdx(idx));
+            }
+        }
         for (i, f) in full.iter().enumerate() {
             let have = self
                 .nodes
