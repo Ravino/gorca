@@ -44,6 +44,8 @@ struct FNode {
     text: String,
     /// Answer `GetRole` only after this long (a hung page).
     role_delay: Duration,
+    /// The target of an `EMBEDS` relation (`GetRelationSet`).
+    embeds: Option<u64>,
 }
 
 #[derive(Debug, Default)]
@@ -95,6 +97,13 @@ impl Acc {
             .iter()
             .map(|c| (":1.1".to_owned(), opath(*c)))
             .collect()
+    }
+
+    fn get_relation_set(&self) -> Vec<(u32, Vec<(String, OwnedObjectPath)>)> {
+        match self.tree.lock().unwrap().nodes[&self.id].embeds {
+            Some(t) => vec![(13, vec![(":1.1".to_owned(), opath(t))])],
+            None => Vec::new(),
+        }
     }
 
     fn get_attributes(&self) -> HashMap<String, String> {
@@ -314,6 +323,7 @@ impl Fake {
                     children: Vec::new(),
                     text: String::new(),
                     role_delay: Duration::ZERO,
+                    embeds: None,
                 },
             );
             id
@@ -2107,4 +2117,155 @@ async fn a_guessed_repair_is_answered_by_the_cheap_look_when_nothing_changed() {
     );
     b.shutdown.cancel();
     let _ = b.task.await;
+}
+
+// ---------------------------------------------------------------------------------------------
+// window_document: the page behind the toolkit window's focus panel (Firefox window activation)
+
+struct Win {
+    gtk_panel: u64,
+    /// The selected tab's document and a background tab's.
+    selected: u64,
+    background: u64,
+    gecko: u64,
+    root: u64,
+}
+
+/// root -> [gtk frame "T" -> panel], [gecko frame "T" -> chrome panel -> internal frame ->
+/// (background doc, selected doc)]. The background document comes first in tree order.
+async fn win(fake: &Fake) -> Win {
+    let root = fake.node(raw::APPLICATION, "Firefox", "", None).await;
+    let gtk = fake.node(raw::FRAME, "T", "", None).await;
+    let gtk_panel = fake.node(raw::PANEL, "", "", None).await;
+    let gecko = fake.node(raw::FRAME, "T", "", None).await;
+    let tabs = fake.node(raw::PANEL, "", "", None).await;
+    let inner = fake.node(raw::PANEL, "", "", None).await;
+    let background = fake.node(raw::DOCUMENT_WEB, "old tab", "", None).await;
+    let selected = fake.node(raw::DOCUMENT_WEB, "page", "", None).await;
+    fake.tree
+        .lock()
+        .unwrap()
+        .nodes
+        .get_mut(&background)
+        .unwrap()
+        .state &= !(1 << 25);
+    for (p, c) in [
+        (root, gtk),
+        (gtk, gtk_panel),
+        (root, gecko),
+        (gecko, tabs),
+        (tabs, inner),
+        (inner, background),
+        (inner, selected),
+    ] {
+        fake.link(p, c);
+    }
+    Win {
+        gtk_panel,
+        selected,
+        background,
+        gecko,
+        root,
+    }
+}
+
+async fn locate_window(conn: &AppConn, w: &Win, from: u64) -> Option<String> {
+    tokio::time::timeout(
+        Duration::from_secs(5),
+        gorca_doc_source_atspi::factory::window_document_from(
+            conn,
+            &path_of(w.root),
+            &path_of(from),
+        ),
+    )
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn window_document_follows_embeds_to_the_selected_tab() {
+    let (fake, conn) = Fake::start(1).await;
+    let w = win(&fake).await;
+    // Both tabs showing, as a half-built tree can be: only EMBEDS says which one is selected.
+    fake.tree
+        .lock()
+        .unwrap()
+        .nodes
+        .get_mut(&w.background)
+        .unwrap()
+        .state |= 1 << 25;
+    fake.tree
+        .lock()
+        .unwrap()
+        .nodes
+        .get_mut(&w.gecko)
+        .unwrap()
+        .embeds = Some(w.selected);
+    assert_eq!(
+        locate_window(&conn, &w, w.gtk_panel).await,
+        Some(path_of(w.selected))
+    );
+}
+
+#[tokio::test]
+async fn window_document_without_embeds_takes_the_single_showing_document() {
+    let (fake, conn) = Fake::start(1).await;
+    let w = win(&fake).await;
+    assert_eq!(
+        locate_window(&conn, &w, w.gtk_panel).await,
+        Some(path_of(w.selected)),
+        "the background tab is not showing"
+    );
+}
+
+#[tokio::test]
+async fn window_document_refuses_two_showing_documents_without_embeds() {
+    let (fake, conn) = Fake::start(1).await;
+    let w = win(&fake).await;
+    fake.tree
+        .lock()
+        .unwrap()
+        .nodes
+        .get_mut(&w.background)
+        .unwrap()
+        .state |= 1 << 25;
+    assert_eq!(locate_window(&conn, &w, w.gtk_panel).await, None);
+}
+
+#[tokio::test]
+async fn window_document_refuses_a_second_window_of_the_same_title() {
+    let (fake, conn) = Fake::start(1).await;
+    let w = win(&fake).await;
+    // A private window with the same page title and its own document.
+    let other = fake.node(raw::FRAME, "T", "", None).await;
+    let doc = fake.node(raw::DOCUMENT_WEB, "page", "", None).await;
+    fake.link(w.root, other);
+    fake.link(other, doc);
+    assert_eq!(locate_window(&conn, &w, w.gtk_panel).await, None);
+}
+
+#[tokio::test]
+async fn window_document_leaves_the_browsers_own_interface_alone() {
+    let (fake, conn) = Fake::start(1).await;
+    let w = win(&fake).await;
+    // A childless panel inside a toolbar (not directly under a window), a button, an entry, a
+    // panel that has children, and a window without a title.
+    let bar = fake.node(raw::TOOL_BAR, "Navigation", "", None).await;
+    let bar_panel = fake.node(raw::PANEL, "", "", None).await;
+    let button = fake.node(raw::PUSH_BUTTON, "Back", "", None).await;
+    let entry = fake
+        .node(raw::ENTRY, "Search or enter address", "", None)
+        .await;
+    fake.link(w.gecko, bar);
+    fake.link(bar, bar_panel);
+    fake.link(bar, button);
+    fake.link(bar, entry);
+    for n in [bar_panel, button, entry, w.gecko] {
+        assert_eq!(locate_window(&conn, &w, n).await, None, "node {n}");
+    }
+    let nameless = fake.node(raw::FRAME, "", "", None).await;
+    let np = fake.node(raw::PANEL, "", "", None).await;
+    fake.link(w.root, nameless);
+    fake.link(nameless, np);
+    assert_eq!(locate_window(&conn, &w, np).await, None);
 }
