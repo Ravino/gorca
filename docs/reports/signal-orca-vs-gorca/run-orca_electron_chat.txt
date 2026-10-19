@@ -1,0 +1,33 @@
+settle  -       consumed=None  passed=None  focus-events=1 (+0 
+prime   Shift   consumed=False passed=True  focus-events=1 +11 table row name='' table row<article<list item<list (+0 child
+        ORCA  'Signal-like fixture frame'
+        ORCA  'left shift'
+up1     Up      consumed=False passed=True  focus-events=1 +21 table row name='' table row<article<list item<list (+0 child
+up2     Up      consumed=False passed=True  focus-events=1 +11 table row name='' table row<article<list item<list (+0 child
+        ORCA  'Contact 0 Message number 398 body text 10:38 Message'
+        ORCA  'Me Message number 397 body text 10:37 Message'
+up3     Up      consumed=False passed=True  focus-events=1 +11 table row name='' table row<article<list item<list (+0 child
+up4     Up      consumed=False passed=True  focus-events=1 +12 table row name='' table row<article<list item<list (+0 child
+        ORCA  'Contact 0 Message number 396 body text 10:36 Message'
+down1   Down    consumed=False passed=True  focus-events=1 +10 table row name='' table row<article<list item<list (+0 child
+        ORCA  'Contact 0 Message number 395 body text 10:35 Message'
+down2   Down    consumed=False passed=True  focus-events=1 +11 table row name='' table row<article<list item<list (+0 child
+        ORCA  'Contact 0 Message number 396 body text 10:36 Message'
+home    Home    consumed=False passed=True  focus-events=1 +27 table row name='' table row<article<list item<list (+28 chil
+        ORCA  'Me Message number 397 body text 10:37 Message'
+        ORCA  'Contact 0 Message number 0 body text 10:00 Message'
+        ORCA  'Contact 0'
+        ORCA  'Contact 0 Message number 0 body text 10:00'
+end     End     consumed=False passed=True  focus-events=1 +28 table row name='' table row<article<list item<list (+25 chil
+        ORCA  'Contact 0 Message number 399 body text 10:39 Message'
+        ORCA  'Message number 399 body text'
+tab     Tab     consumed=False passed=True  focus-events=1 +11 entry name='Send a message' entry<section<section<section (+
+        ORCA  'Contact 0 Message number 399 body text 10:39'
+        ORCA  'tab'
+        ORCA  'leaving list.'
+        ORCA  'leaving main content.'
+        ORCA  'Send a message entry.'
+        ORCA  'Focus mode'
+enter   Return  consumed=False passed=True  focus-events=1 (+2 
+        ORCA  'return'
+flush   -       consumed=None  passed=None  focus-events=1 (+0 
