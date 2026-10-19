@@ -1,7 +1,8 @@
-# ADR-0016: Configuration profiles (typed layer stack, triggers, origin-layer edits)
+# ADR-0016: Configuration profiles (typed layer stack, triggers, per-app edits)
 
-Status: **Proposed** (r2, 2026-10-19: review `docs/reports/adr-0016-review.md` r1 ACCEPT-WITH-CHANGES,
-H-1..H-3, M-1..M-7 and L-1..L-8 integrated, mapping in §8). Owner: architect.
+Status: **Proposed** (r3, 2026-10-19: owner answers Q-P1..Q-P6 applied, §9; r2: review
+`docs/reports/adr-0016-review.md` r1 ACCEPT-WITH-CHANGES, H-1..H-3, M-1..M-7 and L-1..L-8 integrated, §8).
+Owner: architect. **One rule awaits owner confirmation: PK-1 (§2.5).**
 Relates to: ADR-0005 (settings as data, explicit save, `ArcSwap<Settings>`, keymaps), ADR-0003 §21 and
 `docs/design/browse-mode.md` (browse/focus machine), ADR-0019 (extension platform, data-first add-ons, I-8,
 `request-mode`), ADR-0021 (`browse.selection_model`), ADR-0022 (presentation, `ReportFlags`), ADR-0024 §2.13
@@ -42,7 +43,8 @@ Requirements:
 
 ## 2. Decision
 
-**Typed layer stack with automatic triggers and origin-layer edits** (option A3 of `phase-3-features.md` §3.2).
+**Typed layer stack with automatic triggers; edits go to the focused application's profile** (option A3 of
+`phase-3-features.md` §3.2, with the owner's Q-P1 edit rule replacing A3's origin-layer rule in r3).
 All resolvers read **one published snapshot**; effective settings are precomputed per match set and swapped as one
 `Arc`.
 
@@ -53,23 +55,23 @@ All resolvers read **one published snapshot**; effective settings are precompute
 | L0 Defaults | `SETTINGS` table | no | yes / yes | every key |
 | L1 Preset | keyboard preset × layout (`presets/*.toml`) | no | yes / yes | keymap, keyboard-implied defaults |
 | L2 Extension defaults | extension schema defaults | no | no / yes | only `ext.<id>.*` of that extension (ADR-0019 I-8) |
-| L3 Product rows | first-party rows compiled into `gorca-config` (`include_str!("product/*.toml")`) | no (shadowed) | **yes / yes** | `vendor` keys (§2.3), each row names its apps (PF-4) |
-| L4 Add-on rows | `[[profile]]` rows of installed extensions | no (shadowed) | no / **no** | `vendor` keys, non-`privacy`, confined to the extension's `app_name` list (PF-4); third-party rows **off** until enabled |
+| L3 Third-party rows | `[[profile]]` rows of installed third-party extensions | no | no / **no** | `vendor` keys, non-`privacy`, confined to the extension's `app_name` list (PF-4); **off** until the user enables each (owner Q-P2) |
+| L4 First-party rows | product rows compiled into `gorca-config` (`include_str!("product/*.toml")`) and rows of first-party extensions in this repository | no | product rows **yes / yes**; extension rows no / no | as L3; **on** automatically and above every third-party row (owner Q-P2) |
 | L5 User base | `~/.config/gorca/gorca.toml` | yes | yes / yes | every key; see UB-1 |
-| L6 User profiles | `~/.config/gorca/profiles/*.toml`, incl. **shadows** of L3/L4 rows | yes | no / no | every non-`Base` key, subject to the matrix (§2.3) |
-| (L7 Manual profile) | a user profile activated by command | — | — | **type-only in M14a** (owner Q-P5): the `LayerRef::Manual` variant and the snapshot field exist, nothing activates it until the M15a chooser |
+| L6 User profiles | `~/.config/gorca/profiles/*.toml`: app profiles (auto-created by edits, PE-1), site/window/context profiles, manual-only profiles | yes | no / no | keys of the global schema only (PK-1), never `Base` keys, subject to the matrix (§2.3); an app **pin** (PS-1) replaces automatic selection for one app |
 | Session deltas | unsaved runtime edits | — | — | **not a layer above the others**: each writable layer (L5, each L6 file) carries its own delta, folded directly on top of that layer's file values |
 | Safety clamp | — | — | always | PC-1 |
 
-Fold order: `L0, L1, L2, L3 (by specificity), L4 (by specificity), L5 (file ⊕ Δ, UB-1), L6 (by specificity,
-file ⊕ Δ each), [L7], clamp`. Names, not numbers, are normative; ADR-0024 PS-5 "L3/L5/L6" means the user layers
-(here L5, L6, L7) and "vendor (L4)" means L3 and L4.
+Fold order: `L0, L1, L2, L3 (by specificity), L4 (by specificity), L5 (file ⊕ Δ, UB-1), L6 (the pinned profile,
+or the matching profiles by specificity; file ⊕ Δ each), clamp`. Names, not numbers, are normative; ADR-0024 PS-5
+"L3/L5/L6" means the user layers (here L5, L6) and "vendor (L4)" means L3 and L4. Every user profile sits above
+every row, so overriding a row needs no shadow file (r2 shadows are dropped): the app profile carries the key.
 
 - **UB-1 User choices beat add-on and product rows; generated defaults do not.** An L5 entry whose value equals the
   L0/L1 default is not an override (a full dump of the defaults, as `gorca --defaults` writes, must not cancel
   every row); it is skipped in the fold. Any L5 entry that differs from the default, and every L5 entry of a
-  `privacy` key, sits above L3/L4. To keep the default value against a row, the user disables the row (PF-2) or
-  overrides it in its shadow. `settings.explain_current` says which applies.
+  `privacy` key, sits above L3/L4 (owner Q-P6: yes). To keep the default value against a row, the user disables
+  the row (PF-2) or sets the key in the app profile. `settings.explain_current` says which applies.
 - **PM-1 Specificity** inside L3, L4 and L6: for each key the most specific profile that sets it wins. A profile's
   specificity is that of its most specific *matching* trigger: `Site > Window > App > Context`; ties: longer
   literal prefix of the best matching glob, then profile id order, with one load diagnostic naming both.
@@ -105,7 +107,7 @@ pub enum FocusContext { Terminal, Editable, Document, BrowseMode, FocusMode, Men
 - **TR-2 Compiled index.** `ProfileSet::compile` builds per-kind lookup tables: app matchers → profile ids
   (evaluated once per app), a `[Vec<ProfileId>; N_CONTEXT]` table, window and site glob lists. A focus change
   unions at most four cached id lists and interns the result.
-- **TR-3 ProfileKey** = `(rows: MatchSetId, user: MatchSetId, manual: Option<ProfileId>)`, interned `u32`s.
+- **TR-3 ProfileKey** = `(rows: MatchSetId, user: MatchSetId, pin: Option<PinId>)`, interned `u32`s.
 - **TR-4 Suspension** (NVDA): triggers are not re-evaluated while the Reader is in its own modes (`Chooser`,
   `Prompt`, `InputHelp`); the latest focus is remembered and evaluated once on leaving.
 - **TR-5 Deferred:** a `SayAll` trigger (Phase 4); add-on context tags as `ctx.tag` facts matched by `Context`
@@ -138,7 +140,7 @@ pub enum KeyScope {
 | `echo.*` | Focus | **no** | **yes** | typing echo is a privacy choice (shoulder-surfing, shared rooms) |
 | `editing.announce_clipboard` | Focus | **no** | **yes** | clipboard contents spoken |
 | other `editing.*`, `text.*` timings, `verbosity.*`, `report.*` (new, compiled to `ReportFlags`, M22d) | Focus | yes | no | `editing.word` per app (decision 2026-10-17) |
-| `browse.enabled`, `browse.mode_default`, `browse.auto_focus_mode`, `browse.sticky_focus`, `browse.selection_model` (ADR-0021), `browse.say_all_on_load` | **Doc** | yes | no | mode policy inputs (§2.6) |
+| `browse.enabled`, `browse.mode_default`, `browse.auto_focus_mode`, `browse.toggle_scope`, `browse.selection_model` (ADR-0021), `browse.say_all_on_load` | **Doc** | yes | no | mode policy inputs (§2.6) |
 | `browse.description_pause`, other `browse.*` presentation | Focus | yes | no | |
 | `terminal.settle_ms`, `burst_lines`, `prompt_markers`, `prompt_regex` | App | yes | no | read by the terminal arm for that app, focused or not |
 | `terminal.secret_regex` | App | **no** | **yes** | **additive** (TS-1) |
@@ -168,7 +170,9 @@ pub struct ProfileSnapshot {
     pub gen: u64,                      // bumps on any field change
     pub set: Arc<ProfileSet>,          // compiled files + rows (from the config task)
     pub deltas: Arc<Deltas>,           // unsaved edits per writable layer
-    pub manual: Option<ProfileId>,     // always None in M14a (Q-P5)
+    pub pins: Arc<Pins>,               // session: per app Auto | Profile(id) | GlobalOnly (PS-1)
+    pub targets: Arc<EditTargets>,     // session: per app App | Site | Global (PE-2)
+    pub disabled: Arc<HashSet<ProfileId>>, // profiles switched off (persisted as `enabled = false` on save)
     pub mode: ProfileMode,             // Active | Suspended | Disabled (safe mode)
 }
 pub struct Effective {
@@ -176,7 +180,7 @@ pub struct Effective {
     pub origin: Box<[LayerRef]>,       // per KeyId: which layer supplied the value (PE-1, explain)
     pub report: ReportFlags,           // u64, compiled once (M22d consumes)
 }
-pub enum LayerRef { Default, Preset, ExtDefault(ExtId), Product(RowId), AddOn(RowId), UserBase, User(ProfileId), Manual(ProfileId) }
+pub enum LayerRef { Default, Preset, ExtDefault(ExtId), ThirdParty(RowId), FirstParty(RowId), UserBase, User(ProfileId) }
 
 impl ProfileSnapshot {
     pub fn resolve_focus(&self, key: ProfileKey) -> Effective;
@@ -187,7 +191,7 @@ impl ProfileSnapshot {
 
 - **SS-1 One input (H-1).** All three resolvers are pure functions of one snapshot. `Suspended` folds only
   L0, L1, L3, L5 (+ L5 delta); `Disabled` folds L0, L1, L3, L5 (safe mode keeps product rows, M-5). Unsaved edits,
-  suspend and (later) the manual profile therefore reach App and Doc keys in the doc registry and the terminal
+  suspend, pins and disabled profiles therefore reach App and Doc keys in the doc registry and the terminal
   arm exactly as they reach the Reader. Consumers cache `AppScoped`/`DocScoped` per `AppId`/`DocId` tagged with
   `gen` and recompute lazily on a `gen` change; when they apply is §2.6 DL-1.
 - **INV-P1** Effective values are a pure function of (snapshot `gen`, key or facts). **INV-P4** The Reader is the
@@ -239,20 +243,51 @@ enum ProfileState {
 
 ### 2.5 Edits: where a change is written
 
-- **PE-1 Origin-layer rule.** A command that changes a setting writes the delta of the layer in `origin[key]`:
-  `Default/Preset/ExtDefault/UserBase` → L5; `User(p)` → p; `Product(r)`/`AddOn(r)` → the **shadow** of r (an L6
-  file with the same triggers and `shadows = "<owner>/<row-id>"`, created on save, holding only the user's
-  keys). A change of a `privacy` key from any origin may also be written to L5 (it beats rows by UB-1).
-- **PE-2 Explicit scope.** `profiles.edit_scope_cycle` (provisional chord gorca+Ctrl+Shift+P) cycles the target of
-  the next edits for this focus: automatic (PE-1) → this application (App profile, created if absent) → this site
-  (only in a document; Site profile on the host) → global (L5). It falls back to automatic after 30 s without an
-  edit or on app change. A key whose scope forbids the target (NS-1) uses the nearest allowed one and says so.
-- **PE-3 Every edit is audible or explained (INV-P5).** After the edit the Reader publishes a new snapshot and
-  re-resolves; if the effective value did not change, the confirmation names the layer that holds it
-  ("rate 60 globally; Terminal profile keeps 45").
+- **PK-1 Profiles override only what the global level knows (owner: "нельзя в общем профиле сменить то, чего
+  нет"; wording to confirm).** *Every key in a profile or row must be a key of the global schema: a core
+  `SETTINGS` row or a key of an installed extension's schema (`ext.<id>.*`). A profile cannot introduce a key, a
+  section or a value type that the global settings do not have; such a key is rejected at load with a
+  "did you mean" diagnostic and never applied. Keys of an extension that is not installed are kept in the file
+  untouched but inactive (one diagnostic), so reinstalling the extension restores them. Values are validated
+  against the same type and range as in the global file.* Consequence: the effective settings of any app are
+  always "the global settings with some values changed", the settings app (M14) can show every profile as a diff
+  against global, and "save to global" (PE-4) is always possible.
+- **PE-1 Edits go to the focused application's profile (owner Q-P1).** A command that changes a setting (rate,
+  pitch, volume, punctuation, verbosity, echo of non-privacy kinds, `browse.save_mode_default`, ...) writes the
+  delta of the **app profile of the focused application**: the pinned profile if the app is pinned (PS-1),
+  otherwise the user profile with an App trigger for this app (the most specific one if several), otherwise a
+  new one created on the first edit (PE-6 naming, App trigger with the app name as an escaped literal, display
+  name = the application's name) and announced once: "new profile for Firefox". Exceptions:
+  - **PE-1a More specific user profile.** If a user Site or Window profile currently supplies the key, the edit
+    goes there (writing to the app profile would be inaudible); the confirmation names it ("for
+    web.telegram.org").
+  - **PE-1b Inherently global keys** always go to the global file L5 and say so ("saved globally"): every `Base`
+    key (speech server/backend, keyboard modifiers, preset and layout, UI language, `profiles.*`) and every
+    `privacy` key (`echo.*`, `editing.announce_clipboard`, `terminal.secret_regex`, `sources.*`), which are
+    choices about the person and the room, not about an application. A user may still put a privacy key into an
+    app profile by editing the file (or the M14 GUI); once the app profile holds it, key edits of that key go
+    there (PE-1a logic). `Base` keys never enter a profile.
+  - **PE-1c Explicit target.** When the target for this app is switched to "global" (PE-2), edits go to L5.
+  - No focused application (startup, lock screen): L5.
+  So a change made in Firefox never changes Signal; the global profile changes only by an explicit action
+  (PE-2 target, PE-4 save to global) or for PE-1b keys.
+- **PE-2 Edit target (owner Q-P5).** `profiles.edit_target_cycle` (gorca+Ctrl+Alt+P) cycles the target for the
+  focused app: "this application" (default) → "this site" (only in a document; Site profile on the host, created
+  if absent) → "global". The choice is session state per app (in the snapshot, `targets`), survives focus changes
+  and is reset by restart; every confirmation names the target, so a forgotten "global" is heard on the next edit.
+- **PE-3 Every edit says where it went and is audible or explained (INV-P5).** Confirmations carry the target
+  once per change burst: "rate 60, for Firefox", "punctuation most, globally". After the edit the Reader
+  publishes a new snapshot and re-resolves; if the effective value did not change (a global edit while the app
+  profile sets the key), the confirmation names the layer that holds it ("rate 60 globally; Firefox keeps 45").
 - **PE-4 Explain.** `settings.explain_current` speaks the active profiles and rows in precedence order and, for a
   key in review, its origin; UB-1 skips are named. The settings app (M14) shows the origin per value.
-- **PE-5 Save** (`settings.save`, ADR-0005 explicit save) writes every dirty delta to its own file with
+- **PE-4 Save to global** (`profiles.save_global`, gorca+Ctrl+Shift+C): moves the focused app profile's keys
+  changed in this session into L5 and removes them from the app profile, then saves both files; it says "3
+  settings saved globally, removed from Firefox". Pressed twice: the same for every key of the app profile.
+  Pressed three times (`profiles.apply_everywhere`): additionally removes those keys from every other user
+  profile so the global value applies everywhere, after a spoken count ("applies to all apps; 2 profiles
+  changed"). Nothing else writes L5 implicitly except PE-1b.
+- **PE-5 Save** (`settings.save`, gorca+Ctrl+C in all presets today, as NVDA+Ctrl+C) writes every dirty delta to its own file with
   `toml_edit` (comments kept), atomic rename, content hash checked against the loaded text (a file changed on disk
   is not overwritten: "profile <name> changed on disk, reload first"). **Revert** clears all deltas. The daemon's
   config task is the only writer (ADR-0005 §7.6).
@@ -263,10 +298,36 @@ enum ProfileState {
   itself. Display names are sanitised (control characters dropped, ≤ 128 chars). Tests use hostile names
   (`..`, `/`, NUL, `*`, 4 KiB, RTL marks).
 - **PE-7 Session mode state is not a setting.** The browse/focus toggle stays reader state, sticky
-  (`FocusCause::Manual`, only the toggle leaves). `browse.save_mode_default` (no default chord in M14a, owner
-  Q-P4; reachable from the keymap and later the M15a command list) writes the current mode as
-  `browse.mode_default` through PE-1/PE-2 with the default target "this site" in a browser and "this
-  application" elsewhere, and applies to the current document at once (DL-1).
+  (`FocusCause::Manual`, only the toggle leaves). `browse.save_mode_default` (gorca+Ctrl+Shift+Space, owner Q-P4:
+  its own chord, never a gorca+Space multi-press) writes the current mode as `browse.mode_default` through
+  PE-1/PE-2 (app profile by default, site profile when the target is "this site") and applies to the current
+  document at once (DL-1). `settings.save` (gorca+Ctrl+C) persists it like any other delta.
+
+### 2.5a Profile commands (owner Q-P5) and chords
+
+Automatic selection stays the default; these commands act on the focused application. All chords were checked
+free in the four presets (`crates/gorca-config/presets/{nvda,orca}-{desktop,laptop}.toml`) and the command table
+(`gorca-core/src/commands/table.rs`); only `gorca+ctrl+c` was already bound (to `settings.save`, kept).
+
+| Command | Chord (all presets) | Behaviour |
+|---|---|---|
+| `settings.save` | gorca+Ctrl+C (existing) | save every dirty delta to its file (PE-5) |
+| `profiles.save_global` | gorca+Ctrl+Shift+C (×2, ×3 as PE-4) | move this app's changes to global (PE-4) |
+| `profiles.cycle` | gorca+Ctrl+P | cycle the **pin** for this app: Automatic → each user profile that matches this app or is `manual = true` → "global only" (no user profiles or rows for this app) → Automatic; speaks the new choice |
+| `profiles.toggle_enabled` | gorca+Ctrl+Shift+P | switch off/on the profile currently in effect for this app (pinned, else the top matching user profile, else the top row); a user profile gets `enabled = false` as a delta, a row an entry in `profiles.rows` (global) |
+| `profiles.edit_target_cycle` | gorca+Ctrl+Alt+P | PE-2 |
+| `profiles.announce` | gorca+Shift+P | speaks the active profile(s) for this app and where edits go ("Firefox profile, edits for Firefox"); ×2: the full stack with rows and pins (`settings.explain_current`) |
+| `profiles.suspend` | unbound (keymap, command list) | §2.4 |
+| `browse.save_mode_default` | gorca+Ctrl+Shift+Space | PE-7 |
+
+- **PS-1 Pins are session state** (`pins` in the snapshot), never written to disk; restart returns to Automatic.
+  A pin replaces only L6 selection for that app; rows still apply unless the pin is "global only". The NVDA
+  multi-press semantics of `max_press` are unchanged (each chord above has `max_press = 1` except
+  `profiles.save_global` and `profiles.announce`).
+- gorca+Shift+P appears as a doc-comment example in `gorca-ext-host/src/manifest_file.rs:24`; P2 changes the
+  example. Orca has no profile-cycling chord (its profiles are loaded from the preferences dialog); NVDA uses
+  NVDA+Ctrl+P for its profiles dialog and NVDA+Ctrl+C for save, so the P family and gorca+Ctrl+C match NVDA
+  muscle memory.
 
 ### 2.6 Browse-mode keys (ADR-0024 PS-2, owner DP-3)
 
@@ -275,7 +336,7 @@ enum ProfileState {
 | `browse.enabled` | bool | true | false = no virtual buffer; the reader follows focus (CHR-0 `Off`). Resolved at App level it also means "do not mirror documents of this app" (doc registry); at Site level the document is mirrored but stays in focus mode. |
 | `browse.mode_default` | `browse` \| `focus` | `browse` | mode when a document first gets focus. `focus` enters `FocusCause::Manual` (sticky). |
 | `browse.auto_focus_mode` | `widgets` \| `never` | `widgets` | NVDA `autoPassThroughOnFocusChange` (`configSpec.py:220`) with gorca's D-1 role sets. |
-| `browse.sticky_focus` | bool | false | false: a user toggle is remembered per document lineage (MS-1). true: per application for the session (Orca `focus_mode_is_sticky`). |
+| `browse.toggle_scope` | `document` \| `application` | `document` | owner Q-P3, both supported: `document` = a user toggle is remembered per document lineage (MS-1, NVDA); `application` = per application for the session, new documents of the app open in the toggled mode (Orca `focus_mode_is_sticky`). Settable globally, per app profile or per site profile. Replaces ADR-0024 PS-2's `browse.sticky_focus` (bool), which had no definition. |
 
 - **MS-1 Document lineage (owner Q-P3 refinement).** A toggle survives a document replacement inside the same
   app, same frame and same host (Chromium document swaps, SPA reloads that create a new document): the new
@@ -302,7 +363,7 @@ enum ProfileState {
 # crates/gorca-config/product/web-apps.toml (L3, compiled in); add-ons: `[[profile]]` in ext.toml from M18a
 schema = 1
 [[profile]]
-id = "vscode"                         # stable row id; "gorca/vscode" in profiles.rows and shadows
+id = "vscode"                         # stable row id; "gorca/vscode" in profiles.rows
 name = "Visual Studio Code"
 why = "editor built from text widgets with its own key bindings (NVDA appModules/code.py)"
 triggers = [{ app = { name = ["code", "visual studio code", "code - oss", "vscodium", "cursor"] } }]
@@ -312,7 +373,7 @@ browse.enabled = false
 
 - **PF-1 Keys.** Only `vendor = true`, `privacy = false` keys are accepted; a rejected key is a diagnostic.
 - **PF-2 User control.** `profiles.rows = { "gorca/vscode" = false, "ext-foo/bar" = true }` (L5) disables or
-  enables one row; shadows override single keys (PE-1); disabling an extension removes its rows. A key in
+  enables one row (also `profiles.toggle_enabled`); an app profile overrides single keys (PE-1); disabling an extension removes its rows. A key in
   `profiles.rows` that names no row is a diagnostic, never silent (a renamed row is visible). Row ids are required
   and must stay stable across extension versions (manifest validation).
 - **PF-3 No auto-activation.** Add-ons cannot activate, deactivate or rank rows at run time and cannot declare a
@@ -323,23 +384,24 @@ browse.enabled = false
   (literal equality after normalisation, or a literal that the manifest glob matches); an extension with an empty
   `app_name` (toolkit/connector matchers only) has **no** rows. `browse.*` keys are accepted only from an extension
   whose manifest claims the app by `app_name`.
-- **PF-5 Default state.** Product rows (L3) and rows of first-party extensions shipped in this repository are on by
-  default (owner Q-P2 (a), first-party only). Third-party rows start **off**; enabling is an explicit L5 entry, and
-  the install flow (M18) announces the extension's rows once.
+- **PF-5 Default state (owner Q-P2).** First-party rows (L4: product rows and rows of extensions shipped in this
+  repository) are on automatically and, when several rows match, beat every third-party row (layer order) and
+  then each other by PM-1. Third-party rows (L3) start **off**; enabling is an explicit L5 entry or
+  `profiles.toggle_enabled`, and the install flow (M18) announces the extension's rows once.
 - **PF-6 Limits.** 8 rows × 64 keys per extension, 16 triggers per row, 16 globs per matcher, 256 bytes per glob;
   over-limit rows are dropped with a diagnostic.
 
 ### 2.8 Persistence format
 
 - `~/.config/gorca/profiles/<id>.toml`, one profile per file. The id is the file stem fixed at creation (PE-6); the
-  display name is a field and may change freely. Shadows live in `profiles/shadow/<owner>--<row-id>.toml` (both
-  parts slugged).
+  display name is a field and may change freely. App profiles created by PE-1 are ordinary files the user may edit.
 
 ```toml
 schema = 1
 [profile]
 name = "Telegram web"
-shadows = ""                          # "<owner>/<row-id>" for a shadow
+enabled = true                        # profiles.toggle_enabled writes false
+manual = false                        # true: never triggered, reachable only through profiles.cycle
 [[profile.trigger]]
 site = { app = { name = ["firefox*", "chromium*", "google-chrome*"] }, host = "web.telegram.org" }
 [speech]
@@ -376,7 +438,7 @@ mode_default = "focus"
 | `layers` "later layer wins" | L3 < L4 < L5 (UB-1) < L6 |
 | "host row beats app row" | PM-1 `Site > App` |
 | `id`, `why` | row `id`, `why` (spoken by `settings.explain_current`) |
-| `builtin_rows()` (`vscode`) | **L3 product row** in `crates/gorca-config/product/web-apps.toml`, loaded with `include_str!` — no extension, no ext-host change, and like CHR-0 it applies in safe mode and under `profiles.suspend` |
+| `builtin_rows()` (`vscode`) | **L4 product row** in `crates/gorca-config/product/web-apps.toml`, loaded with `include_str!` — no extension, no ext-host change, and like CHR-0 it applies in safe mode and under `profiles.suspend` |
 | `browse_default(&info.app_name)` in `doc_registry.rs` | `snapshot.resolve_app(&facts).browse_enabled()` |
 
 P6 keeps a parity test: every CHR-0 test case, the shipped row, safe mode and suspend give the same decision as
@@ -394,12 +456,15 @@ before. `app_modes.rs` is then deleted. CHR-0 needs no change before it merges.
 | extension ↔ mode oscillation | impossible by NS-3; `request-mode` rate limit as a second guard |
 | hostile app name or host creates a profile | PE-6 slug + `O_EXCL|O_NOFOLLOW` + escaped literal |
 | file edited on disk while deltas are dirty | reload wins per key (HR-4); save refuses on hash mismatch |
+| user forgets the edit target is "global" | every confirmation names the target (PE-3); target resets on restart |
+| many auto-created app profiles | one file per app actually edited; `profiles.save_global` ×2 folds one back; M14 GUI lists them as diffs (PK-1) |
 
 ## 3. Alternatives
 
 | Option | Why not |
 |---|---|
-| A1 NVDA stack (edits into the top profile) | surprising edits; no add-on rows; no site triggers |
+| A1 NVDA stack (edits into the top profile) | no add-on rows, no site triggers. Its edit rule is close to the owner's Q-P1 choice; r3 keeps the rule but removes NVDA's confusion by naming the target in every confirmation (PE-3), sending person-level keys to global (PE-1b) and offering save-to-global (PE-4) |
+| r1/r2 origin-layer edits (a change goes to the layer that supplied the value) | owner Q-P1: a change in one app must never alter another app; origin-layer edits wrote most changes to global |
 | A2 Orca layers (app → profile → default, manual profiles) | no window/site/context triggers; no add-on rows; dconf storage |
 | CSS-like cascade (per-key selectors over roles/nodes) | per-node cost on presentation paths; per-node variability belongs to the semantic model (ADR-0024 PS-6) |
 | Each actor folds its own settings from files | several writers and inputs; this is exactly the H-1 divergence the single snapshot removes |
@@ -415,7 +480,9 @@ before. `app_modes.rs` is then deleted. CHR-0 needs no change before it merges.
 - ext-host glob becomes ASCII case-insensitive with escapes (GL-1); ext-vte's secret pattern becomes additive (TS-1).
 - Per-app behaviour that needs code today (VS Code without a buffer) becomes data; NVDA's
   `disableBrowseModeByDefault` list can be ported as product rows after measurement.
-- Users learn "where does this setting come from" — mitigated by PE-3 and PE-4.
+- Users learn "where does this setting come from" — mitigated by PE-3, PE-4 and `profiles.announce`.
+- App profiles accumulate (one per edited app); PK-1 keeps each a readable diff against global.
+- Four new chords in every preset (§2.5a) plus gorca+Ctrl+Shift+Space and gorca+Ctrl+Shift+C.
 
 ## 5. Metrics to validate
 
@@ -429,6 +496,8 @@ before. `app_modes.rs` is then deleted. CHR-0 needs no change before it merges.
 | P5 | migration parity | 100 % of CHR-0 cases, the shipped row, safe mode and suspend decide identically |
 | P6 | property tests | fold = specification oracle (random sets of ≤ 32 profiles and rows, all trigger kinds, deltas, suspend); INV-P6; NS-1 matrix exhaustive; PE-1 targets exhaustive; PF-4 confinement against random manifests; GL-1 vs CHR-0 `eq_ignore_ascii_case` incl. non-ASCII; PE-6 hostile names |
 | P7 | DL-1 cases | each latch rule has one e2e step (reload, save-mode, refresh, lineage swap) |
+| P8 | Q-P1 isolation | e2e: rate change in Firefox, focus Signal → Signal's rate unchanged; "save to global" → both change unless an app profile sets it; PE-1b keys land in L5 |
+| P9 | profile chords | gorca+Ctrl+P / Shift+P / Ctrl+Shift+P / Ctrl+Alt+P → spoken result ≤ 5 ms p99 gorca-side; preset conflict test (no chord bound twice in any preset) |
 
 ## 6. Implementation slices (M14a-core; ≤ 2 days each, no GUI)
 
@@ -442,28 +511,32 @@ M22a waves' way); tests are proptest round-trips, no cargo-fuzz.
 |---|---|---|---|---|---|---|
 | **P1** | `KeyId` registry over `SETTINGS`; `SettingDef.scope/vendor/privacy`; `SettingType::Map(bool)`; typed `Value`; `SettingsPatch` with `apply`/`drop_changed` (generalises `Overlay`, façade kept); `load.rs` `apply_key` through `Value`; UB-1 default-equality helper; tests: every row round-trips | rust-engineer | 2 | — | `gorca-config/src/{settings.rs,load.rs,patch.rs}` | **yes** |
 | **P2** | GL-1 glob (escapes, ASCII case-insensitive, limits) + ext-host re-export or copy; profile, product-row and add-on-row parsers; `Trigger`, `AppMatcher`; NS-1, NS-3, PF-1, PF-4, PF-6, PC-1, PC-3 diagnostics; `ProfileSet::compile` (TR-2); proptest round-trips | rust-engineer | 2 | P1 | `gorca-config/src/{glob.rs,profiles/{mod,trigger,file,compile}.rs}`, `gorca-ext-host/src/glob.rs` | **yes** |
-| **P3** | `ProfileSnapshot` and the three resolvers (SS-1, UB-1, suspend/safe-mode layer sets), interning, fold with `origin`, LRU type; PE-1/PE-2 `plan_edit`; delta save into profile and shadow files with PE-6 naming (`save.rs`); property tests P6 against a Python oracle | rust-engineer + math-researcher (oracle) | 2 | P2 | `gorca-config/src/profiles/{snapshot,resolve,edit,naming}.rs`, `save.rs`, `tools/research/profiles_oracle.py` | **yes** |
-| P4 | config task: profiles dir load, inotify, PC-0, prewarm (SW-2) by `gen`; Reader `ProfileState` machine (full table), snapshot publication, key computation from focus/window/`WebMode`, SW-3, `profiles.suspend`, `settings.explain_current`, `profiles.edit_scope_cycle`, PC-4; catalog strings | rust-engineer | 2 | P3 | `gorca-daemon/src/config_task.rs`, `gorca-core/src/commands/{profiles.rs,state.rs,handlers.rs}`, focus hook in `reader.rs`, `gorca-i18n` catalogs (append) | yes, if no other branch holds `commands/state.rs` |
-| P5 | gates P1, P1b, P2–P4 bench (`gorca-bench/benches/profiles.rs`) + e2e: terminal App profile `punctuation=most`; voice-change ordering; gorca+Space with a `FocusMode` profile | perf-engineer, test-engineer | 1.5 | P4 | `crates/gorca-bench/benches/profiles.rs`, `bench/e2e` scenario | yes |
-| P6 | browse keys (§2.6), `WebPolicy::initial`, MS-1 lineage, DL-1 latches, `browse.save_mode_default`, CHR-0 migration to the L3 product row + parity test P5; terminal arm reads App keys via the snapshot; TS-1 in ext-vte; delete `app_modes.rs` | rust-engineer (+ web-a11y-engineer review) | 2 | P4, **CHR-0 merged** | `doc_registry.rs`, `browse/{mod,commands,policy}.rs`, `gorca-core/src/terminal.rs`, `extensions/ext-vte/src/prompt.rs`, `gorca-config/product/` | after CHR-0; before M22a wave C or rebased on it |
+| **P3** | `ProfileSnapshot` and the three resolvers (SS-1, UB-1, suspend/safe-mode layer sets), interning, fold with `origin`, LRU type; PK-1 validation; PE-1/PE-1a/PE-1b/PE-2 `plan_edit` incl. app-profile auto-creation, PE-4 move/remove planning; delta save with PE-6 naming (`save.rs`); property tests P6 against a Python oracle | rust-engineer + math-researcher (oracle) | 2 | P2 | `gorca-config/src/profiles/{snapshot,resolve,edit,naming}.rs`, `save.rs`, `tools/research/profiles_oracle.py` | **yes** |
+| P4 | config task: profiles dir load, inotify, PC-0, prewarm (SW-2) by `gen`; Reader `ProfileState` machine (full table), snapshot publication, key computation from focus/window/`WebMode`, SW-3, `profiles.suspend`, `settings.explain_current`, §2.5a commands and preset chords (pins, enable, target, announce, save global), PC-4; catalog strings | rust-engineer | 2 | P3 | `gorca-daemon/src/config_task.rs`, `gorca-core/src/commands/{profiles.rs,state.rs,handlers.rs,table.rs}`, `gorca-config/presets/*.toml`, focus hook in `reader.rs`, `gorca-i18n` catalogs (append) | yes, if no other branch holds `commands/state.rs` |
+| P5 | gates P1, P1b, P2–P4, P8, P9 bench (`gorca-bench/benches/profiles.rs`) + e2e: terminal App profile `punctuation=most`; voice-change ordering; gorca+Space with a `FocusMode` profile | perf-engineer, test-engineer | 1.5 | P4 | `crates/gorca-bench/benches/profiles.rs`, `bench/e2e` scenario | yes |
+| P6 | browse keys (§2.6) incl. `browse.toggle_scope`, `WebPolicy::initial`, MS-1 lineage, DL-1 latches, `browse.save_mode_default`, CHR-0 migration to the L3 product row + parity test P5; terminal arm reads App keys via the snapshot; TS-1 in ext-vte; delete `app_modes.rs` | rust-engineer (+ web-a11y-engineer review) | 2 | P4, **CHR-0 merged** | `doc_registry.rs`, `browse/{mod,commands,policy}.rs`, `gorca-core/src/terminal.rs`, `extensions/ext-vte/src/prompt.rs`, `gorca-config/product/` | after CHR-0; before M22a wave C or rebased on it |
 | P7 | inputs: `AppInfo.exe` (async `/proc`), `DocMeta.url` (Site triggers), window title generations; `desktop_id` when ShellHelper exposes it | linux-platform-engineer | 2 | P4 | connector `AppInfo`, doc source (`DocURL`), `present/window.rs` | after M22a wave C |
 | P8 | adversarial review + fix round, decision row | reviewer, then rust-engineer | 2 | P5, P6 | — | — |
 
 Critical path P1 → P2 → P3 → P4 → P6 → P8 ≈ 12 days; P1–P3 fit the free cargo slot of M22a wave A once this ADR
 is accepted (one cargo build per agent). Site triggers work end to end only after P7; until then `Site` rows load
-and `settings.explain_current` reports them as "waiting for the document address". The manual profile (L7) stays
-type-only until M15a.
+and `settings.explain_current` reports them as "waiting for the document address". Pins and the profile chords land in
+P4; the M15a chooser later lists the same profiles.
 
-## 7. Decisions pending (owner)
+## 7. Owner decisions (answered 2026-10-19) and the one rule to confirm
 
-| # | Question | Options | Recommended (architect + reviewer) |
+| # | Question | Owner answer | Where |
 |---|---|---|---|
-| Q-P1 (= QF-1) | A setting changed with a key while an app profile is active: where does it go? | (a) origin layer (global unless the profile sets it), plus a scope key; (b) always the active profile (NVDA); (c) always global | **(a)** |
-| Q-P2 (= QF-2) | Rows shipped with gorca and its own extensions (VS Code without browse mode, terminal punctuation) | (a) on by default, presentation and mode keys only, one switch each; (b) off until enabled | **(a) for first-party rows only**; third-party add-on rows start off (PF-5) |
-| Q-P3 | Scope of the browse/focus toggle by default | (a) per document (NVDA); (b) per application for the session (Orca) | **(a)**, kept across document replacement on the same host (MS-1), with `browse.sticky_focus = true` per app for messengers |
-| Q-P4 | Chord for "save the current mode as the default here" | (a) gorca+Space ×3 (would run toggle, toggle, save today); (b) no chord now: keymap and the M15a command list | **(b)**; Orca presets later mirror Orca's ×2 sticky focus / ×3 sticky browse (§2.6), NVDA presets may get ×3 = save with `max_press = 3` |
-| Q-P5 | Manual profile switching before the chooser (M15a) | (a) `profiles.manual_cycle` now; (b) wait for M15a | **(b)**, and the manual layer is type-only until then |
-| Q-P6 (new, UB-1) | Your global file sets a value different from the default (e.g. punctuation "all"); an extension row sets it for one app | (a) your global choice wins; keep the row's value by its shadow or a profile; (b) the row wins in its app | **(a)** |
+| Q-P1 | Where does a setting changed with a key go? | the focused app's profile, auto-created; global only by an explicit action | PE-1..PE-4 |
+| Q-P2 | First-party and third-party rows | first-party on and winning; third-party off until enabled | §2.1 L3/L4, PF-5 |
+| Q-P3 | Scope of the browse/focus toggle | both, configurable; per document default | `browse.toggle_scope`, MS-1 |
+| Q-P4 | Chord for "save" | its own NVDA-like chord, never a gorca+Space multi-press | gorca+Ctrl+C (save), gorca+Ctrl+Shift+Space (save mode default), gorca+Ctrl+Shift+C (save to global) |
+| Q-P5 | Profile hotkeys | cycle, enable/disable, global vs app target, announce; automatic stays default | §2.5a |
+| Q-P6 | User's global choice vs a row | the user's choice wins | UB-1 |
+
+**To confirm with the owner: PK-1** — "A profile can only change settings that exist in the global settings: every
+key must be a core setting or a setting of an installed extension, with the same type and range. Unknown keys are
+rejected when the file loads; keys of an uninstalled extension are kept but inactive."
 
 ## 8. Review r1 mapping
 
@@ -487,3 +560,14 @@ type-only until M15a.
 | L-6 context source | §2.2 TR-1 |
 | L-7 fuzz, no new crate | §6 preamble; SW-1 |
 | L-8 map type | §2.3 `SettingType::Map(bool)` |
+
+## 9. Owner answers r3 mapping
+
+| Answer | Change from r2 |
+|---|---|
+| Q-P1 | origin-layer rule replaced by the focused-app rule PE-1 (+PE-1a/b/c), PK-1, save to global PE-4; shadows dropped (user profiles are above all rows) |
+| Q-P2 | rows split into L3 third-party (off) and L4 first-party (on, winning) |
+| Q-P3 | `browse.sticky_focus` (bool) → `browse.toggle_scope = document \| application` |
+| Q-P4 | gorca+Ctrl+C save kept; gorca+Ctrl+Shift+Space save mode default; gorca+Ctrl+Shift+C save to global |
+| Q-P5 | manual layer L7 replaced by per-app session pins; §2.5a chords |
+| Q-P6 | UB-1 confirmed |

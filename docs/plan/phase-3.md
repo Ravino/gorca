@@ -276,39 +276,42 @@ braille checklist passes with a real display (§9 Q4) or, failing hardware, with
 quality for Russian (`ru-litbrl`, `ru-compbrl`) to be verified; brltty owning the keyboard for some
 drivers.
 
-### M14a — Configuration profiles, core (ADR-0016 r2, Proposed; review r1 ACCEPT-WITH-CHANGES integrated)
+### M14a — Configuration profiles, core (ADR-0016 r3, Proposed; review r1 integrated; owner Q-P1..Q-P6 applied)
 
-**User-testable increment.** A file `~/.config/gorca/profiles/terminal.toml` with an App trigger makes the
-terminal read with punctuation "most" while everything else stays global; VS Code has no browse mode by
-default through a compiled-in product row (replaces the CHR-0 interim table, also in safe mode); "save the
-current mode as the default here" makes a web messenger open in sticky focus mode at once and on every later
-visit; gorca explains where a setting comes from.
+**User-testable increment.** Changing the rate in Firefox creates a Firefox profile and leaves Signal unchanged
+("rate 60, for Firefox"); gorca+Ctrl+Shift+C moves the change to the global settings; gorca+Ctrl+P cycles the
+profiles for the current app, gorca+Ctrl+Shift+P switches one off, gorca+Ctrl+Alt+P chooses app/site/global as
+the edit target, gorca+Shift+P says which profile is active and where edits go; VS Code has no browse mode by
+default through a compiled-in first-party row (replaces the CHR-0 interim table, also in safe mode);
+gorca+Ctrl+Shift+Space saves the current browse/focus mode as the default for the app or site, so a web
+messenger opens in sticky focus mode; gorca+Ctrl+C saves.
 
-**Scope.** ADR-0016: layers L0 defaults, L1 preset, L2 extension defaults, L3 product rows, L4 add-on rows
-(first-party on, third-party off, confined to apps the manifest names), L5 user base (beats rows for values that
-differ from the default and for privacy keys), L6 user profiles; manual profile type-only until M15a; per-layer
-session deltas; one published `ProfileSnapshot` read by the Reader, the doc registry and the terminal arm;
-App, Window, Context and Site triggers; key scopes Base/App/Doc/Focus with privacy keys never settable by rows;
-origin-layer edits with an explicit scope key; precomputed effective settings with prewarm of both browse and
-focus contexts (gorca+Space computes a key, gate P1b); `browse.enabled/mode_default/auto_focus_mode/
-sticky_focus` latched per document; migration of `gorca-config::app_modes`. No GUI (M14), no `[report]`
-consumers (M22d), no Orca-preset ×2/×3 sticky chords (with M15a key work).
+**Scope.** ADR-0016: layers L0 defaults, L1 preset, L2 extension defaults, L3 third-party rows (off until
+enabled), L4 first-party rows (on, winning), L5 user base (beats rows for values that differ from the default and
+for privacy keys), L6 user profiles with per-app session pins; per-layer session deltas; one published
+`ProfileSnapshot` read by the Reader, the doc registry and the terminal arm; App, Window, Context and Site
+triggers; key scopes Base/App/Doc/Focus; profiles may only override keys of the global schema (PK-1, owner to
+confirm wording); edits go to the focused app's profile (auto-created), person-level keys (backend, keyboard,
+language, privacy) to global, global otherwise only by explicit target or save-to-global; precomputed effective
+settings with prewarm of both browse and focus contexts (gate P1b); `browse.enabled/mode_default/
+auto_focus_mode/toggle_scope` latched per document; migration of `gorca-config::app_modes`. No GUI (M14), no
+`[report]` consumers (M22d), no Orca-preset ×2/×3 sticky chords (with M15a key work).
 
 | Slice | Content | Days | Depends on | Slot |
 |---|---|---|---|---|
 | P1 | `KeyId`, `SettingDef` scope/vendor/privacy, `SettingType::Map`, `SettingsPatch` | 2 | — | free M22a wave A slot (after ADR-0016 accepted) |
-| P2 | shared glob (escapes, ASCII case-insensitive), profile/product/add-on row parsers, matrix, confinement, `ProfileSet::compile` | 2 | P1 | same |
-| P3 | `ProfileSnapshot` + three resolvers, origin tracking, `plan_edit`, safe file naming, delta save, property tests vs oracle | 2 | P2 | same |
-| P4 | config task load/watch/last-good/prewarm; Reader `ProfileState`, snapshot publication, switch, explain, suspend, scope cycle, voice fallback | 2 | P3 | when `commands/state.rs` is free |
-| P5 | gates P1, P1b, P2–P4, e2e | 1.5 | P4 | any |
-| P6 | browse keys, `WebPolicy::initial`, lineage, latches, save-mode, CHR-0 migration + parity, terminal arm via snapshot, additive secret patterns in ext-vte | 2 | P4, CHR-0 merged | before M22a wave C or rebased on it |
+| P2 | shared glob (escapes, ASCII case-insensitive), profile/row parsers, PK-1, matrix, confinement, `ProfileSet::compile` | 2 | P1 | same |
+| P3 | `ProfileSnapshot` (pins, targets, disabled) + three resolvers, origin tracking, per-app edit planning with auto-creation and save-to-global, safe file naming, delta save, property tests vs oracle | 2 | P2 | same |
+| P4 | config task load/watch/last-good/prewarm; Reader `ProfileState`, snapshot publication, switch, explain, suspend; profile commands and preset chords (§2.5a); voice fallback | 2 | P3 | when `commands/state.rs` is free |
+| P5 | gates P1, P1b, P2–P4, P8 (Firefox/Signal isolation), P9 (chords), e2e | 1.5 | P4 | any |
+| P6 | browse keys incl. `toggle_scope`, `WebPolicy::initial`, lineage, latches, save-mode chord, CHR-0 migration + parity, terminal arm via snapshot, additive secret patterns in ext-vte | 2 | P4, CHR-0 merged | before M22a wave C or rebased on it |
 | P7 | `AppInfo.exe`, `DocMeta.url`, window title generations | 2 | P4 | after M22a wave C |
 | P8 | review + fix round | 2 | P5, P6 | — |
 
 **Agents:** rust-engineer (P1–P4, P6), math-researcher (P3 oracle), perf-engineer + test-engineer (P5),
 linux-platform-engineer (P7), web-a11y-engineer (P6 review), reviewer (P8).
-**Acceptance.** ADR-0016 §5 metrics P1, P1b, P2–P7. **Owner questions:** ADR-0016 §7 Q-P1..Q-P6 (Q-P1/Q-P2 are
-QF-1/QF-2).
+**Acceptance.** ADR-0016 §5 metrics P1, P1b, P2–P9. **Owner:** Q-P1..Q-P6 answered 2026-10-19; PK-1 wording to
+confirm (ADR-0016 §7).
 
 ### M14 — Control API and settings app (ADR-0011)
 
@@ -602,7 +605,7 @@ Wave 2; M13 gains `CueSink`/`gorca-cues` and dictionary import (ADR-0017).
 **Semantics (amendment 2026-10-18, owner decision; ADR-0022 Proposed):** Phase 3 starts with
 P2-ARIA-0 → **M22a**, then **M18a** on the final model (supersedes "Phase 3 starts with M18a" of
 2026-10-17 for that slot). M22b1 runs in parallel with M18a; M22b2 precedes M15 and M10 integration;
-M22b3 precedes M21; M22b4 follows M18a and precedes M18b; M22d follows M14a. **Amendment 2026-10-19 (proposed, owner question D-6 in `docs/reports/m22a-kickoff.md` §5):** per-app/site mode defaults (owner, DP-3) live in profiles (ADR-0024 §2.13). M14a-core (ADR-0016 layer stack, triggers, origin-layer edits, vendor profiles, `browse.*` mode keys, migration of the CHR-0 interim per-app mode table; no GUI) may take the free cargo slot of M22a wave A **only once ADR-0016 is written and accepted** (write it during wave A); otherwise it keeps its Wave 2 slot after M22a wave B. **Update 2026-10-19:** ADR-0016 is written (Proposed r2 after review, `docs/adr/0016-profiles.md`); its slices P1–P3 (pure `gorca-config`) take the free slot once it is accepted, P4–P5 follow, P6 (browse keys + CHR-0 table migration) waits for CHR-0 to merge, P7 (exe/URL/title inputs) for M22a wave C; see the M14a block below. Future sources: M23-0 runtime, then M23–M25 (ADR-0024). M22a/b own
+M22b3 precedes M21; M22b4 follows M18a and precedes M18b; M22d follows M14a. **Amendment 2026-10-19 (proposed, owner question D-6 in `docs/reports/m22a-kickoff.md` §5):** per-app/site mode defaults (owner, DP-3) live in profiles (ADR-0024 §2.13). M14a-core (ADR-0016 layer stack, triggers, origin-layer edits, vendor profiles, `browse.*` mode keys, migration of the CHR-0 interim per-app mode table; no GUI) may take the free cargo slot of M22a wave A **only once ADR-0016 is written and accepted** (write it during wave A); otherwise it keeps its Wave 2 slot after M22a wave B. **Update 2026-10-19:** ADR-0016 is written (Proposed r3: review and owner answers applied, `docs/adr/0016-profiles.md`); its slices P1–P3 (pure `gorca-config`) take the free slot once it is accepted, P4–P5 follow, P6 (browse keys + CHR-0 table migration) waits for CHR-0 to merge, P7 (exe/URL/title inputs) for M22a wave C; see the M14a block below. Future sources: M23-0 runtime, then M23–M25 (ADR-0024). M22a/b own
 `gorca-core/present/`, `browse/present.rs` and `doc_actor/` while they run: schedule them after the M12a
 sweep (or fold M12a's catalog ids into M22b), and serialise with M15 on `browse/`.
 
