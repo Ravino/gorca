@@ -1765,3 +1765,21 @@ fn aging_never_takes_the_only_slot_of_a_one_call_run_while_priority_work_waits()
         );
     }
 }
+
+#[test]
+fn the_synchronous_drain_stops_at_its_time_bound_and_carries_the_rest() {
+    let mut e = star(40);
+    let window: Vec<_> = (1..=30).map(nid).collect();
+    e.set_focus_chain(&[nid(1), nid(0)]);
+    e.set_visible(&window);
+    e.run(Budget::UNLIMITED);
+    // A zero time bound: the drain takes one fusion (progress is guaranteed) and carries the rest.
+    e.set_sync_drain_time(std::time::Duration::ZERO);
+    e.bump_global();
+    let left = (0..=30).filter(|i| e.is_dirty(nid(*i))).count();
+    assert!(left > 0, "the rest stays dirty in front for the next run");
+    // The next run finishes it, and the result equals a from-scratch fusion.
+    e.run(Budget::UNLIMITED);
+    assert!((0..=30).all(|i| !e.is_dirty(nid(i))));
+    assert!(e.verify().is_ok());
+}

@@ -710,7 +710,14 @@ pub trait PatchSource {
     }
 
     /// Which groups of the neighbours' S0 the selectors read (the selector-read set). Incremental
-    /// maintenance re-fuses a neighbour only when one of these groups changed. The default reads
+    /// maintenance re-fuses a neighbour only when one of these groups changed, and the stored
+    /// neighbour view (published entry plus exceptions) is exact **only over these groups**.
+    ///
+    /// Contract: the set must cover every group any selector reads from the parent or a child. A
+    /// selector that reads a group outside it sees a stale or default value and its result drifts
+    /// from a from-scratch fusion. `Ivm::verify` (and the `fuse_full_check` feature, which runs it
+    /// after every drained run) compares the incremental state with a from-scratch evaluation and
+    /// reports such a node, so a too-narrow set fails the oracle tests. The default reads
     /// everything: always correct, never narrower than needed.
     fn reads(&self) -> SelectorReads {
         SelectorReads::ALL
