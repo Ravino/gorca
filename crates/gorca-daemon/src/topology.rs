@@ -1144,12 +1144,19 @@ mod tests {
         );
         assert!(p.rtkit.is_none());
         assert!(p.rt_status.starts_with("unavailable"), "{}", p.rt_status);
-        // placing a lane without rtkit leaves it plain and records why
+        // Placing a lane without rtkit leaves it plain and records why. Hosts that grant
+        // RLIMIT_RTPRIO (a `realtime` group, for example) take the rlimit path instead, which
+        // never needs rtkit. Runs on a throw-away thread.
         std::thread::spawn(move || {
             p.place_lane(Lane::Input);
             let g = p.grants.lock().unwrap();
-            assert_eq!(g[0].granted, "none");
-            assert!(g[0].error.is_some());
+            if g[0].via == "rlimit" {
+                assert!(g[0].realtime, "{}", g[0].granted);
+                assert!(g[0].error.is_none(), "{:?}", g[0].error);
+            } else {
+                assert_eq!(g[0].granted, "none");
+                assert!(g[0].error.is_some());
+            }
         })
         .join()
         .unwrap();
