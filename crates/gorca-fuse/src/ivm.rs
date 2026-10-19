@@ -30,7 +30,7 @@ use std::time::Instant;
 use gorca_model::fact::{BindGen, SourceId};
 use gorca_model::sem::{BindQuality, Group, GroupMask, SemEntry};
 
-use crate::epoch::{Epochs, silences};
+use crate::epoch::{Epochs, silences, sticky};
 use crate::explain::NoTrace;
 use crate::profile::Profile;
 use crate::register::{NodeRegs, PrimarySlot, UserOp};
@@ -167,6 +167,17 @@ pub struct ApplyReport {
 
 type DirtyKey = (u8, Reverse<u32>, u32);
 
+/// Runs a node must wait in the dirty set before aging may pick it ahead of depth order.
+const AGE_RUNS: u64 = 3;
+
+/// A per-source re-fuse sweep; the anchor list is built when the sweep starts, inside `run`.
+#[derive(Debug)]
+struct SourceSweep {
+    src: SourceId,
+    anchors: Option<Vec<AnchorId>>,
+    cur: usize,
+}
+
 #[derive(Debug)]
 struct Node {
     parent: Option<NodeIdx>,
@@ -239,11 +250,33 @@ pub struct Ivm<Q: Quirks, P: PatchSource> {
     exact: HashMap<(u16, u128), NodeIdx>,
     resolved: HashMap<AnchorId, Resolved>,
     anchor_nodes: HashMap<NodeIdx, BTreeSet<AnchorId>>,
-    index_dirty: bool,
+    /// Nodes whose liveness or DOM id changed in this batch, DOM ids whose holders changed, and
+    /// anchors to re-resolve directly: per-key re-resolution, never "all anchors".
+    touched_nodes: Vec<NodeIdx>,
+    touched_dom: Vec<Arc<str>>,
+    touched_anchors: Vec<AnchorId>,
+    dom_anchors: HashMap<Arc<str>, BTreeSet<AnchorId>>,
+    exact_by_node: HashMap<NodeIdx, Vec<(u16, u128)>>,
+    /// Scheduler: run counter, first-dirty tick of each dirty node (aging), a global sweep cursor
+    /// and lazily expanded per-source sweeps (epochs without an O(n) sync part).
+    tick: u64,
+    rebinds: u64,
+    age: HashMap<NodeIdx, u64>,
+    by_age: BTreeSet<(u64, u32)>,
+    sweep: Option<usize>,
+    source_sweeps: VecDeque<SourceSweep>,
     dirty: BTreeSet<DirtyKey>,
     dirty_of: HashMap<NodeIdx, DirtyKey>,
-    focus: HashSet<NodeIdx>,
-    visible: HashSet<NodeIdx>,
+    focus: Vec<NodeIdx>,
+    visible: Vec<NodeIdx>,
+    /// The priority set: focus chain, visible window and the descendants that feed them (bounded
+    /// by `Limits::max_priority`), computed top-down once per change.
+    prio: HashSet<NodeIdx>,
+    /// Work of the last priority-set computation (nodes visited), for the cost tests.
+    prio_work: usize,
+    /// Silencing states by stable source name: a revoked, quarantined or paused source keeps its
+    /// state when it reconnects or is re-registered.
+    retained: HashMap<Arc<str>, (u64, SourceState)>,
     relations: Relations,
     background: VecDeque<NodeIdx>,
     in_background: HashSet<NodeIdx>,
@@ -258,8 +291,10 @@ fn intersects(a: GroupMask, b: GroupMask) -> bool {
     a.0 & b.0 != 0
 }
 
-fn bind_gen(seq: Seq) -> BindGen {
-    BindGen(u32::try_from(seq).unwrap_or(u32::MAX))
+/// The binding generation of a seq. `BindGen` is 32-bit: a seq that does not fit makes the
+/// anchor **unbound** (fail closed) instead of colliding with other generations.
+fn bind_gen(seq: Seq) -> Option<BindGen> {
+    u32::try_from(seq).ok().map(BindGen)
 }
 
 fn node_of(nodes: &[Option<Node>], n: NodeIdx) -> Option<&Node> {
@@ -267,11 +302,11 @@ fn node_of(nodes: &[Option<Node>], n: NodeIdx) -> Option<&Node> {
 }
 
 fn by_node(nodes: &[Option<Node>], n: NodeIdx, quality: BindQuality) -> Resolved {
-    match node_of(nodes, n).and_then(|nd| nd.alive) {
-        Some(seq) => Resolved {
+    match node_of(nodes, n).and_then(|nd| nd.alive).and_then(bind_gen) {
+        Some(generation) => Resolved {
             node: Some(n),
             quality,
-            generation: bind_gen(seq),
+            generation,
         },
         None => Resolved::UNBOUND,
     }
@@ -319,6 +354,9 @@ fn resolve_in(
             let seq = node_of(nodes, first)
                 .and_then(|nd| nd.attr.as_ref())
                 .map_or(0, |a| a.0);
+            let Some(generation) = bind_gen(seq) else {
+                return Resolved::UNBOUND;
+            };
             Resolved {
                 node: Some(first),
                 quality: if *count == 1 && holders.len() == 1 {
@@ -326,7 +364,7 @@ fn resolve_in(
                 } else {
                     BindQuality::Heuristic
                 },
-                generation: bind_gen(seq),
+                generation,
             }
         }
         // Region, structural and content anchors need geometry or hashing indices (M24).
@@ -397,11 +435,24 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             exact: HashMap::new(),
             resolved: HashMap::new(),
             anchor_nodes: HashMap::new(),
-            index_dirty: false,
+            touched_nodes: Vec::new(),
+            touched_dom: Vec::new(),
+            touched_anchors: Vec::new(),
+            dom_anchors: HashMap::new(),
+            exact_by_node: HashMap::new(),
+            tick: 0,
+            rebinds: 0,
+            age: HashMap::new(),
+            by_age: BTreeSet::new(),
+            sweep: None,
+            source_sweeps: VecDeque::new(),
             dirty: BTreeSet::new(),
             dirty_of: HashMap::new(),
-            focus: HashSet::new(),
-            visible: HashSet::new(),
+            focus: Vec::new(),
+            visible: Vec::new(),
+            prio: HashSet::new(),
+            prio_work: 0,
+            retained: HashMap::new(),
             relations: Relations::default(),
             background: VecDeque::new(),
             in_background: HashSet::new(),
@@ -428,7 +479,17 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     /// Dirty nodes plus background dependents not yet re-fused.
     pub fn pending(&self) -> usize {
-        self.dirty.len() + self.background.len()
+        let sweep = self.sweep.map_or(0, |c| self.nodes.len().saturating_sub(c));
+        let sources: usize = self
+            .source_sweeps
+            .iter()
+            .map(|s| {
+                s.anchors
+                    .as_ref()
+                    .map_or(1, |a| a.len().saturating_sub(s.cur))
+            })
+            .sum();
+        self.dirty.len() + self.background.len() + sweep + sources
     }
 
     pub fn clock(&self) -> u64 {
@@ -496,24 +557,45 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         let mut stack = vec![node];
         let mut removed = Vec::new();
         while let Some(n) = stack.pop() {
-            if let Some(Some(nd)) = self.nodes.get_mut(slot(n)) {
-                stack.extend(nd.children.iter().copied());
-                let published = nd.published.take();
-                if let Some(old) = self.dirty_of.remove(&n) {
-                    self.dirty.remove(&old);
-                }
-                if published.is_some() {
-                    removed.push(Published {
-                        node: n,
-                        entry: None,
-                    });
-                }
-                self.nodes[slot(n)] = None;
-                self.relations.forget(n);
-                self.focus.remove(&n);
-                self.visible.remove(&n);
-                self.anchor_nodes.remove(&n);
+            let Some(Some(nd)) = self.nodes.get_mut(slot(n)) else {
+                continue;
+            };
+            stack.extend(nd.children.iter().copied());
+            let published = nd.published.take();
+            let attr_id = nd.attr.as_ref().and_then(|a| a.1.clone());
+            self.nodes[slot(n)] = None;
+            if published.is_some() {
+                removed.push(Published {
+                    node: n,
+                    entry: None,
+                });
             }
+            let key = self.dirty_of.get(&n).copied();
+            if let Some(k) = key {
+                self.take_dirty(k);
+            }
+            self.relations.forget(n);
+            self.focus.retain(|x| *x != n);
+            self.visible.retain(|x| *x != n);
+            self.prio.remove(&n);
+            // Anchors bound to the node, its DOM id and its exact keys re-resolve (per key).
+            if let Some(set) = self.anchor_nodes.remove(&n) {
+                self.touched_anchors.extend(set);
+            }
+            if let Some(id) = attr_id {
+                if let Some(holders) = self.dom.get_mut(&id) {
+                    holders.remove(&n);
+                    if holders.is_empty() {
+                        self.dom.remove(&id);
+                    }
+                }
+                self.touched_dom.push(id);
+            }
+            for (space, id) in self.exact_by_node.remove(&n).unwrap_or_default() {
+                self.exact.remove(&(space, id));
+                self.touched_anchors.push(AnchorId::Exact { space, id });
+            }
+            self.touched_nodes.push(n);
         }
         if let Some(p) = parent
             && let Some(Some(pn)) = self.nodes.get_mut(slot(p))
@@ -526,21 +608,22 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             }
             self.mark_dirty(p);
         }
-        // Dom holders and exact keys of removed nodes disappear; anchors re-resolve.
-        self.dom
-            .values_mut()
-            .for_each(|s| s.retain(|n| self.nodes.get(slot(*n)).is_some_and(Option::is_some)));
-        self.exact
-            .retain(|_, n| self.nodes.get(slot(*n)).is_some_and(Option::is_some));
-        self.index_dirty = true;
         self.reindex();
         Ok(removed)
     }
 
     /// Bind an exact key (for example an AccessKit node id) to a node.
     pub fn bind_exact(&mut self, space: u16, id: u128, node: NodeIdx) {
-        self.exact.insert((space, id), node);
-        self.index_dirty = true;
+        if let Some(old) = self.exact.insert((space, id), node)
+            && let Some(keys) = self.exact_by_node.get_mut(&old)
+        {
+            keys.retain(|k| *k != (space, id));
+        }
+        self.exact_by_node
+            .entry(node)
+            .or_default()
+            .push((space, id));
+        self.touched_anchors.push(AnchorId::Exact { space, id });
         self.reindex();
     }
 
@@ -553,19 +636,34 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     /// The focus chain (focused node, its ancestors, the active descendant): fused first.
     pub fn set_focus_chain(&mut self, chain: &[NodeIdx]) {
-        self.focus = chain.iter().copied().collect();
-        self.rekey();
+        self.focus = chain.to_vec();
+        self.apply_prio();
     }
 
     /// The visible window: fused right after the focus chain.
     pub fn set_visible(&mut self, window: &[NodeIdx]) {
-        self.visible = window.iter().copied().collect();
-        self.rekey();
+        self.visible = window.to_vec();
+        self.apply_prio();
+    }
+
+    /// Nodes the global-epoch sweep still has to visit.
+    pub fn sweep_remaining(&self) -> usize {
+        self.sweep.map_or(0, |c| self.nodes.len().saturating_sub(c))
+    }
+
+    /// Anchor re-resolutions performed so far (cost tests).
+    pub fn rebind_count(&self) -> u64 {
+        self.rebinds
+    }
+
+    /// Nodes visited by the last priority-set computation (bounded by `Limits::max_priority`).
+    pub fn priority_work(&self) -> usize {
+        self.prio_work
     }
 
     fn key_of(&self, n: NodeIdx) -> Option<DirtyKey> {
         let nd = node_of(&self.nodes, n)?;
-        let class = u8::from(!self.is_priority(n));
+        let class = u8::from(!self.prio.contains(&n));
         Some((class, Reverse(nd.depth), n.0))
     }
 
@@ -576,31 +674,51 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             .is_some_and(|e| self.profile.rules.content_named.has(e.sem.role))
     }
 
-    /// True for the focus chain, the visible window and every node that feeds one of them through
-    /// the content-name edge (a descendant reached through first-`max_children` positions): a
-    /// priority node is complete only when the nodes it reads are fused too (FS-7).
-    fn is_priority(&self, n: NodeIdx) -> bool {
+    /// The priority set, top-down from the focus chain and the visible window: a node joins when
+    /// it is a seed, or one of the first `max_children` children of a member that reads its
+    /// children. Bounded by `Limits::max_priority` visited nodes (excess nodes simply fall to the
+    /// normal class), so its cost does not depend on the tree's depth or width.
+    fn compute_prio(&mut self) -> HashSet<NodeIdx> {
+        let limit = self.profile.limits.max_priority.max(1);
         let cap = self.profile.limits.max_children.max(1);
-        let mut cur = n;
-        loop {
-            if self.focus.contains(&cur) || self.visible.contains(&cur) {
-                return true;
+        let mut set: HashSet<NodeIdx> = HashSet::new();
+        let mut queue: VecDeque<NodeIdx> = self
+            .focus
+            .iter()
+            .chain(&self.visible)
+            .copied()
+            .filter(|n| node_of(&self.nodes, *n).is_some())
+            .collect();
+        let mut work = 0usize;
+        while let Some(n) = queue.pop_front() {
+            if set.len() >= limit {
+                break;
             }
-            let Some(nd) = node_of(&self.nodes, cur) else {
-                return false;
-            };
-            match nd.parent {
-                Some(p) if nd.pos < cap && self.reads_children(p) => cur = p,
-                _ => return false,
+            work += 1;
+            if !set.insert(n) {
+                continue;
+            }
+            if self.reads_children(n)
+                && let Some(nd) = node_of(&self.nodes, n)
+            {
+                queue.extend(nd.children.iter().take(cap).copied());
             }
         }
+        self.prio_work = work;
+        set
     }
 
-    fn rekey(&mut self) {
-        let nodes: Vec<NodeIdx> = self.dirty_of.keys().copied().collect();
-        self.dirty.clear();
-        self.dirty_of.clear();
-        for n in nodes {
+    /// Recompute the priority set and re-key only the dirty nodes whose class changed.
+    fn apply_prio(&mut self) {
+        let new = self.compute_prio();
+        let moved: Vec<NodeIdx> = self
+            .prio
+            .symmetric_difference(&new)
+            .copied()
+            .filter(|n| self.dirty_of.contains_key(n))
+            .collect();
+        self.prio = new;
+        for n in moved {
             self.mark_dirty(n);
         }
     }
@@ -609,8 +727,78 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         let Some(key) = self.key_of(n) else { return };
         if let Some(old) = self.dirty_of.insert(n, key) {
             self.dirty.remove(&old);
+        } else {
+            self.age.insert(n, self.tick);
+            self.by_age.insert((self.tick, n.0));
         }
         self.dirty.insert(key);
+    }
+
+    fn take_dirty(&mut self, key: DirtyKey) {
+        let n = NodeIdx(key.2);
+        self.dirty.remove(&key);
+        self.dirty_of.remove(&n);
+        if let Some(t) = self.age.remove(&n) {
+            self.by_age.remove(&(t, n.0));
+        }
+    }
+
+    /// Re-fuse `n` soon: priority nodes (and nodes already dirty) join the dirty set now; any other
+    /// node waits in the background queue, which `run` serves with a guaranteed share. This keeps
+    /// the cost of issuing a mask or a release independent of how many nodes it touches.
+    fn schedule(&mut self, n: NodeIdx) {
+        if node_of(&self.nodes, n).is_none() {
+            return;
+        }
+        if self.prio.contains(&n) || self.dirty_of.contains_key(&n) {
+            self.mark_dirty(n);
+        } else if self.in_background.insert(n) {
+            self.background.push_back(n);
+        }
+    }
+
+    /// Move up to `share` units of background work into the dirty set: queued dependents, then
+    /// per-source sweeps, then the global sweep.
+    fn feed_background(&mut self, share: usize) {
+        let mut left = share;
+        while left > 0 {
+            if let Some(n) = self.background.pop_front() {
+                self.in_background.remove(&n);
+                self.mark_dirty(n);
+                left -= 1;
+                continue;
+            }
+            if let Some(sw) = self.source_sweeps.front_mut() {
+                if sw.anchors.is_none() {
+                    sw.anchors = Some(self.side.anchors_of_source(sw.src));
+                }
+                let next = sw.anchors.as_ref().and_then(|a| a.get(sw.cur)).cloned();
+                match next {
+                    Some(a) => {
+                        sw.cur += 1;
+                        self.dirty_anchor(&a);
+                        left -= 1;
+                    }
+                    None => {
+                        self.source_sweeps.pop_front();
+                    }
+                }
+                continue;
+            }
+            if let Some(c) = self.sweep {
+                if c < self.nodes.len() {
+                    self.sweep = Some(c + 1);
+                    if let Some(n) = u32::try_from(c).ok().map(NodeIdx) {
+                        self.mark_dirty(n);
+                    }
+                    left -= 1;
+                } else {
+                    self.sweep = None;
+                }
+                continue;
+            }
+            break;
+        }
     }
 
     // ---- inputs ---------------------------------------------------------------------------------
@@ -625,9 +813,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 Err(e) => rep.errors.push(e),
             }
         }
-        if self.index_dirty {
-            self.reindex();
-        }
+        self.reindex();
         rep
     }
 
@@ -673,7 +859,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                     let moved = now != n.alive;
                     n.alive = now;
                     if moved {
-                        self.index_dirty = true;
+                        self.touched_nodes.push(node);
                     }
                     self.mark_dirty(node);
                 }
@@ -707,18 +893,22 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                     return Ok(());
                 }
                 let old = n.attr.replace(new.clone());
-                if let Some((_, Some(old_id))) = old
-                    && let Some(set) = self.dom.get_mut(&old_id)
-                {
-                    set.remove(&node);
-                    if set.is_empty() {
-                        self.dom.remove(&old_id);
+                if let Some((_, Some(old_id))) = old {
+                    if let Some(set) = self.dom.get_mut(&old_id) {
+                        set.remove(&node);
+                        if set.is_empty() {
+                            self.dom.remove(&old_id);
+                        }
                     }
+                    self.touched_dom.push(old_id);
                 }
                 if let Some(new_id) = new.1 {
-                    self.dom.entry(new_id).or_default().insert(node);
+                    self.dom
+                        .entry(Arc::clone(&new_id))
+                        .or_default()
+                        .insert(node);
+                    self.touched_dom.push(new_id);
                 }
-                self.index_dirty = true;
                 self.mark_dirty(node);
             }
             Input::Vis { node, rev } => {
@@ -767,8 +957,17 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     /// Re-resolve one anchor; dirty the nodes it moved between.
     fn rebind_anchor(&mut self, a: &AnchorId) {
+        self.rebinds += 1;
         let new = resolve_in(&self.nodes, &self.dom, &self.exact, a);
         let old = self.resolved.insert(a.clone(), new);
+        if old.is_none()
+            && let AnchorId::Dom { id, .. } = a
+        {
+            self.dom_anchors
+                .entry(Arc::clone(id))
+                .or_default()
+                .insert(a.clone());
+        }
         if old == Some(new) {
             return;
         }
@@ -784,13 +983,47 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         }
     }
 
-    /// A lifecycle or DOM-id change can move any anchor: re-resolve every cached one (the cost is
-    /// the number of anchors with registers, paid only on those rare inputs).
+    /// Re-resolve exactly the anchors a lifecycle, DOM-id or exact-key change can move: the node's
+    /// own anchor, the anchors bound to it, the anchors of the DOM ids whose holders changed and
+    /// the exact keys of the node. Cost is proportional to those, not to all cached anchors.
     fn reindex(&mut self) {
-        self.index_dirty = false;
-        let anchors: Vec<AnchorId> = self.resolved.keys().cloned().collect();
+        if self.touched_nodes.is_empty()
+            && self.touched_dom.is_empty()
+            && self.touched_anchors.is_empty()
+        {
+            return;
+        }
+        let mut anchors: BTreeSet<AnchorId> = std::mem::take(&mut self.touched_anchors)
+            .into_iter()
+            .collect();
+        let mut dom_ids: BTreeSet<Arc<str>> =
+            std::mem::take(&mut self.touched_dom).into_iter().collect();
+        for x in std::mem::take(&mut self.touched_nodes) {
+            anchors.insert(AnchorId::Node(x));
+            if let Some(set) = self.anchor_nodes.get(&x) {
+                anchors.extend(set.iter().cloned());
+            }
+            for (space, id) in self.exact_by_node.get(&x).into_iter().flatten() {
+                anchors.insert(AnchorId::Exact {
+                    space: *space,
+                    id: *id,
+                });
+            }
+            // A holder of a DOM id going live or dead moves that id's anchors.
+            if let Some(Some((_, Some(id)))) = node_of(&self.nodes, x).map(|n| n.attr.clone()) {
+                dom_ids.insert(id);
+            }
+        }
+        for id in dom_ids {
+            if let Some(set) = self.dom_anchors.get(&id) {
+                anchors.extend(set.iter().cloned());
+            }
+        }
         for a in anchors {
-            self.rebind_anchor(&a);
+            // Only anchors that have registers are cached; the rest need no resolution.
+            if self.resolved.contains_key(&a) {
+                self.rebind_anchor(&a);
+            }
         }
     }
 
@@ -801,10 +1034,27 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     }
 
     /// Register a non-primary source.
+    ///
+    /// A new source is **masked** until an explicit `Active` epoch arrives
+    /// ([`Ivm::set_source_state`]); a source whose stable name was revoked, quarantined or paused
+    /// before inherits that state.
     pub fn set_source(&mut self, info: SourceInfo) -> Result<(), SideError> {
+        let (id, name) = (info.id, Arc::clone(&info.name));
         self.side.set_source(info)?;
+        if let Some(&(n, state)) = self.retained.get(&name) {
+            self.epochs.join_source(id, n, state);
+        }
         self.refresh_snapshot();
         Ok(())
+    }
+
+    /// Remember a silencing epoch under the source's stable name (called before the old id goes).
+    fn retain_silence(&mut self, id: SourceId) {
+        if let (Some(name), Some((n, state))) = (self.side.source_name(id), self.epochs.take(id))
+            && sticky(state)
+        {
+            self.retained.insert(name, (n, state));
+        }
     }
 
     fn forget_anchors(&mut self, anchors: &[AnchorId]) -> Vec<NodeIdx> {
@@ -812,12 +1062,18 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         for a in anchors {
             if !self.side.has_anchor(a)
                 && let Some(r) = self.resolved.remove(a)
-                && let Some(n) = r.node
             {
-                if let Some(set) = self.anchor_nodes.get_mut(&n) {
+                if let AnchorId::Dom { id, .. } = a
+                    && let Some(set) = self.dom_anchors.get_mut(id)
+                {
                     set.remove(a);
                 }
-                touched.push(n);
+                if let Some(n) = r.node {
+                    if let Some(set) = self.anchor_nodes.get_mut(&n) {
+                        set.remove(a);
+                    }
+                    touched.push(n);
+                }
             } else if let Some(n) = self.resolved.get(a).and_then(|r| r.node) {
                 touched.push(n);
             }
@@ -826,39 +1082,51 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     }
 
     /// A source disconnects for good: its registration and every register it owns are dropped,
-    /// and the focus chain and visible window are re-fused before this returns.
+    /// and the focus chain and visible window are re-fused before this returns (bounded; the
+    /// rest follows in `run`).
     pub fn release_source(&mut self, id: SourceId) -> Vec<Published> {
+        self.retain_silence(id);
         let anchors = self.side.release_source(id);
-        self.epochs.forget(id);
         self.refresh_snapshot();
         let touched = self.forget_anchors(&anchors);
         for n in touched {
-            self.mark_dirty(n);
+            self.schedule(n);
         }
         self.drain_priority().published
     }
 
     /// A source reconnects under its stable name: the old slot is released (registration and
     /// registers) **before** the new registration, which would otherwise be rejected as a
-    /// duplicate name. On error nothing changed.
+    /// duplicate name. On error nothing changed. A silencing state (revoked, quarantined,
+    /// paused) follows the name to the new connection; otherwise the new id is masked until its
+    /// first explicit `Active` epoch.
     pub fn reconnect(
         &mut self,
         old: SourceId,
         info: SourceInfo,
     ) -> Result<Vec<Published>, SideError> {
+        let (new_id, name) = (info.id, Arc::clone(&info.name));
+        let old_state = self.epochs.entry(old);
         let anchors = self.side.reconnect(old, info)?;
-        self.epochs.forget(old);
+        if let Some(&(n, state)) = old_state.as_ref().filter(|(_, s)| sticky(*s)) {
+            self.retained.insert(name.clone(), (n, state));
+        }
+        self.epochs.take(old);
+        if let Some(&(n, state)) = self.retained.get(&name) {
+            self.epochs.join_source(new_id, n, state);
+        }
         self.refresh_snapshot();
         let touched = self.forget_anchors(&anchors);
         for n in touched {
-            self.mark_dirty(n);
+            self.schedule(n);
         }
         Ok(self.drain_priority().published)
     }
 
-    /// A per-source epoch message (mask, pause, revoke, detach, throttle, resume). A silencing
-    /// state re-fuses the focus chain and the visible window **synchronously** (FS-7); the rest
-    /// of the affected nodes stay dirty for the next `run`. Returns what was published.
+    /// A per-source epoch message (mask, pause, revoke, detach, throttle, resume). Issuing it is
+    /// O(priority set): the priority nodes are re-fused synchronously (FS-7, bounded by
+    /// `Limits::max_sync_drain`) and the source's other nodes are swept by `run` with a guaranteed
+    /// share. Returns what was published.
     pub fn set_source_state(
         &mut self,
         src: SourceId,
@@ -868,10 +1136,21 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         if !self.epochs.join_source(src, n, state) {
             return Vec::new();
         }
-        self.refresh_snapshot();
-        for a in self.side.anchors_of_source(src) {
-            self.dirty_anchor(&a);
+        if let Some(name) = self.side.source_name(src) {
+            if sticky(state) {
+                self.retained.insert(name, (n, state));
+            } else if self.retained.get(&name).is_some_and(|(rn, _)| n > *rn) {
+                // An explicit later epoch lifts the silence.
+                self.retained.remove(&name);
+            }
         }
+        self.refresh_snapshot();
+        self.touch_priority_nodes();
+        self.source_sweeps.push_back(SourceSweep {
+            src,
+            anchors: None,
+            cur: 0,
+        });
         if silences(state) {
             self.drain_priority().published
         } else {
@@ -879,15 +1158,27 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         }
     }
 
-    /// The global epoch (patch set changed, host-wide mask): every node is re-fused, focus chain
-    /// and visible window synchronously, the rest in budgeted chunks by `run`.
+    /// Dirty the priority nodes that carry non-primary facts (cutoff keeps this cheap).
+    fn touch_priority_nodes(&mut self) {
+        let nodes: Vec<NodeIdx> = self
+            .prio
+            .iter()
+            .copied()
+            .filter(|n| self.anchor_nodes.get(n).is_some_and(|s| !s.is_empty()))
+            .collect();
+        for n in nodes {
+            self.mark_dirty(n);
+        }
+    }
+
+    /// The global epoch (patch set changed, host-wide mask): O(priority set) to issue. The
+    /// priority nodes are re-fused synchronously (bounded), every other node by the sweep `run`
+    /// serves in budgeted chunks.
     pub fn bump_global(&mut self) -> Vec<Published> {
         self.epochs.bump_global();
-        let all: Vec<NodeIdx> = (0..self.nodes.len())
-            .filter_map(|i| u32::try_from(i).ok().map(NodeIdx))
-            .filter(|n| node_of(&self.nodes, *n).is_some())
-            .collect();
-        for n in all {
+        self.sweep = Some(0);
+        let nodes: Vec<NodeIdx> = self.prio.iter().copied().collect();
+        for n in nodes {
             self.mark_dirty(n);
         }
         self.drain_priority().published
@@ -904,25 +1195,26 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     // ---- running ---------------------------------------------------------------------------------
 
-    /// Re-fuse the focus chain and visible window (class 0) until none of them is dirty.
+    /// Re-fuse the priority class synchronously, at most `Limits::max_sync_drain` fusions; what
+    /// does not fit stays dirty in the front class for the next `run`.
     fn drain_priority(&mut self) -> RunReport {
+        let cap = self.profile.limits.max_sync_drain.max(1);
         let mut rep = RunReport::default();
         loop {
             let before = rep.fuse_calls;
             while let Some(&key) = self.dirty.first() {
-                if key.0 != 0 {
+                if key.0 != 0 || rep.fuse_calls >= cap {
                     break;
                 }
-                self.dirty.remove(&key);
-                self.dirty_of.remove(&NodeIdx(key.2));
+                self.take_dirty(key);
                 self.process(NodeIdx(key.2), &mut rep);
             }
-            // Fusing changes which nodes feed the priority nodes: refresh the keys and go on while
+            // Fusing changes which nodes feed the priority nodes: refresh the set and go on while
             // a priority node is still dirty (keys are scheduling hints, never results).
-            if rep.fuse_calls == before {
+            if rep.fuse_calls == before || rep.fuse_calls >= cap {
                 break;
             }
-            self.rekey();
+            self.apply_prio();
             if self.dirty.first().is_none_or(|k| k.0 != 0) {
                 break;
             }
@@ -931,29 +1223,44 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         rep
     }
 
-    /// Re-fuse dirty nodes: focus chain and visible window first, then deepest first, until the
-    /// budget is spent. Background dependents are re-fused in chunks once the dirty set is empty.
+    /// Re-fuse dirty nodes until the budget is spent: the priority class first, then deepest
+    /// first, with two anti-starvation guarantees. **Aging:** a node dirty for `AGE_RUNS` runs may
+    /// be taken ahead of depth order, for up to a quarter of the calls (at least one). **Background
+    /// share:** queued dependents, sweeps and epoch re-fuses get a share of every run even while
+    /// the dirty set is busy. Carry-over changes latency only, never the result.
     pub fn run(&mut self, budget: Budget) -> RunReport {
         let mut rep = RunReport::default();
+        self.tick += 1;
+        let share = if budget.max_calls == usize::MAX {
+            BACKGROUND_CHUNK
+        } else {
+            (budget.max_calls / 4).max(1)
+        };
+        self.feed_background(share);
+        let mut aged = 0usize;
         loop {
             if budget.exhausted(rep.fuse_calls) {
                 break;
             }
-            let Some(&key) = self.dirty.first() else {
-                if self.background.is_empty() {
-                    break;
+            let oldest = self.by_age.first().copied();
+            let key = match oldest {
+                Some((t, i))
+                    if self.tick.saturating_sub(t) >= AGE_RUNS
+                        && aged < (rep.fuse_calls / 4).max(1) =>
+                {
+                    aged += 1;
+                    self.dirty_of.get(&NodeIdx(i)).copied()
                 }
-                for _ in 0..BACKGROUND_CHUNK {
-                    let Some(n) = self.background.pop_front() else {
-                        break;
-                    };
-                    self.in_background.remove(&n);
-                    self.mark_dirty(n);
+                _ => self.dirty.first().copied(),
+            };
+            let Some(key) = key else {
+                self.feed_background(BACKGROUND_CHUNK);
+                if self.dirty.is_empty() {
+                    break;
                 }
                 continue;
             };
-            self.dirty.remove(&key);
-            self.dirty_of.remove(&NodeIdx(key.2));
+            self.take_dirty(key);
             self.process(NodeIdx(key.2), &mut rep);
         }
         rep.pending = self.pending();

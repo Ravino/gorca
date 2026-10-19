@@ -261,6 +261,8 @@ fn engine(s: &Setup, narrow: bool) -> Engine {
     );
     for src in SOURCES {
         e.set_source(source_info(src)).unwrap();
+        // A new source is masked until its first explicit Active epoch.
+        e.set_source_state(id(src.0), 1, SourceState::Active);
     }
     for (i, p) in s.parent.iter().enumerate() {
         e.add_node(
@@ -892,6 +894,8 @@ fn fact_engine() -> Ivm<NoQuirks, NoPatches> {
     let mut e = chain_engine(2);
     e.set_source(source_info(&SOURCES[1])).unwrap();
     e.set_source(source_info(&SOURCES[0])).unwrap();
+    e.set_source_state(id(3), 1, SourceState::Active);
+    e.set_source_state(id(2), 1, SourceState::Active);
     e
 }
 
@@ -1016,7 +1020,15 @@ fn a_reconnecting_source_releases_its_old_slot_before_registering() {
         slot: 30,
         generation: 1,
     };
-    e.apply([Input::Fact(fresh)]);
+    // Masked until the new connection's first Active epoch.
+    e.apply([Input::Fact(fresh.clone())]);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(
+        e.entry(nid(1)).unwrap().name.as_deref(),
+        None,
+        "new source starts masked"
+    );
+    e.set_source_state(fresh.source, 1, SourceState::Active);
     e.run(Budget::UNLIMITED);
     assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Fresh"));
     // A permanent release drops the registration and registers.
@@ -1145,4 +1157,300 @@ fn a_parent_s0_change_that_a_selector_reads_refuses_the_children() {
         );
         assert!(e.verify().is_ok());
     }
+}
+
+// ---- security and scheduler fixes -----------------------------------------------------------------
+
+fn star(n: usize) -> Ivm<NoQuirks, NoPatches> {
+    let mut e = chain_engine(1);
+    for i in 1..=n {
+        e.add_node(nid(i), Some(nid(0))).unwrap();
+        e.apply([Input::Life {
+            node: nid(i),
+            src: PrimarySlot::P0,
+            seq: 1,
+            alive: true,
+        }]);
+    }
+    e.run(Budget::UNLIMITED);
+    e
+}
+
+#[test]
+fn a_silenced_source_cannot_escape_by_reconnecting_or_re_registering() {
+    let mut e = fact_engine();
+    let f = ocr_name(1, "Save", &e, 300_000);
+    e.apply([f]);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Save"));
+    e.set_focus_chain(&[nid(1), nid(0)]);
+    e.set_source_state(id(3), 5, SourceState::Revoked);
+    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), None);
+    // Reconnect: the new id inherits the revocation by stable name; an Active epoch with a lower
+    // number cannot lift it, a later one can.
+    let new = SourceId {
+        slot: 40,
+        generation: 1,
+    };
+    let mut info = source_info(&SOURCES[1]);
+    info.id = new;
+    e.reconnect(id(3), info).unwrap();
+    let Input::Fact(mut f) = ocr_name(1, "Again", &e, 300_000) else {
+        panic!()
+    };
+    f.source = new;
+    f.seq = 9;
+    e.apply([Input::Fact(f)]);
+    e.set_source_state(new, 1, SourceState::Active);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(
+        e.entry(nid(1)).unwrap().name.as_deref(),
+        None,
+        "a revoked source stays revoked across a reconnect"
+    );
+    e.set_source_state(new, 6, SourceState::Active);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Again"));
+    // A permanent release keeps the silence for the name too.
+    e.set_source_state(new, 7, SourceState::Quarantined);
+    e.release_source(new);
+    let back = SourceId {
+        slot: 41,
+        generation: 2,
+    };
+    let mut info = source_info(&SOURCES[1]);
+    info.id = back;
+    e.set_source(info).unwrap();
+    let Input::Fact(mut f) = ocr_name(1, "Back", &e, 300_000) else {
+        panic!()
+    };
+    f.source = back;
+    e.apply([Input::Fact(f)]);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), None);
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn a_new_source_is_masked_until_an_explicit_active_epoch() {
+    let mut e = chain_engine(2);
+    e.set_source(source_info(&SOURCES[1])).unwrap();
+    let f = ocr_name(1, "Save", &e, 300_000);
+    e.apply([f]);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), None);
+    e.set_source_state(id(3), 1, SourceState::Active);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Save"));
+}
+
+#[test]
+fn a_life_seq_beyond_32_bits_fails_closed_instead_of_colliding() {
+    let mut e = chain_engine(1);
+    // `BindGen` is 32-bit: a seq that does not fit makes the anchor unbound, never u32::MAX.
+    e.apply([Input::Life {
+        node: nid(0),
+        src: PrimarySlot::P0,
+        seq: u64::from(u32::MAX) + 5,
+        alive: true,
+    }]);
+    let r = e.resolve_anchor(&AnchorId::Node(nid(0)));
+    assert_eq!(r.node, None);
+    e.apply([Input::Life {
+        node: nid(0),
+        src: PrimarySlot::P0,
+        seq: 7,
+        alive: true,
+    }]);
+    // The older, smaller seq cannot resurrect it: the register keeps the larger one.
+    assert_eq!(e.resolve_anchor(&AnchorId::Node(nid(0))).node, None);
+}
+
+#[test]
+fn the_priority_set_is_bounded_on_deep_and_wide_trees() {
+    // Deep: a 5000-deep chain of content-named buttons, focus at the root.
+    let mut e = chain_engine(5000);
+    let limit = e.profile().limits.max_priority;
+    for i in 0..5000 {
+        e.apply([Input::Inval {
+            node: nid(i),
+            src: PrimarySlot::P0,
+            seq: 9,
+        }]);
+    }
+    e.set_focus_chain(&[nid(0)]);
+    assert!(e.priority_work() <= limit, "deep: {}", e.priority_work());
+    e.set_visible(&[nid(2500)]);
+    assert!(e.priority_work() <= limit);
+    // Wide: 10_000 children, the root is focused; only the first max_children join.
+    let mut w = star(10_000);
+    for i in 1..=10_000 {
+        w.apply([Input::Inval {
+            node: nid(i),
+            src: PrimarySlot::P0,
+            seq: 9,
+        }]);
+    }
+    w.set_focus_chain(&[nid(0)]);
+    assert!(w.priority_work() <= w.profile().limits.max_children + 1);
+    // Re-keying never walks the dirty backlog: running in small slices makes steady progress.
+    let before = w.pending();
+    let rep = w.run(Budget::calls(50));
+    assert!(rep.fuse_calls <= 50);
+    assert!(w.pending() < before);
+    w.run(Budget::UNLIMITED);
+    assert!(w.verify().is_ok());
+}
+
+#[test]
+fn a_shallow_change_is_fused_within_a_few_runs_while_a_deep_leaf_keeps_changing() {
+    let mut e = chain_engine(50);
+    e.apply([Input::Obs {
+        node: nid(1),
+        src: PrimarySlot::P0,
+        seq: 100,
+        write: write_from_toy(Group::Description, &json!("Required")),
+    }]);
+    let mut fused_at = None;
+    for k in 0..40u64 {
+        e.apply([Input::Obs {
+            node: nid(49),
+            src: PrimarySlot::P0,
+            seq: 200 + k,
+            write: write_from_toy(
+                Group::Description,
+                &json!(if k.is_multiple_of(2) {
+                    "Opens a dialog"
+                } else {
+                    "Required"
+                }),
+            ),
+        }]);
+        let rep = e.run(Budget::calls(1));
+        if fused_at.is_none() && rep.published.iter().any(|p| p.node.0 == 1) {
+            fused_at = Some(k);
+        }
+    }
+    let k = fused_at.expect("node 1 starved");
+    assert!(k <= 6, "aging should serve it within a few runs, took {k}");
+}
+
+#[test]
+fn background_work_gets_a_share_even_while_the_dirty_set_is_busy() {
+    // A global epoch queues every node; deep churn keeps the dirty set non-empty, yet the sweep
+    // still reaches the shallow nodes.
+    let mut e = chain_engine(60);
+    e.bump_global();
+    let mut k = 0u64;
+    while e.sweep_remaining() > 0 && k < 400 {
+        // Ten deep nodes change every round: the dirty set never drains under a 2-call budget.
+        for d in 50..60usize {
+            e.apply([Input::Obs {
+                node: nid(d),
+                src: PrimarySlot::P0,
+                seq: 1000 + k,
+                write: write_from_toy(
+                    Group::Description,
+                    &json!(if k.is_multiple_of(2) {
+                        "Required"
+                    } else {
+                        "Opens a dialog"
+                    }),
+                ),
+            }]);
+        }
+        e.run(Budget::calls(2));
+        k += 1;
+    }
+    e.run(Budget::UNLIMITED);
+    assert!(k < 400, "the sweep starved");
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn a_lifecycle_change_re_resolves_only_the_anchors_it_can_move() {
+    let mut e = fact_engine();
+    for i in 2..=400 {
+        e.add_node(nid(i), Some(nid(0))).unwrap();
+        e.apply([Input::Life {
+            node: nid(i),
+            src: PrimarySlot::P0,
+            seq: 1,
+            alive: true,
+        }]);
+        let Input::Fact(mut f) = ocr_name(i, "X", &e, 300_000) else {
+            panic!()
+        };
+        f.seq = i as u64;
+        e.apply([Input::Fact(f)]);
+    }
+    e.run(Budget::UNLIMITED);
+    let before = e.rebind_count();
+    e.apply([Input::Life {
+        node: nid(77),
+        src: PrimarySlot::P0,
+        seq: 5,
+        alive: true,
+    }]);
+    let delta = e.rebind_count() - before;
+    assert!(delta <= 3, "re-resolved {delta} anchors for one node");
+    e.run(Budget::UNLIMITED);
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn the_synchronous_priority_drain_is_bounded_and_the_rest_carries_over() {
+    let mut e = star(2000);
+    e.set_visible(&[nid(0)]);
+    // The root reads its first 256 children: all join the priority set, but the synchronous part
+    // never exceeds the cap; the remainder stays dirty in the front class.
+    let cap = e.profile().limits.max_sync_drain;
+    let pubd = e.bump_global();
+    assert!(pubd.len() <= cap);
+    assert!(e.pending() > 0);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.pending(), 0);
+    assert!(e.verify().is_ok());
+}
+
+/// Release-mode timing: issuing a focus change or a global epoch with a huge dirty backlog must
+/// not walk the backlog (S-1). Skipped in debug builds, where timings mean nothing.
+#[test]
+fn focus_change_and_global_epoch_with_100k_dirty_nodes_stay_under_half_a_millisecond() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let n = 100_000;
+    let mut e = star(n);
+    for i in 1..=n {
+        e.apply([Input::Obs {
+            node: nid(i),
+            src: PrimarySlot::P0,
+            seq: 10,
+            write: write_from_toy(Group::Description, &json!("Required")),
+        }]);
+    }
+    assert!(e.pending() >= n);
+    let mut best_focus = std::time::Duration::MAX;
+    for k in 0..7usize {
+        let t = std::time::Instant::now();
+        e.set_focus_chain(&[nid(3 + k), nid(0)]);
+        best_focus = best_focus.min(t.elapsed());
+    }
+    e.set_visible(&[nid(0)]);
+    let mut best_epoch = std::time::Duration::MAX;
+    for _ in 0..5 {
+        let t = std::time::Instant::now();
+        let _ = e.bump_global();
+        best_epoch = best_epoch.min(t.elapsed());
+    }
+    eprintln!("focus change {best_focus:?}, bump_global sync {best_epoch:?} (100k dirty)");
+    assert!(
+        best_focus < std::time::Duration::from_micros(500),
+        "{best_focus:?}"
+    );
+    assert!(
+        best_epoch < std::time::Duration::from_micros(500),
+        "{best_epoch:?}"
+    );
 }

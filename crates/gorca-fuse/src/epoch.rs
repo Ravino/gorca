@@ -68,26 +68,42 @@ impl Epochs {
         }
     }
 
-    /// The state of `src`, `Active` when no epoch message ever arrived for a registered source.
-    pub fn state(&self, src: SourceId) -> SourceState {
-        self.sources
-            .get(&src)
-            .map_or(SourceState::Active, |&(_, s)| s)
+    /// The epoch entry of `src`: `None` until an epoch message arrived for it.
+    pub fn entry(&self, src: SourceId) -> Option<(u64, SourceState)> {
+        self.sources.get(&src).copied()
     }
 
-    /// Forget a released source's epoch.
-    pub fn forget(&mut self, src: SourceId) {
-        self.sources.remove(&src);
+    /// The state of `src`, or `None` when no epoch message ever arrived for it. A newly
+    /// registered source has no state and stays **masked** until an explicit `Active` epoch.
+    pub fn state(&self, src: SourceId) -> Option<SourceState> {
+        self.sources.get(&src).map(|&(_, s)| s)
     }
 
-    /// The snapshot `FUSE` reads: every **registered** source is listed (a source missing from a
-    /// snapshot is masked, so an unregistered one stays masked).
+    /// Remove and return a released source's epoch entry. The caller decides whether to retain a
+    /// silencing state by stable name (a revoked source must not escape by reconnecting).
+    pub fn take(&mut self, src: SourceId) -> Option<(u64, SourceState)> {
+        self.sources.remove(&src)
+    }
+
+    /// The snapshot `FUSE` reads: only sources with an epoch entry are listed. A registered source
+    /// without one, and an unregistered one, are missing and therefore masked (fail closed).
     pub fn snapshot(&self, registered: impl IntoIterator<Item = SourceId>) -> EpochSnapshot {
         let mut e = EpochSnapshot::default();
         for id in registered {
-            e.set(id, self.state(id));
+            if let Some(s) = self.state(id) {
+                e.set(id, s);
+            }
         }
         e
+    }
+}
+
+/// States that survive a reconnect or a release: the user's or the host's decision to silence a
+/// source is about the source, not about one connection.
+pub const fn sticky(s: SourceState) -> bool {
+    match s {
+        SourceState::Paused | SourceState::Quarantined | SourceState::Revoked => true,
+        SourceState::Active | SourceState::Throttled | SourceState::Detached => false,
     }
 }
 
@@ -108,20 +124,31 @@ mod tests {
         assert!(e.join_source(id(1), 2, SourceState::Revoked));
         assert!(!e.join_source(id(1), 1, SourceState::Active), "older epoch");
         assert!(!e.join_source(id(1), 2, SourceState::Revoked), "duplicate");
-        assert_eq!(e.state(id(1)), SourceState::Revoked);
+        assert_eq!(e.state(id(1)), Some(SourceState::Revoked));
         assert!(e.join_source(id(1), 3, SourceState::Active));
-        assert_eq!(e.state(id(1)), SourceState::Active);
-        assert_eq!(e.state(id(9)), SourceState::Active);
+        assert_eq!(e.state(id(1)), Some(SourceState::Active));
+        assert_eq!(
+            e.state(id(9)),
+            None,
+            "no epoch yet: masked until Active arrives"
+        );
     }
 
     #[test]
     fn snapshot_lists_only_registered_sources() {
         let mut e = Epochs::default();
         e.join_source(id(1), 1, SourceState::Paused);
-        let s = e.snapshot([id(1), id(2)]);
+        e.join_source(id(2), 1, SourceState::Active);
+        let s = e.snapshot([id(1), id(2), id(4)]);
         assert_eq!(s.state(id(1)), Some(SourceState::Paused));
         assert_eq!(s.state(id(2)), Some(SourceState::Active));
+        assert_eq!(
+            s.state(id(4)),
+            None,
+            "registered without an epoch stays masked"
+        );
         assert_eq!(s.state(id(3)), None, "unregistered stays fail-closed");
+        assert!(sticky(SourceState::Revoked) && !sticky(SourceState::Detached));
     }
 
     #[test]

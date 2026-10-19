@@ -169,6 +169,13 @@ pub struct Limits {
     /// Maximum children read by one name-from-content derivation. Depth needs no separate
     /// bound: every child name is already at most `max_text`, so a parent's is too.
     pub max_children: usize,
+    /// Maximum nodes in the priority set (focus chain, visible window and the descendants that
+    /// feed them): computing it costs at most this much, whatever the tree looks like.
+    pub max_priority: usize,
+    /// Maximum node fusions of the synchronous priority drain (masking, revocation, global
+    /// epoch). What does not fit stays dirty in the front class for the next `run`: the part
+    /// that runs inside the caller's turn is bounded (FS-7, M-16: ~0.5 ms).
+    pub max_sync_drain: usize,
 }
 
 impl Default for Limits {
@@ -176,6 +183,8 @@ impl Default for Limits {
         Limits {
             max_text: crate::value::MAX_TEXT_BYTES,
             max_children: 256,
+            max_priority: 1024,
+            max_sync_drain: 200,
         }
     }
 }

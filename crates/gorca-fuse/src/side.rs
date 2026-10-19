@@ -14,7 +14,7 @@
 //! the current one (stale when different).
 
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 use gorca_model::fact::{Basis, BindGen, SourceId};
@@ -307,6 +307,8 @@ pub struct SideTable {
     regs: HashMap<SideKey, FactReg>,
     /// Reverse index: the registers of each anchor (incremental maintenance reads it).
     by_anchor: HashMap<AnchorId, Vec<SideKey>>,
+    /// Reverse index: the anchors with registers of each source.
+    by_source: HashMap<SourceId, BTreeSet<AnchorId>>,
     cap: usize,
 }
 
@@ -323,6 +325,7 @@ impl SideTable {
             sources: BTreeMap::new(),
             regs: HashMap::new(),
             by_anchor: HashMap::new(),
+            by_source: HashMap::new(),
             cap,
         }
     }
@@ -395,6 +398,10 @@ impl SideTable {
         if self.regs.len() >= self.cap {
             return Err(SideError::Full);
         }
+        self.by_source
+            .entry(key.source)
+            .or_default()
+            .insert(key.anchor.clone());
         self.by_anchor
             .entry(key.anchor.clone())
             .or_default()
@@ -409,6 +416,7 @@ impl SideTable {
     /// registers (their nodes must be re-fused).
     pub fn release_source(&mut self, id: SourceId) -> Vec<AnchorId> {
         self.sources.remove(&id);
+        self.by_source.remove(&id);
         let keys: Vec<SideKey> = self
             .regs
             .keys()
@@ -457,22 +465,23 @@ impl SideTable {
         self.sources.keys().copied()
     }
 
+    /// The stable name of a registered source.
+    pub fn source_name(&self, id: SourceId) -> Option<Arc<str>> {
+        self.sources.get(&id).map(|s| Arc::clone(&s.name))
+    }
+
     /// True when `a` still has at least one register.
     pub fn has_anchor(&self, a: &AnchorId) -> bool {
         self.by_anchor.contains_key(a)
     }
 
-    /// Anchors with at least one register of `id`.
+    /// Anchors with at least one register of `id` (from the reverse index: proportional to the
+    /// source's own anchors, not to the table).
     pub fn anchors_of_source(&self, id: SourceId) -> Vec<AnchorId> {
-        let mut v: Vec<AnchorId> = self
-            .regs
-            .keys()
-            .filter(|k| k.source == id)
-            .map(|k| k.anchor.clone())
-            .collect();
-        v.sort();
-        v.dedup();
-        v
+        self.by_source
+            .get(&id)
+            .map(|s| s.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     /// Anchors with a register whose TTL expires in `(from_ms, to_ms]`.
