@@ -137,7 +137,7 @@ fn gecko_list_marker_row_reproduces_the_blink_names() {
             let before = name_of(&rec);
             gecko.apply(PrimarySlot::P0, &mut rec);
             let after = name_of(&rec);
-            if rec.hit[ix(Group::Name)] == 1 {
+            if matches!(rec.hit[ix(Group::Name)], 1 | 3) {
                 stripped += 1;
                 assert_ne!(before, after);
                 // Same element in Blink: same name.

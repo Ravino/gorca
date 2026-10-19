@@ -1,0 +1,29 @@
+# e2e-m8 c2-msgk-new-1
+# utc=2026-10-19T14:40:31Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=20.27 19.26 18.33 3/2520 1249788
+# git_rev=9018cde6
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=c2-msgk-new-1
+# reader=daemon:<repo>/.claude/worktrees/agent-a95d316c70d5c4694/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=20.27 19.26 18.33 4/2520 1249785
+# loadavg_end=20.27 19.26 18.33 4/2520 1249785
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-MSGK SKIPPED: a Chromium-only scenario
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-MSGK.skipped            daemon/voicego            1            1            1  1                  info   [flag]

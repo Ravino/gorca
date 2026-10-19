@@ -5,6 +5,7 @@
 mod coded;
 pub mod codes;
 pub mod entry;
+pub mod record;
 pub mod registry;
 pub mod role;
 pub mod states;
@@ -15,6 +16,7 @@ pub use codes::{
     TrustTier,
 };
 pub use entry::{SemEntry, Semantics};
+pub use record::{Notes, RoleSource, SrcRecord, TagName};
 pub use role::SemRole;
 pub use states::{
     Avail, Check, Current, Expand, GridPos, Invalid, Live, NameFrom, Orientation, Popup, PosSrc,

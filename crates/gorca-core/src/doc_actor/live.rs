@@ -74,7 +74,7 @@ enum Politeness {
 
 #[derive(Copy, Clone, Debug)]
 #[allow(clippy::struct_excessive_bools)] // independent ARIA flags of one region
-struct Props {
+pub(super) struct Props {
     politeness: Politeness,
     atomic: bool,
     removals: bool,
@@ -91,8 +91,66 @@ fn has_role(v: &NodeView<'_>, tok: &str) -> bool {
     attr(v, web_attrs::XML_ROLES).is_some_and(|r| r.split_ascii_whitespace().any(|t| t == tok))
 }
 
-/// The live properties of a node that is a region root; `None` for an ordinary node.
-fn props_of(v: &NodeView<'_>) -> Option<Props> {
+/// The live properties of a node that is a region root; `None` for an ordinary node. The
+/// properties still come from the node's attributes (dual-carry); a node with a fused entry is
+/// checked against it.
+pub(super) fn props_of(v: &NodeView<'_>) -> Option<Props> {
+    let legacy = legacy_props(v);
+    if let Some(e) = v.meta.and_then(|m| m.sem.as_deref()) {
+        check_props(v, legacy, e);
+    }
+    legacy
+}
+
+/// The legacy region properties against the fused entry (M22a-C2 agreement). A region root the
+/// legacy parse calls `off` (explicit `live=off`, a timer or marquee) is no live region in the
+/// model, where `off` is the absence of a `Live`. Two documented deviations: the legacy parse
+/// treats `alertdialog` as an assertive atomic region (the model does not: only `alert` is
+/// implicitly live), and it makes `status` atomic only when the role token is present, while the
+/// model gives every `status` (an `<output>` too) ARIA's implicit `aria-atomic=true`.
+fn check_props(v: &NodeView<'_>, legacy: Option<Props>, e: &gorca_model::sem::SemEntry) {
+    use gorca_model::sem::Relevant;
+    if !e.known.has(gorca_model::sem::Group::Live) || v.flags.contains(NodeFlags::HIDDEN) {
+        return;
+    }
+    let fused = e.sem.live.filter(|l| l.root);
+    let bad = match (legacy.filter(|p| p.politeness != Politeness::Off), fused) {
+        (None, None) => None,
+        (Some(p), Some(l)) => {
+            let pol = match l.politeness {
+                gorca_model::event::Politeness::Polite => Politeness::Polite,
+                gorca_model::event::Politeness::Assertive => Politeness::Assertive,
+            };
+            let implicit_status =
+                e.sem.role == gorca_model::sem::SemRole::Status && l.atomic && !p.atomic;
+            if pol != p.politeness {
+                Some("politeness")
+            } else if l.atomic != p.atomic && !implicit_status {
+                Some("atomic")
+            } else if l.relevant.contains(Relevant::REMOVALS) != p.removals {
+                Some("relevant")
+            } else {
+                None
+            }
+        }
+        (Some(p), None) => (!(p.alert && e.sem.role == gorca_model::sem::SemRole::AlertDialog))
+            .then_some("legacy region root, no fused live"),
+        (None, Some(_)) => Some("fused region root, no legacy live"),
+    };
+    if let Some(why) = bad {
+        let detail = format!(
+            "{why}: attrs live {:?} atomic {:?} relevant {:?}, roles {:?}; legacy {legacy:?}, fused {:?}",
+            attr(v, web_attrs::LIVE),
+            attr(v, web_attrs::ATOMIC),
+            attr(v, web_attrs::RELEVANT),
+            attr(v, web_attrs::XML_ROLES),
+            e.sem.live,
+        );
+        super::agree::flag(super::agree::Aspect::LiveProps, v.role, &detail);
+    }
+}
+
+fn legacy_props(v: &NodeView<'_>) -> Option<Props> {
     if v.flags.contains(NodeFlags::HIDDEN) {
         return None;
     }
@@ -767,5 +825,67 @@ mod tests {
         assert!(spoken <= 8, "spoken {spoken}");
         assert!(spoken >= 1);
         assert!(summaries <= 2, "summaries {summaries}");
+    }
+
+    // ---- agreement with the fused entry (M22a-C2) ----------------------------------------------
+
+    /// A one-node document whose root region has these attributes and this fused entry.
+    fn fused_region(live_attr: &str, live: Option<gorca_model::sem::Live>) -> (WebDoc, DocNodeId) {
+        use gorca_model::sem::{Group, GroupMask, SemEntry};
+        let mut e = SemEntry::default();
+        e.sem.live = live;
+        e.known = GroupMask::EMPTY;
+        e.known.set(Group::Live, true);
+        let mut m = NodeMeta::default();
+        m.attrs.push((web_attrs::LIVE, Arc::from(live_attr)));
+        m.sem = Some(Arc::new(e));
+        let node = SubtreeSpec::leaf(
+            NodeSpec::new(Role::Panel)
+                .flags(NodeFlags::BLOCK | NodeFlags::LIVE)
+                .meta(Arc::new(m)),
+        );
+        let mut d = WebDoc::new(1);
+        assert!(
+            d.apply(&DocOp::InsertSubtree {
+                parent: None,
+                before: None,
+                subtree: Arc::new(node),
+            })
+            .is_ok()
+        );
+        let r = d.root().unwrap();
+        (d, r)
+    }
+
+    fn live(politeness: gorca_model::event::Politeness, atomic: bool) -> gorca_model::sem::Live {
+        gorca_model::sem::Live {
+            politeness,
+            atomic,
+            relevant: gorca_model::sem::Relevant::default(),
+            root: true,
+        }
+    }
+
+    #[test]
+    fn a_region_the_tracker_and_the_entry_both_see_agrees() {
+        use gorca_model::event::Politeness as P;
+        let (d, r) = fused_region("polite", Some(live(P::Polite, false)));
+        let (_, p) = region_of(&d, r).unwrap();
+        assert_eq!(p.politeness, Politeness::Polite);
+        let (d, r) = fused_region("assertive", Some(live(P::Assertive, false)));
+        assert!(region_of(&d, r).is_some());
+        // `off` is a region root for the tracker and the absence of a live region in the model.
+        let (d, r) = fused_region("off", None);
+        assert_eq!(
+            region_of(&d, r).map(|(_, p)| p.politeness),
+            Some(Politeness::Off)
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "legacy agreement")]
+    fn a_region_the_entry_does_not_see_is_a_disagreement() {
+        let (d, r) = fused_region("polite", None);
+        let _ = region_of(&d, r);
     }
 }

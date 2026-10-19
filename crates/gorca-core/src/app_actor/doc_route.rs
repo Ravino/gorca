@@ -209,6 +209,7 @@ mod tests {
             events: ev_tx,
             orphans: Arc::default(),
             repair_flag: Arc::default(),
+            timeline: Arc::default(),
         });
         join.set(nk(11), (DocId(1), DocNodeId::from_parts(0, 0)));
         join.set(nk(12), (DocId(1), DocNodeId::from_parts(1, 0)));

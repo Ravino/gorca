@@ -12,6 +12,7 @@
 //!    spec says the native semantics survive (presentational conflict resolution, a secret field,
 //!    `generic` on a semantic element).
 
+pub use gorca_model::sem::RoleSource;
 use gorca_model::sem::SemRole;
 
 /// Raw `AtspiRole` numbers used by name elsewhere in this crate.
@@ -447,19 +448,6 @@ pub fn tag_role(tag: &str) -> Option<SemRole> {
 /// Engine roles that carry no semantics of their own, so the DOM tag may refine them.
 pub const fn is_weak_engine_role(r: SemRole) -> bool {
     matches!(r, SemRole::Generic | SemRole::StaticText | SemRole::Unknown)
-}
-
-/// Which side decided the role.
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub enum RoleSource {
-    /// No usable token; the engine role.
-    #[default]
-    Engine,
-    /// The author's ARIA token.
-    Token,
-    /// A token was present but the native semantics won (presentational conflict resolution,
-    /// secret field, `generic` on a semantic element).
-    EngineOverToken,
 }
 
 /// Roles that survive `role=presentation|none` because they are interactive (ARIA 1.2 section

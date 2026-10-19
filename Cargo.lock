@@ -1158,7 +1158,9 @@ dependencies = [
  "gorca-connector-api",
  "gorca-doc",
  "gorca-doc-source-api",
+ "gorca-doc-source-atspi",
  "gorca-ext-api",
+ "gorca-fuse",
  "gorca-i18n",
  "gorca-ingress",
  "gorca-input-api",
@@ -1251,6 +1253,7 @@ name = "gorca-doc-source-api"
 version = "0.0.0"
 dependencies = [
  "bitflags",
+ "gorca-fuse",
  "gorca-model",
  "gorca-rt",
  "smallvec",
@@ -1265,8 +1268,10 @@ dependencies = [
  "futures-lite",
  "gorca-dbus",
  "gorca-doc-source-api",
+ "gorca-fuse",
  "gorca-model",
  "gorca-rt",
+ "gorca-sem-atspi",
  "serde",
  "smallvec",
  "thiserror",

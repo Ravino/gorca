@@ -1,0 +1,42 @@
+2026-10-19T14:25:12.495114Z  INFO gorca_phase: phase="web_focus" hit=false id=None
+2026-10-19T14:25:12.528406Z  INFO gorca_phase: phase="warm" wall_ms=33.182784 waited_ms=30.809585000000002 blocked_ms=3.9728619999999997 slept_ms=26.772668 rounds=2 probes=19 sampled_nodes=3 tagged_nodes=3 ready=true
+2026-10-19T14:25:12.529334Z  INFO gorca_phase: phase="locate" wall_ms=0.817455
+2026-10-19T14:25:12.529373Z  INFO gorca_phase: phase="create" wall_ms=0.0046879999999999995
+2026-10-19T14:25:12.533390Z  INFO gorca_phase: phase="fetch" total_ms=3.966005 warm_ms=0.0 frontier_ms=0.069787 get_tree_ms=1.7451940000000001 roles_ms=0.771754 states_ms=0.514722 text_ms=0.5694950000000001 assemble_ms=0.010147 heaviest_get_tree_ms=0.513 calls=96 tree_bytes=8616 nodes=31
+2026-10-19T14:25:12.533551Z  INFO gorca_phase: phase="translate" wall_ms=0.081423 nodes=64
+2026-10-19T14:25:13.104920Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 4, gen_: 0 })
+2026-10-19T14:25:13.183289Z  INFO gorca_phase: phase="live_msg" text=Polite message 1 assertive=false
+2026-10-19T14:25:13.325259Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 7, gen_: 0 })
+2026-10-19T14:25:13.325377Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 7, gen_: 0 })
+2026-10-19T14:25:13.402878Z  INFO gorca_phase: phase="live_msg" text=Assertive message 2 assertive=true
+2026-10-19T14:25:13.546469Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 10, gen_: 0 })
+2026-10-19T14:25:13.625124Z  INFO gorca_phase: phase="live_msg" text=Alert: disk almost full assertive=true
+2026-10-19T14:25:13.768930Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 13, gen_: 0 })
+2026-10-19T14:25:13.769035Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 13, gen_: 0 })
+2026-10-19T14:25:13.846130Z  INFO gorca_phase: phase="live_msg" text=Saved at step 3 assertive=false
+2026-10-19T14:25:13.981043Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 16, gen_: 0 })
+2026-10-19T14:25:13.981144Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 16, gen_: 0 })
+2026-10-19T14:25:14.058891Z  INFO gorca_phase: phase="live_msg" text=Log entry 4 assertive=false
+2026-10-19T14:25:14.271543Z  INFO gorca_phase: phase="live_msg" text=Log entry 5 assertive=false
+2026-10-19T14:25:15.714588Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 19, gen_: 0 })
+2026-10-19T14:25:15.792895Z  INFO gorca_phase: phase="live_msg" text=Ticker: 1 points assertive=false
+2026-10-19T14:25:15.941623Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 28, gen_: 0 })
+2026-10-19T14:25:16.568722Z  INFO gorca_phase: phase="live_msg" text=Busy final text assertive=false
+2026-10-19T14:25:18.174800Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 31, gen_: 0 })
+2026-10-19T14:25:19.100066Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 34, gen_: 0 })
+2026-10-19T14:25:19.177970Z  INFO gorca_phase: phase="live_msg" text=Removable text A assertive=false
+2026-10-19T14:25:19.322626Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 37, gen_: 0 })
+2026-10-19T14:25:19.429224Z  INFO gorca_phase: phase="live_msg" text=Same text again assertive=false
+2026-10-19T14:25:20.794421Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 40, gen_: 0 })
+2026-10-19T14:25:21.172376Z  INFO gorca_phase: phase="live_msg" text=Text added after the region exists assertive=false
+2026-10-19T14:25:22.626403Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 43, gen_: 0 })
+2026-10-19T14:25:23.542702Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 22, gen_: 0 })
+2026-10-19T14:25:23.732665Z  INFO gorca_phase: phase="live_msg" text=Flood update 26 assertive=false
+2026-10-19T14:25:23.866793Z  INFO gorca_phase: phase="live_msg" text=Flood update 53 assertive=false
+2026-10-19T14:25:23.999103Z  INFO gorca_phase: phase="live_msg" text=Flood update 80 assertive=false
+2026-10-19T14:25:26.167525Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 25, gen_: 0 })
+2026-10-19T14:25:26.356737Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 26 assertive=true
+2026-10-19T14:25:26.490853Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 53 assertive=true
+2026-10-19T14:25:26.624740Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 80 assertive=true
+2026-10-19T14:25:26.889833Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 133 assertive=true
+2026-10-19T14:25:29.133303Z  INFO gorca_phase: phase="live_msg" text=9 updates in Flood region assertive=false

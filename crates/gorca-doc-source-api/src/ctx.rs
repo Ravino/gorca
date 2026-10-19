@@ -16,6 +16,13 @@ pub trait DocSource: Send + 'static {
     fn caps(&self) -> SourceCaps;
     /// Runs until detached or shutdown. Must honour deadlines on every `DocRequest`.
     fn attach(self: Box<Self>, ctx: DocSourceCtx) -> BoxFuture<'static, Result<(), SourceError>>;
+    /// The fusion tables for the nodes this source delivers with a [`gorca_model::SrcNode::rec`]
+    /// (the document actor is the nodes' single writer and runs `FUSE`, ADR-0022 SM-8). `None`:
+    /// the source does not normalise and its nodes carry no fused semantics. Called once,
+    /// before `attach`.
+    fn fuse_setup(&self) -> Option<crate::FuseSetup> {
+        None
+    }
 }
 
 /// One normalised event of the document's application, as the connector's drain produced it

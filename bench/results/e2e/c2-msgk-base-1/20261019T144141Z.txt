@@ -1,0 +1,45 @@
+# e2e-m8 c2-msgk-base-1
+# utc=2026-10-19T14:41:41Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=15.60 18.13 18.01 4/2553 1260588
+# git_rev=9018cde6
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=c2-msgk-base-1
+# reader=daemon:/var/tmp/gorca-base-target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=16.84 18.55 18.14 4/2491 1257153
+# loadavg_end=15.60 18.13 18.01 2/2553 1260585
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-MSGK MK.fm.toggle P0 FAIL: heard "not in a web page" 
+# note1=M8-MSGK MK.fm.down1 P0 FAIL: heard "browse mode, Me, 10:02, Sure, where?, Me, 10:02: Sure, where?" 
+# note2=M8-MSGK MK.fm.back P0 FAIL: heard "focus mode" 
+# note3=M8-MSGK MK.pn.auto P0 FAIL: heard "Pinned: office is closed on Friday, list item" 
+# note4=M8-MSGK MK.pn.toggle P0 FAIL: heard "browse mode, Me, 10:06: Will do" 
+# note5=M8-MSGK MK.pn.pass P0 FAIL: heard "heading level 2, Pinned messages" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-MSGK.mode_ms.n          daemon/voicego            1            1            1  1                  info   [samples]
+M8-MSGK.mode_ms.p50        daemon/voicego        7.712        7.712        7.712  1                  info   [ms]
+M8-MSGK.mode_ms.p95        daemon/voicego        7.712        7.712        7.712  1                  info   [ms]
+M8-MSGK.mode_ms.p99        daemon/voicego        7.712        7.712        7.712  1 <=           15  PASS   [ms]
+M8-MSGK.mode_ms.max        daemon/voicego        7.712        7.712        7.712  1                  info   [ms]
+M8-MSGK.fail               daemon/voicego            6            6            6  1 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-MSGK.gap                daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-MSGK.p0_not_pass        daemon/voicego            6            6            6  1                  info   [steps]
+M8-MSGK.pass               daemon/voicego           16           16           16  1                  info   [steps]
+M8-MSGK.steps              daemon/voicego           22           22           22  1                  info   [steps]
+M8-MSGK.xfail              daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-MSGK.xpass              daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

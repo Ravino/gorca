@@ -58,6 +58,8 @@ pub enum IvmError {
     UnknownNode,
     #[error("unknown parent")]
     UnknownParent,
+    #[error("a node cannot be its own ancestor")]
+    Cycle,
     #[error(transparent)]
     Side(#[from] SideError),
 }
@@ -687,6 +689,128 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             self.mark_dirty(p);
         }
         Ok(())
+    }
+
+    /// True when `node` exists in the engine.
+    pub fn contains(&self, node: NodeIdx) -> bool {
+        node_of(&self.nodes, node).is_some()
+    }
+
+    /// The parent of `node` (`None` for a root or an unknown node).
+    pub fn parent(&self, node: NodeIdx) -> Option<NodeIdx> {
+        node_of(&self.nodes, node).and_then(|n| n.parent)
+    }
+
+    /// The ordered children of `node` (empty for an unknown node).
+    pub fn children(&self, node: NodeIdx) -> &[NodeIdx] {
+        node_of(&self.nodes, node).map_or(&[], |n| n.children.as_slice())
+    }
+
+    /// Make `desired` the complete, ordered child list of `parent` (a source's child list is
+    /// complete, SL-4). Every node of `desired` must exist already (a new node is added first
+    /// with `add_node(node, None)`); listed nodes move under `parent` from wherever they were,
+    /// and former children that are not listed become roots (the caller removes them with
+    /// [`Ivm::remove_subtree`] when they are gone). A repeated entry keeps its first place. The
+    /// call is atomic: on `Err` nothing changed. The parent and every node that left a child
+    /// list are re-fused (the content name reads the children).
+    pub fn set_children(&mut self, parent: NodeIdx, desired: &[NodeIdx]) -> Result<(), IvmError> {
+        let pn = node_of(&self.nodes, parent).ok_or(IvmError::UnknownParent)?;
+        let parent_depth = pn.depth;
+        let mut seen: HashSet<NodeIdx> = HashSet::with_capacity(desired.len());
+        let mut list: Vec<NodeIdx> = Vec::with_capacity(desired.len());
+        for &c in desired {
+            if node_of(&self.nodes, c).is_none() {
+                return Err(IvmError::UnknownNode);
+            }
+            if c == parent {
+                return Err(IvmError::Cycle);
+            }
+            if seen.insert(c) {
+                list.push(c);
+            }
+        }
+        // A listed node may not be an ancestor of `parent` (the walk is bounded by the depth).
+        let mut up = node_of(&self.nodes, parent).and_then(|n| n.parent);
+        let mut hops = 0u32;
+        while let Some(a) = up {
+            if seen.contains(&a) {
+                return Err(IvmError::Cycle);
+            }
+            hops += 1;
+            if hops > parent_depth + 1 {
+                break;
+            }
+            up = node_of(&self.nodes, a).and_then(|n| n.parent);
+        }
+        // Former children that are not listed become roots.
+        let old: Vec<NodeIdx> = node_of(&self.nodes, parent)
+            .map(|n| n.children.clone())
+            .unwrap_or_default();
+        for c in old {
+            if !seen.contains(&c) {
+                self.relink(c, None, 0, 0);
+            }
+        }
+        let child_depth = parent_depth + 1;
+        for (i, &c) in list.iter().enumerate() {
+            let pos = u32::try_from(i).unwrap_or(u32::MAX);
+            let (old_parent, old_depth) =
+                node_of(&self.nodes, c).map_or((None, 0), |n| (n.parent, n.depth));
+            if let Some(op) = old_parent
+                && op != parent
+                && let Some(Some(opn)) = self.nodes.get_mut(slot(op))
+            {
+                opn.children.retain(|x| *x != c);
+                for (j, k) in opn.children.clone().into_iter().enumerate() {
+                    if let Some(Some(kn)) = self.nodes.get_mut(slot(k)) {
+                        kn.pos = u32::try_from(j).unwrap_or(u32::MAX);
+                    }
+                }
+                self.mark_dirty(op);
+            }
+            if let Some(Some(cn)) = self.nodes.get_mut(slot(c)) {
+                cn.parent = Some(parent);
+                cn.pos = pos;
+            }
+            if old_depth != child_depth || old_parent.is_none() {
+                self.set_subtree_depth(c, child_depth);
+            }
+        }
+        if let Some(Some(pn)) = self.nodes.get_mut(slot(parent)) {
+            pn.children = list;
+        }
+        self.mark_dirty(parent);
+        Ok(())
+    }
+
+    /// Detach `c` from its parent's list (renumbering the siblings) and make it a root at
+    /// `depth`; used for former children that a new list no longer names.
+    fn relink(&mut self, c: NodeIdx, parent: Option<NodeIdx>, pos: u32, depth: u32) {
+        if let Some(Some(cn)) = self.nodes.get_mut(slot(c)) {
+            cn.parent = parent;
+            cn.pos = pos;
+        }
+        self.set_subtree_depth(c, depth);
+    }
+
+    /// Set the depth of `top` and re-derive its descendants' depths (iterative, bounded by the
+    /// subtree).
+    fn set_subtree_depth(&mut self, top: NodeIdx, depth: u32) {
+        let mut stack = vec![(top, depth)];
+        while let Some((n, d)) = stack.pop() {
+            let Some(Some(nd)) = self.nodes.get_mut(slot(n)) else {
+                continue;
+            };
+            let changed = nd.depth != d;
+            nd.depth = d;
+            stack.extend(nd.children.iter().map(|k| (*k, d + 1)));
+            // The scheduler orders the dirty set by depth (children before the names that read
+            // them): a dirty node whose depth changed is re-keyed, or it keeps the order of the
+            // depth it had when it was marked and its parent re-fuses once per child.
+            if changed && self.dirty.contains(n) {
+                self.mark_dirty(n);
+            }
+        }
     }
 
     /// Remove `node` and its whole subtree. Returns the removals to publish.

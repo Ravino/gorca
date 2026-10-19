@@ -1783,3 +1783,166 @@ fn the_synchronous_drain_stops_at_its_time_bound_and_carries_the_rest() {
     assert!((0..=30).all(|i| !e.is_dirty(nid(i))));
     assert!(e.verify().is_ok());
 }
+
+// ---- set_children (C2: the doc actor mirrors a source's complete child lists) ---------------------
+
+#[test]
+fn set_children_reorders_moves_and_detaches_with_the_content_name_following() {
+    // A root (0) with children 1, 2, 3 and a second branch node 4 (a button, content-named).
+    let mut e = chain_engine(1);
+    for i in 1..=4 {
+        e.add_node(nid(i), None).unwrap();
+        e.apply([
+            Input::Life {
+                node: nid(i),
+                src: PrimarySlot::P0,
+                seq: 1,
+                alive: true,
+            },
+            Input::Obs {
+                node: nid(i),
+                src: PrimarySlot::P0,
+                seq: 2,
+                write: write_from_toy(Group::Role, &json!(if i == 4 { "button" } else { "text" })),
+            },
+        ]);
+    }
+    for (i, t) in [(1, "one"), (2, "two"), (3, "three")] {
+        name(&mut e, i, 5, t);
+    }
+    e.set_children(nid(0), &[nid(1), nid(2), nid(3)]).unwrap();
+    e.run(Budget::UNLIMITED);
+    assert_eq!(
+        e.entry_unmasked(nid(0)).unwrap().name.as_deref(),
+        Some("one two three")
+    );
+    // Reorder: the content name follows the new order.
+    e.set_children(nid(0), &[nid(3), nid(1), nid(2)]).unwrap();
+    e.run(Budget::UNLIMITED);
+    assert_eq!(
+        e.entry_unmasked(nid(0)).unwrap().name.as_deref(),
+        Some("three one two")
+    );
+    // Move node 2 under 4: both parents are re-fused and the old parent loses it.
+    e.set_children(nid(4), &[nid(2)]).unwrap();
+    e.set_children(nid(0), &[nid(3), nid(1)]).unwrap();
+    e.run(Budget::UNLIMITED);
+    assert_eq!(
+        e.entry_unmasked(nid(0)).unwrap().name.as_deref(),
+        Some("three one")
+    );
+    assert_eq!(
+        e.entry_unmasked(nid(4)).unwrap().name.as_deref(),
+        Some("two")
+    );
+    assert!(e.verify().is_ok());
+    // An unlisted child becomes a root; it keeps its own entry.
+    e.set_children(nid(0), &[nid(3)]).unwrap();
+    e.run(Budget::UNLIMITED);
+    assert_eq!(
+        e.entry_unmasked(nid(0)).unwrap().name.as_deref(),
+        Some("three")
+    );
+    assert_eq!(
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
+        Some("one")
+    );
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn set_children_refuses_unknown_nodes_and_cycles_without_changing_anything() {
+    let mut e = chain_engine(3);
+    // 0 -> 1 -> 2 is a chain: listing an ancestor under a descendant is a cycle.
+    assert_eq!(
+        e.set_children(nid(2), &[nid(0)]),
+        Err(gorca_fuse::IvmError::Cycle)
+    );
+    assert_eq!(
+        e.set_children(nid(1), &[nid(1)]),
+        Err(gorca_fuse::IvmError::Cycle)
+    );
+    assert_eq!(
+        e.set_children(nid(1), &[nid(2), nid(9)]),
+        Err(gorca_fuse::IvmError::UnknownNode)
+    );
+    assert_eq!(
+        e.set_children(nid(9), &[]),
+        Err(gorca_fuse::IvmError::UnknownParent)
+    );
+    // A repeated entry keeps its first place.
+    e.set_children(nid(0), &[nid(1), nid(1)]).unwrap();
+    e.run(Budget::UNLIMITED);
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn set_children_keeps_depth_order_right_for_a_moved_subtree() {
+    // 0 -> 1 -> 2 -> 3; move 3 up under 0: the priority/depth keys follow, results stay exact.
+    let mut e = chain_engine(4);
+    name(&mut e, 3, 10, "Leaf");
+    e.run(Budget::UNLIMITED);
+    e.set_children(nid(2), &[]).unwrap();
+    e.set_children(nid(0), &[nid(1), nid(3)]).unwrap();
+    e.run(Budget::UNLIMITED);
+    assert_eq!(
+        e.entry_unmasked(nid(0)).unwrap().name.as_deref(),
+        Some("Leaf")
+    );
+    assert_eq!(e.entry_unmasked(nid(2)).unwrap().name.as_deref(), None);
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn set_children_rekeys_dirty_nodes_so_a_parent_fuses_once_not_once_per_child() {
+    // All nodes are added as roots and written (dirty at depth 0), then wired into a tree before
+    // the first run, like the document actor's first block. Stale depth keys would fuse the
+    // parents first and again for every child.
+    let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], toy_rules());
+    profile.default_role = SemRole::Generic;
+    let mut e = Ivm::new(profile, NoQuirks, NoPatches);
+    let (groups, per) = (40usize, 8usize);
+    let total = 1 + groups * (1 + per);
+    for i in 0..total {
+        e.add_node(nid(i), None).unwrap();
+        let role = if i == 0 || (i - 1) % (per + 1) == 0 {
+            "group"
+        } else {
+            "button"
+        };
+        e.apply([
+            Input::Life {
+                node: nid(i),
+                src: PrimarySlot::P0,
+                seq: 1,
+                alive: true,
+            },
+            Input::Obs {
+                node: nid(i),
+                src: PrimarySlot::P0,
+                seq: 2,
+                write: write_from_toy(Group::Role, &json!(role)),
+            },
+            Input::Obs {
+                node: nid(i),
+                src: PrimarySlot::P0,
+                seq: 2,
+                write: write_from_toy(Group::Name, &json!(format!("n{i}"))),
+            },
+        ]);
+    }
+    let tops: Vec<NodeIdx> = (0..groups).map(|g| nid(1 + g * (per + 1))).collect();
+    e.set_children(nid(0), &tops).unwrap();
+    for g in 0..groups {
+        let first = 2 + g * (per + 1);
+        let kids: Vec<NodeIdx> = (first..first + per).map(nid).collect();
+        e.set_children(nid(1 + g * (per + 1)), &kids).unwrap();
+    }
+    let rep = e.run(Budget::UNLIMITED);
+    assert!(
+        rep.fuse_calls <= total + groups,
+        "{} fusions for {total} nodes",
+        rep.fuse_calls
+    );
+    assert!(e.verify().is_ok());
+}
