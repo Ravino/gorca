@@ -440,7 +440,7 @@ announced; a diagnostics command explains why gorca said a word.
 | Slice | Content | Depends on | Must land before |
 |---|---|---|---|
 | **P2-ARIA-0** (Phase 2 polish) | icon-only button tests (after the BT1 repro), MI-1 anchor collapse + inline runs, PR-1 across focus + browse tail, mixed state, cross-surface test | C0 | M22a |
-| **M22a** model + fusion | `gorca-model::sem` (`Semantics`, `SemEntry`, `ProvTag`), `gorca-sem-atspi` (one normaliser), ADR-0008 quirk table (engine knowledge out of core), registers + `FUSE` in the node writers, `explain`, `MsgId`/origin on `Segment`, dual-carry with legacy agreement assertions; replaces `web_overlay`/`subtree_label` and the second normaliser; F1–F10, B-FUSE | P2-ARIA-0 | **M18a**, M22b1 |
+| **M22a** model + fusion + source contract | `gorca-model::sem` (`Semantics`, `SemEntry`, `ProvTag`) and `::fact`, `gorca-fuse`, `gorca-fact-api` (ADR-0024: descriptor, grant, admission, `FactPort`, source state machine, S4 inferred stratum, hedge), `gorca-sem-atspi` (one normaliser), ADR-0008 quirk table (engine knowledge out of core), registers + `FUSE` in the node writers, `explain`, `MsgId`/origin on `Segment`, dual-carry with legacy agreement assertions; fake source + conformance kit; replaces `web_overlay`/`subtree_label` and the second normaliser; F1–F17, B-FUSE. Spec: `docs/plan/m22a-spec.md` | waves A/B: none; wave C: P2-ARIA-0, CHR-0 | **M18a**, M22b1 |
 | **M22b1** focus + changes | `gorca-present` compose/render, rule table, shadow diff; switch `present_focus`/`present_change`/`apply_web_extra` | M22a | M22b2 |
 | **M22b2** browse | switch browse line, quick nav, say-all, leads; doc actor `translate.rs`/`live.rs` read `Semantics` | M22b1 | M15 elements list, M10 integration |
 | **M22b3** review | switch review/object nav, `review/cluster.rs` | M22b1 | M21 |
@@ -458,6 +458,17 @@ M-6b), wasm-engineer (registries, accessors in M18a), reviewer.
 **Bake-off:** none; A-vs-C representation micro-bench (2 days) before M22a.
 **Acceptance.** ADR-0022 M-1..M-13: P0–P10 and F1–F10 in `cargo test`, zero shadow diff outside
 `deviations.toml` per switched surface, M-6/M-6b latency gates, B-FUSE ≤ 2 µs/event p99.
+
+### M23–M25 — Future fact sources (ADR-0024; after M22a, lowest priority after M19)
+
+Each later source implements `FactSource`, passes the M22a conformance kit, gets a core-computed
+grant, is off until the user opts in (ADR-0024 TP-2), and needs no core change.
+
+| Milestone | Source | Scope | Depends on | Gate |
+|---|---|---|---|---|
+| **M23** browser add-on bus | Secondary, T3 | first task: TBD-S3 join keys per browser (ADR-0001 §9.3); Firefox + Chrome WebExtension (own add-on, no remote code), native-messaging host relaying to a private `AF_UNIX` socket, `gorca-source-webext`; `DomId` and `Structural` anchors; evidence facts (`hint.*`, `layout.*`) and fills of groups AT-SPI cannot express; S3 rule rows; per-site deny list | M22a, M18a (`facts` registries) | M-18 binding precision; M-14/M-15 under a real page flood; no K2 regression |
+| **M24** local inference facts | Inferred, T2 | ADR-0002 phases 2–3: naming cascade as S4 data (label memory, OCR, image/icon model) via the `gorca-perceive` sidecar; captures from the gorca-helper `CaptureWindowArea` with X-4 masking; `Region`/`Content` anchors; `vis_rev` basis; synthetic nodes for canvas text; full-window OCR as a review surface; calibration sets | M22a, M22b1 (hedge wording), ADR-0002 §10 capture decision | M-19 precision; M-20 refine; NC-1 never delays step 0 |
+| **M25** annotations | Annotation | on-demand summaries and long image descriptions as labelled content utterances (never fused); local model only; prompt-injection rule TP-6 | M24 | latency budget per command; 0 content off-host |
 
 ### M20 — Release candidate and closed alpha
 
@@ -556,7 +567,7 @@ Wave 2; M13 gains `CueSink`/`gorca-cues` and dictionary import (ADR-0017).
 **Semantics (amendment 2026-10-18, owner decision; ADR-0022 Proposed):** Phase 3 starts with
 P2-ARIA-0 → **M22a**, then **M18a** on the final model (supersedes "Phase 3 starts with M18a" of
 2026-10-17 for that slot). M22b1 runs in parallel with M18a; M22b2 precedes M15 and M10 integration;
-M22b3 precedes M21; M22b4 follows M18a and precedes M18b; M22d follows M14a. M22a/b own
+M22b3 precedes M21; M22b4 follows M18a and precedes M18b; M22d follows M14a. **Amendment 2026-10-19 (proposed, owner question D-6 in `docs/reports/m22a-kickoff.md` §5):** M14a-core (ADR-0016 layer stack, triggers, origin-layer edits, vendor profiles, `browse.*` mode keys, migration of the CHR-0 interim per-app mode table; no GUI) runs in parallel with M22a waves A/B, so per-app/site mode defaults (owner, DP-3) live in profiles from the start. Future sources M23–M25 follow M22a/M18a (ADR-0024). M22a/b own
 `gorca-core/present/`, `browse/present.rs` and `doc_actor/` while they run: schedule them after the M12a
 sweep (or fold M12a's catalog ids into M22b), and serialise with M15 on `browse/`.
 

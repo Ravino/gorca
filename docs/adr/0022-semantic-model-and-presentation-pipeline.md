@@ -1,6 +1,15 @@
 # ADR-0022: Semantic model (roles, states, properties), one fusion stage and one presentation pipeline
 
-Status: **Proposed** (draft r2, 2026-10-18). Owner: architect.
+Status: **Proposed** (draft r2, 2026-10-18; r3 note 2026-10-19). Owner: architect.
+
+**r3 (2026-10-19):** the source contract is opened to future fact sources (browser add-on bus,
+extensions, local inference) by ADR-0024 (`docs/adr/0024-fact-sources-contract.md`). It amends
+§2.2: the source-slot list is open (sources register with a descriptor and a core-computed
+grant); a new stratum **S4 inferred** sits below S3 derived (precedence user > patch > observed >
+derived > inferred > default); confidence gates admission and sets a spoken hedge but never ranks
+sources (alternative G stands); `SemEntry` gains a `hedge` mask; `PI[app profile]` is renamed
+`PI[source profile]` (engine/toolkit class, not an ADR-0016 user profile). Everything else in r2
+is unchanged. M22a plan: `docs/plan/m22a-spec.md`.
 
 - Analysis, prior art, interface sketches: `docs/reports/aria-semantics-architecture.md`.
 - Coverage input: `docs/reports/aria-coverage-audit.md` (web-a11y engineer).
