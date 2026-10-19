@@ -346,6 +346,7 @@ pub fn kit_scope(n: u32) -> Scope {
         },
         doc: None,
         site: None,
+        tab: None,
     }
 }
 
@@ -800,6 +801,7 @@ pub fn f19_scope_pinning(seed: u64) -> Report {
         app: kit_scope(1).app,
         doc: Some(9),
         site: None,
+        tab: None,
     };
     w.add_node(
         NodeKey {

@@ -612,7 +612,12 @@ impl SourceBook {
         if log.len() > MAX_QUARANTINE_LOG {
             log.remove(0);
         }
-        log.len() >= WIDE_LIMIT
+        // Site-less scopes (keyed by app and tab) count only when at least two distinct ones
+        // are quarantined: one tab reloading itself can never trip the source-wide limit.
+        let sited = log.iter().filter(|(s, _)| s.site.is_some()).count();
+        let siteless = log.len() - sited;
+        let siteless = if siteless >= 2 { siteless } else { 0 };
+        sited + siteless >= WIDE_LIMIT
     }
 }
 
@@ -637,6 +642,7 @@ mod tests {
             },
             doc: None,
             site: Some(u64::from(n)),
+            tab: None,
         }
     }
 
@@ -731,6 +737,7 @@ mod tests {
             },
             doc: Some(d),
             site: Some(site),
+            tab: None,
         }
     }
 
@@ -844,32 +851,57 @@ mod tests {
         assert!(b.remembered(&i, doc(70, 70)).is_none());
     }
 
-    #[test]
-    fn scopes_without_a_site_are_not_collapsed() {
-        let nosite = |d: u64| Scope {
+    fn tab(d: u64, t: u64) -> Scope {
+        Scope {
             site: None,
+            tab: Some(t),
             ..doc(d, 0)
-        };
+        }
+    }
+
+    #[test]
+    fn a_siteless_page_reloading_never_trips_the_wide_limit() {
         let mut b = SourceBook::new();
         let i = named("bus");
-        b.apply(&i, nosite(100), SourceEvent::Hello { remembered: None }, 0);
-        for d in 1..=3u64 {
-            quarantine(&mut b, &i, nosite(d), d * 10);
+        b.apply(&i, tab(1000, 9), SourceEvent::Hello { remembered: None }, 0);
+        for d in 1..=5u64 {
+            quarantine(&mut b, &i, tab(d, 1), d * 10);
         }
-        // Three distinct documents without site info count as three keys, not one.
-        assert_eq!(b.state(&i, nosite(100)), SourceState::Quarantined);
-        // Yet reloading the *same* document scope repeatedly is still one key.
+        assert!(b.state(&i, tab(1000, 9)).facts_win());
+        b.apply(
+            &i,
+            tab(1001, 8),
+            SourceEvent::Hello { remembered: None },
+            500,
+        );
+        assert!(b.state(&i, tab(1001, 8)).facts_win());
+    }
+
+    #[test]
+    fn three_different_siteless_tabs_trip_the_wide_limit() {
         let mut b = SourceBook::new();
-        for k in 0..5u64 {
-            quarantine(&mut b, &i, nosite(1), k * 100);
+        let i = named("bus");
+        b.apply(&i, tab(1000, 9), SourceEvent::Hello { remembered: None }, 0);
+        for t in 1..=3u64 {
+            quarantine(&mut b, &i, tab(t, t), t * 10);
+        }
+        assert_eq!(b.state(&i, tab(1000, 9)), SourceState::Quarantined);
+    }
+
+    #[test]
+    fn two_siteless_tabs_alone_do_not_trip_it() {
+        let mut b = SourceBook::new();
+        let i = named("bus");
+        for t in 1..=2u64 {
+            quarantine(&mut b, &i, tab(t, t), t * 10);
         }
         b.apply(
             &i,
-            nosite(100),
+            tab(50, 50),
             SourceEvent::Hello { remembered: None },
-            9999,
+            100,
         );
-        assert!(b.state(&i, nosite(100)).facts_win());
+        assert!(b.state(&i, tab(50, 50)).facts_win());
     }
 
     #[test]
