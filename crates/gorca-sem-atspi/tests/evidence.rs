@@ -151,18 +151,14 @@ fn attr_holds(r: &SrcRecord, key: &str, want: &str) -> Option<String> {
         }
         "colindextext" => eq(
             "colindextext",
-            r.index_text
-                .as_deref()
-                .and_then(|t| t.col.as_deref())
+            text.and_then(|t| t.col_index_text.as_deref())
                 .unwrap_or("")
                 .to_owned(),
             want,
         ),
         "rowindextext" => eq(
             "rowindextext",
-            r.index_text
-                .as_deref()
-                .and_then(|t| t.row.as_deref())
+            text.and_then(|t| t.row_index_text.as_deref())
                 .unwrap_or("")
                 .to_owned(),
             want,

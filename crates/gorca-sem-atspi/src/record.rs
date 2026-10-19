@@ -32,7 +32,7 @@ use gorca_model::sem::{
 };
 
 use crate::attrs::{
-    self, ParsedAttrs, current_of, grid_of, has_details, invalid_of, level_of, live_of,
+    self, ParsedAttrs, arc_capped, current_of, grid_of, has_details, invalid_of, level_of, live_of,
     name_from_of, orientation_of, popup_of, setpos_of, sort_of, text_of,
 };
 use crate::roles::{
@@ -75,13 +75,18 @@ impl Notes {
     pub const INVALID_CURRENT_TOKEN: Notes = Notes(1 << 4);
     /// `aria-haspopup` had an unrecognised value (treated as `menu`).
     pub const INVALID_POPUP_TOKEN: Notes = Notes(1 << 5);
-    /// INVALID_ENTRY on a REQUIRED web field without an `invalid` attribute: engines raise it for
-    /// an empty required field, so it is not taken as `aria-invalid`.
-    pub const INVALID_ENTRY_DISCOUNTED: Notes = Notes(1 << 6);
+    /// INVALID_ENTRY on a REQUIRED web field without an `invalid` attribute. The record keeps
+    /// `Invalid::True` (a filled `type=email required` holding "abc" is invalid), but engines
+    /// also raise the state for an EMPTY required field, which is not an author error:
+    /// presentation may suppress `invalid` for this case only when it knows the field is empty.
+    pub const INVALID_ENTRY_ON_REQUIRED: Notes = Notes(1 << 6);
     /// A numeric attribute (level, posinset, setsize, index) did not parse.
     pub const MALFORMED_NUMBER: Notes = Notes(1 << 7);
     /// A tag longer than [`TagName::CAP`] bytes was truncated.
     pub const TAG_TRUNCATED: Notes = Notes(1 << 8);
+    /// A page string (name, description, placeholder, shortcuts, value text, index texts) was cut
+    /// to [`crate::attrs::PAGE_STRING_CAP`] bytes.
+    pub const TRUNCATED: Notes = Notes(1 << 9);
 
     /// True when every bit of `other` is set.
     pub const fn contains(self, other: Notes) -> bool {
@@ -135,13 +140,6 @@ impl TagName {
     }
 }
 
-/// `aria-colindextext` / `aria-rowindextext`.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct IndexText {
-    pub col: Option<Arc<str>>,
-    pub row: Option<Arc<str>>,
-}
-
 /// The normalised source record of one node from the AT-SPI source: per-group values with the
 /// `known` mask (Unknown vs Absent), plus the pieces S3 and the quirk stratum read.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -158,8 +156,6 @@ pub struct SrcRecord {
     pub role_source: RoleSource,
     /// The DOM tag, when the engine exports it.
     pub tag: TagName,
-    /// Column and row index texts, when exported.
-    pub index_text: Option<Arc<IndexText>>,
     /// Diagnostics.
     pub notes: Notes,
 }
@@ -205,7 +201,11 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
     let name_nonempty = raw.name.is_some_and(|n| !n.is_empty());
     if have_name {
         known.set(Group::Name, true);
-        rec.name = raw.name.filter(|n| !n.is_empty()).map(Arc::from);
+        let mut cut = false;
+        rec.name = arc_capped(raw.name, &mut cut);
+        if cut {
+            notes.add(Notes::TRUNCATED);
+        }
     }
     if have_desc {
         known.set(Group::Description, true);
@@ -258,12 +258,6 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
             if truncated {
                 notes.add(Notes::TAG_TRUNCATED);
             }
-        }
-        if a.rowindextext.is_some() || a.colindextext.is_some() {
-            rec.index_text = Some(Arc::new(IndexText {
-                col: a.colindextext.filter(|s| !s.is_empty()).map(Arc::from),
-                row: a.rowindextext.filter(|s| !s.is_empty()).map(Arc::from),
-            }));
         }
         known.set(Group::Current, true);
         known.set(Group::Sort, true);
@@ -321,14 +315,12 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
         sem.invalid = match attr_kind {
             Some(k) => k,
             None if invalid_entry => {
-                // Gecko and Blink raise INVALID_ENTRY on an empty required field and an
-                // unchecked required checkbox (HTML validity), not only for aria-invalid.
+                // Gecko and Blink also raise INVALID_ENTRY on an empty required field and an
+                // unchecked required checkbox (HTML validity). Keep the fact, mark the case.
                 if required && a.is_web() {
-                    notes.add(Notes::INVALID_ENTRY_DISCOUNTED);
-                    Invalid::No
-                } else {
-                    Invalid::True
+                    notes.add(Notes::INVALID_ENTRY_ON_REQUIRED);
                 }
+                Invalid::True
             }
             None => Invalid::No,
         };
@@ -337,7 +329,11 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
     // ---- text, flags from attributes --------------------------------------------------------
     if have_attrs || have_desc {
         let desc = if have_desc { raw.description } else { None };
-        sem.text = text_of(desc, &a);
+        let (text, cut) = text_of(desc, &a);
+        sem.text = text;
+        if cut {
+            notes.add(Notes::TRUNCATED);
+        }
     }
 
     rec.sem = sem;
@@ -539,6 +535,21 @@ mod tests {
     }
 
     #[test]
+    fn a_huge_name_is_capped_and_noted() {
+        let big = "n".repeat(1_000_000);
+        let mut n = node(PropMask::NAME, 43, StateBits(0), &[]);
+        n.name = Some(big.as_str());
+        let r = normalise(&n);
+        assert_eq!(
+            r.name.as_deref().map(str::len),
+            Some(crate::attrs::PAGE_STRING_CAP)
+        );
+        assert!(r.notes.contains(Notes::TRUNCATED));
+        n.name = Some("short");
+        assert!(!normalise(&n).notes.contains(Notes::TRUNCATED));
+    }
+
+    #[test]
     fn token_wins_and_multi_token_falls_back() {
         let attrs = [("xml-roles", "bogus switch"), ("tag", "div")];
         let r = normalise(&node(
@@ -661,11 +672,17 @@ mod tests {
             Some("Alt+S")
         );
         assert_eq!(
-            r.index_text.as_deref().and_then(|t| t.col.as_deref()),
+            r.sem
+                .text
+                .as_deref()
+                .and_then(|t| t.col_index_text.as_deref()),
             Some("Column C")
         );
         assert_eq!(
-            r.index_text.as_deref().and_then(|t| t.row.as_deref()),
+            r.sem
+                .text
+                .as_deref()
+                .and_then(|t| t.row_index_text.as_deref()),
             Some("Row 3")
         );
         assert!(r.sem.flags.contains(SemFlags::BUSY));
@@ -706,18 +723,21 @@ mod tests {
     }
 
     #[test]
-    fn invalid_entry_is_not_aria_invalid_on_required_web_fields() {
-        let web = [("tag", "input")];
+    fn invalid_entry_on_required_web_fields_stays_invalid_and_is_marked() {
+        // A filled `type=email required` holding "abc" raises INVALID_ENTRY and must stay
+        // invalid; the note lets presentation suppress only the empty-required case.
+        let web = [("tag", "input"), ("text-input-type", "email")];
         let r = normalise(&node(
             all(),
             79,
             st(&[bit::INVALID_ENTRY, bit::REQUIRED]),
             &web,
         ));
-        assert_eq!(r.sem.invalid, Invalid::No);
-        assert!(r.notes.contains(Notes::INVALID_ENTRY_DISCOUNTED));
+        assert_eq!(r.sem.invalid, Invalid::True);
+        assert!(r.notes.contains(Notes::INVALID_ENTRY_ON_REQUIRED));
         let r = normalise(&node(all(), 79, st(&[bit::INVALID_ENTRY]), &web));
         assert_eq!(r.sem.invalid, Invalid::True);
+        assert!(!r.notes.contains(Notes::INVALID_ENTRY_ON_REQUIRED));
         // Not web (GTK): the state is the whole truth.
         let r = normalise(&node(
             all(),

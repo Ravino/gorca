@@ -123,13 +123,6 @@ const ENGINE_GAPS: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
-/// Expectation rows drafted against ARIA only; the model carries a finer role, so the normalised
-/// result is the model role. (pattern, expected role name in the model).
-const MODEL_ROLE_OVERRIDES: &[(&str, &str)] = &[
-    ("textbox.password", "passwordbox"),
-    ("gtk4.entry.password", "passwordbox"),
-];
-
 #[derive(Default)]
 struct Tally {
     rows: u32,
@@ -225,11 +218,7 @@ fn the_normaliser_reproduces_the_expectations_on_the_corpus() {
 
             // role
             if let Some(role) = str_of(p, "role") {
-                let override_role = MODEL_ROLE_OVERRIDES
-                    .iter()
-                    .find(|(p, _)| *p == key)
-                    .map(|(_, r)| *r);
-                let want = match override_role.unwrap_or(role) {
+                let want = match role {
                     "label" => Some(SemRole::StaticText),
                     other => SemRole::from_name(other),
                 };

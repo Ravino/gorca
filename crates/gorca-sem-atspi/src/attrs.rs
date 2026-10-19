@@ -382,8 +382,28 @@ pub fn name_from_of(a: &ParsedAttrs<'_>, name_empty: bool) -> NameFrom {
 /// Cap on `aria-roledescription` (ADR-0022 section 2.1).
 pub const ROLE_DESCRIPTION_CAP: usize = 64;
 
-fn arc_nonempty(v: Option<&str>) -> Option<Arc<str>> {
-    v.filter(|s| !s.is_empty()).map(Arc::from)
+/// Longest page-derived string the normaliser keeps, in bytes (ADR-0024 section 2.6: page strings
+/// longer than 1 KiB are truncated and counted). Applies to name, description, placeholder, key
+/// shortcuts, value text and the index texts; `aria-roledescription` has its own 64 scalar cap.
+pub const PAGE_STRING_CAP: usize = 1024;
+
+/// Truncate to at most [`PAGE_STRING_CAP`] bytes on a scalar boundary. The flag says it cut.
+pub fn cap_page_string(s: &str) -> (&str, bool) {
+    if s.len() <= PAGE_STRING_CAP {
+        return (s, false);
+    }
+    let mut end = PAGE_STRING_CAP;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    (&s[..end], true)
+}
+
+/// A non-empty, capped string as an `Arc`; sets `cut` when it truncated.
+pub fn arc_capped(v: Option<&str>, cut: &mut bool) -> Option<Arc<str>> {
+    let (s, c) = cap_page_string(v.filter(|s| !s.is_empty())?);
+    *cut |= c;
+    Some(Arc::from(s))
 }
 
 /// Truncate to at most `cap` Unicode scalars, on a scalar boundary.
@@ -394,24 +414,29 @@ pub fn cap_scalars(s: &str, cap: usize) -> &str {
     }
 }
 
-/// Assemble the rare strings; `None` when every field is empty.
-pub fn text_of(description: Option<&str>, a: &ParsedAttrs<'_>) -> Option<Arc<SemText>> {
+/// Assemble the rare strings; `None` when every field is empty. The flag says a string was
+/// truncated to [`PAGE_STRING_CAP`].
+pub fn text_of(description: Option<&str>, a: &ParsedAttrs<'_>) -> (Option<Arc<SemText>>, bool) {
+    let mut cut = false;
     let t = SemText {
-        description: arc_nonempty(description),
-        role_description: arc_nonempty(
+        description: arc_capped(description, &mut cut),
+        role_description: arc_capped(
             a.roledescription
                 .map(|s| cap_scalars(s, ROLE_DESCRIPTION_CAP)),
+            &mut cut,
         ),
         error_text: None,
-        placeholder: arc_nonempty(a.placeholder_text.or(a.placeholder)),
-        key_shortcuts: arc_nonempty(a.keyshortcuts),
-        value_text: arc_nonempty(a.valuetext),
+        placeholder: arc_capped(a.placeholder_text.or(a.placeholder), &mut cut),
+        key_shortcuts: arc_capped(a.keyshortcuts, &mut cut),
+        value_text: arc_capped(a.valuetext, &mut cut),
+        col_index_text: arc_capped(a.colindextext, &mut cut),
+        row_index_text: arc_capped(a.rowindextext, &mut cut),
         details_target: None,
     };
     if t.is_empty() {
-        None
+        (None, cut)
     } else {
-        Some(Arc::new(t))
+        (Some(Arc::new(t)), cut)
     }
 }
 
@@ -455,7 +480,10 @@ pub const ARIA_PROPERTIES: &[(&str, AriaUse)] = &[
         AriaUse::Unmapped("table dimension: Table interface, read on demand"),
     ),
     ("aria-colindex", AriaUse::Mapped("grid.col")),
-    ("aria-colindextext", AriaUse::Mapped("SrcRecord.index_text")),
+    (
+        "aria-colindextext",
+        AriaUse::Mapped("text.col_index_text / row_index_text"),
+    ),
     ("aria-colspan", AriaUse::Mapped("grid.col_span")),
     (
         "aria-controls",
@@ -526,7 +554,10 @@ pub const ARIA_PROPERTIES: &[(&str, AriaUse)] = &[
         AriaUse::Unmapped("table dimension: Table interface, read on demand"),
     ),
     ("aria-rowindex", AriaUse::Mapped("grid.row")),
-    ("aria-rowindextext", AriaUse::Mapped("SrcRecord.index_text")),
+    (
+        "aria-rowindextext",
+        AriaUse::Mapped("text.col_index_text / row_index_text"),
+    ),
     ("aria-rowspan", AriaUse::Mapped("grid.row_span")),
     ("aria-selected", AriaUse::Mapped("select")),
     ("aria-setsize", AriaUse::Mapped("setpos.size")),
@@ -771,7 +802,8 @@ mod tests {
             ("keyshortcuts", "Alt+K"),
             ("valuetext", "five"),
         ]);
-        let t = text_of(Some("desc"), &a);
+        let (t, cut) = text_of(Some("desc"), &a);
+        assert!(!cut);
         let t = t.as_deref();
         assert_eq!(
             t.and_then(|t| t.placeholder.as_deref()),
@@ -784,21 +816,62 @@ mod tests {
         let g = pa(&[("placeholder-text", "Gecko hint")]);
         assert_eq!(
             text_of(None, &g)
+                .0
                 .and_then(|t| t.placeholder.clone())
                 .as_deref(),
             Some("Gecko hint")
         );
         assert_eq!(
             text_of(Some(""), &pa(&[])),
-            None,
+            (None, false),
             "empty strings store no Arc"
         );
         let long = "é".repeat(100);
         let rd = pa(&[("roledescription", long.as_str())]);
         let n = text_of(None, &rd)
+            .0
             .and_then(|t| t.role_description.clone())
             .map(|s| s.chars().count());
         assert_eq!(n, Some(ROLE_DESCRIPTION_CAP));
+    }
+
+    #[test]
+    fn page_strings_are_capped_on_a_scalar_boundary() {
+        assert_eq!(cap_page_string("short"), ("short", false));
+        let exact = "a".repeat(PAGE_STRING_CAP);
+        assert!(!cap_page_string(&exact).1);
+        // 2-byte scalars: 1024 bytes is a boundary, 1025 would split one.
+        let wide = "é".repeat(600);
+        let (s, cut) = cap_page_string(&wide);
+        assert!(cut && s.len() == PAGE_STRING_CAP && s.chars().all(|c| c == 'é'));
+        let odd = format!("x{}", "é".repeat(600));
+        let (s, cut) = cap_page_string(&odd);
+        assert!(
+            cut && s.len() == PAGE_STRING_CAP - 1,
+            "never splits a scalar"
+        );
+        // Every text field is capped and the flag is set; index texts live in SemText.
+        let big = "k".repeat(5000);
+        let a = pa(&[
+            ("keyshortcuts", big.as_str()),
+            ("valuetext", big.as_str()),
+            ("placeholder", big.as_str()),
+            ("colindextext", big.as_str()),
+            ("rowindextext", "Row 3"),
+        ]);
+        let (t, cut) = text_of(Some(big.as_str()), &a);
+        assert!(cut);
+        let t = t.expect("text");
+        for s in [
+            &t.description,
+            &t.key_shortcuts,
+            &t.value_text,
+            &t.placeholder,
+            &t.col_index_text,
+        ] {
+            assert_eq!(s.as_deref().map(str::len), Some(PAGE_STRING_CAP));
+        }
+        assert_eq!(t.row_index_text.as_deref(), Some("Row 3"));
     }
 
     #[test]

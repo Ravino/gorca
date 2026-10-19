@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use common::{Rec, load, root};
 use gorca_model::PropMask;
-use gorca_model::sem::{Check, Expand, Group, Press, SemRole};
+use gorca_model::sem::{Check, Expand, Group, Invalid, Press, SemRole};
 use gorca_sem_atspi::{Notes, RawNode, SrcRecord, normalise};
 
 fn all_nodes() -> Vec<(String, String, Rec)> {
@@ -116,6 +116,13 @@ fn invariants_hold_on_every_recorded_node() {
                 rec.sem.role
             );
         }
+        // INVALID_ENTRY is never dropped (P-1): without an exported kind it is `Invalid::True`,
+        // including on required web fields, where the note marks the empty-required ambiguity.
+        if r.states.has(gorca_sem_atspi::states::bit::INVALID_ENTRY)
+            && !r.attrs.iter().any(|(k, _)| k == "invalid")
+        {
+            assert_eq!(rec.sem.invalid, Invalid::True, "{ctx}");
+        }
         // Set positions are 1-based.
         if let Some(p) = rec.sem.pos {
             assert!(p.pos >= 1, "{ctx}");
@@ -138,7 +145,10 @@ fn invariants_hold_on_every_recorded_node() {
             (Notes::INVALID_ROLE_TOKEN, "invalid-role-token"),
             (Notes::UNMAPPED_ROLE_TOKEN, "unmapped-role-token"),
             (Notes::INVALID_CURRENT_TOKEN, "invalid-current-token"),
-            (Notes::INVALID_ENTRY_DISCOUNTED, "invalid-entry-discounted"),
+            (
+                Notes::INVALID_ENTRY_ON_REQUIRED,
+                "invalid-entry-on-required",
+            ),
             (Notes::MALFORMED_NUMBER, "malformed-number"),
             (Notes::TAG_TRUNCATED, "tag-truncated"),
         ] {

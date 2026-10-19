@@ -22,13 +22,13 @@ when ATTRS was fetched, or STATES with HAS_POPUP clear).
 - States: INDETERMINATE -> `Check::Mixed` on checkables, `Press::Mixed` on toggles (toggle = raw toggle-button
   or PRESSED on a button); EXPANDED wins over COLLAPSED; availability only on disableable roles (SM-5);
   READ_ONLY = state, or missing EDITABLE on an engine text field (Gecko convention).
-- `INVALID_ENTRY` on a REQUIRED web field with no `invalid` attribute is NOT `aria-invalid` (both engines raise it
-  on empty required fields and unchecked required checkboxes); noted as `INVALID_ENTRY_DISCOUNTED`.
+- `INVALID_ENTRY` always yields `Invalid::True` (P-1); on a REQUIRED web field with no `invalid` attribute the note `INVALID_ENTRY_ON_REQUIRED` marks the empty-required ambiguity (engines raise the state for empty required fields too), so presentation can suppress only that case.
+  Assumption: read-only text fields in Gecko are inferred from a missing EDITABLE state (an engine text field without EDITABLE is READ_ONLY); a disabled field may be misread.
 - `aria-current`: unrecognised token = true (noted); haspopup `true` = menu; level only on
   heading/treeitem/row/comment/static text (Blink exports level=1 on every listitem); heading falls back to the
   tag, then ARIA default 2; setsize 0/-1 = unknown size; alert/status/log carry their implicit live settings,
   `container-live` members get `root: false`.
-- `colindextext`/`rowindextext` go to `SrcRecord.index_text` (SemText has no field for them).
+- `colindextext`/`rowindextext` are `SemText.col_index_text`/`row_index_text` (P-3). All page strings (name, description, placeholder, shortcuts, value text, index texts) are capped at 1 KiB on a scalar boundary (ADR-0024 limit, `Notes::TRUNCATED`) (P-2).
 
 ## Corpus result (A2: 3170 recorded nodes, 195 patterns)
 | Engine | rows | pass | gap rows | FAIL | node not exported |
@@ -48,8 +48,8 @@ option selectable. Engine does not export (status ok, role not on the wire): Gec
 placeholder (2 rows, Blink says `name-from: placeholder`); GtkSwitch = check-box; GtkSearchEntry = entry;
 GtkColumnView = tree-table; GTK navigation/main/feed = filler, search = form (A2 report). Fixture artifacts:
 gtk4.accprop.checked-mixed, gtk4.accprop.expanded. Deferred: `doc-footnote` (DPUB not in `SemRole` yet).
-Expectation vs model: textbox.password / gtk4.entry.password expect `textbox`; the model has `PasswordBox`, so
-the normalised role is `passwordbox` (override table in `tests/corpus.rs`).
+Expectation fixed: textbox.password / gtk4.entry.password now expect `passwordbox` (the model has `PasswordBox`);
+`expect_spec.py` and `expect.toml` were regenerated, the test-side override table is gone.
 
 ## M-10 unmapped lists (code, with tests)
 - ARIA 1.2 roles: all 82 core roles (incl. directory, none) map (`roles::ARIA_12_ROLES` test). Valid but unmapped (DPUB/graphics, 42

@@ -19,6 +19,6 @@ pub mod record;
 pub mod roles;
 pub mod states;
 
-pub use record::{IndexText, Notes, RawNode, SrcRecord, TagName, normalise};
+pub use record::{Notes, RawNode, SrcRecord, TagName, normalise};
 pub use roles::{EngineRole, RoleSource, TokenKind};
 pub use states::StateBits;
