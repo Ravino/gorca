@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Test library for org.gorca.ShellHelper v2 (run with /usr/bin/python3 inside an allow-listed systemd --user unit).
+# Test library for org.gorca.ShellHelper v2 (run with /usr/bin/python3 as the rig's allow-listed caller binary, see run-as.sh).
 # Environment: BUS (private session bus address), WL (wayland display), RT (runtime dir), W (rig workdir).
 import json, os, subprocess, sys, time
 import gi

@@ -15,7 +15,7 @@ const OBJECT_PATH = '/org/gorca/ShellHelper';
 const MAX_PIXELS = 2048 * 2048;     // logical area cap per request
 const RATE_PER_SEC = 100;           // token bucket, burst = 2x
 const PTR_RATE_PER_SEC = 20;        // H-1: pointer methods, burst 2x (a count=2 click costs 2)
-const DENIED_RATE_PER_SEC = 10;     // H-1a: per-sender bucket for callers that are not (yet) allow-listed, burst 2x
+const DENIED_RATE_PER_SEC = 10;     // H-1a: ONE global bucket for all callers that are not (yet) allow-listed, burst 2x
 const DENIED_TTL_US = 5e6;          // negative authorization cache lifetime (re-reads /proc after this)
 const HOLD_BACKSTOP_MS = 125000;    // H-3: gorca releases at 120 s, the helper at 125 s
 const DOUBLE_CLICK_GAP_MS = 30;
@@ -129,7 +129,13 @@ export class ShellHelperService {
         this._denied = 0;
         this._senders = new Map();
         this._configGen = 0;
-        this._senderBuckets = new Map();   // H-1a: sender -> {tokens, time}, only for non-allowed senders
+        this._denyTokens = DENIED_RATE_PER_SEC * 2;   // H-1a: global bucket, shared by every non-allowed sender
+        this._denyTokenTime = GLib.get_monotonic_time();
+        this._denyLogLast = 0;
+        this._denyLogSuppressed = 0;
+        this._gen = 0;                     // bumped by stop(): work started before it must not act after it
+        this._stopped = true;
+        this._lastPickUs = 0;
         this._ptrTokens = PTR_RATE_PER_SEC * 2;
         this._ptrTokenTime = GLib.get_monotonic_time();
         this._device = null;               // H-6: one lazily created POINTER_DEVICE
@@ -145,6 +151,7 @@ export class ShellHelperService {
     }
 
     start() {
+        this._stopped = false;
         this._dbus = Gio.DBusExportedObject.wrapJSObject(IFACE, this);
         this._dbus.export(Gio.DBus.session, OBJECT_PATH);
         this._noc = Gio.DBus.session.signal_subscribe(
@@ -168,6 +175,8 @@ export class ShellHelperService {
     }
 
     stop() {
+        this._stopped = true;
+        this._gen++;
         if (this._ownerId) {
             Gio.bus_unown_name(this._ownerId);
             this._ownerId = 0;
@@ -185,10 +194,17 @@ export class ShellHelperService {
             this._monitorsId = 0;
         }
         this._releaseEverything('disabled');
-        this._device = null;                 // H-6: dropping the last reference destroys the virtual device
+        if (this._device) {
+            // H-6: destroy explicitly (Mutter releases anything still pressed when the device goes away)
+            try {
+                this._device.run_dispose();
+            } catch (e) {
+                console.warn(`gorca-helper: device dispose failed: ${e.message}`);
+            }
+            this._device = null;
+        }
         for (const k of [...this._senders.keys()])
             this._dropSender(k);
-        this._senderBuckets.clear();
         this._dbus?.unexport();
         this._dbus = null;
     }
@@ -265,7 +281,6 @@ export class ShellHelperService {
         if (this._holder === name)
             this._releaseHolds(`holder ${name} vanished`);
         this._cancelTimers(t => t.sender === name);
-        this._senderBuckets.delete(name);
         this._dropSender(name);
     }
 
@@ -281,12 +296,13 @@ export class ShellHelperService {
     // Identity is bound to the bus connection through a pidfd obtained from the broker, so the pid
     // cannot be recycled while the entry lives. Returns normally if allowed, throws DeniedError otherwise.
     async _authorize(invocation, cap) {
+        const gen = this._gen;
         const sender = invocation.get_sender();
         let id = this._senders.get(sender);
         // H-1a: a caller that is not (yet) known to be allow-listed is rate limited per sender BEFORE any
         // /proc, config or broker work; a cached negative decision answers without touching anything.
         if (!id?.allowed) {
-            this._senderBucket(sender);
+            this._denyBucket();
             this._loadConfig();     // a changed config stamp bumps _configGen and so voids cached denials
             if (id?.denied && id.denied.gen === this._configGen && GLib.get_monotonic_time() < id.denied.until)
                 throw new DeniedError(id.denied.msg);
@@ -305,6 +321,8 @@ export class ShellHelperService {
                         }
                     });
             });
+            if (gen !== this._gen)
+                throw new HelperError('disabled', 'helper was disabled during authorization');
             const creds = reply.get_child_value(0);
             const lookup = k => creds.lookup_value(k, null);
             const handle = lookup('ProcessFD');
@@ -357,7 +375,7 @@ export class ShellHelperService {
                     const key = `${this._configGen}:${cap}`;
                     if (id.loggedCap !== key) {
                         id.loggedCap = key;
-                        console.warn(`gorca-helper: DENIED sender=${sender} pid=${pid} exe=${exe} cap=${cap} missing`);
+                        this._logDenied(`DENIED sender=${sender} pid=${pid} exe=${exe} cap=${cap} missing`);
                     }
                     throw new DeniedError(`caller ${exe} lacks cap ${cap}`);
                 }
@@ -377,25 +395,32 @@ export class ShellHelperService {
         this._denied++;
         if (id.loggedGen !== gen) {
             id.loggedGen = gen;
-            console.warn(`gorca-helper: ${logLine}`);
+            this._logDenied(logLine);
         }
         throw new DeniedError(msg);
     }
 
-    _senderBucket(sender) {
+    _denyBucket() {
         const now = GLib.get_monotonic_time();
-        let b = this._senderBuckets.get(sender);
-        if (!b) {
-            if (this._senderBuckets.size > 256)
-                this._senderBuckets.clear();
-            b = {tokens: DENIED_RATE_PER_SEC * 2, time: now};
-            this._senderBuckets.set(sender, b);
+        this._denyTokens = Math.min(DENIED_RATE_PER_SEC * 2,
+            this._denyTokens + (now - this._denyTokenTime) * DENIED_RATE_PER_SEC / 1e6);
+        this._denyTokenTime = now;
+        if (this._denyTokens < 1)
+            throw new HelperError('rate', 'too many calls from callers that are not allow-listed');
+        this._denyTokens -= 1;
+    }
+
+    // Log limit for denials is global too (many connections cannot multiply it): 1 line/s plus a counter.
+    _logDenied(line) {
+        const now = GLib.get_monotonic_time();
+        if (now - this._denyLogLast < 1e6) {
+            this._denyLogSuppressed++;
+            return;
         }
-        b.tokens = Math.min(DENIED_RATE_PER_SEC * 2, b.tokens + (now - b.time) * DENIED_RATE_PER_SEC / 1e6);
-        b.time = now;
-        if (b.tokens < 1)
-            throw new HelperError('rate', 'too many calls from a caller that is not allow-listed');
-        b.tokens -= 1;
+        const sup = this._denyLogSuppressed ? ` (+${this._denyLogSuppressed} suppressed)` : '';
+        this._denyLogLast = now;
+        this._denyLogSuppressed = 0;
+        console.warn(`gorca-helper: ${line}${sup}`);
     }
 
     _rateLimit() {
@@ -423,16 +448,21 @@ export class ShellHelperService {
     // (the handler takes it, because the cost depends on the arguments). fn(ctx) returns the reply Variant
     // (or a Promise of it).
     async _guard(invocation, cap, fn, opts = {}) {
+        const gen = this._gen;
         try {
             const ctx = await this._authorize(invocation, cap);
+            if (gen !== this._gen || this._stopped)
+                throw new HelperError('disabled', 'helper is shutting down');
             if (!opts.ptr)
                 this._rateLimit();
             if (Main.sessionMode.isLocked)
                 throw new HelperError('locked', 'session is locked');
             const t0 = GLib.get_monotonic_time();
             const res = fn(ctx);       // handlers are synchronous up to their first await
-            if (this._trace && cap === 'pointer')
-                console.log(`gorca-helper trace ${invocation.get_method_name()} handler_us=${GLib.get_monotonic_time() - t0}`);
+            if (this._trace && cap === 'pointer') {
+                const us = GLib.get_monotonic_time() - t0;
+                console.log(`gorca-helper trace ${invocation.get_method_name()} handler_us=${us} pick_us=${this._lastPickUs}`);
+            }
             invocation.return_value(await res);
         } catch (e) {
             const name = e instanceof DeniedError
@@ -492,6 +522,7 @@ export class ShellHelperService {
 
     async GetPointerAsync(_params, invocation) {
         await this._guard(invocation, 'pointer', () => {
+            this._pointerRate(1);
             const [x, y] = global.get_pointer();
             const picked = this._pickAt(x, y);
             const pw = picked === undefined ? this._topWindowAt(x, y) : this._ownerWindow(picked);
@@ -504,7 +535,7 @@ export class ShellHelperService {
                 'monitor': v.i(global.display.get_monitor_index_for_rect(rect)),
             };
             return new GLib.Variant('(a{sv})', [out]);
-        });
+        }, {ptr: true});
     }
 
     async PointerMoveAsync(params, invocation) {
@@ -557,7 +588,8 @@ export class ShellHelperService {
             const notAfter = this._notAfter(opts);
             const [px, py] = global.get_pointer();
             const r = {x: px, y: py, windowAt: 0, occluded: false, clamped: false, outcome: 'done'};
-            if (this._expired(notAfter))
+            // A release never expires: a late release is always safe and a skipped one would leave a button down.
+            if (action !== 'release' && this._expired(notAfter))
                 return this._replyVariant(ctx, r, 'expired');
             if (action === 'release') {
                 this._releaseOne(ctx.sender, btn);
@@ -587,6 +619,8 @@ export class ShellHelperService {
     // ---- pointer implementation ---------------------------------------------------
 
     _ensureDevice() {
+        if (this._stopped)
+            throw new HelperError('disabled', 'helper is shutting down');
         if (!this._device) {
             const seat = global.stage.context.get_backend().get_default_seat();
             this._device = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
@@ -656,8 +690,7 @@ export class ShellHelperService {
         const t0 = GLib.get_monotonic_time();
         const picked = this._pickAt(sx, sy);
         const pw = picked === undefined ? this._topWindowAt(sx, sy) : this._ownerWindow(picked);
-        if (this._trace)
-            console.log(`gorca-helper trace pick_us=${GLib.get_monotonic_time() - t0}`);
+        this._lastPickUs = GLib.get_monotonic_time() - t0;
         r.windowAt = pw ? pw.get_id() : 0;
         if (win) {
             // MI-5 window guard + pick-based occlusion; both use the popup family (C-2).
@@ -893,7 +926,7 @@ export class ShellHelperService {
             'GetCurrentState', null, null, Gio.DBusCallFlags.NONE, 1000, null,
             (c, res) => {
                 try {
-                    const props = c.call_finish(res).get_child_value(2);
+                    const props = c.call_finish(res).get_child_value(3);   // (u serial, monitors, logical monitors, properties)
                     const lm = props.lookup_value('layout-mode', null);
                     if (lm)
                         this._layoutMode = lm.get_uint32();

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-pointer.sh [WORKDIR] [--slow] : helper v2 pointer tests in a PRIVATE headless gnome-shell (own bus, own Wayland
-# display, own runtime dir). Needs systemd --user for the transient allow-listed caller units. Nothing touches the live
+# display, own runtime dir). Nothing touches the live
 # session; teardown kills only PIDs recorded by the rig (tools/platform-probes/mouse-emulation/teardown.sh).
 set -u
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

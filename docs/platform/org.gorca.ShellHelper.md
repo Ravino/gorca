@@ -12,7 +12,7 @@ headless shell, see `docs/reports/2026-10-12-screen-capture-options.md`).
 | `GetMonitors` | - | `aa{sv}`: `index` i, `x y w h` i, `scale` d, `primary` b, `x-scale` d (v2: XWayland's global effective scale, as `meta_xwayland_get_effective_scale`: 1 in physical layout mode, else round(`xwayland-scaling-factor`) if the key exists and is set, else ceil(highest monitor scale)) |
 | `CaptureArea` | `iiii` x y w h (stage logical px), `a{sv}` options (reserved) | `(uuusd)` (pixel w, pixel h, stride=0, format `"PNG"`, scale), `ay` PNG bytes |
 | `CaptureWindowArea` | `t` window id, `iiii` rect relative to the window frame (`origin`="buffer" in options: relative to the buffer rect incl. shadows), `a{sv}` | same as above, plus `a{sv}` meta: `stage-x`, `stage-y`, `occluded` b (a window stacked above overlaps the rect) |
-| `GetPointer` | - | `a{sv}`: `x` `y` d (stage), `window` t (topmost window at the pointer by pick, 0 = Shell UI), `wx` `wy` d (relative to that window's frame), `monitor` i |
+| `GetPointer` | - | (pointer bucket) `a{sv}`: `x` `y` d (stage), `window` t (topmost window at the pointer by pick, 0 = Shell UI), `wx` `wy` d (relative to that window's frame), `monitor` i |
 | `PointerMove` | `t` window, `s` origin (`frame`\|`buffer`\|`stage`), `d` x, `d` y, `a{sv}` opts | `a{sv}` reply |
 | `PointerClickAt` | `t` window, `s` origin, `d` x, `d` y, `u` button (1 left, 2 middle, 3 right), `a{sv}` opts | `a{sv}` reply |
 | `PointerButton` | `u` button, `s` action (`click`\|`press`\|`release`), `a{sv}` opts | `a{sv}` reply |
@@ -39,7 +39,7 @@ Errors: `Error.Failed` messages start with a machine prefix: `locked:` `rate:` `
 `org.gorca.ShellHelper.Error.AccessDenied` (caller not allow-listed), `org.gorca.ShellHelper.Error.Failed`
 (bad rect, locked session, rate limit, no such window).
 
-Limits: area <= 2048x2048 logical px, 100 calls/s (burst 200) for every v1 method and `GetPointer`; pointer methods have their own bucket of 20/s (burst 40, a `count = 2` click costs 2); a caller that is not (yet) allow-listed is limited per sender to 10/s (burst 20) before any /proc or config work, its negative decision is cached until the config stamp changes, the sender vanishes or 5 s pass, and `DENIED` is logged once per (sender, config stamp); refused while the session is locked, the cursor is never
+Limits: area <= 2048x2048 logical px, 100 calls/s (burst 200) for every v1 method; pointer methods including `GetPointer` have their own bucket of 20/s (burst 40, a `count = 2` click costs 2); callers that are not (yet) allow-listed share ONE global bucket of 10/s (burst 20) checked before any /proc or config work (many connections do not multiply it), the negative decision is cached per sender until the config stamp changes, the sender vanishes or 5 s pass, and `DENIED` lines are limited globally to 1/s with a suppressed counter; a `release` ignores `not-after` (a late release is always safe); work in flight when the extension is disabled (an authorization lookup) is dropped, no device is created after `disable()`; refused while the session is locked, the cursor is never
 painted. Pixels never touch disk (MemoryOutputStream, then the D-Bus message).
 
 Access control: config `/etc/gorca/shell-helper.json` (root-owned, authoritative if present) else
@@ -50,7 +50,7 @@ Identity is bound to the bus connection: the broker's `GetConnectionCredentials`
 means deny, there is no pid fallback). The pid is read from `/proc/self/fdinfo/<pidfd>`, the pidfd is kept open while the
 sender lives (pid cannot be recycled), start time (`/proc/<pid>/stat` field 22) and label are recorded at first contact and
 must not change, and exe and cgroup are re-read on every call and re-validated against the pidfd afterwards. Cache entries
-(and pidfds) are dropped on `NameOwnerChanged`. Empty or missing config denies everyone. Tests: `contrib/gnome-shell-extension/test-access.sh` (v1 identity), `contrib/gnome-shell-extension/test-pointer.sh [WORKDIR] [--slow]` (v2: caps, validation, expiry, guards, occlusion, holds, rate, left-handed, stall, hot reload; private shell plus transient `systemd --user` caller units).
+(and pidfds) are dropped on `NameOwnerChanged`. Empty or missing config denies everyone. Tests: `contrib/gnome-shell-extension/test-access.sh` (v1 identity), `contrib/gnome-shell-extension/test-pointer.sh [WORKDIR] [--slow]` (v2: caps, validation, expiry, guards, occlusion, holds, rate, left-handed, stall, hot reload; private shell, caller identities are private copies of the python binary, no service manager involved).
 
 Client rule: before trusting replies, check that the owner of `org.gorca.ShellHelper` is the owner of `org.gnome.Shell`
 (name squatting by another process would otherwise let it feed fake pixels).

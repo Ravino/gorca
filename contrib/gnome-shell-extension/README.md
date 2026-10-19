@@ -10,7 +10,7 @@ Set `GORCA_TRACE=1` for per-call timing in the shell log. Kill only the gnome-sh
 
 ## Pointer tests (helper v2, private shell)
     contrib/gnome-shell-extension/test-pointer.sh [WORKDIR] [--slow]    # starts test-rig.sh, runs testclients/test_pointer.py (caller A) and test_roles.py (callers B, C)
-`test-rig.sh` writes the allow-list for transient `systemd --user` units, `run-as.sh WORKDIR a|b|c SCRIPT` runs a script as one of them. Teardown: `tools/platform-probes/mouse-emulation/teardown.sh WORKDIR` (recorded PIDs and the rig process group only).
+`test-rig.sh` writes an allow-list for three private python binaries (`WORKDIR/py-a|b|c`, same cgroup as the rig, no systemd); `run-as.sh WORKDIR a|b|c SCRIPT` runs a script as one of them. Teardown: `tools/platform-probes/mouse-emulation/teardown.sh WORKDIR` (recorded PIDs and the rig process group only).
 Spikes: `testclients/spike_*.py` (see ADR-0025 section 14).
 
 ## Install for the real session (this user only)

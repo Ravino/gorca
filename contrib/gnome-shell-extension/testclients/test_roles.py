@@ -45,7 +45,7 @@ if role == 'b':
     log1 = shell_log().count('DENIED')
     R.check('B repeated cap denials log at most once per (sender, config stamp)', log1 - log0 <= 1, f'{log1 - log0} new lines')
     # config stamp change grants the cap without reconnecting
-    exe = os.path.realpath('/usr/bin/python3')
+    exe = os.path.realpath(sys.executable)
     cg = open('/proc/self/cgroup').read().strip().split('::', 1)[1]
     time.sleep(1.1)
     rewrite([{'exe': exe, 'cgroup': cg, 'caps': ['capture', 'pointer', 'bogus']}])
@@ -76,6 +76,25 @@ elif role == 'c':
     log1 = shell_log().count('DENIED')
     R.check('C flood: per-sender bucket answers rate: before any /proc work', names.get('rate', 0) > 100, f'{names} in {el:.2f}s')
     R.check('C flood: DENIED logged at most once per (sender, config stamp)', log1 - log0 <= 1, f'{log1 - log0} lines')
+    # the limits are global: many connections do not multiply them
+    conns = [new_conn() for _ in range(10)]
+    log0 = shell_log().count('DENIED')
+    nd = nr = 0
+    time.sleep(1.2)
+    t0 = time.time()
+    for c in conns:
+        for i in range(30):
+            try:
+                call('Ping', rsig='(u)', c=c)
+            except HelperError as e:
+                if e.name == 'AccessDenied':
+                    nd += 1
+                else:
+                    nr += 1
+    el = time.time() - t0
+    log1 = shell_log().count('DENIED')
+    R.check('C 10 connections x 30 calls: global bucket (<= 20 burst + 10/s) bounds answered denials', nd <= 20 + 10 * el + 6 and nr > 150, f'denied={nd} rate={nr} in {el:.2f}s')
+    R.check('C DENIED log lines are globally limited to ~1/s', log1 - log0 <= int(el) + 2, f'{log1 - log0} lines in {el:.2f}s')
     e, _ = err(get_pointer)
     R.check('C pointer methods AccessDenied or rate:', e is not None, str(e))
 sys.exit(R.summary())

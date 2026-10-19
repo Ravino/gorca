@@ -3,8 +3,8 @@
 # test-pointer.sh and the MO-0 spikes. Touches nothing in the real session.
 #   test-rig.sh WORKDIR ["WxH WxH ..."]      foreground; run it with setsid; teardown: tools/platform-probes/mouse-emulation/teardown.sh WORKDIR
 # Writes WORKDIR/env (BUS, WL, RT, A11Y), WORKDIR/rig.pgid (process group = this script), WORKDIR/shell.pid,
-# WORKDIR/units (transient systemd --user unit names usable as allow-listed callers: A has capture+pointer,
-# B has capture only, C is not listed at all) and WORKDIR/shell.log.
+# WORKDIR/py-a, py-b, py-c (private copies of the python binary used as caller identities: A has capture+pointer,
+# B has capture only, C is not listed) and WORKDIR/shell.log. No systemd, no service manager, nothing outside WORKDIR.
 # Env: GORCA_RIG_NO_X11=  (empty) enables XWayland; GORCA_RIG_KEYFILE_EXTRA="key=value\n..." appended under [org/gnome/mutter].
 set -euo pipefail
 W="$(realpath -m "$1")"; VM="${2:-1280x800}"
@@ -25,15 +25,14 @@ welcome-dialog-last-shown-version='99'
 experimental-features=['scale-monitor-framebuffer','xwayland-native-scaling']
 ${GORCA_RIG_KEYFILE_EXTRA:-}
 K
-ID="$$"
-UID_N="$(id -u)"
-CG="/user.slice/user-$UID_N.slice/user@$UID_N.service/app.slice"
-EXE="$(readlink -f /usr/bin/python3)"
-printf 'gorca-motest-%s-a\ngorca-motest-%s-b\ngorca-motest-%s-c\n' "$ID" "$ID" "$ID" > "$W/units"
+# Caller identities WITHOUT touching any service manager: three private copies of the python binary (distinct exe),
+# all in the cgroup this script runs in. A has capture+pointer, B capture only, C is not listed.
+CGP="$(sed -n 's/^0:://p' /proc/self/cgroup)"
+for r in a b c; do cp /usr/bin/python3.13 "$W/py-$r"; done
 cat > "$W/config/gorca/shell-helper.json" <<J
 {"allowed":[
- {"exe":"$EXE","cgroup":"$CG/gorca-motest-$ID-a.service","caps":["capture","pointer"]},
- {"exe":"$EXE","cgroup":"$CG/gorca-motest-$ID-b.service"}
+ {"exe":"$W/py-a","cgroup":"$CGP","caps":["capture","pointer"]},
+ {"exe":"$W/py-b","cgroup":"$CGP"}
 ]}
 J
 chmod 600 "$W/config/gorca/shell-helper.json"

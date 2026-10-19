@@ -96,6 +96,25 @@ def main():
     time.sleep(0.4)
     R.check('T5 expired calls inject nothing', len(evs(A)) == n0, str(evs(A)))
 
+    # ---- T5b a release never expires (F-3), GetPointer shares the pointer bucket
+    wa = rewin('PA')
+    move(wa['id'], 'frame', 200, 200)
+    n0 = len(evs(A))
+    button(1, 'press')
+    r = button(1, 'release', opts(not_after_ms=-50))
+    ok = wait_for(lambda: any(x[0] == 'release' for x in evs(A)[n0:]), 2)
+    R.check('T5b expired release still releases', r['outcome'] == 'done' and r['held'] == 0 and ok, f'{r} {evs(A)[n0:]}')
+    time.sleep(2.2)
+    okg = failg = 0
+    for i in range(80):
+        try:
+            get_pointer(); okg += 1
+        except HelperError as e:
+            assert e.msg.startswith('rate:'), e
+            failg += 1
+    R.check('T5b GetPointer is on the pointer bucket (burst ~40 then rate:)', 38 <= okg <= 50 and failg >= 30, f'ok={okg} limited={failg}')
+    time.sleep(2.2)
+
     # ---- T6 click at frame origin, all buttons, double click
     for b in (1, 2, 3):
         n0 = len(evs(A))
@@ -388,6 +407,9 @@ def main():
     back = wait_for(lambda: err(ping)[0] is None, 8)
     R.check('T16 helper comes back after enable (dev hot reload)', back)
 
+    log = open(os.path.join(W, 'shell.log')).read()
+    crit = [l for l in log.split('\n') if 'CRITICAL' in l or 'JS ERROR' in l]
+    R.check('no CRITICAL / JS ERROR line in the shell log (F-1)', not crit, '; '.join(crit[:3]))
     for c in clients:
         c.kill()
     return R.summary()
