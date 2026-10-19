@@ -926,7 +926,7 @@ EVIDENCE = {"hint.icon_class": 0x8000, "hint.src_name": 0x8001, "hint.title_attr
             "visual.ocr_text": 0x8003, "visual.label_guess": 0x8004, "layout.box": 0x8005,
             "layout.css_hidden": 0x8006}
 PROV = {"Default": 0, "Derived": 1, "DerivedTainted": 2, "Inferred": 3, "ObservedPrimary": 4,
-        "ObservedSecondary": 5, "Patch": 6, "User": 7, "Fallback": 8}
+        "ObservedSecondary": 5, "Patch": 6, "User": 7}
 PROV_NAME = {v: k for k, v in PROV.items()}
 TAINTED = {PROV["DerivedTainted"], PROV["Inferred"], PROV["ObservedSecondary"]}
 PROTECTED = {PROV["User"], PROV["Patch"], PROV["ObservedPrimary"], PROV["Derived"]}
@@ -2042,7 +2042,7 @@ tables: group_codes (fused group -> code; evidence kinds have bit 15), prov_code
   (hedge values: 0 Asserted/plain, 1 High, 2 Probable, 3 Possible), bind_quality, source table
   {name: [slot, gen, class, tier, s4_kind_order]}, grants {name: {semantic, evidence, anchors, floor}},
   min_bind per group class, inexpressible rows per source profile, PI per source profile, thresholds,
-  defaults, max_str, default_ttl_ms.
+  defaults, max_str (TEST-SCALE value 64 so truncation is exercised; the product limit is 1 KiB), default_ttl_ms.
 case: {id, desc, profile, scope, content_rule, parent[] (static tree, root -1), patches[],
   events[] (canonical order), deliveries[] ({name, batches: [[event index...]...]}),
   admission[] (per event index: accept | accept:truncated | reject:<reason> | - for non-facts),
