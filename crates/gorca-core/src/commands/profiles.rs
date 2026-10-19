@@ -15,7 +15,7 @@ use gorca_config::profiles::{
     EffectiveCache, FocusContext, KeyRef, Pin, ProfileCell, ProfileKey, ProfileMode,
     ProfileSnapshot, ProfileSource, SaveRefusal, TargetWhy, initial_snapshot,
 };
-use gorca_config::{KeyId, ModeDefault, Overlay, Punct, Settings, Value, Verbosity};
+use gorca_config::{KeyId, Overlay, Punct, Settings, Value, Verbosity};
 use gorca_i18n::{MsgId as M, msg, t};
 
 use super::state::{
@@ -229,7 +229,8 @@ pub(crate) struct ProfileRuntime {
     counters: ProfileCounters,
     /// A save is in flight; edits are refused until it lands (the snapshot is completed with
     /// what was written).
-    saving: Option<(SaveNote, Instant)>,
+    saving: Option<(SaveNote, Instant, u64)>,
+    save_seq: u64,
     last_target_note: Option<(String, Instant)>,
     /// Keys the last save-to-global moved, for the second press (apply everywhere).
     last_global: Option<(String, Vec<KeyRef>, Instant)>,
@@ -261,6 +262,7 @@ impl ProfileRuntime {
             host: None,
             counters: ProfileCounters::default(),
             saving: None,
+            save_seq: 0,
             last_target_note: None,
             last_global: None,
             prewarmed_for: None,
@@ -335,10 +337,17 @@ impl ProfileRuntime {
         self.counters
     }
 
+    /// Start a save: remember what it will say and return the id its answer must carry.
+    fn begin_save(&mut self, note: SaveNote, now: Instant) -> u64 {
+        self.save_seq += 1;
+        self.saving = Some((note, now, self.save_seq));
+        self.save_seq
+    }
+
     /// Is a save in flight? A save nobody answered within [`SAVE_TIMEOUT`] is forgotten.
     fn busy(&mut self, now: Instant) -> bool {
         match &self.saving {
-            Some((_, at)) if now.saturating_duration_since(*at) < SAVE_TIMEOUT => true,
+            Some((_, at, _)) if now.saturating_duration_since(*at) < SAVE_TIMEOUT => true,
             Some(_) => {
                 self.saving = None;
                 false
@@ -398,7 +407,6 @@ pub(crate) enum Change {
     CommandKeys(bool),
     Verbosity(Verbosity),
     Punctuation(Punct),
-    ModeDefault(ModeDefault),
 }
 
 impl Change {
@@ -412,7 +420,6 @@ impl Change {
             Change::CommandKeys(_) => ("echo", "command_keys"),
             Change::Verbosity(_) => ("verbosity", "level"),
             Change::Punctuation(_) => ("speech", "punctuation"),
-            Change::ModeDefault(_) => ("browse", "mode_default"),
         }
     }
 
@@ -424,12 +431,11 @@ impl Change {
             }
             Change::Verbosity(v) => Value::Str(v.name().to_owned()),
             Change::Punctuation(p) => Value::Str(p.name().to_owned()),
-            Change::ModeDefault(m) => Value::Str(m.name().to_owned()),
         }
     }
 
-    /// The overlay route, for a Reader without profiles. `false`: no overlay entry exists.
-    fn overlay(&self, o: &mut Overlay) -> bool {
+    /// The overlay route, for a Reader without profiles.
+    fn overlay(&self, o: &mut Overlay) {
         match self {
             Change::Rate(v) => o.rate = Some(*v),
             Change::Pitch(v) => o.pitch = Some(*v),
@@ -439,9 +445,7 @@ impl Change {
             Change::CommandKeys(b) => o.command_keys = Some(*b),
             Change::Verbosity(v) => o.verbosity = Some(*v),
             Change::Punctuation(p) => o.punctuation = Some(*p),
-            Change::ModeDefault(_) => return false,
         }
-        true
     }
 }
 
@@ -670,11 +674,8 @@ impl Reader {
     /// the refusal was spoken.
     pub(crate) fn apply_change(&mut self, c: &Change, fx: &mut ReaderEffects) -> Option<String> {
         let Some(rt) = self.cmd.profiles.as_mut() else {
-            if c.overlay(&mut self.cmd.overlay) {
-                return Some(String::new());
-            }
-            self.say(t(M::CommandNotAvailable), fx);
-            return None;
+            c.overlay(&mut self.cmd.overlay);
+            return Some(String::new());
         };
         if rt.busy(self.now) {
             self.say(t(M::ProfileSaveBusy), fx);
@@ -768,8 +769,9 @@ impl Reader {
             self.say(t(M::ProfileNothingToSave), fx);
             return;
         }
-        rt.saving = Some((note, self.now));
+        let id = rt.begin_save(note, self.now);
         let req = SaveProfiles {
+            id,
             snapshot: rt.cell.load(),
             kind: SaveKind::All,
         };
@@ -794,8 +796,9 @@ impl Reader {
             && let Some((except, keys, at)) = rt.last_global.take()
             && now.saturating_duration_since(at) < EVERYWHERE_WINDOW
         {
-            rt.saving = Some((SaveNote::default(), self.now));
+            let id = rt.begin_save(SaveNote::default(), self.now);
             let req = SaveProfiles {
+                id,
                 snapshot: rt.cell.load(),
                 kind: SaveKind::Everywhere { keys, except },
             };
@@ -814,8 +817,9 @@ impl Reader {
             return;
         };
         let focus = rt.eval.focus();
-        rt.saving = Some((SaveNote::default(), self.now));
+        let id = rt.begin_save(SaveNote::default(), self.now);
         let req = SaveProfiles {
+            id,
             snapshot: rt.cell.load(),
             kind: SaveKind::Global { profile_id, focus },
         };
@@ -829,7 +833,15 @@ impl Reader {
         let Some(rt) = self.cmd.profiles.as_mut() else {
             return;
         };
-        let note = rt.saving.take().map(|(n, _)| n).unwrap_or_default();
+        // An answer to a save we no longer wait for (a reload, the timeout) is dropped: the
+        // snapshot it was planned against is gone (R-1).
+        let Some((note, _, id)) = rt.saving.take() else {
+            return;
+        };
+        if id != r.id {
+            rt.saving = Some((note, Instant::now(), id));
+            return;
+        }
         let done_count = match &r.outcome {
             ProfileSaveOutcome::Written { done, .. } | ProfileSaveOutcome::Failed { done } => *done,
             ProfileSaveOutcome::Refused(_) | ProfileSaveOutcome::NewerSchema => 0,
@@ -960,6 +972,10 @@ impl Reader {
             self.say(t(M::CommandNotAvailable), fx);
             return;
         };
+        if rt.busy(self.now) {
+            self.say(t(M::ProfileSaveBusy), fx);
+            return;
+        }
         let Some(id) = rt.effective_profile_id() else {
             self.say(&msg!(ProfileNoneToToggle, name = &*app), fx);
             return;
@@ -1046,33 +1062,6 @@ impl Reader {
             return;
         }
         self.profile_event(ProfileEvent::UserSuspend, fx);
-    }
-
-    /// `browse.save_mode_default`: the mode this document is in becomes the default for the
-    /// application (or the site, with that edit target).
-    pub(crate) fn browse_save_mode_default(&mut self, fx: &mut ReaderEffects) {
-        let mode = match self.web.as_ref().map(|b| b.mode) {
-            Some(WebMode::Browse { .. }) => ModeDefault::Browse,
-            Some(WebMode::Focus { .. }) => ModeDefault::Focus,
-            Some(WebMode::Inactive | WebMode::Loading { .. }) | None => {
-                self.say(t(M::ProfileNoDocument), fx);
-                return;
-            }
-        };
-        let Some(note) = self.apply_change(&Change::ModeDefault(mode), fx) else {
-            return;
-        };
-        self.cmd.republish();
-        let name = match mode {
-            ModeDefault::Browse => t(M::WebModeBrowse),
-            ModeDefault::Focus => t(M::WebModeFocus),
-        };
-        let mut text = msg!(ProfileModeSaved, mode = name);
-        if !note.is_empty() {
-            text.push_str(", ");
-            text.push_str(&note);
-        }
-        self.say(&text, fx);
     }
 }
 

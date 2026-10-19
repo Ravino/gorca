@@ -533,6 +533,8 @@ pub enum FileId {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WriteStep {
     pub file: FileId,
+    /// The file must not exist yet: create it exclusively (an existing empty file is a file, R-6).
+    pub create: bool,
     pub expect_hash: u64,
     pub text: String,
 }
@@ -557,10 +559,15 @@ pub enum SaveRefusal {
 
 #[derive(Clone, Debug)]
 enum Effect {
-    /// `settings.save` of the global delta.
-    SaveBase,
-    /// `settings.save` of one profile's delta (and creation of its file).
-    SaveProfile { id: String },
+    /// `settings.save` of the global delta: exactly the values that were written (R-1), so an
+    /// edit made while the write ran is never marked saved.
+    SaveBase { values: Vec<(KeyRef, Value)> },
+    /// `settings.save` of one profile's delta (and creation of its file), likewise.
+    SaveProfile {
+        id: String,
+        values: Vec<(KeyRef, Value)>,
+        enabled: Option<bool>,
+    },
     /// Save-to-global: copied keys into the global file.
     GlobalCopy { values: Vec<(KeyRef, Value)> },
     /// Save-to-global: keys removed from a profile file; `flush` when the file was rendered
@@ -654,10 +661,11 @@ impl ProfileSnapshot {
                 set_keys(disk.global.as_deref().unwrap_or(""), &vals).map_err(SaveRefusal::Text)?;
             plan.steps.push(WriteStep {
                 file: FileId::Global,
+                create: false,
                 expect_hash: self.base.user.hash,
                 text,
             });
-            plan.effects.push(Effect::SaveBase);
+            plan.effects.push(Effect::SaveBase { values: vals });
         }
         for (id, delta) in &self.deltas.profiles {
             let created = self.deltas.created.get(id);
@@ -697,6 +705,7 @@ impl ProfileSnapshot {
             };
             plan.steps.push(WriteStep {
                 file: FileId::Profile(id.clone()),
+                create: on_disk.is_none(),
                 expect_hash: if on_disk.is_some() {
                     p.hash
                 } else {
@@ -704,7 +713,11 @@ impl ProfileSnapshot {
                 },
                 text,
             });
-            plan.effects.push(Effect::SaveProfile { id: id.clone() });
+            plan.effects.push(Effect::SaveProfile {
+                id: id.clone(),
+                values: vals,
+                enabled: delta.enabled,
+            });
         }
         if plan.steps.is_empty() {
             return Err(SaveRefusal::NothingToSave);
@@ -804,6 +817,7 @@ impl ProfileSnapshot {
             let text = remove_keys(t, &held).map_err(SaveRefusal::Text)?;
             plan.steps.push(WriteStep {
                 file: FileId::Profile(q.id.clone()),
+                create: false,
                 expect_hash: q.hash,
                 text,
             });
@@ -887,6 +901,7 @@ impl ProfileSnapshot {
                 .map_err(SaveRefusal::Text)?;
             steps.push(WriteStep {
                 file: FileId::Global,
+                create: false,
                 expect_hash: self.base.user.hash,
                 text,
             });
@@ -932,6 +947,7 @@ impl ProfileSnapshot {
         };
         steps.push(WriteStep {
             file: FileId::Profile(profile_id.to_owned()),
+            create: flush,
             expect_hash: if flush { hash_of(None) } else { p.hash },
             text,
         });
@@ -966,6 +982,7 @@ impl ProfileSnapshot {
                 let text = remove_keys(t, &held).map_err(SaveRefusal::Text)?;
                 steps.push(WriteStep {
                     file: FileId::Profile(q.id.clone()),
+                    create: false,
                     expect_hash: q.hash,
                     text,
                 });
@@ -995,27 +1012,55 @@ impl ProfileSnapshot {
         for (step, effect) in plan.steps.iter().zip(plan.effects.iter()).take(done) {
             let hash = fnv1a(step.text.as_bytes());
             match effect {
-                Effect::SaveBase => {
-                    for (k, v) in d.base.core.iter() {
-                        base.user.file.set(k, v.clone());
-                    }
-                    for (p, v) in &d.base.ext {
-                        base.user.ext.insert(p.clone(), v.clone());
+                Effect::SaveBase { values } => {
+                    for (k, v) in values {
+                        match k {
+                            KeyRef::Core(id) => {
+                                base.user.file.set(*id, v.clone());
+                            }
+                            KeyRef::Ext(p) => {
+                                base.user.ext.insert(p.clone(), v.clone());
+                            }
+                        }
+                        // A later edit of the same key stays dirty.
+                        if d.base.get(k).as_ref() == Some(v) {
+                            d.base.remove(k);
+                        }
                     }
                     base.user.hash = hash;
-                    d.base = LayerDelta::default();
                 }
-                Effect::SaveProfile { id } => {
+                Effect::SaveProfile {
+                    id,
+                    values,
+                    enabled,
+                } => {
                     if let Some(p) = set.id_of(id).and_then(|i| set.get(i)) {
                         let mut q = (**p).clone();
-                        if let Some(delta) = d.profiles.remove(id) {
-                            for (k, v) in delta.core.iter() {
-                                q.values.set(k, v.clone());
+                        for (k, v) in values {
+                            match k {
+                                KeyRef::Core(kid) => {
+                                    q.values.set(*kid, v.clone());
+                                }
+                                KeyRef::Ext(path) => {
+                                    q.ext.insert(path.clone(), v.clone());
+                                }
                             }
-                            q.ext.extend(delta.ext);
-                            if let Some(en) = delta.enabled {
-                                q.enabled = en;
+                            if let Some(pd) = d.profiles.get_mut(id)
+                                && pd.get(k).as_ref() == Some(v)
+                            {
+                                pd.remove(k);
                             }
+                        }
+                        if let Some(en) = enabled {
+                            q.enabled = *en;
+                            if let Some(pd) = d.profiles.get_mut(id)
+                                && pd.enabled == Some(*en)
+                            {
+                                pd.enabled = None;
+                            }
+                        }
+                        if d.profiles.get(id).is_some_and(LayerDelta::is_empty) {
+                            d.profiles.remove(id);
                         }
                         q.hash = hash;
                         d.created.remove(id);

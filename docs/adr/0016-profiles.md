@@ -651,6 +651,17 @@ M14a-core P4 to P6 as built (slices P4 to P6 of §6; the old P5 bench/e2e slice 
   (`plan_save`, `plan_save_global`, `plan_apply_everywhere`), writes in plan order (a new profile with
   `O_CREAT | O_EXCL`, a changed one only if its hash still matches, atomic rename) and answers with how far it
   got; the Reader completes its snapshot with what was written (SG-5). Edits are refused while a save is in flight.
+- **Review fixes (R-1 to R-9).** A save completes the snapshot with the values it wrote (`Effect` carries them), so
+  edits made during the write stay dirty; requests carry an id and answers for another request, or after a
+  reload or the 10 s timeout, are dropped; toggles wait for a running save like edits. A failed or slow read of
+  `profiles/` keeps the loaded profiles and is retried; FIFOs and links in the directory are skipped (not
+  followed); `WriteStep.create` says "must not exist" explicitly; saves keep their slots in the config queue
+  (prewarm leaves 8 of 16 free); a save that cannot be queued is answered as failed. R-7: `browse.enabled` is
+  classified `App` (a Site-level "focus only" is not built). R-8, follow-up: own mode is learn mode only, and
+  `profiles.suspend` during an own mode publishes the layer set at once.
+- **`browse.save_mode_default` is planned and unbound** in all presets (R-2): nothing applies
+  `browse.mode_default` when a document first gets focus yet, so the chord of §2.5a is withheld, and the
+  setting is documented as "not applied yet" in `docs/config-reference.md`. It comes with `WebPolicy::initial`.
 - **Not wired yet.** Site triggers need the document address (P7: `Reader::set_document_host` is the entry
   point); extension schemas are empty, so `ext.*` keys stay inactive; `browse.mode_default` is saved and resolved
   but not applied when a document first gets focus (DL-1, `WebPolicy::initial`: the browse keys slice);

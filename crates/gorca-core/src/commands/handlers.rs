@@ -172,7 +172,6 @@ impl Reader {
             CoreCmd::ProfilesEditTargetCycle => self.profiles_edit_target_cycle(fx),
             CoreCmd::ProfilesAnnounce => self.profiles_announce(rep, fx),
             CoreCmd::ProfilesSuspend => self.profiles_suspend(fx),
-            CoreCmd::BrowseSaveModeDefault => self.browse_save_mode_default(fx),
             CoreCmd::InputSleepToggle => self.sleep_toggle(fx),
             CoreCmd::InfoBattery => {
                 fx.push(ReaderEffect::Desktop(

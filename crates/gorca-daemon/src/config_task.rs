@@ -244,6 +244,11 @@ fn read_profile_dir(dir: &Path) -> std::io::Result<Vec<(String, String)>> {
         let Some(stem) = name.strip_suffix(".toml") else {
             continue;
         };
+        // Regular files only, looked at without following links: a FIFO or a device would
+        // block the open, a link may point anywhere (R-4).
+        if !ent.file_type().is_ok_and(|t| t.is_file()) {
+            continue;
+        }
         if stem.is_empty() || stem.starts_with('.') {
             continue;
         }
@@ -364,6 +369,10 @@ struct State {
     loader: ProfileLoader,
     /// Hash of the profiles directory as last loaded or written by us.
     profiles_hash: u64,
+    /// The files of the last good read of the directory.
+    last_pfiles: Vec<(String, String)>,
+    /// The last read of the directory failed: try again on the retry tick.
+    profiles_failed: bool,
 }
 
 impl ConfigTask {
@@ -456,15 +465,15 @@ impl ConfigTask {
     }
 
     /// The profile files, read off the loop with a deadline (home may be on NFS or FUSE).
-    async fn read_profiles(&self) -> (Vec<(String, String)>, Option<Diag>) {
+    async fn read_profiles(&self) -> (Option<Vec<(String, String)>>, Option<Diag>) {
         let Some(dir) = self.profiles_dir() else {
-            return (Vec::new(), None);
+            return (Some(Vec::new()), None);
         };
         let job = tokio::task::spawn_blocking(move || read_profile_dir(&dir));
         match tokio::time::timeout(READ_DEADLINE, job).await {
-            Ok(Ok(Ok(files))) => (files, None),
+            Ok(Ok(Ok(files))) => (Some(files), None),
             Ok(Ok(Err(e))) => (
-                Vec::new(),
+                None,
                 Some(Diag::error(
                     "profiles",
                     None,
@@ -472,7 +481,7 @@ impl ConfigTask {
                 )),
             ),
             Ok(Err(_)) | Err(_) => (
-                Vec::new(),
+                None,
                 Some(Diag::error(
                     "profiles",
                     None,
@@ -544,9 +553,19 @@ impl ConfigTask {
     /// loads keep the last good settings when the file is bad or unreadable (HR-2).
     async fn reload(&self, st: &mut State, cause: LoadCause) {
         let (text, read_err) = self.read().await;
-        let (pfiles, perr) = self.read_profiles().await;
+        let (read, perr) = self.read_profiles().await;
+        // A failed or slow read of the directory keeps what was loaded (R-3): the profiles and
+        // the unsaved edits of this session survive, and the read is retried.
+        let (pfiles, phash) = match read {
+            Some(f) => {
+                let h = profiles_hash(&f);
+                st.last_pfiles.clone_from(&f);
+                (f, h)
+            }
+            None => (st.last_pfiles.clone(), st.profiles_hash),
+        };
+        st.profiles_failed = perr.is_some();
         let hash = fnv1a(text.as_deref().unwrap_or("").as_bytes());
-        let phash = profiles_hash(&pfiles);
         // Content, not provenance: the file is reloaded whenever its text differs from what is
         // active. Our own save sets `last_hash`, so its inotify event changes nothing, and a
         // later revert to that same text is a real change (F5). The same holds for the profile
@@ -626,7 +645,7 @@ impl ConfigTask {
                 }
                 let path = dir.join(format!("{id}.toml"));
                 let expect = step.expect_hash;
-                let create = expect == fnv1a(b"");
+                let create = step.create;
                 let job = tokio::task::spawn_blocking(move || {
                     if create {
                         return match create_exclusive(&path, &text) {
@@ -663,25 +682,27 @@ impl ConfigTask {
     async fn disk_view(
         &self,
         snapshot: &gorca_config::profiles::ProfileSnapshot,
-    ) -> gorca_config::profiles::DiskView {
+    ) -> Option<gorca_config::profiles::DiskView> {
         let global = match &self.source.path {
             Some(p) => read_file(p).await.ok().flatten(),
             None => None,
         };
+        // A directory that cannot be read cannot be planned against.
         let (files, _) = self.read_profiles().await;
         let _ = snapshot;
-        gorca_config::profiles::DiskView {
+        Some(gorca_config::profiles::DiskView {
             global,
-            profiles: files.into_iter().collect(),
-        }
+            profiles: files?.into_iter().collect(),
+        })
     }
 
     /// `settings.save`, `profiles.save_global` and its second press: plan against the files on
     /// disk, write in plan order, and tell the Reader how far it got (SG-5).
     async fn save_profiles(&self, st: &mut State, req: SaveProfiles) {
-        let SaveProfiles { snapshot, kind } = req;
+        let SaveProfiles { id, snapshot, kind } = req;
         let reply = |plan: Option<Arc<SavePlan>>, outcome: ProfileSaveOutcome, kind: SaveKind| {
             SettingsMsg::ProfilesSaved(Arc::new(ProfilesSaved {
+                id,
                 plan,
                 outcome,
                 kind,
@@ -692,7 +713,11 @@ impl ConfigTask {
                 .await;
             return;
         }
-        let disk = self.disk_view(&snapshot).await;
+        let Some(disk) = self.disk_view(&snapshot).await else {
+            self.send(reply(None, ProfileSaveOutcome::Failed { done: 0 }, kind))
+                .await;
+            return;
+        };
         let planned = match &kind {
             SaveKind::All => snapshot.plan_save(&disk),
             SaveKind::Global { profile_id, focus } => {
@@ -735,8 +760,10 @@ impl ConfigTask {
         }
         if done > 0 {
             // What is on disk now is what we wrote: the watcher's event is not a change.
-            let (files, _) = self.read_profiles().await;
-            st.profiles_hash = profiles_hash(&files);
+            if let (Some(files), _) = self.read_profiles().await {
+                st.profiles_hash = profiles_hash(&files);
+                st.last_pfiles = files;
+            }
             if plan
                 .steps
                 .iter()
@@ -856,6 +883,8 @@ impl ConfigTask {
             layout_busy: Arc::default(),
             loader: ProfileLoader::new(),
             profiles_hash: 0,
+            last_pfiles: Vec::new(),
+            profiles_failed: false,
         };
         self.reload(&mut st, LoadCause::Startup).await;
 
@@ -901,11 +930,15 @@ impl ConfigTask {
                 _ = layouts.tick(), if !self.source.no_probe => {
                     self.poll_layouts(&mut st).await;
                 }
-                _ = retry.tick(), if (events.is_none() || self.profiles_unwatched(profiles_watched)) && self.source.path.is_some() => {
+                _ = retry.tick(), if (events.is_none() || self.profiles_unwatched(profiles_watched) || st.profiles_failed) && self.source.path.is_some() => {
                     // The directory did not exist (or the watch broke), or the profiles
-                    // directory appeared after the watcher was made: look again.
-                    (events, profiles_watched) = self.open_events();
-                    if events.is_some() {
+                    // directory appeared after the watcher was made, or its last read failed:
+                    // look again.
+                    let rewatch = events.is_none() || self.profiles_unwatched(profiles_watched);
+                    if rewatch {
+                        (events, profiles_watched) = self.open_events();
+                    }
+                    if (rewatch && events.is_some()) || st.profiles_failed {
                         self.reload(&mut st, LoadCause::FileChanged).await;
                     }
                 }
@@ -1365,6 +1398,7 @@ mod tests {
         let snap = snap.apply_edit(&facts, &plan).snapshot;
         let snap = Arc::new(snap);
         req.send(ConfigRequest::SaveProfiles(Box::new(SaveProfiles {
+            id: 1,
             snapshot: Arc::clone(&snap),
             kind: SaveKind::All,
         })))
@@ -1408,6 +1442,7 @@ mod tests {
         // The same snapshot again (it still believes the profile has no file): the plan sees
         // the file and refuses; nothing is overwritten.
         req.send(ConfigRequest::SaveProfiles(Box::new(SaveProfiles {
+            id: 1,
             snapshot: Arc::clone(&snap),
             kind: SaveKind::All,
         })))
@@ -1425,6 +1460,119 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(dir.join("profiles").join(&files[0])).unwrap(),
             written
+        );
+        stop.cancel();
+        let _ = h.await;
+    }
+
+    #[tokio::test]
+    async fn fifos_and_links_in_the_profiles_directory_are_skipped_without_blocking() {
+        let dir = tmpdir("profiles-hostile");
+        std::fs::write(dir.join("gorca.toml"), "").unwrap();
+        let pd = dir.join("profiles");
+        std::fs::create_dir_all(&pd).unwrap();
+        std::fs::write(pd.join("ff.toml"), FF).unwrap();
+        let made = std::process::Command::new("mkfifo")
+            .arg(pd.join("pipe.toml"))
+            .status()
+            .is_ok_and(|s| s.success());
+        assert!(made, "mkfifo");
+        std::os::unix::fs::symlink(pd.join("ff.toml"), pd.join("link.toml")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let p2 = pd.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(read_profile_dir(&p2));
+        });
+        let files = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the read must not block on a FIFO")
+            .unwrap();
+        let stems: Vec<_> = files.iter().map(|(s, _)| s.as_str()).collect();
+        assert_eq!(stems, ["ff"]);
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_profiles_directory_keeps_the_loaded_profiles_and_is_retried() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tmpdir("profiles-keep");
+        std::fs::write(dir.join("gorca.toml"), "").unwrap();
+        let pd = dir.join("profiles");
+        std::fs::create_dir_all(&pd).unwrap();
+        std::fs::write(pd.join("ff.toml"), FF).unwrap();
+        let (t, mut rx, req) = task(&dir);
+        let stop = CancellationToken::new();
+        let h = tokio::spawn(t.run(stop.clone()));
+        let l = loaded(&mut rx).await;
+        assert!(l.profiles.as_ref().unwrap().set.id_of("ff").is_some());
+        std::fs::set_permissions(&pd, std::fs::Permissions::from_mode(0o000)).unwrap();
+        req.send(ConfigRequest::Reload).await.unwrap();
+        let l = loop {
+            let l = loaded(&mut rx).await;
+            if l.cause == LoadCause::Explicit {
+                break l;
+            }
+        };
+        let kept = l.profiles.as_ref().unwrap().set.id_of("ff").is_some();
+        let said = l.problems.iter().any(|p| p.contains("profiles directory"));
+        std::fs::set_permissions(&pd, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(kept, "the last good profiles stay");
+        assert!(said, "{:?}", l.problems);
+        stop.cancel();
+        let _ = h.await;
+    }
+
+    #[tokio::test]
+    async fn an_existing_empty_profile_file_can_be_saved() {
+        use gorca_config::profiles::{AppFacts, Edit, FocusFacts, KeyRef, ProfileSnapshot};
+        let dir = tmpdir("profiles-empty");
+        std::fs::write(dir.join("gorca.toml"), "").unwrap();
+        let pd = dir.join("profiles");
+        std::fs::create_dir_all(&pd).unwrap();
+        std::fs::write(pd.join("ff.toml"), "").unwrap();
+        let (t, mut rx, req) = task(&dir);
+        let stop = CancellationToken::new();
+        let h = tokio::spawn(t.run(stop.clone()));
+        let l = loaded(&mut rx).await;
+        // An empty file is an existing file: a save never treats it as a create (R-6).
+        let p = l.profiles.clone().unwrap();
+        let facts = FocusFacts {
+            app: Some(AppFacts {
+                name: "ff",
+                exe: None,
+                desktop_id: None,
+            }),
+            ..FocusFacts::default()
+        };
+        let snap = ProfileSnapshot::new(Arc::clone(&p.set), Arc::clone(&p.base));
+        let rate = gorca_config::KeyId::of("speech", "rate").unwrap();
+        let plan = snap
+            .plan_edit(
+                &facts,
+                Edit {
+                    key: KeyRef::Core(rate),
+                    value: gorca_config::Value::Int(61),
+                },
+            )
+            .unwrap();
+        let snap = Arc::new(snap.apply_edit(&facts, &plan).snapshot);
+        req.send(ConfigRequest::SaveProfiles(Box::new(SaveProfiles {
+            id: 9,
+            snapshot: snap,
+            kind: SaveKind::All,
+        })))
+        .await
+        .unwrap();
+        let r = saved(&mut rx).await;
+        assert_eq!(r.id, 9);
+        assert!(
+            matches!(r.outcome, ProfileSaveOutcome::Written { done: 1, total: 1 }),
+            "{:?}",
+            r.outcome
+        );
+        assert!(
+            std::fs::read_to_string(pd.join("ff.toml"))
+                .unwrap()
+                .is_empty()
         );
         stop.cancel();
         let _ = h.await;
@@ -1492,6 +1640,7 @@ mod tests {
         assert_eq!(entries.generation, snap.generation);
         assert!(!entries.entries.is_empty());
         req.send(ConfigRequest::SaveProfiles(Box::new(SaveProfiles {
+            id: 1,
             snapshot: Arc::clone(&snap),
             kind: SaveKind::Global {
                 profile_id: "firefox".to_owned(),

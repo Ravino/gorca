@@ -230,7 +230,10 @@ const MAX_FETCHES_IN_FLIGHT: usize = 64;
 const HEALTH_TICK: Duration = Duration::from_millis(250);
 const HEALTH_QUEUE: usize = 32;
 const REGISTRAR_QUEUE: usize = 64;
-const CONFIG_QUEUE: usize = 8;
+const CONFIG_QUEUE: usize = 16;
+/// Prewarm requests leave this many slots free for the requests that matter (a save is never
+/// dropped for a prewarm, R-5).
+const CONFIG_RESERVED: usize = 8;
 
 struct Shared {
     epoch: Arc<EpochCell>,
@@ -1184,11 +1187,7 @@ async fn reader_loop(
                     shared.grabs.send_replace(set);
                 }
                 ReaderEffect::SpeechCtl(ctl) => shared.speech.control(ctl),
-                ReaderEffect::Config(req) => {
-                    if shared.config.try_send(req).is_err() {
-                        tracing::warn!("config request queue full; dropped a request");
-                    }
-                }
+                ReaderEffect::Config(req) => send_config(shared, req),
                 ReaderEffect::Web(w) => exec_web(shared, w),
                 ReaderEffect::SayAllChunk { intent, first } => {
                     bump(&shared.stats.utterances);
@@ -1214,6 +1213,32 @@ async fn reader_loop(
 /// The app side of a desktop effect (windows, notifications; M4b): a task bounded by request
 /// deadlines whose outcome goes to the Reader on the background lane. An app that is gone, hung
 /// or refusing answers with nothing, so the Reader keeps what it has (I-4).
+/// Queue a request for the config task. A prewarm is dropped first (the Reader folds on a
+/// miss); a save that cannot be queued is answered as failed, so the Reader never waits for it.
+fn send_config(shared: &Shared, req: ConfigRequest) {
+    if matches!(req, ConfigRequest::Prewarm(_)) && shared.config.capacity() <= CONFIG_RESERVED {
+        return;
+    }
+    let failed_save = match &req {
+        ConfigRequest::SaveProfiles(r) => Some((r.id, r.kind.clone())),
+        ConfigRequest::Reload | ConfigRequest::Save(_) | ConfigRequest::Prewarm(_) => None,
+    };
+    if shared.config.try_send(req).is_err() {
+        tracing::warn!("config request queue full; dropped a request");
+        if let Some((id, kind)) = failed_save {
+            let answer = crate::ProfilesSaved {
+                id,
+                plan: None,
+                outcome: crate::ProfileSaveOutcome::Failed { done: 0 },
+                kind,
+            };
+            let _ = shared.senders.control.try_send(crate::ControlMsg::Settings(
+                crate::SettingsMsg::ProfilesSaved(Arc::new(answer)),
+            ));
+        }
+    }
+}
+
 fn spawn_desktop(set: &mut JoinSet<()>, shared: &Arc<Shared>, d: crate::present::DesktopEffect) {
     use crate::present::{DesktopEffect, fetch_level, fetch_window};
     use crate::reader::BackgroundMsg;

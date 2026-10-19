@@ -6,7 +6,8 @@
 use std::collections::BTreeSet;
 
 use gorca_config::profiles::{
-    BuiltLayers, DiskView, ExtSchema, ProfileLoader, ProfileMode, SaveRefusal, build_layers,
+    BuiltLayers, DiskView, ExtSchema, ProfileLoader, ProfileMode, SavePlan, SaveRefusal,
+    build_layers,
 };
 use gorca_model::DocId;
 
@@ -410,6 +411,7 @@ fn settings_save_names_where_it_saved_and_completes_the_snapshot() {
     assert_eq!(total, 2, "the global file and the new Firefox profile");
     let fx = f.control(ControlMsg::Settings(SettingsMsg::ProfilesSaved(Arc::new(
         ProfilesSaved {
+            id: req.id,
             plan: Some(Arc::new(plan)),
             outcome: ProfileSaveOutcome::Written { done: total, total },
             kind: SaveKind::All,
@@ -435,6 +437,7 @@ fn a_refused_save_says_why_and_keeps_the_edits() {
     let _ = snapshot;
     let fx = f.control(ControlMsg::Settings(SettingsMsg::ProfilesSaved(Arc::new(
         ProfilesSaved {
+            id: req.id,
             plan: None,
             outcome: ProfileSaveOutcome::Refused(SaveRefusal::ChangedOnDisk(
                 gorca_config::profiles::FileId::Global,
@@ -514,6 +517,7 @@ fn save_global_moves_only_the_touched_keys_and_twice_applies_everywhere() {
     let kind = req.kind.clone();
     let fx = f.control(ControlMsg::Settings(SettingsMsg::ProfilesSaved(Arc::new(
         ProfilesSaved {
+            id: req.id,
             plan: Some(Arc::new(plan)),
             outcome: ProfileSaveOutcome::Written { done: total, total },
             kind,
@@ -546,6 +550,7 @@ fn save_global_moves_only_the_touched_keys_and_twice_applies_everywhere() {
     let total = plan.steps.len();
     let fx = f.control(ControlMsg::Settings(SettingsMsg::ProfilesSaved(Arc::new(
         ProfilesSaved {
+            id: req.id,
             plan: Some(Arc::new(plan)),
             outcome: ProfileSaveOutcome::Written { done: total, total },
             kind,
@@ -565,45 +570,6 @@ fn save_global_moves_only_the_touched_keys_and_twice_applies_everywhere() {
         &DiskView::default(),
     );
     assert!(matches!(plan, Err(SaveRefusal::NothingChanged(_))));
-}
-
-#[test]
-fn save_mode_default_writes_the_documents_mode_as_a_profile_value() {
-    let mut f = fixture();
-    f.reader = f.reader.with_web(
-        Arc::new(crate::DocDirectory::new()),
-        Arc::new(crate::WebJoin::new()),
-    );
-    f.reader
-        .dir
-        .set_app_name(app(), Some(&Arc::<str>::from("Firefox")));
-    deliver(&mut f, None, &[], LoadCause::Startup);
-    f.focus(1);
-    assert_eq!(
-        said(&f.run(CoreCmd::BrowseSaveModeDefault, 1)),
-        "no web page is focused"
-    );
-    f.reader.web.as_mut().unwrap().mode = WebMode::Focus {
-        doc: DocId(1),
-        node: gorca_model::DocNodeId::from_parts(0, 0),
-        cause: crate::FocusCause::Manual,
-        resume: WebCursor {
-            node: gorca_model::DocNodeId::from_parts(0, 0),
-            local: 0,
-        },
-        scope: Scope::Document,
-    };
-    let fx = f.run(CoreCmd::BrowseSaveModeDefault, 1);
-    let text = said(&fx);
-    assert!(
-        text.starts_with("focus mode saved as the default"),
-        "{text}"
-    );
-    assert!(text.contains("for Firefox"), "{text}");
-    assert_eq!(
-        f.reader.settings().browse.mode_default,
-        gorca_config::ModeDefault::Focus
-    );
 }
 
 #[test]
@@ -656,7 +622,6 @@ fn profile_chords_are_bound_once_per_preset_and_conflict_free() {
         ("gorca+ctrl+shift+p", "profiles.toggle_enabled"),
         ("gorca+ctrl+alt+p", "profiles.edit_target_cycle"),
         ("gorca+shift+p", "profiles.announce"),
-        ("gorca+ctrl+shift+space", "browse.save_mode_default"),
         ("gorca+ctrl+c", "settings.save"),
     ];
     for preset in ["nvda", "orca"] {
@@ -684,8 +649,60 @@ fn profile_chords_are_bound_once_per_preset_and_conflict_free() {
                     "{preset} {layout}: {chord}"
                 );
             }
-            // `profiles.suspend` has no chord (command list only).
+            // `profiles.suspend` has no chord (command list only), and `browse.save_mode_default`
+            // stays unbound until `browse.mode_default` is applied (R-2).
             assert!(!bound.iter().any(|(_, c)| *c == "profiles.suspend"));
+            assert!(!bound.iter().any(|(_, c)| *c == "browse.save_mode_default"));
         }
     }
+}
+
+#[test]
+fn a_late_or_foreign_save_answer_is_dropped_and_a_toggle_waits_for_a_running_save() {
+    let mut f = pf("Firefox", None, &[("firefox", FIREFOX)]);
+    f.run(CoreCmd::SpeechRateUp, 1);
+    let fx = f.run(CoreCmd::SettingsSave, 1);
+    let reqs = requests(&fx);
+    let Some(ConfigRequest::SaveProfiles(req)) = reqs.first().copied() else {
+        panic!("{fx:?}")
+    };
+    // A toggle during the save is refused (it would be lost on restart).
+    assert_eq!(
+        said(&f.run(CoreCmd::ProfilesToggleEnabled, 1)),
+        "saving, try again in a moment"
+    );
+    let disk = DiskView {
+        global: None,
+        profiles: [("firefox".to_owned(), FIREFOX.to_owned())]
+            .into_iter()
+            .collect(),
+    };
+    let plan = req.snapshot.plan_save(&disk).unwrap();
+    let total = plan.steps.len();
+    let answer = |id: u64, plan: SavePlan| {
+        ControlMsg::Settings(SettingsMsg::ProfilesSaved(Arc::new(ProfilesSaved {
+            id,
+            plan: Some(Arc::new(plan)),
+            outcome: ProfileSaveOutcome::Written { done: total, total },
+            kind: SaveKind::All,
+        })))
+    };
+    // An answer of another request changes nothing and says nothing.
+    let fx = f.control(answer(req.id + 7, plan.clone()));
+    assert!(fx.is_empty(), "{fx:?}");
+    assert!(!f.reader.profile_snapshot().unwrap().deltas.is_empty());
+    // The answer it waits for completes the save.
+    let fx = f.control(answer(req.id, plan.clone()));
+    assert_eq!(said(&fx), "saved for Firefox");
+    // After a reload that cleared the wait, a late answer is dropped too.
+    f.run(CoreCmd::SpeechRateUp, 1);
+    f.run(CoreCmd::SettingsSave, 1);
+    deliver(
+        &mut f,
+        None,
+        &[("firefox", FIREFOX)],
+        LoadCause::FileChanged,
+    );
+    let fx = f.control(answer(req.id + 1, plan));
+    assert!(fx.is_empty(), "{fx:?}");
 }

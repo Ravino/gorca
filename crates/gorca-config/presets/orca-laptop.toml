@@ -28,7 +28,6 @@
 "gorca+ctrl+shift+p" = "profiles.toggle_enabled"
 "gorca+ctrl+alt+p" = "profiles.edit_target_cycle"
 "gorca+shift+p" = "profiles.announce"
-"gorca+ctrl+shift+space" = "browse.save_mode_default"
 "gorca+ctrl+shift+r" = "settings.report_problems"
 "gorca+f1" = "debug.node_info"
 "gorca+ctrl+f1" = "debug.app_info"

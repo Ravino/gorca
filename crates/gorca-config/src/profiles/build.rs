@@ -361,6 +361,117 @@ mod tests {
         assert_eq!(cache.len(), 1);
     }
 
+    // ---- R-1: a save completes with what was written, not with what is in memory now ------------
+
+    #[test]
+    fn an_edit_made_while_a_save_runs_is_not_marked_saved() {
+        use crate::patch::KeyId;
+        use crate::profiles::{DiskView, Edit, FocusFacts, KeyRef};
+        let s = initial_snapshot();
+        let facts = FocusFacts::default();
+        let rate = KeyId::of("speech", "rate").unwrap();
+        let plan = s
+            .plan_edit(
+                &facts,
+                Edit {
+                    key: KeyRef::Core(rate),
+                    value: Value::Int(70),
+                },
+            )
+            .unwrap();
+        let s = s.apply_edit(&facts, &plan).snapshot;
+        let save = s.plan_save(&DiskView::default()).unwrap();
+        // While the write runs: another change to the same key and a row toggle.
+        let plan = s
+            .plan_edit(
+                &facts,
+                Edit {
+                    key: KeyRef::Core(rate),
+                    value: Value::Int(80),
+                },
+            )
+            .unwrap();
+        let s = s.apply_edit(&facts, &plan).snapshot;
+        let s = s.toggle_enabled("gorca/vscode").unwrap();
+        let done = s.complete(&save, save.steps.len());
+        // The written value is in the file layer; the later edits are still dirty.
+        assert_eq!(done.base.user.file.get(rate), Some(&Value::Int(70)));
+        assert_eq!(done.deltas.base.core.get(rate), Some(&Value::Int(80)));
+        let rows = KeyId::of("profiles", "rows").unwrap();
+        assert!(
+            done.deltas.base.core.get(rows).is_some(),
+            "the row toggle is still unsaved and would be written by the next save"
+        );
+        let next = done
+            .plan_save(&DiskView {
+                global: Some(save.steps[0].text.clone()),
+                profiles: std::collections::BTreeMap::default(),
+            })
+            .unwrap();
+        assert!(next.steps[0].text.contains("rate = 80"));
+        assert!(next.steps[0].text.contains("gorca/vscode"));
+    }
+
+    #[test]
+    fn an_existing_empty_profile_file_is_replaced_not_created() {
+        use crate::profiles::{DiskView, Edit, FocusFacts, KeyRef};
+        let l = crate::load::load(None, &Presets::builtin());
+        let files = vec![(
+            "ff".to_owned(),
+            "schema = 1\n[profile]\nname = \"ff\"\ntrigger = [{ app = { name = [\"ff\"] } }]\n"
+                .to_owned(),
+        )];
+        let b = build_layers(
+            &l.patch,
+            l.hash,
+            &files,
+            &ExtSchema::new(),
+            &mut ProfileLoader::new(),
+        );
+        let s = ProfileSnapshot::new(b.set, b.base);
+        let facts = FocusFacts {
+            app: Some(crate::profiles::AppFacts {
+                name: "ff",
+                exe: None,
+                desktop_id: None,
+            }),
+            ..FocusFacts::default()
+        };
+        let plan = s
+            .plan_edit(
+                &facts,
+                Edit {
+                    key: KeyRef::Core(crate::patch::KeyId::of("speech", "rate").unwrap()),
+                    value: Value::Int(60),
+                },
+            )
+            .unwrap();
+        let s = s.apply_edit(&facts, &plan).snapshot;
+        let disk = DiskView {
+            global: None,
+            profiles: [("ff".to_owned(), files[0].1.clone())]
+                .into_iter()
+                .collect(),
+        };
+        let save = s.plan_save(&disk).unwrap();
+        assert!(!save.steps[0].create);
+        // A profile that has no file yet is a create.
+        let s2 = initial_snapshot();
+        let plan = s2
+            .plan_edit(
+                &facts,
+                Edit {
+                    key: KeyRef::Core(crate::patch::KeyId::of("speech", "rate").unwrap()),
+                    value: Value::Int(60),
+                },
+            )
+            .unwrap();
+        let s2 = s2.apply_edit(&facts, &plan).snapshot;
+        let save = s2.plan_save(&DiskView::default()).unwrap();
+        let created: Vec<bool> = save.steps.iter().map(|x| x.create).collect();
+        assert_eq!(created, [true]);
+    }
+
     #[test]
     fn the_user_can_switch_the_row_off_or_override_it_per_app() {
         // CHR-0 documented that user layers can override the row; the row id is stable.

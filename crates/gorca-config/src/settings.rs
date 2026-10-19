@@ -1266,7 +1266,7 @@ static DOCS: &[(&str, &str, &str)] = &[
     (
         "browse",
         "mode_default",
-        "The mode a web page starts in: browse or focus.",
+        "Not applied yet: the mode a web page will start in, browse or focus.",
     ),
     (
         "terminal",

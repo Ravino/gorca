@@ -111,6 +111,8 @@ pub enum SaveKind {
 /// A request to write profile files, planned and performed by the config task.
 #[derive(Clone, Debug)]
 pub struct SaveProfiles {
+    /// Echoed in the answer: the Reader drops answers it no longer waits for (R-1).
+    pub id: u64,
     /// The Reader's snapshot at the moment of the request.
     pub snapshot: Arc<ProfileSnapshot>,
     pub kind: SaveKind,
@@ -147,6 +149,8 @@ pub enum ProfileSaveOutcome {
 /// The config task's answer to a [`SaveProfiles`] request.
 #[derive(Clone, Debug)]
 pub struct ProfilesSaved {
+    /// The id of the request this answers.
+    pub id: u64,
     pub plan: Option<Arc<SavePlan>>,
     pub outcome: ProfileSaveOutcome,
     pub kind: SaveKind,

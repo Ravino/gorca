@@ -153,7 +153,7 @@ say_all_on_load = true
 description_pause = true
 # Build a browse-mode view of web pages; false follows the focus instead, as for a code editor. (true or false)
 enabled = true
-# The mode a web page starts in: browse or focus. ("browse" or "focus")
+# Not applied yet: the mode a web page will start in, browse or focus. ("browse" or "focus")
 mode_default = "browse"
 
 [terminal]

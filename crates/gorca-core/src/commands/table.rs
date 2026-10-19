@@ -323,6 +323,7 @@ macro_rules! planned_cmds {
             | CoreCmd::QuicknavPrevDifferentStyle
             | CoreCmd::QuicknavNextReference
             | CoreCmd::QuicknavPrevReference
+            | CoreCmd::BrowseSaveModeDefault
     };
 }
 pub(crate) use planned_cmds;
@@ -3058,7 +3059,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::BrowseSaveModeDefault,
         name: "browse.save_mode_default",
-        available: Availability::Implemented,
+        available: Availability::Planned(Milestone::Later),
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
