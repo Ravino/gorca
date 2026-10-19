@@ -1286,10 +1286,99 @@ fn msg() -> Vec<Step> {
     ]
 }
 
+/// Form-label sources (`tests/web/forms/pages/labels.html`): every control is focused in
+/// document order (what Tab ends in); the words Orca speaks for its name must be spoken.
+/// `(id, nth focusable, [words])`. Orca: speech generator `_generate_accessible_label_and_name`
+/// = label-for relation, else the accessible name (which Gecko/Blink fill from aria-label,
+/// aria-labelledby, label, title, placeholder), then the description when not a duplicate.
+type LblRow = (&'static str, usize, &'static [&'static str]);
+
+const LBL: &[LblRow] = &[
+    ("LB.for", 0, &["Alpha for-label"]),
+    ("LB.wrap", 1, &["Bravo wrapping"]),
+    ("LB.arialabel", 2, &["Charlie aria-label"]),
+    ("LB.labelledby", 3, &["Delta labelledby"]),
+    ("LB.labelledby2", 4, &["Echo two ids"]),
+    ("LB.title", 5, &["Foxtrot title only"]),
+    ("LB.placeholder", 6, &["Golf placeholder only"]),
+    ("LB.legend", 7, &["India in legend", "Hotel legend"]),
+    ("LB.srlabel", 8, &["Juliet hidden label"]),
+    ("LB.react", 9, &["Kilo react label"]),
+    ("LB.all3", 10, &["Lima label"]),
+    ("LB.desc", 11, &["Mike name", "Mike description text"]),
+    ("LB.emailtitle", 12, &["November email title"]),
+    ("LB.arialabel+title", 13, &["Oscar aria"]),
+    ("LB.dnone", 14, &["Papa display none label"]),
+    ("LB.hiddenref", 15, &["Quebec hidden target"]),
+    ("LB.sibling", 16, &["Romeo unassociated sibling"]),
+    ("LB.nameattr", 17, &["sierra"]),
+    ("LB.cbfor", 18, &["Tango checkbox label"]),
+    ("LB.cbtitle", 19, &["Uniform checkbox title"]),
+    ("LB.btntitle", 20, &["Victor button title"]),
+    ("LB.searchph", 21, &["Whiskey search placeholder"]),
+    ("LB.taph", 22, &["Xray textarea placeholder"]),
+    ("LB.searchbox", 23, &["Yankee role searchbox"]),
+    ("LB.ce", 24, &["Zulu contenteditable"]),
+    ("LB.ceph", 25, &["Zero aria-placeholder"]),
+];
+
+fn lbl_steps(table: &'static [LblRow]) -> Vec<Step> {
+    let mut v = Vec::new();
+    for (id, nth, say) in table {
+        v.push(s(id, P0, "Tab onto the control: its label words are spoken", Act::FocusNth(*nth), say));
+        v.push(esc("LB.esc"));
+    }
+    v
+}
+
+fn lb() -> Vec<Step> {
+    lbl_steps(LBL)
+}
+
+/// Login shapes of real sites (`tests/web/forms/pages/login-real.html`).
+const LBR: &[LblRow] = &[
+    ("LR.google.user", 0, &["Email or phone"]),
+    ("LR.google.pass", 1, &["Enter your password"]),
+    ("LR.google.show", 2, &["Show password"]),
+    ("LR.google.next", 3, &["Next"]),
+    ("LR.github.user", 4, &["GHUser name or email address"]),
+    ("LR.github.pass", 5, &["GHPass word"]),
+    ("LR.github.submit", 6, &["Sign in"]),
+    ("LR.github.forgot", 7, &["Forgot password"]),
+    ("LR.tgk.phone", 8, &["TGK Phone Number"]),
+    ("LR.tgk.next", 9, &["NEXT"]),
+    ("LR.tga.phone", 10, &["TGA Your phone number"]),
+    ("LR.tga.pass", 11, &["TGA Password"]),
+    ("LR.mui.email", 12, &["MUI Email", "We never share it"]),
+    ("LR.bs.email", 13, &["BS Email address"]),
+    ("LR.bs.pass", 14, &["BS Password"]),
+    ("LR.search", 15, &["Search the wiki"]),
+    ("LR.search.go", 16, &["Go"]),
+];
+
+fn lr() -> Vec<Step> {
+    lbl_steps(LBR)
+}
+
+/// The same login page walked with REAL Tab key presses typed into the browser (the compositor's
+/// virtual keyboard, evdev 15): what the user does. The first field is focused by AT-SPI, every
+/// other stop is a Tab.
+fn lt() -> Vec<Step> {
+    // The first typed key only focuses the window (RIG_KEYS): a Shift press primes it.
+    let mut v = vec![pos("LT.start", Act::FocusNth(0)), pos("LT.prime", Act::AppKeys(&[42])), pos("LT.wait", Act::Wait(600))];
+    for (id, _, say) in LBR.iter().skip(1) {
+        v.push(s(id, P0, "Real Tab onto the control: its label words are spoken", Act::AppKeys(&[15]), say).win(1500));
+    }
+    v
+}
+
 /// Every scenario, in run order.
 pub fn scenarios() -> Vec<Scenario> {
     let sc = |id, area, page, title, body| Scenario { id, area, page, title, body, xfail: None };
     vec![
+        sc("M8-FLB", "form label sources: what Tab onto a control says", "../../forms/pages/labels.html", "FL Labels", Body::Steps(lb)),
+        sc("M8-FLR", "real-site login shapes: what Tab onto a control says", "../../forms/pages/login-real.html", "FL Real logins", Body::Steps(lr)),
+        sc("M8-FLT", "real-site login shapes walked with real Tab presses", "../../forms/pages/login-real.html", "FL Real logins", Body::Steps(lt)),
         sc("M8-QN", "quick navigation keys", "quicknav.html", "M8 Quick navigation", Body::Steps(qn)),
         sc("M8-TB", "tables", "tables.html", "M8 Tables", Body::Steps(tb)),
         sc("M8-FM", "forms, focus and browse mode", "forms.html", "M8 Forms", Body::Steps(fm)),

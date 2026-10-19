@@ -1,0 +1,52 @@
+1052869004683675 said "FL Real logins - Google Chrome for Testing, FL Real logins, document"
+1052869080654843 said "browse mode, main landmark, heading level 1, Real-world login shapes"
+1052870701570159 said "focus mode, Email or phone, edit"
+1052870707185965 said "blank"
+1052871073943253 said "FL Real logins - Google Chrome for Testing, Email or phone, edit"
+1052872013411176 said "Enter your password, password edit"
+1052872163435704 said "browse mode, Show password, check box, not checked"
+1052872296516161 said "Next, button"
+1052872429558059 said "focus mode, GHUser name or email address, edit"
+1052872435488517 said "blank"
+1052872572220209 said "GHPass word, password edit"
+1052872578202753 said "blank"
+1052872710286849 said "browse mode, Sign in, button"
+1052872860852421 said "Forgot password?, link"
+1052872997563212 said "panel"
+1052874502262430 said "NEXT, button"
+1052874634927778 said "focus mode, TGA Your phone number, edit"
+1052874639032648 said "focus mode, TGA Your phone number, edit, plus 1"
+1052874776209892 said "TGA Password, password edit"
+1052874914289829 said "MUI Email, edit. We never share it"
+1052875044223353 said "BS Email address, edit"
+1052875050697191 said "blank"
+bus 4 /org/a11y/atspi/accessible/22 TextChanged:insert
+bus 2 /org/a11y/atspi/accessible/21 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/67 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/21 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/199 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/199 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/199 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/200 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/200 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/201 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/27 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/208 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/208 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/211 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/211 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/212 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/213 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/216 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/216 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/219 StateChanged:focused
+bus 5 /org/a11y/atspi/accessible/22 TextSelectionChanged:
+bus 3 /org/a11y/atspi/accessible/22 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/22 StateChanged:focused
+bus 5 /org/a11y/atspi/accessible/240 TextSelectionChanged:
+bus 3 /org/a11y/atspi/accessible/240 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/240 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/222 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/222 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/226 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/226 StateChanged:focused

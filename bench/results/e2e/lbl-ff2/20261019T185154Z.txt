@@ -1,0 +1,71 @@
+# e2e-m8 lbl-ff2
+# utc=2026-10-19T18:51:54Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=26.91 18.75 15.58 9/2702 2716834
+# git_rev=a6f5387c
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=lbl-ff2
+# reader=daemon:/var/tmp/gorca-lbl-target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# quick=false
+# loadavg_before=13.44 13.55 13.66 4/3161 2684649
+# loadavg_end=26.91 18.75 15.58 11/2701 2716827
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-FLB LB.legend P0 FAIL: heard "focus mode, India in legend, edit | blank" 
+# note1=M8-FLB LB.dnone P0 FAIL: heard "focus mode, edit" 
+# note2=M8-FLB LB.sibling P0 FAIL: heard "focus mode, edit" 
+# note3=M8-FLB LB.nameattr P0 FAIL: heard "focus mode, edit" 
+# note4=M8-FLB LB.ceph P0 FAIL: heard "focus mode, edit | blank" 
+# note5=M8-FLR LR.tgk.phone P0 FAIL: heard "panel" 
+# note6=M8-FLT LR.google.pass P0 FAIL: heard "FL Real logins — Mozilla Firefox, panel" 
+# note7=M8-FLT LR.google.show P0 FAIL: heard "focus mode, Enter your password, password edit | blank" 
+# note8=M8-FLT LR.google.next P0 FAIL: heard "browse mode, Show password, check box, not checked" 
+# note9=M8-FLT LR.github.user P0 FAIL: heard "Next, button" 
+# note10=M8-FLT LR.github.pass P0 FAIL: heard "focus mode, GHUser name or email address, edit | blank" 
+# note11=M8-FLT LR.github.submit P0 FAIL: heard "GHPass word, password edit | blank" 
+# note12=M8-FLT LR.github.forgot P0 FAIL: heard "browse mode, Sign in, button" 
+# note13=M8-FLT LR.tgk.phone P0 FAIL: heard "Forgot password?, link" 
+# note14=M8-FLT LR.tgk.next P0 FAIL: heard "panel" 
+# note15=M8-FLT LR.tga.phone P0 FAIL: heard "NEXT, button" 
+# note16=M8-FLT LR.tga.pass P0 FAIL: heard "focus mode, TGA Your phone number, edit | plus 1 selected" 
+# note17=M8-FLT LR.mui.email P0 FAIL: heard "TGA Password, password edit | blank" 
+# note18=M8-FLT LR.bs.email P0 FAIL: heard "MUI Email, edit. We never share it | blank" 
+# note19=M8-FLT LR.bs.pass P0 FAIL: heard "BS Email address, edit | blank" 
+# note20=M8-FLT LR.search P0 FAIL: heard "BS Password, password edit | blank" 
+# note21=M8-FLT LR.search.go P0 FAIL: heard "Search the wiki, edit | blank" 
+# note22=M8-FLT LR.tga.pass P0 FAIL: heard "focus mode, TGA Your phone number, edit | all selected, 2 characters" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-FLB.fail                daemon/voicego            5            5            5  3 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-FLB.gap                 daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-FLB.p0_not_pass         daemon/voicego            5            5            5  3                  info   [steps]
+M8-FLB.pass                daemon/voicego           21           21           21  3                  info   [steps]
+M8-FLB.steps               daemon/voicego           26           26           26  3                  info   [steps]
+M8-FLB.xfail               daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-FLB.xpass               daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-FLR.fail                daemon/voicego            1            1            1  3 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-FLR.gap                 daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-FLR.p0_not_pass         daemon/voicego            1            1            1  3                  info   [steps]
+M8-FLR.pass                daemon/voicego           16           16           16  3                  info   [steps]
+M8-FLR.steps               daemon/voicego           17           17           17  3                  info   [steps]
+M8-FLR.xfail               daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-FLR.xpass               daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-FLT.fail                daemon/voicego           16           16           16  3 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-FLT.gap                 daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-FLT.p0_not_pass         daemon/voicego           16           16           16  3                  info   [steps]
+M8-FLT.pass                daemon/voicego            0            0            0  3                  info   [steps]
+M8-FLT.steps               daemon/voicego           16           16           16  3                  info   [steps]
+M8-FLT.xfail               daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-FLT.xpass               daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]

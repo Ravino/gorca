@@ -2088,6 +2088,163 @@ fn a_contenteditable_paragraph_takes_over_the_caret() {
     assert_eq!(g.r.text_counters().retargets, 1);
 }
 
+/// Signal-style composers rebuild the text node on every edit: Backspace arrives as one insert of
+/// the whole shorter text on a node the mirror never saw, and no delete.
+#[test]
+fn backspace_in_an_editor_that_rebuilds_its_text_node_is_spoken() {
+    let mut g = gecko_rig();
+    let (p, q) = (leaf(96), leaf(97));
+    g.rich(p, "hello, world");
+    // The caret goes to the end of the text (a move the machine reads and presents).
+    g.advance(1000);
+    let _ = g.key(BACKSPACE, 0, NONE);
+    let fx = g.insert_on(q, 0, 11, "hello, worl");
+    assert_eq!(spoken(&fx), ["d"], "the removed character: {fx:?}");
+    // The caret event of the new node is the erase's echo, not a move to speak.
+    let fx = g.caret_on(q, 11);
+    assert!(spoken(&fx).is_empty(), "no second speech: {fx:?}");
+    assert_eq!(g.r.text.caret.tracked().map(|t| t.node), Some(q));
+}
+
+#[test]
+fn the_rebuilt_node_is_diffed_even_when_the_editors_root_churned_in_between() {
+    let mut g = gecko_rig();
+    let (p, q) = (leaf(96), leaf(97));
+    g.rich(p, "hello, world");
+    g.advance(1000);
+    let _ = g.key(BACKSPACE, 0, NONE);
+    // The root's own embedded-object churn comes first and moves the tracking to the root.
+    let _ = g.delete_on(node(), 0, 1, "\u{FFFC}");
+    let _ = g.insert_on(node(), 0, 1, "\u{FFFC}");
+    let fx = g.insert_on(q, 0, 11, "hello, worl");
+    let said = spoken(&fx);
+    assert!(
+        said.iter().any(|s| s == "d"),
+        "the removed character: {fx:?}"
+    );
+    let fx = g.caret_on(q, 11);
+    assert!(spoken(&fx).is_empty(), "no second speech: {fx:?}");
+}
+
+/// A run of Backspaces (or Deletes) in a rebuilding editor: every key is spoken, whatever the
+/// event order (root churn first, or the new node first) and the pace.
+fn run_of_erases(root_churn_first: bool, delay_ms: u64, forward: bool, count: usize) {
+    let mut g = gecko_rig();
+    let text = "hello, world";
+    g.rich(leaf(96), text);
+    g.advance(1000);
+    let mut cur: Vec<char> = text.chars().collect();
+    for i in 0..count {
+        let (idx, key) = if forward {
+            (0, 0xffff) // Delete at the start
+        } else {
+            (cur.len() - 1, BACKSPACE)
+        };
+        let gone = cur.remove(idx);
+        let new: String = cur.iter().collect();
+        let q = leaf(200 + u64::try_from(i).unwrap_or(0));
+        let mut said = spoken(&g.key(key, if forward { 0x7f } else { 0 }, NONE));
+        if root_churn_first {
+            let _ = g.delete_on(node(), 0, 1, "\u{FFFC}");
+            let _ = g.insert_on(node(), 0, 1, "\u{FFFC}");
+        }
+        let len = u32::try_from(cur.len()).unwrap_or(0);
+        said.extend(spoken(&g.insert_on(q, 0, len, &new)));
+        if !root_churn_first {
+            let _ = g.delete_on(node(), 0, 1, "\u{FFFC}");
+            let _ = g.insert_on(node(), 0, 1, "\u{FFFC}");
+        }
+        let at = if forward { 0 } else { len };
+        said.extend(spoken(&g.caret_on(q, at)));
+        assert_eq!(
+            said,
+            [gone.to_string()],
+            "press {i} (churn first {root_churn_first}, delay {delay_ms}, forward {forward})"
+        );
+        g.advance(delay_ms);
+    }
+}
+
+#[test]
+fn consecutive_backspaces_in_a_rebuilding_editor_are_all_spoken() {
+    for churn in [true, false] {
+        for delay in [0, 30, 400] {
+            for n in [2, 3, 5] {
+                run_of_erases(churn, delay, false, n);
+            }
+        }
+    }
+}
+
+#[test]
+fn consecutive_deletes_in_a_rebuilding_editor_are_all_spoken() {
+    for churn in [true, false] {
+        for delay in [0, 30, 400] {
+            run_of_erases(churn, delay, true, 4);
+        }
+    }
+}
+
+/// Typing in a rebuilding editor: the typed key speaks the character, the new node (the old text
+/// plus the char) and its caret event say nothing more: not the growing word, not the line.
+#[test]
+fn typing_in_an_editor_that_rebuilds_its_text_node_is_spoken_once_per_key() {
+    for churn_first in [true, false] {
+        for words in [false, true] {
+            typing_in_a_rebuilding_editor(churn_first, words);
+        }
+    }
+}
+
+fn typing_in_a_rebuilding_editor(churn_first: bool, words: bool) {
+    {
+        let mut g = gecko_rig();
+        if words {
+            g.r.cmd.overlay.typed_words = Some(true);
+            g.r.cmd.republish();
+        }
+        g.rich(leaf(96), "he");
+        g.advance(1000);
+        let mut text = String::from("he");
+        for (i, c) in "llo wor".chars().enumerate() {
+            text.push(c);
+            let q = leaf(300 + u64::try_from(i).unwrap_or(0));
+            let len = u32::try_from(text.chars().count()).unwrap_or(0);
+            let mut said = spoken(&g.typed(c));
+            if churn_first {
+                let _ = g.delete_on(node(), 0, 1, "\u{FFFC}");
+                let _ = g.insert_on(node(), 0, 1, "\u{FFFC}");
+            }
+            said.extend(spoken(&g.insert_on(q, 0, len, &text)));
+            if !churn_first {
+                let _ = g.delete_on(node(), 0, 1, "\u{FFFC}");
+                let _ = g.insert_on(node(), 0, 1, "\u{FFFC}");
+            }
+            said.extend(spoken(&g.caret_on(q, len)));
+            g.advance(60);
+            let want = if c == ' ' && words {
+                vec![String::from("space"), String::from("hello")]
+            } else if c == ' ' {
+                vec![String::from("space")]
+            } else {
+                vec![c.to_string()]
+            };
+            assert_eq!(said, want, "key {c:?} (churn first {churn_first})");
+        }
+    }
+}
+
+#[test]
+fn a_whole_text_insert_that_is_not_a_removal_of_the_last_text_is_not_ours() {
+    let mut g = gecko_rig();
+    let (p, clock) = (leaf(96), leaf(98));
+    g.rich(p, "hello, world");
+    g.advance(1000);
+    let fx = g.insert_on(clock, 0, 5, "12:01");
+    assert!(spoken(&fx).is_empty(), "{fx:?}");
+    assert_eq!(g.r.text.caret.tracked().map(|t| t.node), Some(p));
+}
+
 #[test]
 fn a_caret_into_the_next_paragraph_is_spoken_as_the_key_moved_it() {
     let mut g = gecko_rig();

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>FL Labels</title>
+<style>.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}</style></head>
+<body>
+<h1>Form label sources</h1>
+<!-- Every control below is in Tab order. The first word of each label is unique (the e2e matches the words). -->
+<form onsubmit="return false" aria-label="Label sources">
+ <p><label for="s1">Alpha for-label</label> <input id="s1" type="text"></p>
+ <p><label>Bravo wrapping <input id="s2" type="text"></label></p>
+ <p><input id="s3" type="text" aria-label="Charlie aria-label"></p>
+ <p><span id="s4l">Delta labelledby</span> <input id="s4" type="text" aria-labelledby="s4l"></p>
+ <p><span id="s5a">Echo</span> <span id="s5b">two ids</span> <input id="s5" type="text" aria-labelledby="s5a s5b"></p>
+ <p><input id="s6" type="text" title="Foxtrot title only"></p>
+ <p><input id="s7" type="text" placeholder="Golf placeholder only"></p>
+ <fieldset><legend>Hotel legend</legend>
+   <p><input id="s8" type="text" aria-label="India in legend"></p>
+ </fieldset>
+ <p><label for="s9" class="sr-only">Juliet hidden label</label><input id="s9" type="text"></p>
+ <div class="field"><div id="s10l" class="lbl">Kilo react label</div><input id="s10" type="password" aria-labelledby="s10l"></div>
+ <p><label for="s11">Lima label</label> <input id="s11" type="text" placeholder="Lima placeholder" title="Lima title"></p>
+ <p><input id="s12" type="text" aria-label="Mike name" aria-describedby="s12d"> <span id="s12d">Mike description text</span></p>
+ <p><input id="s13" type="email" title="November email title" placeholder="name@example.com"></p>
+ <p><input id="s14" type="text" aria-label="Oscar aria" title="Oscar title"></p>
+ <p><label for="s15" style="display:none">Papa display none label</label> <input id="s15" type="text"></p>
+ <p><span id="s16l" hidden>Quebec hidden target</span><input id="s16" type="text" aria-labelledby="s16l"></p>
+ <div><div class="lbl2">Romeo unassociated sibling</div><input id="s17" type="text" name="romeo"></div>
+ <p><input id="s18" type="text" name="sierra_field_name" autocomplete="email"></p>
+ <p><label for="s19">Tango checkbox label</label> <input id="s19" type="checkbox"></p>
+ <p><input id="s20" type="checkbox" title="Uniform checkbox title"></p>
+ <p><button id="s21" type="button" title="Victor button title"><svg width="10" height="10"><rect width="10" height="10"/></svg></button></p>
+ <p><input id="s22" type="search" placeholder="Whiskey search placeholder"></p>
+ <p><textarea id="s23" placeholder="Xray textarea placeholder"></textarea></p>
+ <p><input id="s24" type="text" role="searchbox" aria-label="Yankee role searchbox"></p>
+ <div role="textbox" contenteditable="true" id="s25" aria-label="Zulu contenteditable"></div>
+ <div role="textbox" contenteditable="true" id="s26" aria-placeholder="Zero aria-placeholder"></div>
+</form>
+</body>
+</html>
