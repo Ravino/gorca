@@ -71,7 +71,8 @@ pub enum PeerProof {
     Extension(Arc<str>),
 }
 
-/// The identity quarantine, pause and revocation are keyed by for the whole session (M-7), so
+/// The identity of a source. Session memory (quarantine, pause, revocation) is keyed on the
+/// verified `peer`, never on the self-declared `name`, for the whole session (M-7), so
 /// reconnecting never escapes them.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct StableIdentity {

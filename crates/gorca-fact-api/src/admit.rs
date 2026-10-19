@@ -20,6 +20,16 @@ pub const MAX_PAGE_STRING: usize = 1024;
 pub struct Scope {
     pub app: AppId,
     pub doc: Option<u64>,
+    /// The site (document host hash) of a web document. The source-wide quarantine counts
+    /// distinct sites, not tabs or reloads (review B-1).
+    pub site: Option<u64>,
+}
+
+impl Scope {
+    /// What the source-wide quarantine counts: the site within an app, not the document.
+    pub const fn site_key(&self) -> (AppId, Option<u64>) {
+        (self.app, self.site)
+    }
 }
 
 /// Privacy class of a subject (ADR-0002 X-1..X-11, FS-8).
@@ -51,8 +61,10 @@ impl BindInfo {
 pub trait ScopeLookup {
     /// The scope a node of this app lives in, `None` when the node is not (yet) known.
     fn node_scope(&self, node: NodeKey) -> Option<Scope>;
-    /// How well the subject is bound right now, and the current generation.
-    fn bind(&self, subject: &Subject) -> BindInfo;
+    /// How well the subject is bound right now, and the current generation. `pinned` is the
+    /// transport-pinned scope: an implementation must resolve anchors only inside it, so a
+    /// per-app id index can never bind across tabs (review B-5).
+    fn bind(&self, subject: &Subject, pinned: Scope) -> BindInfo;
     fn privacy(&self, subject: &Subject) -> PrivacyClass;
     /// True when a register for (this source, subject, group) already exists.
     fn has_register(&self, subject: &Subject, group: GroupCode) -> bool;
@@ -94,6 +106,9 @@ pub enum Severity {
 pub enum RejectReason {
     /// FS-11 / F19: the target is outside the transport-pinned scope.
     ScopeMismatch,
+    /// Same app, but the node now lives in another document (a navigation race): rejected and
+    /// counted, never stored, but not the source's fault.
+    DocChanged,
     /// The class may not write this kind of group (for example Annotation facts are never fused).
     ClassNotAllowed,
     /// The group code is not registered.
@@ -120,10 +135,13 @@ impl RejectReason {
             | RejectReason::GroupNotGranted
             | RejectReason::AnchorKindUndeclared
             | RejectReason::Malformed
-            | RejectReason::MissingTtl
-            | RejectReason::PrivacyExcluded => Severity::Violation,
+            | RejectReason::MissingTtl => Severity::Violation,
             RejectReason::RegisterCap => Severity::Overload,
-            RejectReason::ParkFull => Severity::Benign,
+            // Page-caused or timing races: a page can flip `type=password` between the
+            // add-on's send and admission, so these never strike (review B-1).
+            RejectReason::ParkFull | RejectReason::PrivacyExcluded | RejectReason::DocChanged => {
+                Severity::Benign
+            }
         }
     }
 }
@@ -280,15 +298,23 @@ fn truncate(f: &mut Fact) -> u32 {
 ///
 /// The declared anchor kinds are `g.anchors` (computed from the descriptor).
 pub fn admit(f: &Fact, g: &SourceGrant, scope: &ScopeView<'_>) -> Admission {
-    // 1. Scope (FS-11, F19). A subject's scope is never taken from the fact.
+    // 1. Scope (FS-11, F19). A subject's scope is never taken from the fact. A node whose
+    // scope is not known yet fails closed: it is parked, never admitted (re-run on retry).
+    let mut scope_unknown = false;
     if let Subject::Node(n) = &f.subject {
         if n.app != scope.pinned.app {
             return reject(RejectReason::ScopeMismatch);
         }
-        if let Some(s) = scope.lookup.node_scope(*n)
-            && s != scope.pinned
-        {
-            return reject(RejectReason::ScopeMismatch);
+        match scope.lookup.node_scope(*n) {
+            Some(s) if s != scope.pinned => {
+                return reject(if s.app == scope.pinned.app {
+                    RejectReason::DocChanged
+                } else {
+                    RejectReason::ScopeMismatch
+                });
+            }
+            Some(_) => {}
+            None => scope_unknown = true,
         }
     }
     // 2. Class allows this kind of group.
@@ -333,14 +359,14 @@ pub fn admit(f: &Fact, g: &SourceGrant, scope: &ScopeView<'_>) -> Admission {
     let Some(bind_class) = GroupBindClass::of(f.group) else {
         return reject(RejectReason::UnregisteredGroup);
     };
-    let mut bind = scope.lookup.bind(&fact.subject);
+    let mut bind = scope.lookup.bind(&fact.subject, scope.pinned);
     if let Subject::Anchor(AnchorKey::DomId { dom_count, .. }) = &fact.subject
         && *dom_count != 1
     {
         // An ambiguous id never binds `Unique` (F15), whatever the writer's index says.
         bind.quality = worse_bind(bind.quality, BindQuality::Heuristic);
     }
-    if let BindQuality::Unbound = bind.quality {
+    if scope_unknown || matches!(bind.quality, BindQuality::Unbound) {
         return if scope.parked >= g.max_parked {
             reject(RejectReason::ParkFull)
         } else {
@@ -399,6 +425,67 @@ mod tests {
         assert_eq!(c.len(), MAX_PAGE_STRING - 1);
     }
 
+    struct Spy {
+        seen: std::cell::Cell<Option<Scope>>,
+    }
+
+    impl ScopeLookup for Spy {
+        fn node_scope(&self, _: NodeKey) -> Option<Scope> {
+            None
+        }
+        fn bind(&self, _: &Subject, pinned: Scope) -> BindInfo {
+            self.seen.set(Some(pinned));
+            BindInfo::UNBOUND
+        }
+        fn privacy(&self, _: &Subject) -> PrivacyClass {
+            PrivacyClass::Normal
+        }
+        fn has_register(&self, _: &Subject, _: GroupCode) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn bind_receives_the_pinned_scope() {
+        use gorca_model::fact::{Basis, SrcSeq};
+        use gorca_model::ids::{ConnectorId, LocalId};
+        use gorca_model::sem::{Group, TrustTier};
+        let pinned = Scope {
+            app: AppId {
+                connector: ConnectorId(1),
+                serial: 1,
+            },
+            doc: Some(7),
+            site: Some(1),
+        };
+        let spy = Spy {
+            seen: std::cell::Cell::new(None),
+        };
+        let view = ScopeView {
+            pinned,
+            lookup: &spy,
+            registers: 0,
+            parked: 0,
+        };
+        let mut g = SourceGrant::new(SourceClass::Secondary, TrustTier::T3Untrusted);
+        g.semantic_groups = gorca_model::sem::GroupMask::EMPTY.with(Group::Name);
+        let f = Fact {
+            subject: Subject::Node(NodeKey {
+                app: pinned.app,
+                local: LocalId(1),
+            }),
+            group: Group::Name.group_code(),
+            value: FactValue::Value(PropValue::Name(Arc::from("x"))),
+            seq: SrcSeq(1),
+            conf: gorca_model::fact::Confidence::from_p_milli(990),
+            basis: Basis::None,
+            ttl_ms: None,
+        };
+        // Unknown node scope fails closed: parked, never admitted, and bind saw the pinned scope.
+        assert!(matches!(admit(&f, &g, &view), Admission::Park));
+        assert_eq!(spy.seen.get(), Some(pinned));
+    }
+
     #[test]
     fn reject_severity_table_is_total() {
         for r in [
@@ -409,9 +496,11 @@ mod tests {
             RejectReason::AnchorKindUndeclared,
             RejectReason::Malformed,
             RejectReason::MissingTtl,
-            RejectReason::PrivacyExcluded,
         ] {
             assert_eq!(r.severity(), Severity::Violation);
+        }
+        for r in [RejectReason::PrivacyExcluded, RejectReason::DocChanged] {
+            assert_eq!(r.severity(), Severity::Benign, "{r:?}");
         }
         assert_eq!(RejectReason::RegisterCap.severity(), Severity::Overload);
         assert_eq!(RejectReason::ParkFull.severity(), Severity::Benign);

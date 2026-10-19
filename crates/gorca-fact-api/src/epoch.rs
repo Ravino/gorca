@@ -89,6 +89,7 @@ mod tests {
                 serial: n,
             },
             doc: None,
+            site: None,
         };
         let mut b = EpochBook::new();
         let m1 = b.bump(src, sc(1), MaskKind::Mask);

@@ -102,7 +102,8 @@ impl Counters {
 pub struct RefWriter {
     pub pinned: Scope,
     nodes: Vec<(NodeKey, Scope)>,
-    binds: Vec<(Subject, BindInfo)>,
+    unknown: Vec<NodeKey>,
+    binds: Vec<(Subject, Scope, BindInfo)>,
     privacy: Vec<(Subject, PrivacyClass)>,
     regs: Vec<Reg>,
     parked: Vec<(SourceId, Fact)>,
@@ -117,15 +118,22 @@ struct SourceLookup<'a> {
 
 impl ScopeLookup for SourceLookup<'_> {
     fn node_scope(&self, node: NodeKey) -> Option<Scope> {
-        self.w
-            .nodes
-            .iter()
-            .find(|(n, _)| *n == node)
-            .map(|(_, s)| *s)
+        if self.w.unknown.contains(&node) {
+            return None;
+        }
+        match self.w.nodes.iter().find(|(n, _)| *n == node) {
+            Some((_, s)) => Some(*s),
+            None => Some(self.w.pinned),
+        }
     }
 
-    fn bind(&self, subject: &Subject) -> BindInfo {
-        if let Some((_, b)) = self.w.binds.iter().find(|(s, _)| s == subject) {
+    fn bind(&self, subject: &Subject, pinned: Scope) -> BindInfo {
+        if let Some((_, _, b)) = self
+            .w
+            .binds
+            .iter()
+            .find(|(s, sc, _)| s == subject && *sc == pinned)
+        {
             return *b;
         }
         match subject {
@@ -158,6 +166,7 @@ impl RefWriter {
         RefWriter {
             pinned,
             nodes: Vec::new(),
+            unknown: Vec::new(),
             binds: Vec::new(),
             privacy: Vec::new(),
             regs: Vec::new(),
@@ -171,10 +180,33 @@ impl RefWriter {
         self.nodes.push((node, scope));
     }
 
+    /// The writer learned the node's scope.
+    pub fn learn_node(&mut self, node: NodeKey) {
+        self.unknown.retain(|n| *n != node);
+    }
+
+    /// Mark a node whose scope the writer does not know yet.
+    pub fn forget_node(&mut self, node: NodeKey) {
+        self.unknown.push(node);
+    }
+
     pub fn bind(&mut self, subject: Subject, quality: BindQuality, generation: BindGen) {
-        self.binds.retain(|(s, _)| s != &subject);
+        self.bind_in(self.pinned, subject, quality, generation);
+    }
+
+    /// Bind an anchor inside `scope` only; a lookup for another pinned scope never sees it.
+    pub fn bind_in(
+        &mut self,
+        scope: Scope,
+        subject: Subject,
+        quality: BindQuality,
+        generation: BindGen,
+    ) {
+        self.binds
+            .retain(|(s, sc, _)| s != &subject || *sc != scope);
         self.binds.push((
             subject,
+            scope,
             BindInfo {
                 quality,
                 generation,
@@ -302,6 +334,7 @@ pub fn kit_scope(n: u32) -> Scope {
             serial: n,
         },
         doc: None,
+        site: None,
     }
 }
 
@@ -534,6 +567,44 @@ pub fn admission_matrix() -> Report {
         offer_once(&mut w2, src, &capped, &f1) == Offer::Retracted,
     );
     r.check("cap: retract freed the register", w2.registers().is_empty());
+    // Unknown node scope fails closed (parks), then admits once known.
+    let mut w5 = RefWriter::new(kit_scope(1));
+    if let Subject::Node(n) = node(1) {
+        w5.forget_node(n);
+    }
+    r.check(
+        "node with unknown scope is parked, not admitted",
+        offer_once(&mut w5, src, &sec, &base) == Offer::Parked && w5.registers().is_empty(),
+    );
+    let mut full_unknown = sec.clone();
+    full_unknown.max_parked = 0;
+    r.check(
+        "node with unknown scope and full park lot is rejected",
+        offer_once(&mut w5, src, &full_unknown, &base) == Offer::Rejected(R::ParkFull),
+    );
+    if let Subject::Node(n) = node(1) {
+        w5.learn_node(n);
+    }
+    r.check(
+        "parked fact is admitted on retry once the scope is known",
+        offer_once(&mut w5, src, &sec, &base) == Offer::Stored,
+    );
+    // An anchor bound only in another tab's scope never binds here (review B-5).
+    let mut w6 = RefWriter::new(kit_scope(1));
+    let other_tab = Scope {
+        doc: Some(2),
+        ..kit_scope(1)
+    };
+    w6.bind_in(
+        other_tab,
+        anchored.subject.clone(),
+        BindQuality::Unique,
+        BindGen(1),
+    );
+    r.check(
+        "anchor bound in another tab does not bind in this one",
+        offer_once(&mut w6, src, &sec, &anchored) == Offer::Parked,
+    );
     // Privacy.
     let mut w3 = RefWriter::new(kit_scope(1));
     w3.set_privacy(node(1), PrivacyClass::Secret);
@@ -717,6 +788,7 @@ pub fn f19_scope_pinning(seed: u64) -> Report {
     let other_doc = Scope {
         app: kit_scope(1).app,
         doc: Some(9),
+        site: None,
     };
     w.add_node(
         NodeKey {
@@ -761,7 +833,7 @@ pub fn f19_scope_pinning(seed: u64) -> Report {
                     stored_out += 1;
                 }
             }
-            Offer::Rejected(RejectReason::ScopeMismatch) => {
+            Offer::Rejected(RejectReason::ScopeMismatch | RejectReason::DocChanged) => {
                 r.check("scope mismatch only for out-of-scope targets", !in_scope);
             }
             Offer::Retracted | Offer::Parked | Offer::Throttled | Offer::Rejected(_) => {
@@ -1018,6 +1090,70 @@ pub fn identity_memory() -> Report {
     r
 }
 
+/// Memory is keyed on the verified peer, not the self-declared name: renaming cannot escape it.
+pub fn identity_keyed_on_peer() -> Report {
+    use SourceEvent as E;
+    let mut r = Report::default();
+    let a = FakeFactSource::new("alpha", SourceClass::Secondary).on_peer("alpha");
+    let b = FakeFactSource::new("beta", SourceClass::Secondary).on_peer("alpha");
+    let sc = kit_scope(1);
+    let mut bk = SourceBook::new();
+    bk.apply(a.identity(), sc, E::Hello { remembered: None }, 0);
+    for t in 1..=3 {
+        bk.apply(a.identity(), sc, E::Violation { at_ms: t }, t);
+    }
+    bk.apply(b.identity(), sc, E::Hello { remembered: None }, 10);
+    r.check(
+        "renamed source of a quarantined peer starts Quarantined",
+        bk.state(b.identity(), sc) == SourceState::Quarantined,
+    );
+    // Source-wide quarantine reaches every name of the peer.
+    let mut bk = SourceBook::new();
+    for n in 1..=3 {
+        bk.apply(a.identity(), kit_scope(n), E::Hello { remembered: None }, 0);
+        for t in 0..3 {
+            bk.apply(a.identity(), kit_scope(n), E::Violation { at_ms: t }, 100);
+        }
+    }
+    bk.apply(
+        b.identity(),
+        kit_scope(7),
+        E::Hello { remembered: None },
+        200,
+    );
+    r.check(
+        "source-wide quarantine applies to a renamed source of the peer",
+        bk.state(b.identity(), kit_scope(7)) == SourceState::Quarantined,
+    );
+    // Revocation too.
+    let mut bk = SourceBook::new();
+    bk.apply(a.identity(), sc, E::Hello { remembered: None }, 0);
+    bk.apply(a.identity(), sc, E::UserRevoke, 1);
+    bk.apply(b.identity(), sc, E::Hello { remembered: None }, 2);
+    r.check(
+        "revocation covers the peer",
+        bk.state(b.identity(), sc) == SourceState::Revoked,
+    );
+    r
+}
+
+/// A page can flip a field to `type=password` between the add-on's send and admission: such
+/// rejections and navigation races must not strike the source (review B-1).
+pub fn page_caused_rejections_do_not_strike() -> Report {
+    let mut r = Report::default();
+    for reason in [RejectReason::PrivacyExcluded, RejectReason::DocChanged] {
+        r.check(
+            &format!("{reason:?} is not a strike"),
+            reason.severity() != gorca_fact_api::Severity::Violation,
+        );
+    }
+    r.check(
+        "an out-of-app fact still strikes",
+        RejectReason::ScopeMismatch.severity() == gorca_fact_api::Severity::Violation,
+    );
+    r
+}
+
 /// Run every pure check against one scripted source: its sequence numbers, and its script
 /// through the reference writer under `grant` (rejections must match what the source marked).
 pub fn check_source(src: &FakeFactSource, grant: &SourceGrant) -> Report {
@@ -1068,6 +1204,8 @@ pub fn run_all(seed: u64) -> Report {
     r.merge(f16_flood_isolation(seed));
     r.merge(state_machine_exhaustive());
     r.merge(identity_memory());
+    r.merge(identity_keyed_on_peer());
+    r.merge(page_caused_rejections_do_not_strike());
     r
 }
 
@@ -1128,6 +1266,16 @@ mod tests {
     #[test]
     fn state_machine() {
         assert_ok(&state_machine_exhaustive());
+    }
+
+    #[test]
+    fn page_caused() {
+        assert_ok(&page_caused_rejections_do_not_strike());
+    }
+
+    #[test]
+    fn identity_by_peer() {
+        assert_ok(&identity_keyed_on_peer());
     }
 
     #[test]

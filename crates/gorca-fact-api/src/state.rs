@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use crate::admit::Scope;
-use crate::descriptor::StableIdentity;
+use crate::descriptor::{PeerProof, StableIdentity};
 
 /// Window of the strike counter: 3 strikes within this many milliseconds quarantine a scope.
 pub const STRIKE_WINDOW_MS: u64 = 60_000;
@@ -15,6 +15,9 @@ pub const STRIKE_LIMIT: usize = 3;
 /// Quarantined scopes within `WIDE_WINDOW_MS` that quarantine the whole source.
 pub const WIDE_LIMIT: usize = 3;
 pub const WIDE_WINDOW_MS: u64 = 600_000;
+/// Bound on the quarantine log per peer and on tracked per-scope memory (review B-4).
+pub const MAX_QUARANTINE_LOG: usize = 64;
+pub const MAX_TRACKED_SCOPES: usize = 4096;
 
 /// Timestamps (ms) of the strikes inside the window, oldest first.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -377,9 +380,11 @@ pub struct ScopedEffect {
 #[derive(Debug, Default)]
 pub struct SourceBook {
     states: HashMap<(StableIdentity, Scope), SourceState>,
-    scope_memory: HashMap<(StableIdentity, Scope), Remembered>,
-    wide_memory: HashMap<StableIdentity, Remembered>,
-    quarantines: HashMap<StableIdentity, Vec<(Scope, u64)>>,
+    // Memory is keyed on the verified peer, never on the self-declared name: a source cannot
+    // escape quarantine or revocation by renaming itself.
+    scope_memory: HashMap<(PeerProof, Scope), Remembered>,
+    wide_memory: HashMap<PeerProof, Remembered>,
+    quarantines: HashMap<PeerProof, Vec<(Scope, u64)>>,
 }
 
 impl SourceBook {
@@ -396,8 +401,8 @@ impl SourceBook {
     }
 
     pub fn remembered(&self, id: &StableIdentity, scope: Scope) -> Option<Remembered> {
-        let a = self.scope_memory.get(&(id.clone(), scope)).copied();
-        let b = self.wide_memory.get(id).copied();
+        let a = self.scope_memory.get(&(id.peer.clone(), scope)).copied();
+        let b = self.wide_memory.get(&id.peer).copied();
         match (a, b) {
             (Some(a), Some(b)) => Some(a.stronger(b)),
             (Some(x), None) | (None, Some(x)) => Some(x),
@@ -433,10 +438,11 @@ impl SourceBook {
         let cur = self.state(id, scope);
         let (next, effects) = step(cur, event);
         self.states.insert((id.clone(), scope), next);
+        self.evict(id, scope, next);
         for eff in effects {
             match eff {
                 SourceEffect::Remember(r) => {
-                    let key = (id.clone(), scope);
+                    let key = (id.peer.clone(), scope);
                     let new = self.scope_memory.get(&key).map_or(r, |old| old.stronger(r));
                     self.scope_memory.insert(key, new);
                     if let Remembered::Quarantined = r {
@@ -444,7 +450,11 @@ impl SourceBook {
                     }
                 }
                 SourceEffect::Forget => {
-                    self.scope_memory.remove(&(id.clone(), scope));
+                    self.scope_memory.remove(&(id.peer.clone(), scope));
+                    // A user resume also clears the source-wide memory, or the next reconnect
+                    // would re-quarantine the source the user just resumed (review B-3).
+                    self.wide_memory.remove(&id.peer);
+                    self.quarantines.remove(&id.peer);
                 }
                 SourceEffect::Mask
                 | SourceEffect::Unmask
@@ -457,17 +467,18 @@ impl SourceBook {
             out.push(ScopedEffect { scope, effect: eff });
         }
         if wide {
-            self.wide_memory.insert(id.clone(), Remembered::Quarantined);
-            let others: Vec<Scope> = self
+            self.wide_memory
+                .insert(id.peer.clone(), Remembered::Quarantined);
+            let others: Vec<(StableIdentity, Scope)> = self
                 .states
                 .keys()
-                .filter(|(i, s)| i == id && *s != scope)
-                .map(|(_, s)| *s)
+                .filter(|(i, s)| i.peer == id.peer && !(i == id && *s == scope))
+                .cloned()
                 .collect();
-            for s in others {
-                let cur = self.state(id, s);
+            for (oid, s) in others {
+                let cur = self.state(&oid, s);
                 let (next, effects) = step(cur, SourceEvent::WideQuarantine);
-                self.states.insert((id.clone(), s), next);
+                self.states.insert((oid, s), next);
                 out.extend(
                     effects
                         .into_iter()
@@ -478,11 +489,47 @@ impl SourceBook {
         out
     }
 
+    /// Drop tracking that can no longer matter (review B-4): a purged `Detached` source with no
+    /// memory, and, over the cap, memory for scopes nobody tracks any more.
+    fn evict(&mut self, id: &StableIdentity, scope: Scope, next: SourceState) {
+        if let SourceState::Detached { purged: true } = next
+            && !self.scope_memory.contains_key(&(id.peer.clone(), scope))
+        {
+            self.states.remove(&(id.clone(), scope));
+        }
+        if self.scope_memory.len() > MAX_TRACKED_SCOPES {
+            let live: std::collections::HashSet<(PeerProof, Scope)> = self
+                .states
+                .keys()
+                .map(|(i, s)| (i.peer.clone(), *s))
+                .collect();
+            self.scope_memory.retain(|k, _| live.contains(k));
+        }
+    }
+
+    /// A document or tab went away: forget its machines and memory so the maps do not grow
+    /// with every navigation. Source-wide memory is untouched.
+    pub fn forget_scope(&mut self, scope: Scope) {
+        self.states.retain(|(_, s), _| *s != scope);
+        self.scope_memory.retain(|(_, s), _| *s != scope);
+    }
+
+    /// Number of tracked (identity, scope) machines and remembered scopes.
+    pub fn tracked(&self) -> (usize, usize) {
+        (self.states.len(), self.scope_memory.len())
+    }
+
     /// Record a scope quarantine; true when the source-wide limit is reached.
     fn note_quarantine(&mut self, id: &StableIdentity, scope: Scope, now_ms: u64) -> bool {
-        let log = self.quarantines.entry(id.clone()).or_default();
-        log.retain(|(s, t)| *s != scope && now_ms.saturating_sub(*t) <= WIDE_WINDOW_MS);
+        let log = self.quarantines.entry(id.peer.clone()).or_default();
+        // Count distinct sites (document hosts), not tabs: a hostile site reloading itself
+        // is one site (review B-1).
+        let key = scope.site_key();
+        log.retain(|(s, t)| s.site_key() != key && now_ms.saturating_sub(*t) <= WIDE_WINDOW_MS);
         log.push((scope, now_ms));
+        if log.len() > MAX_QUARANTINE_LOG {
+            log.remove(0);
+        }
         log.len() >= WIDE_LIMIT
     }
 }
@@ -507,6 +554,7 @@ mod tests {
                 serial: n,
             },
             doc: None,
+            site: Some(u64::from(n)),
         }
     }
 
@@ -591,5 +639,129 @@ mod tests {
         assert_eq!(e, vec![SourceEffect::PurgeRegisters]);
         let (s3, _) = step(s, SourceEvent::Hello { remembered: None });
         assert!(s3.facts_win());
+    }
+
+    fn doc(d: u64, site: u64) -> Scope {
+        Scope {
+            app: AppId {
+                connector: ConnectorId(1),
+                serial: 1,
+            },
+            doc: Some(d),
+            site: Some(site),
+        }
+    }
+
+    fn named(name: &str) -> StableIdentity {
+        StableIdentity {
+            name: name.into(),
+            peer: PeerProof::Extension("gorca@ext".into()),
+        }
+    }
+
+    fn quarantine(b: &mut SourceBook, i: &StableIdentity, s: Scope, t: u64) {
+        b.apply(i, s, SourceEvent::Hello { remembered: None }, t);
+        for k in 0..3 {
+            b.apply(i, s, SourceEvent::Violation { at_ms: t + k }, t + k);
+        }
+    }
+
+    #[test]
+    fn one_site_reloading_never_quarantines_other_tabs() {
+        let mut b = SourceBook::new();
+        let i = named("bus");
+        b.apply(&i, doc(100, 99), SourceEvent::Hello { remembered: None }, 0);
+        for (n, d) in [1u64, 2, 3, 4, 5].iter().enumerate() {
+            quarantine(&mut b, &i, doc(*d, 7), 1000 * n as u64);
+        }
+        assert!(b.state(&i, doc(100, 99)).facts_win());
+        // A fresh tab on an innocent site is still welcome.
+        b.apply(
+            &i,
+            doc(101, 98),
+            SourceEvent::Hello { remembered: None },
+            9000,
+        );
+        assert!(b.state(&i, doc(101, 98)).facts_win());
+    }
+
+    #[test]
+    fn three_distinct_sites_still_quarantine_the_source() {
+        let mut b = SourceBook::new();
+        let i = named("bus");
+        b.apply(&i, doc(100, 99), SourceEvent::Hello { remembered: None }, 0);
+        for d in 1..=3u64 {
+            quarantine(&mut b, &i, doc(d, d), d * 10);
+        }
+        assert_eq!(b.state(&i, doc(100, 99)), SourceState::Quarantined);
+    }
+
+    #[test]
+    fn renaming_does_not_escape_quarantine() {
+        let mut b = SourceBook::new();
+        quarantine(&mut b, &named("bus"), doc(1, 1), 0);
+        b.apply(
+            &named("bus2"),
+            doc(1, 1),
+            SourceEvent::Hello { remembered: None },
+            10,
+        );
+        assert_eq!(b.state(&named("bus2"), doc(1, 1)), SourceState::Quarantined);
+    }
+
+    #[test]
+    fn a_stronger_memory_of_any_name_wins() {
+        let mut b = SourceBook::new();
+        let (a, c) = (named("a"), named("c"));
+        b.apply(&a, doc(1, 1), SourceEvent::Hello { remembered: None }, 0);
+        b.apply(&a, doc(1, 1), SourceEvent::PrivacyPause, 1);
+        quarantine(&mut b, &c, doc(1, 1), 2);
+        b.apply(&c, doc(1, 1), SourceEvent::UserRevoke, 5);
+        assert_eq!(
+            b.remembered(&named("zzz"), doc(1, 1)),
+            Some(Remembered::Revoked)
+        );
+    }
+
+    #[test]
+    fn user_resume_clears_the_source_wide_memory() {
+        let mut b = SourceBook::new();
+        let i = named("bus");
+        for d in 1..=3u64 {
+            quarantine(&mut b, &i, doc(d, d), d * 10);
+        }
+        b.apply(&i, doc(1, 1), SourceEvent::Resume { by_user: true }, 100);
+        b.apply(&i, doc(1, 1), SourceEvent::TransportClosed, 110);
+        b.apply(&i, doc(1, 1), SourceEvent::Hello { remembered: None }, 120);
+        assert!(b.state(&i, doc(1, 1)).facts_win());
+        assert!(b.remembered(&i, doc(50, 50)).is_none());
+    }
+
+    #[test]
+    fn tracking_is_bounded_across_navigations() {
+        let mut b = SourceBook::new();
+        let i = named("bus");
+        for d in 0..2000u64 {
+            let s = doc(d, d);
+            b.apply(&i, s, SourceEvent::Hello { remembered: None }, d);
+            b.apply(&i, s, SourceEvent::TransportClosed, d);
+            b.apply(&i, s, SourceEvent::DetachExpired, d);
+        }
+        assert_eq!(b.tracked().0, 0, "purged detached machines are evicted");
+        for d in 0..50u64 {
+            let s = doc(d, d);
+            b.apply(&i, s, SourceEvent::Hello { remembered: None }, d);
+            b.apply(&i, s, SourceEvent::PrivacyPause, d);
+            b.forget_scope(s);
+        }
+        assert_eq!(b.tracked(), (0, 0));
+        for k in 0..300 {
+            quarantine(&mut b, &i, doc(10_000 + k, 10_000 + k), 1_000_000 * k);
+        }
+        assert!(
+            b.quarantines
+                .values()
+                .all(|v| v.len() <= MAX_QUARANTINE_LOG)
+        );
     }
 }

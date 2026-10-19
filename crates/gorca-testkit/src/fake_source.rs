@@ -123,8 +123,8 @@ impl FakeFactSource {
                 wants: InputNeeds::NONE,
             },
             identity: StableIdentity {
+                peer: PeerProof::Extension(name.clone()),
                 name,
-                peer: PeerProof::Extension(Arc::from("fake-ext")),
             },
             id: SourceId {
                 slot: 1,
@@ -138,6 +138,13 @@ impl FakeFactSource {
     #[must_use]
     pub fn with_anchors(mut self, kinds: AnchorKinds) -> FakeFactSource {
         self.descriptor.anchors = kinds;
+        self
+    }
+
+    /// Host this source on a given verified peer (several named sources can share one peer).
+    #[must_use]
+    pub fn on_peer(mut self, peer: &str) -> FakeFactSource {
+        self.identity.peer = PeerProof::Extension(Arc::from(peer));
         self
     }
 
