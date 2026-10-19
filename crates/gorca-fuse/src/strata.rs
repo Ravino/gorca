@@ -126,6 +126,7 @@ impl S0Node {
     }
 
     /// A copy with only the groups in `mask`, sized exactly (no allocation when none remain).
+    #[must_use]
     pub fn filtered(&self, mask: GroupMask) -> S0Node {
         let n = self.slots.iter().filter(|(g, _)| mask.has(*g)).count();
         let mut slots = Vec::with_capacity(n);
@@ -802,7 +803,6 @@ pub fn default_slot(g: Group, default_role: SemRole) -> Slot {
     match g {
         Group::Role => Slot::Val(Val::Role(default_role)),
         // Empty text defaults to `Absent` (finalised to no string): no allocation per fusion.
-        Group::Name | Group::Description => Slot::Absent,
         Group::Check => Slot::Val(Val::Check(Check::NotCheckable)),
         Group::Press => Slot::Val(Val::Press(Press::NotToggle)),
         Group::Expand => Slot::Val(Val::Expand(Expand::NotExpandable)),
@@ -814,7 +814,12 @@ pub fn default_slot(g: Group, default_role: SemRole) -> Slot {
         Group::Flags => Slot::Val(Val::Flags(SemFlags::empty())),
         Group::Orientation => Slot::Val(Val::Orientation(Orientation::NotApplicable)),
         Group::Sort => Slot::Val(Val::Sort(Sort::None)),
-        Group::Level | Group::SetPos | Group::Grid | Group::Live => Slot::Absent,
+        Group::Name
+        | Group::Description
+        | Group::Level
+        | Group::SetPos
+        | Group::Grid
+        | Group::Live => Slot::Absent,
     }
 }
 

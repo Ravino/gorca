@@ -231,6 +231,7 @@ struct Node {
     vis: u32,
     /// Exceptions to the S0 rebuilt from `published` over the selector-read groups (usually
     /// empty, then no allocation).
+    #[allow(clippy::box_collection)] // 8 bytes in the node record instead of 24
     delta: Option<Box<Vec<(Group, Slot)>>>,
     published: Option<Arc<SemEntry>>,
     /// Which non-primary source produced which group of the published entry (including through

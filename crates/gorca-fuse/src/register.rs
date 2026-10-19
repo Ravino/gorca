@@ -315,6 +315,7 @@ pub struct NodeRegs {
     p0: SrcRegs,
     p1: Option<Box<SrcRegs>>,
     /// User overrides, sorted by group slot (almost no node has any).
+    #[allow(clippy::box_collection)] // 8 bytes in the node record instead of 24
     user: Option<Box<Vec<UserReg>>>,
 }
 
@@ -514,7 +515,9 @@ mod tests {
                 let seq = 1 + next(4) as u64;
                 let w = match (g, next(5)) {
                     (_, 0 | 1) => Write::Absent(g),
-                    (Group::Level, _) => Write::Val(Val::Level(1 + next(3) as u8)),
+                    (Group::Level, _) => {
+                        Write::Val(Val::Level(1 + u8::try_from(next(3)).unwrap_or(0)))
+                    }
                     (Group::Check, _) => Write::Val(Val::Check(Check::On)),
                     (Group::Avail, _) => Write::Val(Val::Avail(gorca_model::sem::Avail::Enabled)),
                     (Group::Live, _) => Write::Val(Val::Live(None)),
