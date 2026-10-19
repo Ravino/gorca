@@ -1,6 +1,6 @@
 # M22a kickoff: open fact-source contract, profiles interaction, plan rationale
 
-Date: 2026-10-19. Author: architect. Main at `d87409fb`. Design only, no product code.
+Date: 2026-10-19 (r2 after `docs/reports/adr-0024-review.md`). Author: architect. Design only, no product code.
 
 Deliverables: ADR-0024 `docs/adr/0024-fact-sources-contract.md` (Proposed), ADR-0022 r3 note,
 `docs/plan/m22a-spec.md` (task breakdown, first tasks), `docs/plan/phase-3.md` §M22a, §M23–M25.
@@ -29,11 +29,13 @@ stratum S4 inferred below derived; open source-slot list).
 ## 3. Worked examples (how each future source plugs in)
 
 1. **Icon-only button in a web app, browser bus on.** AT-SPI: role push button, name `Absent`.
-   Add-on: `hint.icon_class = "fa-trash"` and `hint.title_attr = "Delete"` on `DomId("del-btn")`
-   (`Unique`). S3 rule "title names an unnamed control" → name "Delete", layer Derived, `Asserted`,
-   spoken plainly. Without the title, S4 rule icon-class table → "Delete", Inferred, `Probable` →
-   "probably Delete". The first focus utterance never waits: if the fact arrives within 500 ms with
-   the epoch unchanged, one refine tail; otherwise next visit.
+   Add-on (scope pinned to that browser and tab by the transport): `hint.title_attr = "Delete"` on
+   `DomId("del-btn")`, `dom_count = 1`, one mirror node with that id → `Unique`, `BindGen` 4. S3 rule
+   "title names an unnamed control" → name "Delete", layer Derived but **tainted** (T3 evidence) →
+   hedge `Probable` → "probably Delete". The first focus utterance never waits: if the fact arrives
+   within 500 ms with the epoch unchanged, one refine tail; otherwise next visit. If the SPA
+   re-renders and `del-btn` now names another element, `BindGen` bumps and the old fact is stale until
+   the add-on re-asserts it.
 2. **Unlabeled GTK toolbar button, inference on.** Focus speaks "button" at once (NC-1). After
    speech start the core asks the inference source for the masked crop (LB-3, epoch-tagged).
    OCR returns "Save", `p_milli = 950`, `Basis::Capture(id, fp)`, `Region` anchor → `Geometric`
@@ -49,17 +51,19 @@ stratum S4 inferred below derived; open source-slot list).
    group); the token bucket throttles; the source goes `Throttled`; the writer's interactive lane
    and AT-SPI ingestion are untouched (M-15).
 
-## 4. New testable properties (extend math report §5)
+## 4. New testable properties (extend math report §5; r2 after review)
 
 | Id | Property | Oracle |
 |---|---|---|
 | F11 | **Confidence gate**: a fact below its grant floor never wins; moving `p_milli` across the floor changes only that (x, g) winner and hedge | value + hedge diff |
-| F12 | **Class safety (monotonicity)**: adding any set of Secondary/Inferred facts never changes a group whose winner is User, Patch or Observed-primary non-empty, except where a declared `PI` row ranks a secondary first | equality on protected groups |
+| F12 | **Class safety**: adding any set of Secondary/Inferred facts never changes a group whose winner is User, Patch, Observed-primary or untainted Derived; a secondary never wins a group not listed `inexpressible` for its source profile; values derived from T3/Inferred inputs are tainted and hedged | equality on protected groups + taint check |
 | F13 | **Basis staleness**: after a `vis_rev` bump past an inferred winner's basis, the group falls to the next candidate (or default) and no change utterance is produced | value + ST output count = 0 |
 | F14 | **Revocation equivalence**: masking or revoking source s yields the state of the run without s's facts | equality |
 | F15 | **Binding safety**: no fact with binding below its group-class minimum ever wins; ambiguous `DomId` never binds `Unique` | predicate |
 | F16 | **Isolation under flood**: a flood from source s changes no other source's registers and no primary-derived entry; drops counted | equality + counters |
 | F17 | **Hot-path independence**: removing every non-primary fact at keypress time gives the same first utterance for that key (non-primary facts reach speech only as refine tails) | transcript equality |
+| F18 | **Rebinding**: after a `BindGen` bump of an anchor, no fact asserted under the old generation wins until re-asserted | predicate |
+| F19 | **Scope pinning**: a fact whose transport scope differs from its target's scope is rejected and never stored | predicate |
 
 ## 5. Profiles (M14a, ADR-0016) and the model
 
@@ -88,39 +92,32 @@ presets) lives in the profiles system. ADR-0024 §2.13 fixes the interaction:
 - **Terminology fix**: ADR-0022's `PI[app profile]` is a *source profile* (engine/toolkit class),
   not an ADR-0016 user profile.
 
-### Should M14a move earlier? Recommendation: yes, M14a-core in parallel with M22a
+### Should M14a move earlier? Recommendation (r2): not yet; (a) once ADR-0016 exists
 
-Today M14a sits in Wave 2 after M11/M12a, and M22d, the CHR-0 presets migration, DP-3's
-"save mode for this app/site", M18a vendor profiles and the ADR-0024 source opt-ins all wait on it.
+Today M14a sits in Wave 2 after M11/M12a, and M22d, the CHR-0 presets migration, DP-3's "save mode
+for this app/site", M18a vendor profiles and the ADR-0024 source opt-ins all wait on it. Moving
+**M14a-core** (ADR-0016 layer stack, `Trigger`/`AppMatcher`, fold + `ProfileKey` LRU in the Reader,
+origin-layer edits, first-party vendor profiles, `browse.*`/`report.*` keys, CHR-0 table migration;
+no GUI, no Control API) next to M22a is attractive: its files (`gorca-config`, the Reader settings
+cell, one `wire_profiles`) are disjoint from M22a and CHR-0.
 
-- **M14a-core** = ADR-0016 + `gorca-config` layer stack, `Trigger`/`AppMatcher` matcher, fold and
-  `ProfileKey` LRU in the Reader, origin-layer edits (PE-1/PE-2), vendor-profile loading for
-  first-party extensions, `browse.*` and `report.*` keys, the CHR-0 table migration. **No GUI**
-  (M14) and no Control API.
-- Files: `gorca-config`, Reader settings cell, `gorca-daemon` wiring (one `wire_profiles`). Disjoint
-  from every M22a file (§1 of the spec) and from CHR-0 after its interim table merges.
-- Prerequisites: a config schema version bump with its migration (CF-8) is enough; full M11
-  supervision is not required. `AppInfo.desktop_id` (ShellHelper) can start as exe/app-name
-  matching. M12a catalog ids for profile display names can be literal until M12a.
-- Cost: ADR-0016 (architect, 1 day, mostly written in `phase-3-features.md` §3) + ≈ 6–8 implementer
-  days. It uses the free fourth implementer slot of M22a waves A/B.
-- Risk: a second milestone touching the Reader while M22a wave C touches the actors. Mitigation:
-  M14a-core merges before M22a wave C starts or rebases after C1; the Reader settings cell is not
-  touched by M22a.
+But ADR-0016 does not exist yet (only the design in `phase-3-features.md` §3), it needs a review
+round, and the only free cargo slot is in M22a wave A (wave B uses all three builders, spec §4).
+So: **D-6 = (b) for now**; the orchestrator schedules writing ADR-0016 (architect, ≈ 1 day + one
+review round) as a separate task during wave A; if it is accepted while the wave-A slot is still
+free, M14a-core takes that slot, otherwise it starts after wave B. Until then CHR-0's interim
+table already uses the final key names (PS-3), so nothing is lost by waiting.
 
-Confidence: medium-high. Order becomes `P2-ARIA-0 ∥ CHR-0 → M22a (A, B) ∥ M14a-core → M22a C →
-M18a ∥ M22b1`.
-
-## 6. Decisions needing owner input
+## 6. Decisions needing owner input (final recommendations after the review)
 
 | # | Question | Options | Recommendation |
 |---|---|---|---|
-| D-1 | Meaning of "confidence-weighted" | (a) confidence gates admission and sets a spoken hedge; ranking stays a static per-group order; corroboration later; (b) numeric weighted fusion across all sources | **(a)**, high confidence: explainable, order-independent, a wrong confident model cannot override an author's label |
-| D-2 | Default state of new sources | (a) all off, opt-in per browser/app/site; (b) browser bus on when its add-on is installed; inference off | **(a)**: installing the add-on asks once, then per-site deny list |
-| D-3 | Hedged speech | (a) "probably X"/"maybe X" (ADR-0002 wording), refine tail only for Name within 500 ms; (b) plain text, hedge only in where-am-I; (c) a short earcon instead of words | **(a)** default, (c) as a verbosity option once cues exist (M13) |
-| D-4 | May a browser add-on override engine values? | (a) only groups the engine cannot express (primary `Unknown`) + evidence; (b) per-group data rows may rank it first after evidence from `observed-disagree` counters | **(a)** now, (b) case by case with a decision row each |
-| D-5 | M22a start without P2-ARIA-0 | (a) waves A/B now, wave C (integration, X1 replacement) after P2-ARIA-0 and CHR-0 merge; (b) wait | **(a)**: A/B touch only new crates and `gorca-model` |
-| D-6 | Move M14a earlier | (a) M14a-core in parallel with M22a A/B; (b) keep Wave 2 | **(a)** (§5) |
+| D-1 | Meaning of "confidence-weighted" | (a) confidence gates admission, sets a spoken hedge and orders inferred candidates by coarse class; ranking across sources stays a static per-group order; values derived from untrusted inputs are tainted; corroboration later; (b) numeric weighted fusion across all sources | **(a)**, high confidence |
+| D-2 | Default state of new sources | (a) all off, opt-in per browser/app/site, with the gorca add-on enforcing secret-field exclusions at the source and skipping private windows and browser-internal pages; (b) browser bus on when its add-on is installed | **(a)** |
+| D-3 | Hedged speech | (a) "probably X"/"maybe X" for inferred **and tainted derived** values, refine tail only for Name within 500 ms; (b) plain, hedge only in where-am-I; (c) earcon | **(a)** default, (c) as a verbosity option once cues exist (M13) |
+| D-4 | May a browser add-on override engine values? | (a) only groups a static per-engine row declares the engine can never express (never "not fetched yet"), plus evidence; (b) also data rows ranking it first after `observed-disagree` evidence | **(a)**, each `inexpressible` row with its own decision row |
+| D-5 | M22a start without P2-ARIA-0 | (a) waves A/B now (only `gorca-model` + new crates), wave C after P2-ARIA-0 and CHR-0 merge (C2 per H-7); (b) wait | **(a)** |
+| D-6 | Move M14a earlier | (a) M14a-core in the free wave-A slot; (b) keep Wave 2 | **(b) now**; switch to **(a)** as soon as ADR-0016 is written and accepted (write it during wave A) |
 
 ## 7. Coordination with CHR-0
 
@@ -133,8 +130,10 @@ with M7b; M22a only provides `BindQuality` and provenance it can use.
 
 ## 8. Unverified
 
-- `SemEntry` size with `hedge` (the current r2 layout may already exceed 112 B with two
-  `Option<Arc<str>>`); A1 measures and packs masks if needed.
+- `SemEntry` layouts were measured with rustc (scratch probe, x86_64): r2 120 B, r2 + hedge 128 B,
+  20 groups with u128 provenance 128 B, chosen 16-group layout 104 B (ADR-0024 §2.12). A1 re-asserts
+  it on the real types.
+- Native-host pid → browser `AppId` mapping under Flatpak/Snap (FS-11); M23's first task.
 - Exact cross-source keys for elements without an HTML id (TBD-S3); M23's first task.
 - Capture latency and window mapping through the gorca-helper `CaptureWindowArea`
   (`contrib/gnome-shell-extension/gorca-helper@gorca/helper.js:43,286`); M24.
