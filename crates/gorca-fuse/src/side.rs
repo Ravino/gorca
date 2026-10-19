@@ -305,6 +305,8 @@ impl FactReg {
 pub struct SideTable {
     sources: BTreeMap<SourceId, SourceInfo>,
     regs: HashMap<SideKey, FactReg>,
+    /// Reverse index: the registers of each anchor (incremental maintenance reads it).
+    by_anchor: HashMap<AnchorId, Vec<SideKey>>,
     cap: usize,
 }
 
@@ -320,6 +322,7 @@ impl SideTable {
         SideTable {
             sources: BTreeMap::new(),
             regs: HashMap::new(),
+            by_anchor: HashMap::new(),
             cap,
         }
     }
@@ -392,8 +395,145 @@ impl SideTable {
         if self.regs.len() >= self.cap {
             return Err(SideError::Full);
         }
+        self.by_anchor
+            .entry(key.anchor.clone())
+            .or_default()
+            .push(key.clone());
         self.regs.insert(key, new);
         Ok(true)
+    }
+
+    /// Release a source: forget its registration **and every register it owns**. A source that
+    /// reconnects under the same stable name must call this (or [`SideTable::reconnect`]) before
+    /// registering its new id, because stable names are unique. Returns the anchors that lost
+    /// registers (their nodes must be re-fused).
+    pub fn release_source(&mut self, id: SourceId) -> Vec<AnchorId> {
+        self.sources.remove(&id);
+        let keys: Vec<SideKey> = self
+            .regs
+            .keys()
+            .filter(|k| k.source == id)
+            .cloned()
+            .collect();
+        let mut anchors = Vec::new();
+        for k in keys {
+            self.regs.remove(&k);
+            if let Some(list) = self.by_anchor.get_mut(&k.anchor) {
+                list.retain(|x| x != &k);
+                if list.is_empty() {
+                    self.by_anchor.remove(&k.anchor);
+                }
+            }
+            anchors.push(k.anchor);
+        }
+        anchors.sort();
+        anchors.dedup();
+        anchors
+    }
+
+    /// A source reconnects: the old registration and its registers go first, then the new one is
+    /// registered (the explicit "release before `set_source`" path). Returns the anchors whose
+    /// registers were dropped. On error nothing was released.
+    pub fn reconnect(
+        &mut self,
+        old: SourceId,
+        info: SourceInfo,
+    ) -> Result<Vec<AnchorId>, SideError> {
+        // Validate against every *other* source first, so a failure leaves the table untouched.
+        if self
+            .sources
+            .values()
+            .any(|s| s.id != old && s.id != info.id && s.name == info.name)
+        {
+            return Err(SideError::DuplicateName);
+        }
+        let anchors = self.release_source(old);
+        self.set_source(info)?;
+        Ok(anchors)
+    }
+
+    /// The registered sources.
+    pub fn source_ids(&self) -> impl Iterator<Item = SourceId> + '_ {
+        self.sources.keys().copied()
+    }
+
+    /// True when `a` still has at least one register.
+    pub fn has_anchor(&self, a: &AnchorId) -> bool {
+        self.by_anchor.contains_key(a)
+    }
+
+    /// Anchors with at least one register of `id`.
+    pub fn anchors_of_source(&self, id: SourceId) -> Vec<AnchorId> {
+        let mut v: Vec<AnchorId> = self
+            .regs
+            .keys()
+            .filter(|k| k.source == id)
+            .map(|k| k.anchor.clone())
+            .collect();
+        v.sort();
+        v.dedup();
+        v
+    }
+
+    /// Anchors with a register whose TTL expires in `(from_ms, to_ms]`.
+    pub fn expiring(&self, from_ms: u64, to_ms: u64) -> Vec<AnchorId> {
+        let mut v: Vec<AnchorId> = self
+            .regs
+            .iter()
+            .filter(|(_, r)| {
+                r.fact.ttl_ms.is_some_and(|t| {
+                    let at = r.fact.admitted_at_ms.saturating_add(t);
+                    at > from_ms && at <= to_ms
+                })
+            })
+            .map(|(k, _)| k.anchor.clone())
+            .collect();
+        v.sort();
+        v.dedup();
+        v
+    }
+
+    /// Every anchor that has registers.
+    pub fn anchors(&self) -> impl Iterator<Item = &AnchorId> {
+        self.by_anchor.keys()
+    }
+
+    /// The ranked entries of `node`, given the anchors currently bound to it and the current
+    /// resolution of each. Same result as `bind(..).node(node, ctx)`, computed from the anchors
+    /// only (incremental maintenance).
+    pub fn ranked_for<'x>(
+        &self,
+        node: NodeIdx,
+        anchors: impl IntoIterator<Item = &'x AnchorId>,
+        resolve: &dyn Fn(&AnchorId) -> Resolved,
+        ctx: &FuseCtx<'_>,
+    ) -> Ranked {
+        let mut pairs: Vec<(&SideKey, &FactReg)> = Vec::new();
+        for a in anchors {
+            if let Some(keys) = self.by_anchor.get(a) {
+                for k in keys {
+                    if let Some(r) = self.regs.get(k) {
+                        pairs.push((k, r));
+                    }
+                }
+            }
+        }
+        pairs.sort_by(|a, b| self.key_order(a.0, b.0));
+        let mut r = Ranked::default();
+        for (k, reg) in pairs {
+            let Some(info) = self.sources.get(&k.source) else {
+                continue;
+            };
+            let bf = Bf {
+                info,
+                key: k,
+                reg,
+                res: resolve(&k.anchor),
+            };
+            r.push(build_entry(&bf, node, ctx));
+        }
+        r.sort();
+        r
     }
 
     /// Resolve every register against `index`: nodes with facts, and the parked ones.

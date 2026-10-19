@@ -11,7 +11,9 @@
 //! Dependency rules (`cargo xtask deps`): tokio-free and transport-neutral; depends on
 //! `gorca-model` only.
 
+pub mod epoch;
 pub mod explain;
+pub mod ivm;
 pub mod profile;
 pub mod register;
 pub mod repair;
@@ -21,7 +23,11 @@ pub mod strata;
 pub mod taint;
 pub mod value;
 
+pub use epoch::{Epochs, silences};
 pub use explain::{Conflict, Explain, NoTrace, ObsCand, PatchTrail, Trace, Tracer, TrailEntry};
+pub use ivm::{
+    ApplyReport, Budget, Input, Ivm, IvmError, Published, RELATION_FANOUT_CAP, RunReport,
+};
 pub use profile::{Limits, PiRow, Profile, RoleSet, Rules};
 pub use register::{MAX_PRIMARIES, NodeRegs, PrimarySlot, Reg, SrcRegs, UserOp, UserReg, slot_of};
 pub use repair::{Eff, invariant_violations, repair as repair_eff};
@@ -32,7 +38,7 @@ pub use side::{
 };
 pub use strata::{
     ChildView, Fused, Layer, Neighbours, NoPatches, NoQuirks, PatchHit, PatchSource, Quirks,
-    Record, S0Node, S0Slot, Scratch, default_slot, fuse_node, fuse_node_with, is_alive, s0,
-    s0_with,
+    Record, S0Node, S0Slot, Scratch, SelectorReads, default_slot, fuse_node, fuse_node_with,
+    is_alive, s0, s0_with,
 };
 pub use value::{Info, MAX_TEXT_BYTES, Seq, Slot, Val, Write, hedge_cap};

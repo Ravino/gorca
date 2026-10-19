@@ -77,7 +77,11 @@ struct Part<'a> {
 /// Bounded work and output: at most `limits.max_children` children are read and the string stops
 /// at `limits.max_text` bytes on a char boundary. Every child name is itself at most `max_text`,
 /// so a parent's name is too, however deep the tree.
-pub fn name_from_content(children: &[ChildView<'_>], limits: &Limits) -> Option<Content> {
+pub fn name_from_content(
+    children: &[ChildView<'_>],
+    more_children: bool,
+    limits: &Limits,
+) -> Option<Content> {
     let full_len = children.len();
     let children = children.get(..limits.max_children).unwrap_or(children);
     let parts = children.iter().filter_map(|c| {
@@ -97,7 +101,7 @@ pub fn name_from_content(children: &[ChildView<'_>], limits: &Limits) -> Option<
     let any_clean = parts.clone().any(|p| !p.tainted);
     let mut out = String::new();
     let mut n = 0usize;
-    let mut cut = children.len() < full_len;
+    let mut cut = more_children || children.len() < full_len;
     let mut conf = ConfClass::Asserted;
     let mut tier = TrustTier::T0Core;
     let mut from = Vec::new();
@@ -190,7 +194,7 @@ mod tests {
         );
         let lim = Limits::default();
         let kids = [view(0, &clean), view(1, &dirty)];
-        let c = name_from_content(&kids, &lim).expect("name");
+        let c = name_from_content(&kids, false, &lim).expect("name");
         assert_eq!(
             &*c.name, "Close",
             "a tainted child must not leak into an untainted name"
@@ -199,7 +203,7 @@ mod tests {
         assert_eq!(c.from, vec![0]);
         // Only tainted parts: used, DerivedTainted with the weakest class and least trusted tier.
         let only = [view(7, &dirty)];
-        let c = name_from_content(&only, &lim).expect("name");
+        let c = name_from_content(&only, false, &lim).expect("name");
         assert_eq!(&*c.name, "Logo");
         assert_eq!(c.info.prov, ProvCode::DerivedTainted);
         assert_eq!(c.info.conf, ConfClass::High);
@@ -211,9 +215,9 @@ mod tests {
             ConfClass::High,
             TrustTier::T3Untrusted,
         );
-        let c = name_from_content(&[view(0, &t3)], &lim).expect("name");
+        let c = name_from_content(&[view(0, &t3)], false, &lim).expect("name");
         assert_eq!(c.info.conf, ConfClass::Probable, "T3 caps at Probable");
-        assert!(name_from_content(&[], &lim).is_none());
+        assert!(name_from_content(&[], false, &lim).is_none());
     }
 
     #[test]
@@ -225,7 +229,7 @@ mod tests {
             ConfClass::Asserted,
             TrustTier::T1Platform,
         );
-        let c = name_from_content(&[view(0, &dirty)], &Limits::default()).expect("name");
+        let c = name_from_content(&[view(0, &dirty)], false, &Limits::default()).expect("name");
         assert_eq!(c.info.conf, ConfClass::High);
         assert_eq!(
             non_primary_class(ConfClass::Asserted, TrustTier::T0Core),
@@ -243,7 +247,7 @@ mod tests {
         );
         let kids: Vec<ChildView<'_>> = (0..10_000).map(|i| view(i, &e)).collect();
         let lim = Limits::default();
-        let c = name_from_content(&kids, &lim).expect("name");
+        let c = name_from_content(&kids, false, &lim).expect("name");
         assert!(
             c.truncated,
             "children beyond max_children are reported as truncation"
@@ -258,7 +262,7 @@ mod tests {
             TrustTier::T0Core,
         );
         let kids = [view(0, &big), view(1, &big)];
-        let c = name_from_content(&kids, &lim).expect("name");
+        let c = name_from_content(&kids, false, &lim).expect("name");
         assert!(c.truncated && c.name.len() <= lim.max_text);
         assert!(
             c.name.chars().all(|ch| ch == 'é' || ch == ' '),
@@ -282,7 +286,7 @@ mod tests {
         );
         for _ in 0..5_000 {
             let kids = [view(0, &below), view(1, &below)];
-            let c = name_from_content(&kids, &lim).expect("name");
+            let c = name_from_content(&kids, false, &lim).expect("name");
             assert!(c.name.len() <= 64);
             below = child_entry(&c.name, c.info.prov, c.info.conf, c.info.tier);
         }

@@ -110,6 +110,22 @@ impl S0Node {
         &self.slots[ix(g)]
     }
 
+    /// The groups whose S0 **value** differs (what neighbours' selectors can read): all groups
+    /// when liveness differs, none when both are dead.
+    pub fn changed_groups(old: Option<&S0Node>, new: Option<&S0Node>) -> GroupMask {
+        match (old, new) {
+            (None, None) => GroupMask::EMPTY,
+            (Some(_), None) | (None, Some(_)) => GroupMask(u32::MAX),
+            (Some(a), Some(b)) => {
+                let mut m = GroupMask::EMPTY;
+                for g in Group::ALL.iter().copied() {
+                    m.set(g, a.slot(g) != b.slot(g));
+                }
+                m
+            }
+        }
+    }
+
     /// The S0 value of `g` (`Unknown` included).
     pub fn slot(&self, g: Group) -> &Slot {
         &self.get(g).slot
@@ -326,8 +342,11 @@ fn trace_disagreement<T: Tracer>(
 #[derive(Copy, Clone, Debug)]
 pub struct Neighbours<'a> {
     pub parent: Option<&'a S0Node>,
-    /// All children in a stable order (dead ones included, with `None` views).
+    /// The first children in a stable order (dead ones included, with `None` views). A writer
+    /// passes at most `Limits::max_children` of them: nothing reads further.
     pub children: &'a [ChildView<'a>],
+    /// True when the node has more children than `children` lists (reported as truncation).
+    pub more_children: bool,
 }
 
 impl Neighbours<'_> {
@@ -335,6 +354,7 @@ impl Neighbours<'_> {
     pub const NONE: Neighbours<'static> = Neighbours {
         parent: None,
         children: &[],
+        more_children: false,
     };
 }
 
@@ -382,6 +402,33 @@ impl PatchHit {
 /// appends the node's matching edits in rank order (highest first): the first hit of a group wins.
 pub trait PatchSource {
     fn hits(&self, node: &S0Node, nb: &Neighbours<'_>, out: &mut Vec<PatchHit>);
+
+    /// Which groups of the neighbours' S0 the selectors read (the selector-read set). Incremental
+    /// maintenance re-fuses a neighbour only when one of these groups changed. The default reads
+    /// everything: always correct, never narrower than needed.
+    fn reads(&self) -> SelectorReads {
+        SelectorReads::ALL
+    }
+}
+
+/// The groups of neighbour S0 values a patch source's selectors read.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct SelectorReads {
+    /// Groups of the **parent's** S0 read (a change re-fuses the parent's children).
+    pub parent: GroupMask,
+    /// Groups of the **children's** S0 read (a change re-fuses the parent).
+    pub children: GroupMask,
+}
+
+impl SelectorReads {
+    pub const ALL: SelectorReads = SelectorReads {
+        parent: GroupMask(u32::MAX),
+        children: GroupMask(u32::MAX),
+    };
+    pub const NONE: SelectorReads = SelectorReads {
+        parent: GroupMask::EMPTY,
+        children: GroupMask::EMPTY,
+    };
 }
 
 /// No patches installed.
@@ -390,6 +437,10 @@ pub struct NoPatches;
 
 impl PatchSource for NoPatches {
     fn hits(&self, _node: &S0Node, _nb: &Neighbours<'_>, _out: &mut Vec<PatchHit>) {}
+
+    fn reads(&self) -> SelectorReads {
+        SelectorReads::NONE
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -574,7 +625,7 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
     // S3 derived (a): name from content over the children's final names.
     if fillable(&eff, &layer, Group::Name)
         && role_in(profile.rules.content_named)
-        && let Some(c) = name_from_content(nb.children, &profile.limits)
+        && let Some(c) = name_from_content(nb.children, nb.more_children, &profile.limits)
     {
         truncated.set(Group::Name, c.truncated);
         if T::ON {

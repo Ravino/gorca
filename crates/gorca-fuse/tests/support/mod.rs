@@ -1032,6 +1032,7 @@ pub fn evaluate_full<Q: Quirks>(case: &Case, world: &World, quirks: &Q, trace: b
         let nb = Neighbours {
             parent,
             children: &views,
+            more_children: false,
         };
         let cands: NodeCands<'_> = ranked[x].view();
         let fused = if trace {
