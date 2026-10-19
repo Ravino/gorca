@@ -765,6 +765,60 @@ impl ProfileSnapshot {
         Ok(plan)
     }
 
+    /// PE-4, second press of the save-to-global chord: the keys that the first press moved to
+    /// the global file also leave every other user profile that holds them, so the global value
+    /// applies everywhere. `except` is the profile that was just saved. Writes only user
+    /// profile files; the global file already holds the value.
+    pub fn plan_apply_everywhere(
+        &self,
+        keys: &[KeyRef],
+        except: &str,
+        disk: &DiskView,
+    ) -> Result<SavePlan, SaveRefusal> {
+        let mut plan = SavePlan {
+            steps: Vec::new(),
+            effects: Vec::new(),
+            memory: Vec::new(),
+            report: SaveGlobalReport::default(),
+        };
+        for (_, q) in self.set.iter() {
+            if q.source != ProfileSource::User || q.id == except {
+                continue;
+            }
+            let held: Vec<KeyRef> = keys
+                .iter()
+                .filter(|k| self.profile_holds(q, k))
+                .cloned()
+                .collect();
+            if held.is_empty() {
+                continue;
+            }
+            plan.report.other_profiles_changed.push(q.id.clone());
+            if self.deltas.created.contains_key(&q.id) {
+                plan.memory.push((q.id.clone(), held));
+                continue;
+            }
+            let t = self
+                .profile_disk(q, disk)?
+                .ok_or_else(|| SaveRefusal::MissingOnDisk(q.id.clone()))?;
+            let text = remove_keys(t, &held).map_err(SaveRefusal::Text)?;
+            plan.steps.push(WriteStep {
+                file: FileId::Profile(q.id.clone()),
+                expect_hash: q.hash,
+                text,
+            });
+            plan.effects.push(Effect::ProfileRemove {
+                id: q.id.clone(),
+                keys: held,
+                flush: false,
+            });
+        }
+        if plan.report.other_profiles_changed.is_empty() {
+            return Err(SaveRefusal::NothingChanged(except.to_owned()));
+        }
+        Ok(plan)
+    }
+
     #[allow(clippy::too_many_lines)] // one linear plan; splitting would hide the SG order
     fn plan_save_global_excl(
         &self,

@@ -95,6 +95,11 @@ impl AppScoped {
         &self.eff.settings.terminal
     }
 
+    /// `browse.enabled`: false means no virtual buffer for the application (the CHR-0 `Off`).
+    pub fn browse_enabled(&self) -> bool {
+        self.eff.settings.browse.enabled
+    }
+
     pub fn effective(&self) -> &Effective {
         &self.eff
     }
@@ -191,6 +196,17 @@ impl ProfileSnapshot {
     /// Is the profile or row switched on (PF-2, PF-5, `enabled`, the unsaved toggle)?
     pub fn is_enabled(&self, p: &Profile) -> bool {
         match &p.source {
+            ProfileSource::User => self.is_enabled_in(p, &BTreeMap::new()),
+            ProfileSource::Product
+            | ProfileSource::FirstParty { .. }
+            | ProfileSource::ThirdParty { .. } => self.is_enabled_in(p, &self.rows_map()),
+        }
+    }
+
+    /// [`Self::is_enabled`] with the effective `profiles.rows` map computed once by the caller
+    /// (F-9: a fold asks for every matching row).
+    pub(crate) fn is_enabled_in(&self, p: &Profile, rows: &BTreeMap<String, bool>) -> bool {
+        match &p.source {
             ProfileSource::User => self
                 .deltas
                 .profiles
@@ -198,11 +214,9 @@ impl ProfileSnapshot {
                 .and_then(|d| d.enabled)
                 .unwrap_or(p.enabled),
             ProfileSource::Product | ProfileSource::FirstParty { .. } => {
-                self.rows_map().get(&p.id).copied().unwrap_or(p.enabled)
+                rows.get(&p.id).copied().unwrap_or(p.enabled)
             }
-            ProfileSource::ThirdParty { .. } => {
-                self.rows_map().get(&p.id).copied().unwrap_or(false)
-            }
+            ProfileSource::ThirdParty { .. } => rows.get(&p.id).copied().unwrap_or(false),
         }
     }
 
@@ -310,6 +324,7 @@ impl ProfileSnapshot {
     fn fold(&self, rows: &[ProfileId], user: &[ProfileId]) -> Effective {
         let mode = self.mode;
         let base = &*self.base;
+        let rows_map = self.rows_map();
         let mut cx = Fold {
             settings: base.defaults.clone(),
             origin: vec![LayerRef::Default; SETTINGS.len()],
@@ -344,7 +359,7 @@ impl ProfileSnapshot {
                 ProfileSource::Product => (LayerRef::FirstParty(*pid), true),
                 ProfileSource::User => continue,
             };
-            if !allowed || !self.is_enabled(p) {
+            if !allowed || !self.is_enabled_in(p, &rows_map) {
                 continue;
             }
             layer(&mut cx, &p.values, &p.ext, &lref, true);
@@ -407,7 +422,7 @@ impl ProfileSnapshot {
                 let Some(p) = self.set.get(*pid) else {
                     continue;
                 };
-                if p.source != ProfileSource::User || !self.is_enabled(p) {
+                if p.source != ProfileSource::User || !self.is_enabled_in(p, &rows_map) {
                     continue;
                 }
                 let lref = LayerRef::User(*pid);
@@ -432,5 +447,72 @@ impl ProfileSnapshot {
             report: ReportFlags::default(),
             ub1_skipped: cx.ub1.into_boxed_slice(),
         }
+    }
+}
+
+/// A small cache of folded settings per profile key, tied to the snapshot it was filled from
+/// (F-6): a key is the same across delta edits, pins of other applications and suspend, so the
+/// cache is emptied whenever the snapshot `generation` it is asked about differs from the one it
+/// holds.
+#[derive(Debug)]
+pub struct EffectiveCache {
+    generation: u64,
+    lru: super::snapshot::LruMap<ProfileKey, Arc<Effective>>,
+}
+
+impl EffectiveCache {
+    pub fn new(cap: usize) -> Self {
+        EffectiveCache {
+            generation: 0,
+            lru: super::snapshot::LruMap::new(cap),
+        }
+    }
+
+    fn sync(&mut self, generation: u64) {
+        if self.generation != generation {
+            self.lru.clear();
+            self.generation = generation;
+        }
+    }
+
+    /// The effective settings for `key` in `snap`: cached, or folded now.
+    pub fn get_or_fold(&mut self, snap: &ProfileSnapshot, key: ProfileKey) -> Arc<Effective> {
+        self.sync(snap.generation);
+        if let Some(e) = self.lru.get(&key) {
+            return Arc::clone(e);
+        }
+        let e = Arc::new(snap.resolve_focus(key));
+        self.lru.insert(key, Arc::clone(&e));
+        e
+    }
+
+    /// Is `key` cached for `snap`? (Prewarm tests, metrics.)
+    pub fn contains(&mut self, snap: &ProfileSnapshot, key: ProfileKey) -> bool {
+        self.sync(snap.generation);
+        self.lru.contains(&key)
+    }
+
+    /// Store a value folded elsewhere (prewarm). Dropped when it was folded from an older
+    /// generation than `snap`, so a late prewarm never serves stale settings.
+    pub fn insert_prewarmed(
+        &mut self,
+        snap: &ProfileSnapshot,
+        key: ProfileKey,
+        eff: Arc<Effective>,
+    ) -> bool {
+        self.sync(snap.generation);
+        if eff.generation != snap.generation {
+            return false;
+        }
+        self.lru.insert(key, eff);
+        true
+    }
+
+    pub fn len(&self) -> usize {
+        self.lru.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.lru.is_empty()
     }
 }

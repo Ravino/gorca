@@ -273,6 +273,33 @@ impl WordLevel {
     }
 }
 
+/// The mode a document starts in (`[browse] mode_default`, ADR-0016 section 2.6).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum ModeDefault {
+    #[default]
+    Browse,
+    Focus,
+}
+
+impl ModeDefault {
+    pub const NAMES: &'static str = "\"browse\" or \"focus\"";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "browse" => Some(ModeDefault::Browse),
+            "focus" => Some(ModeDefault::Focus),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            ModeDefault::Browse => "browse",
+            ModeDefault::Focus => "focus",
+        }
+    }
+}
+
 /// How much punctuation is spoken (ADR-0007 VB-1).
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
 pub enum Punct {
@@ -585,6 +612,11 @@ pub struct BrowseSettings {
     /// Say the description of a control (`aria-describedby`, a tooltip title) after a short
     /// pause, as its own sentence, instead of straight after the other words (M8b).
     pub description_pause: bool,
+    /// `false`: no virtual buffer for the application; the reader follows its focus (ADR-0016
+    /// section 2.6, the product row for editors built from text widgets).
+    pub enabled: bool,
+    /// The mode a document starts in.
+    pub mode_default: ModeDefault,
 }
 
 impl Default for BrowseSettings {
@@ -592,6 +624,8 @@ impl Default for BrowseSettings {
         Self {
             say_all_on_load: true,
             description_pause: true,
+            enabled: true,
+            mode_default: ModeDefault::Browse,
         }
     }
 }
@@ -832,8 +866,10 @@ const fn classify(section: &str, key: &str) -> (KeyScope, bool, bool) {
             (KeyScope::Focus, true, false)
         }
     } else if same(section, "browse") {
-        if same(key, "say_all_on_load") {
+        if same(key, "say_all_on_load") || same(key, "mode_default") {
             (KeyScope::Doc, true, false)
+        } else if same(key, "enabled") {
+            (KeyScope::App, true, false)
         } else {
             (KeyScope::Focus, true, false)
         }
@@ -1015,6 +1051,13 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     row("browse", "say_all_on_load", SettingType::Bool, "true"),
     row("browse", "description_pause", SettingType::Bool, "true"),
+    row("browse", "enabled", SettingType::Bool, "true"),
+    row(
+        "browse",
+        "mode_default",
+        SettingType::Enum(ModeDefault::NAMES),
+        "\"browse\"",
+    ),
     row(
         "terminal",
         "settle_ms",
@@ -1214,6 +1257,16 @@ static DOCS: &[(&str, &str, &str)] = &[
         "browse",
         "description_pause",
         "Say the description of a web control after a short pause.",
+    ),
+    (
+        "browse",
+        "enabled",
+        "Build a browse-mode view of web pages; false follows the focus instead, as for a code editor.",
+    ),
+    (
+        "browse",
+        "mode_default",
+        "The mode a web page starts in: browse or focus.",
     ),
     (
         "terminal",

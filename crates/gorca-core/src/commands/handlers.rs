@@ -16,6 +16,7 @@ use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, Prio, PropMask, Role};
 use gorca_rt::BudgetClass;
 
 use super::info;
+use super::profiles::Change;
 use super::state::{
     ConfigRequest, ControlMsg, InputNotice, LoadCause, LoadedSettings, PendingInfo, PendingKind,
     Ring, SaveResult, SettingsMsg, SpeechCtl,
@@ -80,6 +81,18 @@ impl Reader {
     fn confirm(&mut self, full: &str, brief: &str, fx: &mut ReaderEffects) {
         let text = if self.brief() { brief } else { full };
         self.say(text, fx);
+    }
+
+    /// A confirmation that also says where the change went ("for Firefox"), when it is worth
+    /// saying (PE-3).
+    fn confirm_noted(&mut self, full: &str, brief: &str, note: &str, fx: &mut ReaderEffects) {
+        let text = if self.brief() { brief } else { full };
+        if note.is_empty() {
+            self.say(text, fx);
+        } else {
+            let both = msg!(ConfirmNoted, text = text, note = note);
+            self.say(&both, fx);
+        }
     }
 
     /// An extension command: queued to the host's worker, never run here (the Reader must not
@@ -153,6 +166,13 @@ impl Reader {
             },
             CoreCmd::SpeechHistoryPrev => self.history_step(true, fx),
             CoreCmd::SpeechHistoryNext => self.history_step(false, fx),
+            CoreCmd::ProfilesSaveGlobal => self.profiles_save_global(rep, fx),
+            CoreCmd::ProfilesCycle => self.profiles_cycle(fx),
+            CoreCmd::ProfilesToggleEnabled => self.profiles_toggle_enabled(fx),
+            CoreCmd::ProfilesEditTargetCycle => self.profiles_edit_target_cycle(fx),
+            CoreCmd::ProfilesAnnounce => self.profiles_announce(rep, fx),
+            CoreCmd::ProfilesSuspend => self.profiles_suspend(fx),
+            CoreCmd::BrowseSaveModeDefault => self.browse_save_mode_default(fx),
             CoreCmd::InputSleepToggle => self.sleep_toggle(fx),
             CoreCmd::InfoBattery => {
                 fx.push(ReaderEffect::Desktop(
@@ -197,29 +217,34 @@ impl Reader {
             }
             CoreCmd::EchoTypedCharsToggle => {
                 let v = !self.cmd.effective.echo.typed_characters;
-                self.cmd.overlay.typed_characters = Some(v);
-                self.toggled(M::CmdTypedCharsOn, M::CmdTypedCharsOff, v, fx);
+                if let Some(note) = self.apply_change(&Change::TypedChars(v), fx) {
+                    self.toggled(M::CmdTypedCharsOn, M::CmdTypedCharsOff, v, &note, fx);
+                }
             }
             CoreCmd::EchoTypedWordsToggle => {
                 let v = !self.cmd.effective.echo.typed_words;
-                self.cmd.overlay.typed_words = Some(v);
-                self.toggled(M::CmdTypedWordsOn, M::CmdTypedWordsOff, v, fx);
+                if let Some(note) = self.apply_change(&Change::TypedWords(v), fx) {
+                    self.toggled(M::CmdTypedWordsOn, M::CmdTypedWordsOff, v, &note, fx);
+                }
             }
             CoreCmd::EchoCommandKeysToggle => {
                 let v = !self.cmd.effective.echo.command_keys;
-                self.cmd.overlay.command_keys = Some(v);
-                self.toggled(M::CmdCommandKeysOn, M::CmdCommandKeysOff, v, fx);
+                if let Some(note) = self.apply_change(&Change::CommandKeys(v), fx) {
+                    self.toggled(M::CmdCommandKeysOn, M::CmdCommandKeysOff, v, &note, fx);
+                }
             }
             CoreCmd::VerbosityCycle => {
                 let v = self.cmd.effective.verbosity.level.next();
-                self.cmd.overlay.verbosity = Some(v);
+                let Some(note) = self.apply_change(&Change::Verbosity(v), fx) else {
+                    return;
+                };
                 self.cmd.republish();
                 let name = match v {
                     gorca_config::Verbosity::Brief => t(M::VerbosityBrief),
                     gorca_config::Verbosity::Normal => t(M::VerbosityNormal),
                     gorca_config::Verbosity::Verbose => t(M::VerbosityVerbose),
                 };
-                self.confirm(&msg!(VerbosityConfirm, name = name), name, fx);
+                self.confirm_noted(&msg!(VerbosityConfirm, name = name), name, &note, fx);
             }
             CoreCmd::InputLearnModeToggle => {
                 let entering = !matches!(self.mode, Mode::InputHelp { .. });
@@ -258,7 +283,9 @@ impl Reader {
             }
             CoreCmd::SpeechPunctuationCycle => {
                 let v = self.cmd.effective.speech.punctuation.next();
-                self.cmd.overlay.punctuation = Some(v);
+                let Some(note) = self.apply_change(&Change::Punctuation(v), fx) else {
+                    return;
+                };
                 self.cmd.republish();
                 // Said in the speech language, with the level named as the symbol table does.
                 let table = gorca_speech::SymbolTable::of(gorca_speech::Lang::from_code(
@@ -274,12 +301,14 @@ impl Reader {
                     table.level_confirmation(rank, false),
                     table.level_confirmation(rank, true),
                 );
-                self.confirm(&full, &brief, fx);
+                self.confirm_noted(&full, &brief, &note, fx);
             }
             CoreCmd::SettingsReload => fx.push(ReaderEffect::Config(ConfigRequest::Reload)),
             CoreCmd::SettingsSave => {
                 if self.cmd.newer_schema {
                     self.say(t(M::SettingsNotSavedNewer), fx);
+                } else if self.cmd.profiles.is_some() {
+                    self.profiles_save(fx);
                 } else {
                     fx.push(ReaderEffect::Config(ConfigRequest::Save(
                         self.cmd.overlay.clone(),
@@ -446,14 +475,14 @@ impl Reader {
         }
     }
 
-    fn toggled(&mut self, on_msg: M, off_msg: M, on: bool, fx: &mut ReaderEffects) {
+    fn toggled(&mut self, on_msg: M, off_msg: M, on: bool, note: &str, fx: &mut ReaderEffects) {
         self.cmd.republish();
         let (full, word) = if on {
             (on_msg, M::StateOn)
         } else {
             (off_msg, M::StateOff)
         };
-        self.confirm(t(full), t(word), fx);
+        self.confirm_noted(t(full), t(word), note, fx);
     }
 
     fn say_ring(&mut self, fx: &mut ReaderEffects) {
@@ -477,15 +506,18 @@ impl Reader {
         let step = i16::from(self.cmd.effective.speech.rate_step);
         let cur = i16::from(self.level(ring));
         let v = u8::try_from((cur + steps * step).clamp(0, 100)).unwrap_or(50);
-        match ring {
-            Ring::Rate => self.cmd.overlay.rate = Some(v),
-            Ring::Pitch => self.cmd.overlay.pitch = Some(v),
-            Ring::Volume => self.cmd.overlay.volume = Some(v),
-        }
+        let change = match ring {
+            Ring::Rate => Change::Rate(v),
+            Ring::Pitch => Change::Pitch(v),
+            Ring::Volume => Change::Volume(v),
+        };
+        let Some(note) = self.apply_change(&change, fx) else {
+            return;
+        };
         self.cmd.ring = ring;
         self.cmd.republish();
         self.send_levels(fx);
-        self.confirm(&format!("{} {v}", ring.name()), &v.to_string(), fx);
+        self.confirm_noted(&format!("{} {v}", ring.name()), &v.to_string(), &note, fx);
     }
 
     /// Send the effective voice levels if they differ from what the speech lane has.
@@ -702,6 +734,8 @@ impl Reader {
         match m {
             ControlMsg::Mode(m) => self.on_mode(m, fx),
             ControlMsg::Settings(SettingsMsg::Loaded(l)) => self.on_loaded(&l, fx),
+            ControlMsg::Settings(SettingsMsg::ProfilesSaved(r)) => self.profiles_saved(&r, fx),
+            ControlMsg::Settings(SettingsMsg::Prewarm(p)) => self.profiles_prewarmed(&p),
             ControlMsg::Settings(SettingsMsg::SaveResult(r)) => {
                 let text = match r {
                     SaveResult::Saved => t(M::SettingsSaved),
@@ -758,6 +792,9 @@ impl Reader {
     /// A new configuration (startup, file change, explicit reload, own save).
     fn on_loaded(&mut self, l: &Arc<LoadedSettings>, fx: &mut ReaderEffects) {
         let old = std::mem::replace(&mut self.cmd.file, l.settings.clone());
+        if let Some(layers) = &l.profiles {
+            self.profiles_loaded(layers, l.cause, fx);
+        }
         match l.cause {
             LoadCause::Startup | LoadCause::Layouts => {}
             LoadCause::FileChanged => self.cmd.overlay.drop_changed(&old, &l.settings),

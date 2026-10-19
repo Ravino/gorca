@@ -248,6 +248,9 @@ struct Shared {
     links: Arc<LaneLinks>,
     /// Effective settings, written by the Reader.
     settings: Arc<ArcSwap<Settings>>,
+    /// The published profile snapshot (ADR-0016 SS-1): the Reader writes it, the document
+    /// registry and the other resolvers read it.
+    profiles: Arc<gorca_config::profiles::ProfileCell>,
     /// The grab set (with its lookup context) the keyboard source should apply; latest wins.
     grabs: Arc<watch::Sender<GrabSet>>,
     config: mpsc::Sender<ConfigRequest>,
@@ -326,6 +329,9 @@ impl Core {
                 next_req: Arc::new(AtomicU64::new(1)),
                 links: LaneLinks::new(),
                 settings: Arc::new(ArcSwap::from_pointee(Settings::default())),
+                profiles: Arc::new(gorca_config::profiles::ProfileCell::new(
+                    gorca_config::profiles::initial_snapshot(),
+                )),
                 grabs: Arc::new(grabs),
                 config,
                 policy: Arc::new(|| Box::new(NullPolicy)),
@@ -493,6 +499,11 @@ impl Core {
         Arc::clone(&self.shared.settings)
     }
 
+    /// The published profile snapshot; the Reader is the only writer.
+    pub fn profile_cell(&self) -> Arc<gorca_config::profiles::ProfileCell> {
+        Arc::clone(&self.shared.profiles)
+    }
+
     /// The grab set the keyboard source should apply, with its lookup context. Latest wins.
     pub fn grab_requests(&self) -> watch::Receiver<GrabSet> {
         self.shared.grabs.subscribe()
@@ -549,6 +560,7 @@ impl Core {
                 docs: Arc::clone(&shared.web.docs),
                 notices: shared.senders.docs.clone(),
                 counters: Arc::clone(&shared.web.counters),
+                profiles: Arc::clone(&shared.profiles),
             };
             tasks.spawn("doc-registry", run_hub(cfg, rx, tasks.token()));
         }
@@ -1051,6 +1063,7 @@ async fn reader_loop(
     .with_focused(Arc::clone(&shared.focused))
     .with_links(Arc::clone(&shared.links))
     .with_settings_cell(Arc::clone(&shared.settings))
+    .with_profile_cell(Arc::clone(&shared.profiles))
     .with_web(Arc::clone(&shared.web.docs), Arc::clone(&shared.web.join))
     .with_text_dropped(Arc::clone(&shared.text_dropped))
     .with_lazy_attrs(shared.lazy_attrs);

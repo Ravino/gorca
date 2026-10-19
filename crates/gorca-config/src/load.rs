@@ -919,7 +919,7 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         );
         assert_eq!(l.settings.editing.word, WordLevel::Coarse);
         assert!(!l.settings.editing.announce_clipboard);
-        assert_eq!(SETTINGS.len(), 41);
+        assert_eq!(SETTINGS.len(), 43);
     }
 
     #[test]

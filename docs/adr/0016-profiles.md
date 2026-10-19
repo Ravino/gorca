@@ -191,7 +191,8 @@ impl ProfileSnapshot {
 ```
 
 - **SS-1 One input (H-1).** All three resolvers are pure functions of one snapshot. `Suspended` folds only
-  L0, L1, L3, L5 (+ L5 delta); `Disabled` folds L0, L1, L3, L5 (safe mode keeps product rows, M-5). Unsaved edits,
+  L0, L1, L2, product rows (L4), L5 (+ L5 delta); `Disabled` folds L0, L1, product rows (L4), L5 (safe mode keeps
+  product rows, M-5; r3.2 erratum: this said "L3", which is the third-party layer). Unsaved edits,
   suspend, pins and disabled profiles therefore reach App and Doc keys in the doc registry and the terminal
   arm exactly as they reach the Reader. Consumers cache `AppScoped`/`DocScoped` per `AppId`/`DocId` tagged with
   `gen` and recompute lazily on a `gen` change; when they apply is §2.6 DL-1.
@@ -391,7 +392,7 @@ free in the four presets (`crates/gorca-config/presets/{nvda,orca}-{desktop,lapt
 ### 2.7 Rows from the product and from add-ons (owner: data only)
 
 ```toml
-# crates/gorca-config/product/web-apps.toml (L3, compiled in); add-ons: `[[profile]]` in ext.toml from M18a
+# crates/gorca-config/product/web-apps.toml (L4, compiled in); add-ons: `[[profile]]` in ext.toml from M18a
 schema = 1
 [[profile]]
 id = "vscode"                         # stable row id; "gorca/vscode" in profiles.rows
@@ -454,7 +455,8 @@ mode_default = "focus"
   speech backend's inventory, or `SetParams` is rejected, the Reader uses the next lower layer's value, says once
   "profile <name>: voice <x> not available", and caches the rejection until the inventory changes. The base value
   is never clamped (it is the user's own last word; the speech client's existing fallback applies).
-- **PC-2 Safe mode** (M11) folds L0, L1, L3, L5. **PC-3** At most 256 profile files and 1 MiB per file
+- **PC-2 Safe mode** (M11) folds L0, L1, product rows (L4) and L5; L2, L3, first-party extension rows and L6 are off
+  (r3.2 erratum: this said "L0, L1, L3, L5"). **PC-3** At most 256 profile files and 1 MiB per file
   (`MAX_FILE_BYTES`); more is a diagnostic, never a failure.
 - **PC-5 Privacy.** Site profiles store host and path globs the user wrote; no URL history is kept.
 
@@ -480,7 +482,7 @@ before. `app_modes.rs` is then deleted. CHR-0 needs no change before it merges.
 | Failure | Behaviour |
 |---|---|
 | bad profile file / bad key | key or row skipped with diagnostic; last good parse kept (PC-0) |
-| profile directory unreadable | L0, L1, L3, L5 only, one spoken notice |
+| profile directory unreadable | L0, L1, product rows (L4), L5 only, one spoken notice |
 | `/proc` exe read or `DocURL` read times out | that input is absent: no match (never blocks the switch) |
 | profile thrash (popups, title churn) | an `Arc` swap; Shell popups get no profile by default; title generations debounced |
 | add-on row silences, misroutes or weakens privacy | PF-1 key filter (no voice/rate/volume/privacy keys), PF-4 confinement, PF-5 third-party off, UB-1, `profiles.suspend` (L4 off) |
@@ -545,7 +547,7 @@ M22a waves' way); tests are proptest round-trips, no cargo-fuzz.
 | **P3** | `ProfileSnapshot` and the three resolvers (SS-1, UB-1, suspend/safe-mode layer sets), interning, fold with `origin`, LRU type; PK-1 validation; PE-1/PE-1a/PE-1b/PE-2 `plan_edit` incl. app-profile auto-creation, PE-4 move/remove planning; delta save with PE-6 naming (`save.rs`); property tests P6 against a Python oracle | rust-engineer + math-researcher (oracle) | 2 | P2 | `gorca-config/src/profiles/{snapshot,resolve,edit,naming}.rs`, `save.rs`, `tools/research/profiles_oracle.py` | **yes** |
 | P4 | config task: profiles dir load, inotify, PC-0, prewarm (SW-2) by `gen`; Reader `ProfileState` machine (full table), snapshot publication, key computation from focus/window/`WebMode`, SW-3, `profiles.suspend`, `settings.explain_current`, §2.5a commands and preset chords (pins, enable, target, announce, save global), PC-4; catalog strings | rust-engineer | 2 | P3 | `gorca-daemon/src/config_task.rs`, `gorca-core/src/commands/{profiles.rs,state.rs,handlers.rs,table.rs}`, `gorca-config/presets/*.toml`, focus hook in `reader.rs`, `gorca-i18n` catalogs (append) | yes, if no other branch holds `commands/state.rs` |
 | P5 | gates P1, P1b, P2–P4, P8, P9 bench (`gorca-bench/benches/profiles.rs`) + e2e: terminal App profile `punctuation=most`; voice-change ordering; gorca+Space with a `FocusMode` profile | perf-engineer, test-engineer | 1.5 | P4 | `crates/gorca-bench/benches/profiles.rs`, `bench/e2e` scenario | yes |
-| P6 | browse keys (§2.6) incl. `browse.toggle_scope`, `WebPolicy::initial`, MS-1 lineage, DL-1 latches, `browse.save_mode_default`, CHR-0 migration to the L3 product row + parity test P5; terminal arm reads App keys via the snapshot; TS-1 in ext-vte; delete `app_modes.rs` | rust-engineer (+ web-a11y-engineer review) | 2 | P4, **CHR-0 merged** | `doc_registry.rs`, `browse/{mod,commands,policy}.rs`, `gorca-core/src/terminal.rs`, `extensions/ext-vte/src/prompt.rs`, `gorca-config/product/` | after CHR-0; before M22a wave C or rebased on it |
+| P6 | browse keys (§2.6) incl. `browse.toggle_scope`, `WebPolicy::initial`, MS-1 lineage, DL-1 latches, `browse.save_mode_default`, CHR-0 migration to the L4 product row + parity test P5; terminal arm reads App keys via the snapshot; TS-1 in ext-vte; delete `app_modes.rs` | rust-engineer (+ web-a11y-engineer review) | 2 | P4, **CHR-0 merged** | `doc_registry.rs`, `browse/{mod,commands,policy}.rs`, `gorca-core/src/terminal.rs`, `extensions/ext-vte/src/prompt.rs`, `gorca-config/product/` | after CHR-0; before M22a wave C or rebased on it |
 | P7 | inputs: `AppInfo.exe` (async `/proc`), `DocMeta.url` (Site triggers), window title generations; `desktop_id` when ShellHelper exposes it | linux-platform-engineer | 2 | P4 | connector `AppInfo`, doc source (`DocURL`), `present/window.rs` | after M22a wave C |
 | P8 | adversarial review + fix round, decision row | reviewer, then rust-engineer | 2 | P5, P6 | — | — |
 
@@ -592,7 +594,7 @@ rejected when the file loads; keys of an uninstalled extension are kept but inac
 | M-2 extension/mode loop | §2.3 NS-3 |
 | M-3 untrusted names | §2.5 PE-6 |
 | M-4 glob semantics | §2.2 GL-1 |
-| M-5 CHR-0 migration | §2.1 L3 product rows; §2.9 |
+| M-5 CHR-0 migration | §2.1 L4 product rows; §2.9 |
 | M-6 latch timing | §2.6 DL-1, MS-1; §5 P7 |
 | M-7 clamp | §2.8 PC-1, PC-4 |
 | L-1 state table | §2.4 table |
@@ -615,3 +617,41 @@ rejected when the file loads; keys of an uninstalled extension are kept but inac
 | Q-P5 | manual layer L7 replaced by per-app session pins; §2.5a chords |
 | Q-P6 | UB-1 confirmed |
 | r3.1 addendum | save-to-global copies only touched keys present in global, never reverses or clobbers (§2.5b SG-1..SG-6); `profiles.save_global` ×3 dropped (×2 = apply everywhere); test list §6.1; status Accepted |
+
+## 10. Implementation notes and errata (r3.2, 2026-10-19)
+
+Errata from `docs/reports/adr-0016-review.md`, applied above: product rows are **L4** everywhere (SS-1, PC-2, §2.7,
+§2.10, §6 P6, §8 M-5; L3 is the third-party layer). Recorded here because the text above cannot carry them:
+
+1. `ProfileSnapshot.disabled: HashSet` is replaced by per-profile `enabled` deltas plus the `profiles.rows` delta
+   (`LayerDelta.enabled`, `profiles.rows` as a real `Map(true)` settings row). Equivalent.
+2. UB-1 skips default-equal entries of the L5 **file** only; an unsaved L5 delta is an explicit choice and always
+   applies (Q-P6).
+3. Save to global needs the focus facts: a key whose move would change the application's effective value (a row
+   sets it and global's default-equal entry would be skipped, UB-1) stays in the profile and is reported
+   (`SaveGlobalReport.kept_row_sets`).
+4. A profile with several triggers is held to the strictest trigger's matrix row (INV-P6), and an edit that the
+   matrix refuses for the existing profile says so instead of creating a twin (F-5).
+
+M14a-core P4 to P6 as built (slices P4 to P6 of §6; the old P5 bench/e2e slice is separate):
+
+- **Where.** `gorca-core/src/commands/profiles.rs` (state machine, runtime, edits, commands, `prewarm`),
+  `gorca-config/src/profiles/build.rs` (product rows, `build_layers`, `initial_snapshot`),
+  `gorca-daemon/src/config_task.rs` (profiles directory read, watched, parsed with last-good per file; saves).
+- **Snapshot.** The Reader is the single writer; it publishes through `ProfileCell` (`Core::profile_cell`), which the
+  document registry reads for `browse.enabled` (SS-1). The cell holds the product rows from the start, so the
+  VS Code row applies before the first load and in safe mode and under suspend.
+- **Key path.** After every message the Reader compares the focus inputs (application name from
+  `MirrorDirectory::app_name`, document host, `WebMode` contexts) with the last ones: one hash lookup and one
+  comparison when nothing changed. A change goes through the `ProfileState` table (§2.4); own mode = learn mode.
+  The cache is `EffectiveCache`, emptied whenever the snapshot `generation` differs (F-6). SW-2 prewarm: the Reader
+  sends `ConfigRequest::Prewarm` once per (generation, focus); the config task folds the keys one step away
+  (`gorca_core::prewarm`) and the Reader drops entries of an older generation. A cold miss folds inline.
+- **Saves.** The Reader sends `SaveProfiles { snapshot, kind }`; the config task reads the files, plans
+  (`plan_save`, `plan_save_global`, `plan_apply_everywhere`), writes in plan order (a new profile with
+  `O_CREAT | O_EXCL`, a changed one only if its hash still matches, atomic rename) and answers with how far it
+  got; the Reader completes its snapshot with what was written (SG-5). Edits are refused while a save is in flight.
+- **Not wired yet.** Site triggers need the document address (P7: `Reader::set_document_host` is the entry
+  point); extension schemas are empty, so `ext.*` keys stay inactive; `browse.mode_default` is saved and resolved
+  but not applied when a document first gets focus (DL-1, `WebPolicy::initial`: the browse keys slice);
+  `settings.explain_current`; PC-4 voice fallback; safe mode has no signal yet (`Reader::set_profiles_safe_mode`).

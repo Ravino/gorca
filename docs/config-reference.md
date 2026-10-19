@@ -151,6 +151,10 @@ caret_late_ms = 400
 say_all_on_load = true
 # Say the description of a web control after a short pause. (true or false)
 description_pause = true
+# Build a browse-mode view of web pages; false follows the focus instead, as for a code editor. (true or false)
+enabled = true
+# The mode a web page starts in: browse or focus. ("browse" or "focus")
+mode_default = "browse"
 
 [terminal]
 # Wait this many milliseconds for terminal output to settle before speaking. (integer 10 to 200)
