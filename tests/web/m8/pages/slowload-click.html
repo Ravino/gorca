@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 SlowLoad Click</title></head>
+<body>
+<!-- CHR-0 step 0: growth driven by an AT click (probe_growth.py, PROBE_CLICK) while the load is held open. -->
+<h1>Slow shell</h1>
+<button type="button" id="render">Render app</button>
+<main id="app" aria-label="App"></main>
+<img src="http://127.0.0.1:18771/slow?ms=45000" alt="" width="1" height="1">
+<script>
+document.getElementById("render").addEventListener("click", function () {
+  var app = document.getElementById("app");
+  for (var i = 1; i <= 45; i++) {
+    var sec = document.createElement("section");
+    sec.setAttribute("aria-label", "Group " + i);
+    var h = document.createElement("h2");
+    h.textContent = "Section " + i;
+    var ul = document.createElement("ul");
+    for (var j = 1; j <= 6; j++) {
+      var li = document.createElement("li");
+      li.textContent = "Item " + i + "." + j;
+      ul.appendChild(li);
+    }
+    sec.append(h, ul);
+    app.appendChild(sec);
+  }
+});
+</script>
+</body>
+</html>

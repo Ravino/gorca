@@ -1,0 +1,12 @@
+{"t_app_s": 0.73, "mode": "poke"}
+{"t": 1.3, "doc": "/org/a11y/atspi/accessible/92", "nodes": 1354, "children_changed": 1, "events_total": 3}
+{"t": 1.8, "doc": "/org/a11y/atspi/accessible/92", "nodes": 1354, "children_changed": 1, "events_total": 3}
+{"t": 2.4, "doc": "/org/a11y/atspi/accessible/92", "nodes": 1354, "children_changed": 1, "events_total": 3}
+{"t": 2.9, "doc": "/org/a11y/atspi/accessible/92", "nodes": 1354, "children_changed": 1, "events_total": 3}
+{"t": 3.5, "doc": "/org/a11y/atspi/accessible/92", "nodes": 1354, "children_changed": 1, "events_total": 3}
+{"t": 4.1, "doc": "/org/a11y/atspi/accessible/92", "nodes": 1354, "children_changed": 1, "events_total": 3}
+{"t": 4.6, "doc": "/org/a11y/atspi/accessible/92", "nodes": 1354, "children_changed": 1, "events_total": 3}
+{"t": 5.2, "doc": "/org/a11y/atspi/accessible/92", "nodes": 1354, "children_changed": 1, "events_total": 3}
+{"t": 5.8, "doc": "/org/a11y/atspi/accessible/92", "nodes": 1354, "children_changed": 1, "events_total": 3}
+{"events": {"Object.PropertyChange:accessible-name": 2, "Object.ChildrenChanged:add": 1}}
+{"summary": {"load_complete_at": [], "busy_events": [], "adds_total": 1, "adds_before_first_load_complete": 1, "adds_after_first_load_complete": 0, "nodes_at_load_complete": null, "nodes_final": 1354, "first_adds": [0.55]}}

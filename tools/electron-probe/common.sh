@@ -1,6 +1,8 @@
 # Shared by the probe wrappers. The probe directory holds data that is exec'd (the Electron
 # build) and read as configuration, so it must be a private directory owned by us.
-EP=${ELECTRON_PROBE_DIR:-$HOME/.cache/electron-probe}
+# The e2e rig runs the browser with a private HOME: take the real one from the user database.
+REAL_HOME=$(getent passwd "$(id -u)" | cut -d: -f6)
+EP=${ELECTRON_PROBE_DIR:-${REAL_HOME:-$HOME}/.cache/electron-probe}
 mkdir -p -m 700 "$EP" 2>/dev/null
 perm=$(stat -c %a "$EP" 2>/dev/null)
 if [ ! -d "$EP" ] || [ ! -O "$EP" ] || [ -L "$EP" ] || [ "${perm: -2}" != 00 ]; then

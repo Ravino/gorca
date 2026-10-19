@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Messenger</title>
+<style>
+  body { font-family: sans-serif; margin: 0; }
+  .app { display: flex; height: 100vh; }
+  nav { width: 320px; overflow: auto; border-right: 1px solid #888; }
+  main { flex: 1; overflow: auto; }
+  [role=option], article, li.pin { padding: 6px; border-bottom: 1px solid #ddd; }
+  [role=option][aria-selected=true], article:focus, li.pin:focus { outline: 2px solid #36c; }
+</style></head>
+<body>
+<!--
+  A web messenger (Signal / Telegram / Slack shaped), three lists that all move by the arrow keys
+  inside the page:
+    1. "Dialogs": role=listbox with aria-activedescendant (focus stays on the listbox).
+    2. "Messages": role=feed of article elements with roving tabindex (the focus moves).
+    3. "Pinned messages": ul role=list of li role=listitem with roving tabindex.
+  Browse mode reads them like any content; the forced (sticky) focus mode sends the arrows to
+  the page and the reader speaks whatever the page focuses.
+-->
+<div class="app">
+<nav aria-label="Chat sidebar">
+  <h2>Chats</h2>
+  <div role="listbox" id="dialogs" tabindex="0" aria-label="Dialogs" aria-activedescendant="d0">
+    <div role="option" id="d0" aria-selected="true">Alice, lunch at noon, 2 unread</div>
+    <div role="option" id="d1" aria-selected="false">Bob, see you tomorrow</div>
+    <div role="option" id="d2" aria-selected="false">Carol, thanks a lot</div>
+    <div role="option" id="d3" aria-selected="false">Dave, build is green</div>
+    <div role="option" id="d4" aria-selected="false">Team standup, notes posted</div>
+  </div>
+</nav>
+<main>
+  <h1>Messenger</h1>
+  <h2>Conversation with Alice</h2>
+  <div role="feed" id="msgs" aria-label="Messages" aria-busy="false">
+    <article tabindex="0" aria-posinset="1" aria-setsize="6" aria-label="Alice, 10:01, Lunch at noon?"><p>Alice, 10:01: Lunch at noon?</p></article>
+    <article tabindex="-1" aria-posinset="2" aria-setsize="6" aria-label="Me, 10:02, Sure, where?"><p>Me, 10:02: Sure, where?</p></article>
+    <article tabindex="-1" aria-posinset="3" aria-setsize="6" aria-label="Alice, 10:03, The new place on Main street"><p>Alice, 10:03: The new place on Main street</p></article>
+    <article tabindex="-1" aria-posinset="4" aria-setsize="6" aria-label="Me, 10:04, Great, see you there"><p>Me, 10:04: Great, see you there</p></article>
+    <article tabindex="-1" aria-posinset="5" aria-setsize="6" aria-label="Alice, 10:05, Bring the report"><p>Alice, 10:05: Bring the report</p></article>
+    <article tabindex="-1" aria-posinset="6" aria-setsize="6" aria-label="Me, 10:06, Will do"><p>Me, 10:06: Will do</p></article>
+  </div>
+  <h2>Pinned messages</h2>
+  <ul role="list" id="pins" aria-label="Pinned messages">
+    <li class="pin" role="listitem" tabindex="0" aria-label="Pinned: office is closed on Friday">Pinned: office is closed on Friday</li>
+    <li class="pin" role="listitem" tabindex="-1" aria-label="Pinned: wifi password is in the wiki">Pinned: wifi password is in the wiki</li>
+    <li class="pin" role="listitem" tabindex="-1" aria-label="Pinned: standup moved to 9:30">Pinned: standup moved to 9:30</li>
+  </ul>
+  <div role="status" id="status" aria-live="polite"></div>
+  <label>Message <input id="composer" type="text"></label>
+</main>
+</div>
+<script>
+function roving(container, items) {
+  container.addEventListener("keydown", function (e) {
+    var list = Array.from(container.querySelectorAll(items));
+    var i = list.indexOf(document.activeElement);
+    if (i < 0) return;
+    var j = i;
+    if (e.key === "ArrowDown") j = Math.min(list.length - 1, i + 1);
+    else if (e.key === "ArrowUp") j = Math.max(0, i - 1);
+    else if (e.key === "Home") j = 0;
+    else if (e.key === "End") j = list.length - 1;
+    else return;
+    e.preventDefault();
+    list[i].tabIndex = -1;
+    list[j].tabIndex = 0;
+    list[j].focus();
+  });
+}
+roving(document.getElementById("msgs"), "article");
+roving(document.getElementById("pins"), "li");
+var dlg = document.getElementById("dialogs");
+function pick(o) {
+  Array.from(dlg.querySelectorAll("[role=option]")).forEach(function (x) { x.setAttribute("aria-selected", "false"); });
+  o.setAttribute("aria-selected", "true");
+  dlg.setAttribute("aria-activedescendant", o.id);
+}
+Array.from(dlg.querySelectorAll("[role=option]")).forEach(function (o) { o.addEventListener("click", function () { pick(o); }); });
+dlg.addEventListener("keydown", function (e) {
+  var opts = Array.from(dlg.querySelectorAll("[role=option]"));
+  var cur = opts.findIndex(function (o) { return o.id === dlg.getAttribute("aria-activedescendant"); });
+  var j = cur;
+  if (e.key === "ArrowDown") j = Math.min(opts.length - 1, cur + 1);
+  else if (e.key === "ArrowUp") j = Math.max(0, cur - 1);
+  else return;
+  e.preventDefault();
+  opts[cur].setAttribute("aria-selected", "false");
+  opts[j].setAttribute("aria-selected", "true");
+  dlg.setAttribute("aria-activedescendant", opts[j].id);
+});
+</script>
+</body>
+</html>

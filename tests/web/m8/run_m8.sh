@@ -18,7 +18,7 @@
 #   * the compositor world: its own dbus-daemon and a headless gnome-shell on a unique Wayland
 #     socket, so Firefox has a display. Firefox reaches it through an absolute WAYLAND_DISPLAY.
 #
-# env: M7_FIREFOX (default firefox), M7_KEEP=1 keeps the compositor world's temp dir,
+# env: M8_READER_BIN (the gorca binary under test; default target/release/gorca), M7_FIREFOX (default firefox), M7_KEEP=1 keeps the compositor world's temp dir,
 # GORCA_M8_STEPS=QN.h,QN.k restricts the steps of a scripted scenario to those id prefixes;
 # GORCA_M8_DUMP=1 keeps the speech and bus tail of every failing step next to the results.
 # Teardown signals only the PIDs recorded here (CLAUDE.md "Live-session safety"); never by name.
@@ -92,6 +92,6 @@ fi
 mkdir -p "bench/results/e2e/$LABEL"
 export GORCA_E2E_READER_LOG=$ROOT/bench/results/e2e/$LABEL/reader-$(date -u +%Y%m%dT%H%M%SZ).log
 tests/harness/run-isolated.sh target/release/e2e-m8 run --label "$LABEL" \
-  --reader "daemon:$ROOT/target/release/gorca,--impersonate-orca" \
+  --reader "daemon:${M8_READER_BIN:-$ROOT/target/release/gorca},--impersonate-orca" \
   --reader-env GORCA_M7=1 --reader-env GORCA_M8=1 --reader-env NO_COLOR=1 --reader-env RUST_LOG=${M7_RUST_LOG:-warn,gorca_phase=info} "$@"
 exit $?

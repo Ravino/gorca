@@ -1176,6 +1176,116 @@ fn cl() -> Vec<Step> {
     ]
 }
 
+/// CHR-0: a document whose tree grows from a few nodes to ~900 while its load is held open by a
+/// slow image (tests/web/chr0/with_slow_server.sh; 45 s). Chromium sends no structural event for
+/// that growth (Electron even keeps the new content out of the platform tree until the load ends:
+/// step 0, docs/reports/chr0-step0). A mirror built early stays small unless gorca repairs it at
+/// the end of the load. The steps run after the load ended. On Firefox the page is a control.
+fn slow() -> Vec<Step> {
+    vec![
+        top("SL.top"),
+        s("SL.wait", P2, "Let the load end (45 s after the page opened)", Act::Wait(40000), &[]).win(40500),
+        s("SL.after.h", P0, "H after the load: a heading that only a repaired mirror has", n('h'), &["Section 1", "heading level 2"]).win(1500),
+        s("SL.after.h2", P0, "H again", n('h'), &["Section 2", "heading level 2"]).win(1500),
+        s("SL.after.k", P0, "K: a link of the grown page", n('k'), &["Item 2.1", "link"]).win(1500),
+        s("SL.after.ph", P0, "Shift+H back", p('h'), &["Section 2", "heading level 2"]).win(1500),
+    ]
+}
+
+/// The control: the load ends at once (no slow image), so the same steps need no wait.
+fn slow_ctl() -> Vec<Step> {
+    vec![
+        top("SC.top"),
+        s("SC.h", P0, "H: a heading of the grown page", n('h'), &["Section 1", "heading level 2"]).win(1500),
+        s("SC.h2", P0, "H again", n('h'), &["Section 2", "heading level 2"]).win(1500),
+        s("SC.k", P0, "K: a link of the grown page", n('k'), &["Item 2.1", "link"]).win(1500),
+        s("SC.ph", P0, "Shift+H back", p('h'), &["Section 2", "heading level 2"]).win(1500),
+    ]
+}
+
+/// A web messenger: lists that move by the arrow keys inside the page. Browse mode reads the
+/// messages; the sticky focus mode (gorca+Space) sends the arrows to the page and the reader
+/// speaks the message the page focuses; listbox with aria-activedescendant and a roving list.
+fn msg_keys() -> Vec<Step> {
+    vec![
+        top("MK.top"),
+        s("MK.br.h1", P0, "H: the next heading after the first line", n('h'), &["Messenger", "heading level 1"]),
+        s("MK.br.h3", P0, "H: the conversation", n('h'), &["Conversation with Alice"]),
+        s("MK.br.m1", P0, "Down: the first message is read", key0(DOWN), &["Lunch at noon"]),
+        s("MK.br.m2", P0, "Down: the next message", key0(DOWN), &["Sure, where"]),
+        s("MK.br.m3", P0, "Down: the next message", key0(DOWN), &["new place on Main street"]),
+        s("MK.br.f", P1, "Browse mode did not move the page focus", key0(UP), &["Sure, where"]).no_focus(),
+        // forced (sticky) focus mode: the arrows are the page's
+        pos("MK.fm.click", Act::Click),
+        pos("MK.fm.focus1", Act::Focus(role::ANY, "Alice, 10:01")),
+        // the first key typed into the browser only gives its window the keyboard focus
+        pos("MK.fm.prime", Act::AppKeys(&[42])),
+        s("MK.fm.toggle", P0, "gorca+Space: sticky focus mode", Act::Chord(INSERT, SPACE, 0), &["focus mode"]).gate(Gate::Mode),
+        s("MK.fm.pass", P0, "Down is not consumed in sticky focus mode: the arrows are the page's", key0(DOWN), &[]).passes_through(),
+        s("MK.fm.down1", P0, "Down reaches the page, the reader speaks the message the page focuses", Act::AppKeys(&[108]), &["Sure, where"]).not(&["browse mode"]).win(1500),
+        s("MK.fm.down2", P0, "Down again", Act::AppKeys(&[108]), &["new place on Main street"]).win(1500),
+        s("MK.fm.up1", P0, "Up", Act::AppKeys(&[103]), &["Sure, where"]).win(1500),
+        s("MK.fm.end", P1, "End: the last message", Act::AppKeys(&[107]), &["Will do"]).win(1500),
+        s("MK.fm.back", P0, "gorca+Space: back to browse mode", Act::Chord(INSERT, SPACE, 0), &["browse mode"]).gate(Gate::Mode),
+        // a list of list items with roving tabindex: a focused list item is a widget (NVDA), so
+        // the focus switches to focus mode by itself; Escape leaves it, the toggle makes it sticky
+        s("MK.pn.auto", P0, "Focus on a list item: automatic focus mode", Act::Focus(role::ANY, "Pinned: office"), &["focus mode", "Pinned: office"]).win(1200),
+        s("MK.pn.down", P0, "Down: the next pinned message", Act::AppKeys(&[108]), &["wifi password"]).win(1500),
+        esc("MK.pn.esc"),
+        s("MK.pn.toggle", P0, "gorca+Space: sticky focus mode", Act::Chord(INSERT, SPACE, 0), &["focus mode"]).gate(Gate::Mode),
+        s("MK.pn.pass", P0, "Down is not consumed in sticky focus mode", key0(DOWN), &[]).passes_through(),
+        s("MK.pn.down2", P0, "Down reaches the page: the next pinned message", Act::AppKeys(&[108]), &["standup moved"]).win(1500),
+        s("MK.pn.back", P0, "gorca+Space: back to browse mode", Act::Chord(INSERT, SPACE, 0), &["browse mode"]).gate(Gate::Mode),
+        // a listbox with aria-activedescendant: auto focus mode on focus, arrows move the option
+        s("MK.dl.focus", P0, "Focus on the dialog list: focus mode", Act::Focus(role::ANY, "Dialogs"), &["focus mode"]).win(1200),
+        s("MK.dl.down", P0, "Down: the next dialog is spoken (active descendant)", Act::AppKeys(&[108]), &["Bob"]).win(1500),
+        s("MK.dl.down2", P0, "Down again", Act::AppKeys(&[108]), &["Carol"]).win(1500),
+        esc("MK.dl.esc"),
+    ]
+}
+
+/// A web messenger: lists that move by the arrow keys inside the page. Browse mode reads the
+/// messages; the sticky focus mode (gorca+Space) lets the arrows through to the page and the
+/// reader speaks the message the page focuses. The page's own focus moves are made by AT-SPI
+/// (`GrabFocus` and a click on an option), which is what a page does on an arrow key; the keys
+/// themselves are checked for not being consumed. `msg_keys` types real keys.
+fn msg() -> Vec<Step> {
+    vec![
+        top("MS.top"),
+        s("MS.br.h1", P0, "H: the next heading after the first line", n('h'), &["Messenger", "heading level 1"]),
+        s("MS.br.h3", P0, "H: the conversation", n('h'), &["Conversation with Alice"]),
+        s("MS.br.m1", P0, "Down: the first message is read", key0(DOWN), &["Lunch at noon"]),
+        s("MS.br.m2", P0, "Down: the next message", key0(DOWN), &["Sure, where"]),
+        s("MS.br.m3", P0, "Down: the next message", key0(DOWN), &["new place on Main street"]),
+        s("MS.br.f", P1, "Browse mode did not move the page focus", key0(UP), &["Sure, where"]).no_focus(),
+        // forced (sticky) focus mode: the arrows are the page's
+        pos("MS.fm.focus1", Act::Focus(role::ANY, "Alice, 10:01")),
+        s("MS.fm.toggle", P0, "gorca+Space: sticky focus mode", Act::Chord(INSERT, SPACE, 0), &["focus mode"]).gate(Gate::Mode),
+        s("MS.fm.pass", P0, "Down is not consumed in sticky focus mode: the arrows are the page's", key0(DOWN), &[]).passes_through(),
+        s("MS.fm.pass_up", P0, "Up is not consumed either", key0(UP), &[]).passes_through(),
+        s("MS.fm.down1", P0, "The page moves its focus to the next message: the reader speaks it", Act::Focus(role::ANY, "Me, 10:02"), &["Sure, where"]).not(&["browse mode"]).win(1500),
+        s("MS.fm.down2", P0, "and the next", Act::Focus(role::ANY, "Alice, 10:03"), &["new place on Main street"]).win(1500),
+        s("MS.fm.up1", P0, "and back", Act::Focus(role::ANY, "Me, 10:02"), &["Sure, where"]).win(1500),
+        s("MS.fm.end", P1, "the last message", Act::Focus(role::ANY, "Me, 10:06"), &["Will do"]).win(1500),
+        s("MS.fm.back", P0, "gorca+Space: back to browse mode", Act::Chord(INSERT, SPACE, 0), &["browse mode"]).gate(Gate::Mode),
+        // a list of list items with roving tabindex: a focused list item is a widget (NVDA), so
+        // the focus switches to focus mode by itself; Escape leaves it, the toggle makes it sticky
+        s("MS.pn.auto", P0, "Focus on a list item: automatic focus mode", Act::Focus(role::ANY, "Pinned: office"), &["focus mode", "Pinned: office"]).win(1200),
+        s("MS.pn.down", P0, "The next pinned message is spoken", Act::Focus(role::ANY, "Pinned: wifi"), &["wifi password"]).win(1500),
+        esc("MS.pn.esc"),
+        s("MS.pn.toggle", P0, "gorca+Space: sticky focus mode", Act::Chord(INSERT, SPACE, 0), &["focus mode"]).gate(Gate::Mode),
+        s("MS.pn.pass", P0, "Down is not consumed in sticky focus mode", key0(DOWN), &[]).passes_through(),
+        s("MS.pn.down2", P0, "The page moves on: the next pinned message", Act::Focus(role::ANY, "Pinned: standup"), &["standup moved"]).win(1500),
+        s("MS.pn.back", P0, "gorca+Space: back to browse mode", Act::Chord(INSERT, SPACE, 0), &["browse mode"]).gate(Gate::Mode),
+        // a listbox with aria-activedescendant: auto focus mode on focus; a click on an option
+        // moves the active descendant (what the arrow keys do)
+        s("MS.dl.focus", P0, "Focus on the dialog list: focus mode", Act::Focus(role::ANY, "Dialogs"), &["focus mode"]).win(1200),
+        s("MS.dl.down", P0, "The active dialog changes: it is spoken", Act::Do(role::ANY, "Bob"), &["Bob"]).win(1500),
+        s("MS.dl.down2", P0, "and the next", Act::Do(role::ANY, "Carol"), &["Carol"]).win(1500),
+        esc("MS.dl.esc"),
+    ]
+}
+
 /// Every scenario, in run order.
 pub fn scenarios() -> Vec<Scenario> {
     let sc = |id, area, page, title, body| Scenario { id, area, page, title, body, xfail: None };
@@ -1207,6 +1317,10 @@ pub fn scenarios() -> Vec<Scenario> {
         sc("M8-FLS", "flat review on a long scrolled page", "longscroll.html", "M8 Long scrolled page", Body::Steps(fls)),
         sc("M8-TG2", "custom ARIA buttons: Tab, B and arrows", "telegram2.html", "M8 Telegram custom buttons", Body::Steps(tg2)),
         sc("M8-TG3", "custom ARIA buttons mounted after load", "telegram3.html", "M8 Telegram dynamic buttons", Body::Steps(tg3)),
+        sc("M8-SLOW", "CHR-0: tree grows while the load is held open", "slowload.html", "M8 SlowLoad", Body::Steps(slow)),
+        sc("M8-SLOW0", "CHR-0 control: the same page without the slow image", "slowload-ctl.html", "M8 SlowLoad Control", Body::Steps(slow_ctl)),
+        sc("M8-MSG", "web messenger: lists, browse mode and sticky focus mode", "messenger.html", "M8 Messenger", Body::Steps(msg)),
+        sc("M8-MSGK", "web messenger with real arrow keys typed into the browser (Chromium)", "messenger.html", "M8 Messenger", Body::Steps(msg_keys)),
         sc("M8-RDESC", "review: description flood", "../../m8b/review/r_desc.html", "M8b Review Desc", Body::Steps(rv_desc)),
         sc("M8-RNAME", "review: name flood", "../../m8b/review/r_name.html", "M8b Review Name", Body::Steps(rv_name)),
         sc("M8-RINV", "review: invalid flood", "../../m8b/review/r_invalid.html", "M8b Review Invalid", Body::Steps(rv_inv)),

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 SlowLoad Late</title></head>
+<body>
+<!--
+  CHR-0 (Chromium mirror freshness): a Signal-shaped shell. The page starts as a tiny document
+  (a heading and an empty main), the "application" renders ~900 nodes 20 s after DOMContentLoaded, and the load stays open because of one image that a loopback server answers
+  after 45 s (tests/web/chr0/with_slow_server.sh, port 18771). Chromium sends no
+  children-changed:add while a page loads, and nothing structural when the load ends; a mirror
+  built early stays at its first size unless gorca repairs it. Gecko does not care. The control
+  page (slowload-ctl.html) is the same without the slow image.
+-->
+<h1>Slow shell</h1>
+<main id="app" aria-label="App"></main>
+<img src="http://127.0.0.1:18771/slow?ms=45000" alt="" width="1" height="1">
+<script>
+// The application renders 20 s after DOMContentLoaded, by a timer (a user gesture such as a click
+// makes Chromium send the structural events anyway; a timer does not): gorca has mirrored the
+// small page by then (the test focuses the document at once).
+document.addEventListener("DOMContentLoaded", function () {
+  setTimeout(function () {
+    var app = document.getElementById("app");
+    for (var i = 1; i <= 45; i++) {
+      var sec = document.createElement("section");
+      sec.setAttribute("aria-label", "Group " + i);
+      var h = document.createElement("h2");
+      h.textContent = "Section " + i;
+      var p = document.createElement("p");
+      p.textContent = "Body text of section " + i + ".";
+      var ul = document.createElement("ul");
+      for (var j = 1; j <= 6; j++) {
+        var li = document.createElement("li");
+        var a = document.createElement("a");
+        a.href = "#s" + i + "-" + j;
+        a.textContent = "Item " + i + "." + j;
+        li.appendChild(a);
+        ul.appendChild(li);
+      }
+      sec.append(h, p, ul);
+      app.appendChild(sec);
+    }
+  }, 12000);
+});
+</script>
+</body>
+</html>
