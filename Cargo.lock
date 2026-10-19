@@ -1318,6 +1318,7 @@ name = "gorca-fuse"
 version = "0.0.0"
 dependencies = [
  "gorca-model",
+ "serde_json",
 ]
 
 [[package]]

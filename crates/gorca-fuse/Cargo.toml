@@ -1,6 +1,6 @@
 [package]
 name = "gorca-fuse"
-description = "Pure FUSE: registers, strata, taint, hedge, binding generations and explain (M22a; empty until B1a)."
+description = "Pure FUSE: registers, strata, taint, hedge, binding generations and explain (M22a)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,6 +9,9 @@ publish.workspace = true
 
 [dependencies]
 gorca-model = { workspace = true }
+
+[dev-dependencies]
+serde_json = "1"
 
 [lints]
 workspace = true

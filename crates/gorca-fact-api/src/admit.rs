@@ -23,12 +23,39 @@ pub struct Scope {
     /// The site (document host hash) of a web document. The source-wide quarantine counts
     /// distinct sites, not tabs or reloads (review B-1).
     pub site: Option<u64>,
+    /// The browser tab, derived by the core from the connection (never declared by the
+    /// source). Stable across reloads and navigations of one tab, unlike `doc`.
+    pub tab: Option<u64>,
+}
+
+/// What the source-wide quarantine counts. Typed per kind, so a site hash, a tab id and a
+/// document id with the same number can never collide.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum WideKey {
+    /// The site (document host) within an app: the preferred key, stable across reloads and tabs.
+    Site(AppId, u64),
+    /// The tab, when the site is unknown: stable across reloads of that tab.
+    Tab(AppId, u64),
+    /// The document, when neither site nor tab is known: the only information there is.
+    Doc(AppId, u64),
+    /// A whole application without documents (native toolkit scope).
+    App(AppId),
 }
 
 impl Scope {
-    /// What the source-wide quarantine counts: the site within an app, not the document.
-    pub const fn site_key(&self) -> (AppId, Option<u64>) {
-        (self.app, self.site)
+    /// Site if known, else tab if known, else document, else the app.
+    ///
+    /// Source-wide quarantine rationale: the per-scope quarantine already contains a misbehaving
+    /// source in that scope. The source-wide one must fire only on evidence across distinct
+    /// sites, tabs or apps, never on per-navigation ids a page controls. So `Doc` keys (only
+    /// possible for non-web scopes; web documents always carry a tab) never count toward it.
+    pub const fn wide_key(&self) -> WideKey {
+        match (self.site, self.tab, self.doc) {
+            (Some(h), _, _) => WideKey::Site(self.app, h),
+            (None, Some(t), _) => WideKey::Tab(self.app, t),
+            (None, None, Some(d)) => WideKey::Doc(self.app, d),
+            (None, None, None) => WideKey::App(self.app),
+        }
     }
 }
 
@@ -61,6 +88,9 @@ impl BindInfo {
 pub trait ScopeLookup {
     /// The scope a node of this app lives in, `None` when the node is not (yet) known.
     fn node_scope(&self, node: NodeKey) -> Option<Scope>;
+    /// True when `doc` is the pinned tab's **previous** document and the tab navigated within
+    /// the race window (about 2 s). Evidence of a benign navigation race, nothing else.
+    fn was_recent_doc(&self, doc: Option<u64>, pinned: Scope) -> bool;
     /// How well the subject is bound right now, and the current generation. `pinned` is the
     /// transport-pinned scope: an implementation must resolve anchors only inside it, so a
     /// per-app id index can never bind across tabs (review B-5).
@@ -106,9 +136,14 @@ pub enum Severity {
 pub enum RejectReason {
     /// FS-11 / F19: the target is outside the transport-pinned scope.
     ScopeMismatch,
-    /// Same app, but the node now lives in another document (a navigation race): rejected and
-    /// counted, never stored, but not the source's fault.
+    /// The node lives in the pinned tab's previous document and the tab navigated within the
+    /// race window: rejected and counted, never stored. Benign up to a small rate, then a
+    /// strike (`SourceEvent::DocRace`). A node of any other document is `ScopeMismatch`.
     DocChanged,
+    /// The pinned scope is a web document without a tab. The connection layer always fills the
+    /// tab for web documents, so this is a core wiring fault, not the source's: rejected and
+    /// logged, never a strike.
+    MissingTab,
     /// The class may not write this kind of group (for example Annotation facts are never fused).
     ClassNotAllowed,
     /// The group code is not registered.
@@ -139,9 +174,10 @@ impl RejectReason {
             RejectReason::RegisterCap => Severity::Overload,
             // Page-caused or timing races: a page can flip `type=password` between the
             // add-on's send and admission, so these never strike (review B-1).
-            RejectReason::ParkFull | RejectReason::PrivacyExcluded | RejectReason::DocChanged => {
-                Severity::Benign
-            }
+            RejectReason::ParkFull
+            | RejectReason::PrivacyExcluded
+            | RejectReason::DocChanged
+            | RejectReason::MissingTab => Severity::Benign,
         }
     }
 }
@@ -298,6 +334,11 @@ fn truncate(f: &mut Fact) -> u32 {
 ///
 /// The declared anchor kinds are `g.anchors` (computed from the descriptor).
 pub fn admit(f: &Fact, g: &SourceGrant, scope: &ScopeView<'_>) -> Admission {
+    // 0. A web document always has a tab (filled by the connection layer); without it the
+    // source-wide accounting could not tell tabs apart, so nothing is admitted.
+    if scope.pinned.doc.is_some() && scope.pinned.tab.is_none() {
+        return reject(RejectReason::MissingTab);
+    }
     // 1. Scope (FS-11, F19). A subject's scope is never taken from the fact. A node whose
     // scope is not known yet fails closed: it is parked, never admitted (re-run on retry).
     let mut scope_unknown = false;
@@ -307,11 +348,14 @@ pub fn admit(f: &Fact, g: &SourceGrant, scope: &ScopeView<'_>) -> Admission {
         }
         match scope.lookup.node_scope(*n) {
             Some(s) if s != scope.pinned => {
-                return reject(if s.app == scope.pinned.app {
-                    RejectReason::DocChanged
-                } else {
-                    RejectReason::ScopeMismatch
-                });
+                return reject(
+                    if s.app == scope.pinned.app && scope.lookup.was_recent_doc(s.doc, scope.pinned)
+                    {
+                        RejectReason::DocChanged
+                    } else {
+                        RejectReason::ScopeMismatch
+                    },
+                );
             }
             Some(_) => {}
             None => scope_unknown = true,
@@ -433,6 +477,9 @@ mod tests {
         fn node_scope(&self, _: NodeKey) -> Option<Scope> {
             None
         }
+        fn was_recent_doc(&self, _: Option<u64>, _: Scope) -> bool {
+            false
+        }
         fn bind(&self, _: &Subject, pinned: Scope) -> BindInfo {
             self.seen.set(Some(pinned));
             BindInfo::UNBOUND
@@ -457,6 +504,7 @@ mod tests {
             },
             doc: Some(7),
             site: Some(1),
+            tab: Some(1),
         };
         let spy = Spy {
             seen: std::cell::Cell::new(None),
@@ -499,7 +547,11 @@ mod tests {
         ] {
             assert_eq!(r.severity(), Severity::Violation);
         }
-        for r in [RejectReason::PrivacyExcluded, RejectReason::DocChanged] {
+        for r in [
+            RejectReason::PrivacyExcluded,
+            RejectReason::DocChanged,
+            RejectReason::MissingTab,
+        ] {
             assert_eq!(r.severity(), Severity::Benign, "{r:?}");
         }
         assert_eq!(RejectReason::RegisterCap.severity(), Severity::Overload);
