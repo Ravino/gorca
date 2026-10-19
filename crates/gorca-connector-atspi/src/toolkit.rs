@@ -70,6 +70,24 @@ impl Toolkit {
 }
 
 impl Toolkit {
+    /// Quirk row `blink-child-device-pixels` (docs/reports/mouse-emulation-design.md section 3, ADR-0025
+    /// 14): in Chromium and Electron the extents of the web content's children are in DEVICE pixels
+    /// while the toplevel is logical, so a pointer target divides them by the monitor scale. Verified at
+    /// monitor scale 1.25 and 2. Gecko and the GTK/Qt toolkits report logical pixels.
+    pub fn children_in_device_pixels(self) -> bool {
+        match self {
+            Toolkit::Chromium => true,
+            Toolkit::Gtk3
+            | Toolkit::Gtk4
+            | Toolkit::Qt
+            | Toolkit::Firefox
+            | Toolkit::Vte
+            | Toolkit::Other => false,
+        }
+    }
+}
+
+impl Toolkit {
     /// Quirk row `gecko-insert-offset`: Gecko now and then names a text-inserted offset other
     /// than where the text went, followed by a caret event that moves by exactly the insert:
     /// one or two units after the caret for scripted or committed text (13 of 461 and 24 of

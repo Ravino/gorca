@@ -93,11 +93,21 @@ impl PointerSink for Mock {
 
     fn move_to(
         &self,
-        _t: PointTarget,
-        _o: ClickOpts,
+        t: PointTarget,
+        o: ClickOpts,
         _d: Deadline,
     ) -> BoxFuture<'_, Result<PointerOutcome, PointerError>> {
-        Box::pin(async { Err(PointerError::NoLocation) })
+        Box::pin(async move {
+            let at = match t {
+                PointTarget::Window { top, x, y } => format!("{} {x} {y}", top.title),
+                PointTarget::Stage { x, y } => format!("stage {x} {y}"),
+            };
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("move_to {at} covered={:?}", o.if_covered));
+            Ok(self.outcome())
+        })
     }
 
     fn button(
@@ -233,7 +243,7 @@ async fn availability_reaches_the_reader_and_a_click_reaches_the_sink() {
     // The helper is absent: the command says why and the sink sees nothing.
     r.press(CoreCmd::MouseLeftClick, 1).await;
     assert!(
-        r.wait_text("Mouse not available: gorca helper is not running", 3)
+        r.wait_text("Mouse not available: the pointer service is not running", 3)
             .await
             .is_some()
     );
@@ -301,4 +311,61 @@ async fn say_position_uses_the_sink() {
     assert!(r.wait_text("Screen 5, 6, monitor 1", 3).await.is_some());
     let _ = ControlMsg::Pointer(gorca_core::PointerMsg::Enabled(true)); // the public message type exists
     r.stop().await;
+}
+
+// ---- route to review through a real app actor: Reader -> Locate in the app -> sink ------------------------
+
+use gorca_connector_api::{Connector, ConnectorCtx};
+use gorca_model::{ConnectorId, Role};
+use gorca_rt::Clock;
+use gorca_testkit::{ScriptedApp, ScriptedConnector, ScriptedNode};
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn route_to_review_locates_the_focused_node_in_its_app_and_moves_the_pointer() {
+    let speech = Arc::new(Recording::default());
+    let mock = Mock::new(PointerAvail::Ready { version: 2 });
+    let mut core = Core::new(CoreConfig::default())
+        .with_speech(Arc::clone(&speech) as Arc<dyn SpeechOut>)
+        .with_pointer(Arc::clone(&mock) as Arc<dyn PointerSink>);
+    let registry = core.connector_registrar(ConnectorId(1));
+    let senders = core.reader_senders();
+    let shutdown = CancellationToken::new();
+    let core = tokio::spawn(core.run(shutdown.clone()));
+    let apps = vec![ScriptedApp {
+        scope: "app".to_owned(),
+        nodes: vec![(3, ScriptedNode::new(Role::Button, "OK"))],
+    }];
+    let (conn, handle) = ScriptedConnector::new(apps.clone());
+    let ctx = ConnectorCtx {
+        id: ConnectorId(1),
+        registry,
+        shutdown: shutdown.clone(),
+        clock: Clock::System,
+    };
+    let connector = tokio::spawn(Box::new(conn).run(ctx));
+    handle.wait_app("app").await;
+    handle.focus("app", 3);
+    let mut r = Rig {
+        speech,
+        mock: Arc::clone(&mock),
+        senders,
+        shutdown,
+        core,
+        epoch: 0,
+    };
+    assert!(
+        r.wait_text("OK button", 5).await.is_some(),
+        "the focus is spoken first"
+    );
+    tokio::time::sleep(Duration::from_millis(80)).await; // availability reached the Reader
+    r.press(CoreCmd::MouseRouteToReview, 1).await;
+    assert!(
+        r.wait_text("Mouse moved", 5).await.is_some(),
+        "spoken: {:?}",
+        r.speech.spoken.lock().unwrap()
+    );
+    // the scripted app's resolver put the node id in x: the located node is the focused one
+    assert_eq!(mock.calls(), ["move_to scripted 3 7 covered=Proceed"]);
+    r.stop().await;
+    let _ = connector.await;
 }

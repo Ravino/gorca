@@ -51,6 +51,7 @@ pub use enablement::{Enablement, StatusValues};
 pub use fetch::items::{
     Decoded, DumpStats, ItemsError, MAX_DUMP_BYTES, MAX_DUMP_NODES, decode_get_items,
 };
+pub use fetch::locate::locate_object;
 pub use fetch::{FetchCounters, FetchCountersSnapshot};
 pub use paths::{GLOBAL_BYTE_CAP as PATH_TABLE_BYTE_CAP, Owner, PathTable};
 pub use role_map::map_role;

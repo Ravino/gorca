@@ -19,9 +19,11 @@
 
 pub mod avail;
 mod client;
+pub mod matcher;
 pub mod wire;
 
 pub use avail::{AvailEffect, AvailEvent, AvailMachine, ProbeResult};
-pub use client::{LATE_CAP, PENDING, PROBE_STEP, ShellHelperClient};
+pub use client::{LATE_CAP, MAX_CALL_DEADLINE, PENDING, PROBE_STEP, ShellHelperClient};
 pub use gorca_output_api::PointerAvail;
+pub use matcher::{MatchError, MonitorRow, WindowRow, resolve};
 pub use wire::{HELPER_INTERFACE, HELPER_NAME, HELPER_PATH, Origin, SHELL_NAME, WireTarget};

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # GTK4 click recorder for the private shell. Prints "EV <kind> <detail>" lines with window-relative logical px
 # (translate_coordinates to the toplevel = Meta frame origin on Wayland). Usage: gtk4_clicker.py TITLE [menu]
+# With "target": a Gtk.Button "Target" 120 px from the left and 80 px from the top of the content; "EV activate Target".
 # With "dialog": also opens a transient (non-popup) window over the parent.
 # With "menu": a MenuButton "Menu" (top-left) opens a popover with buttons "Item A", "Item B"; activation prints
 # "EV activate <label>".
@@ -10,6 +11,7 @@ from gi.repository import Gtk, GLib
 title = sys.argv[1] if len(sys.argv) > 1 else 'clicker'
 menu = 'menu' in sys.argv[2:]
 dialog = 'dialog' in sys.argv[2:]
+target = 'target' in sys.argv[2:]
 win = None
 def rel(widget, x, y):
     p = widget.translate_coordinates(win, x, y)
@@ -33,6 +35,11 @@ def activate(app):
         mb.set_popover(pop)
         mb.set_halign(Gtk.Align.START)
         box.append(mb)
+    if target:
+        tb = Gtk.Button(label='Target')
+        tb.set_halign(Gtk.Align.START); tb.set_margin_start(120); tb.set_margin_top(80)
+        tb.connect('clicked', lambda b: print('EV activate Target', flush=True))
+        box.append(tb)
     da = Gtk.DrawingArea(); da.set_hexpand(True); da.set_vexpand(True)
     g = Gtk.GestureClick(); g.set_button(0); g.connect('pressed', on_press); g.connect('released', on_rel); da.add_controller(g)
     box.append(da)

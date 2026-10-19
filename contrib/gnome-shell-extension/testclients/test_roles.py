@@ -36,9 +36,10 @@ if role == 'b':
     R.check('B GetWindows works', isinstance(windows(), list))
     for nm, fn in [('GetPointer', get_pointer), ('PointerMove', lambda: move(0, 'stage', 300, 10)),
                    ('PointerClickAt', lambda: click_at(0, 'stage', 300, 10, 1)), ('PointerButton', lambda: button(1, 'press')),
-                   ('PointerRelease', release)]:
+                   ]:
         e, _ = err(fn)
         R.check(f'B {nm} -> AccessDenied (no pointer cap)', e and e.name == 'AccessDenied', str(e))
+    R.check('B PointerRelease is allowed for any allow-listed caller and releases nothing', err(release)[0] is None and release() == 0)
     log0 = shell_log().count('DENIED')
     for i in range(30):
         err(get_pointer)

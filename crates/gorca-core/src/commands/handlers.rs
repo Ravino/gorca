@@ -807,6 +807,7 @@ impl Reader {
             ControlMsg::Input(n) => self.on_input_notice(n, fx),
             ControlMsg::Pointer(m) => self.on_pointer(m, now, fx),
             ControlMsg::PointerReply(r) => self.on_pointer_reply(r, now, fx),
+            ControlMsg::PointerHint(h) => self.cmd.pointer_hint = Some(h),
         }
     }
 

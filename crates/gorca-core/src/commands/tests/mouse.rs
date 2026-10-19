@@ -162,22 +162,22 @@ fn mouse_commands_say_why_the_mouse_is_not_available() {
     let mut f = fixture();
     assert_eq!(
         say(&mut f),
-        ["Mouse not available: gorca helper is not running"]
+        ["Mouse not available: the pointer service is not running"]
     );
     avail(&mut f, PointerAvail::TooOld { version: 1 }, Duration::ZERO);
     assert_eq!(
         say(&mut f),
-        ["Mouse not available: gorca helper is too old"]
+        ["Mouse not available: the pointer service is too old"]
     );
     avail(&mut f, PointerAvail::NoCap, Duration::ZERO);
     assert_eq!(
         say(&mut f),
-        ["Mouse not available: allow pointer in ~/.config/gorca/shell-helper.json"]
+        ["Mouse not available: pointer permission is not granted."]
     );
     avail(&mut f, PointerAvail::Denied, Duration::ZERO);
     assert_eq!(
         say(&mut f),
-        ["Mouse not available: gorca is not allowed by the helper"]
+        ["Mouse not available: gorca is not allowed by the pointer service"]
     );
     avail(&mut f, PointerAvail::Unresponsive, Duration::ZERO);
     assert_eq!(
@@ -445,7 +445,7 @@ fn losing_the_helper_forgets_the_lock_and_switching_the_mouse_off_releases_it() 
     avail(&mut f, PointerAvail::Absent, Duration::from_secs(12));
     assert_eq!(
         spoken(&f.run(CoreCmd::MouseLeftLockToggle, 1)),
-        ["Mouse not available: gorca helper is not running"]
+        ["Mouse not available: the pointer service is not running"]
     );
 }
 
@@ -479,16 +479,93 @@ fn say_position_reads_the_window_position_once_and_the_screen_position_twice() {
 }
 
 #[test]
-fn routing_and_item_clicks_say_no_location_until_the_resolver_exists() {
+fn item_clicks_and_review_to_pointer_say_no_location_until_they_exist() {
     let mut f = ready_fixture();
     for c in [
-        CoreCmd::MouseRouteToReview,
         CoreCmd::MouseReviewToPointer,
         CoreCmd::MouseLeftClickItem,
         CoreCmd::MouseRightClickItem,
     ] {
         assert_eq!(spoken(&f.run(c, 1)), ["No location"], "{}", c.name());
     }
+}
+
+fn at_reqs(fx: &ReaderEffects) -> Vec<crate::commands::PointerAtReq> {
+    fx.iter()
+        .filter_map(|e| {
+            if let ReaderEffect::PointerAt(r) = e {
+                Some(*r)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn route_to_review_locates_the_focused_object_and_says_moved() {
+    use crate::commands::AtAct;
+    let mut f = ready_fixture();
+    // nothing focused: no location, and nothing is asked
+    let fx = f.run(CoreCmd::MouseRouteToReview, 1);
+    assert_eq!(spoken(&fx), ["No location"]);
+    assert!(at_reqs(&fx).is_empty());
+    f.focus(1);
+    let fx = f.run(CoreCmd::MouseRouteToReview, 1);
+    let reqs = at_reqs(&fx);
+    assert_eq!(reqs.len(), 1);
+    assert_eq!(
+        (reqs[0].node, reqs[0].offset, reqs[0].act),
+        (key(1), None, AtAct::Move)
+    );
+    assert_eq!(reqs[0].if_covered, gorca_output_api::IfCovered::Proceed);
+    assert!(spoken(&fx).is_empty(), "spoken on the answer");
+    let fx = reply(
+        &mut f,
+        reqs[0].id,
+        Ok(PointerDone::Outcome(outcome(0))),
+        Duration::from_millis(4),
+    );
+    assert_eq!(spoken(&fx), ["Mouse moved"]);
+    // covered: said too
+    let id = at_reqs(&f.run(CoreCmd::MouseRouteToReview, 1))[0].id;
+    let mut o = outcome(0);
+    o.occluded = true;
+    let fx = reply(
+        &mut f,
+        id,
+        Ok(PointerDone::Outcome(o)),
+        Duration::from_millis(5),
+    );
+    assert_eq!(spoken(&fx), ["Mouse moved", "Covered"]);
+}
+
+#[test]
+fn a_target_that_cannot_be_located_is_reported_and_a_hidden_window_says_so() {
+    let mut f = ready_fixture();
+    f.focus(1);
+    for (err, text) in [
+        (PointerError::NoLocation, "No location"),
+        (PointerError::NotVisible, "Window not visible"),
+        (PointerError::Timeout, "Mouse not responding"),
+    ] {
+        let id = at_reqs(&f.run(CoreCmd::MouseRouteToReview, 1))[0].id;
+        let fx = reply(&mut f, id, Err(err.clone()), Duration::from_millis(5));
+        assert_eq!(spoken(&fx), [text], "{err:?}");
+    }
+}
+
+#[test]
+fn the_backend_hint_follows_the_permission_message() {
+    let mut f = fixture();
+    f.control(ControlMsg::PointerHint(Arc::from(
+        "Allow pointer in ~/x.json",
+    )));
+    avail(&mut f, PointerAvail::NoCap, Duration::ZERO);
+    assert_eq!(
+        spoken(&f.run(CoreCmd::MouseLeftClick, 1)),
+        ["Mouse not available: pointer permission is not granted. Allow pointer in ~/x.json"]
+    );
 }
 
 #[test]
@@ -505,5 +582,21 @@ fn mouse_enabled_in_the_settings_drives_the_gate() {
         chords()
             .iter()
             .all(|c| !sets.last().is_some_and(|s| s.exact.contains(c)))
+    );
+}
+
+#[test]
+fn a_lost_reply_does_not_wedge_the_lock() {
+    let mut f = ready_fixture();
+    let first = pointer_reqs(&f.run(CoreCmd::MouseLeftLockToggle, 1));
+    assert_eq!(first.len(), 1);
+    // The reply never comes (dropped channel, cleared table): the Reader's timer gives up after 1 s.
+    let fx = tick(&mut f, Duration::from_millis(1100));
+    assert_eq!(spoken(&fx), ["Mouse not responding"]);
+    let fx = f.run(CoreCmd::MouseLeftLockToggle, 1);
+    assert_eq!(
+        pointer_reqs(&fx)[0].op,
+        PointerOp::ReleaseAll,
+        "recovers instead of answering busy forever"
     );
 }

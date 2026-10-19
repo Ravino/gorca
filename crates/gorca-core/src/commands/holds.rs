@@ -9,6 +9,9 @@ use super::pointer_req::PtrReqId;
 
 /// gorca's auto-release (the owner's fixed value, MI-6).
 pub const HOLD_LIMIT: Duration = Duration::from_secs(120);
+/// A press or release request whose answer is this late is given up: the button state is unknown (a lost reply
+/// must not leave the lock answering "busy" forever).
+pub const INFLIGHT_LIMIT: Duration = Duration::from_secs(1);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ReleaseWhy {
@@ -23,6 +26,7 @@ pub enum HoldState {
     Up,
     Pressing {
         req: PtrReqId,
+        since: Instant,
     },
     Held {
         since: Instant,
@@ -30,6 +34,7 @@ pub enum HoldState {
     Releasing {
         req: PtrReqId,
         why: ReleaseWhy,
+        since: Instant,
     },
     /// A request failed or timed out: nobody knows whether the button is down. The next toggle
     /// sends `ReleaseAll` first.
@@ -87,16 +92,17 @@ impl Hold {
     }
 
     /// The lock key (or a click of the locked button).
-    pub fn toggle(&mut self, req: PtrReqId) -> HoldCmd {
+    pub fn toggle(&mut self, req: PtrReqId, now: Instant) -> HoldCmd {
         match self.state {
             HoldState::Up => {
-                self.state = HoldState::Pressing { req };
+                self.state = HoldState::Pressing { req, since: now };
                 HoldCmd::Press
             }
             HoldState::Held { .. } => {
                 self.state = HoldState::Releasing {
                     req,
                     why: ReleaseWhy::User,
+                    since: now,
                 };
                 HoldCmd::Release
             }
@@ -104,6 +110,7 @@ impl Hold {
                 self.state = HoldState::Releasing {
                     req,
                     why: ReleaseWhy::User,
+                    since: now,
                 };
                 HoldCmd::ReleaseAll
             }
@@ -118,6 +125,7 @@ impl Hold {
                 self.state = HoldState::Releasing {
                     req,
                     why: ReleaseWhy::Expired,
+                    since: now,
                 };
                 Some(HoldCmd::Release)
             }
@@ -133,10 +141,28 @@ impl Hold {
     pub fn deadline(&self) -> Option<Instant> {
         match self.state {
             HoldState::Held { since } => Some(since + HOLD_LIMIT),
-            HoldState::Up
-            | HoldState::Pressing { .. }
+            HoldState::Pressing { since, .. } | HoldState::Releasing { since, .. } => {
+                Some(since + INFLIGHT_LIMIT)
+            }
+            HoldState::Up | HoldState::Unknown => None,
+        }
+    }
+
+    /// A press or release whose reply is more than [`INFLIGHT_LIMIT`] late is given up: the state is
+    /// unknown and the next toggle sends `ReleaseAll`. True if it just happened.
+    pub fn fail_stale(&mut self, now: Instant) -> bool {
+        match self.state {
+            HoldState::Pressing { since, .. } | HoldState::Releasing { since, .. }
+                if now >= since + INFLIGHT_LIMIT =>
+            {
+                self.state = HoldState::Unknown;
+                true
+            }
+            HoldState::Pressing { .. }
             | HoldState::Releasing { .. }
-            | HoldState::Unknown => None,
+            | HoldState::Up
+            | HoldState::Held { .. }
+            | HoldState::Unknown => false,
         }
     }
 
@@ -144,7 +170,7 @@ impl Hold {
     /// as held by us.
     pub fn reply_ok(&mut self, req: PtrReqId, held: bool, now: Instant) -> Option<HoldEvent> {
         match self.state {
-            HoldState::Pressing { req: r } if r == req => {
+            HoldState::Pressing { req: r, .. } if r == req => {
                 if held {
                     self.state = HoldState::Held { since: now };
                     Some(HoldEvent::Locked)
@@ -153,7 +179,7 @@ impl Hold {
                     None
                 }
             }
-            HoldState::Releasing { req: r, why } if r == req => {
+            HoldState::Releasing { req: r, why, .. } if r == req => {
                 self.state = HoldState::Up;
                 Some(HoldEvent::Unlocked(why))
             }
@@ -168,7 +194,9 @@ impl Hold {
     /// A failed or timed-out request: the state of the button is unknown. True if it was ours.
     pub fn reply_err(&mut self, req: PtrReqId) -> bool {
         match self.state {
-            HoldState::Pressing { req: r } | HoldState::Releasing { req: r, .. } if r == req => {
+            HoldState::Pressing { req: r, .. } | HoldState::Releasing { req: r, .. }
+                if r == req =>
+            {
                 self.state = HoldState::Unknown;
                 true
             }
@@ -198,11 +226,11 @@ mod tests {
     fn lock_then_unlock() {
         let t0 = Instant::now();
         let mut h = Hold::new();
-        assert_eq!(h.toggle(R1), HoldCmd::Press);
+        assert_eq!(h.toggle(R1, Instant::now()), HoldCmd::Press);
         assert_eq!(h.reply_ok(R1, true, t0), Some(HoldEvent::Locked));
         assert!(h.is_held());
         assert_eq!(h.deadline(), Some(t0 + HOLD_LIMIT));
-        assert_eq!(h.toggle(R2), HoldCmd::Release);
+        assert_eq!(h.toggle(R2, Instant::now()), HoldCmd::Release);
         assert_eq!(
             h.reply_ok(R2, false, t0),
             Some(HoldEvent::Unlocked(ReleaseWhy::User))
@@ -213,18 +241,18 @@ mod tests {
     #[test]
     fn a_toggle_while_a_request_is_in_flight_is_busy() {
         let mut h = Hold::new();
-        h.toggle(R1);
-        assert_eq!(h.toggle(R2), HoldCmd::Busy);
+        h.toggle(R1, Instant::now());
+        assert_eq!(h.toggle(R2, Instant::now()), HoldCmd::Busy);
     }
 
     #[test]
     fn a_failed_press_goes_unknown_and_the_next_toggle_releases_everything_first() {
         let mut h = Hold::new();
-        h.toggle(R1);
+        h.toggle(R1, Instant::now());
         assert!(h.reply_err(R1));
         assert_eq!(h.state, HoldState::Unknown);
         assert!(h.needs_release());
-        assert_eq!(h.toggle(R2), HoldCmd::ReleaseAll);
+        assert_eq!(h.toggle(R2, Instant::now()), HoldCmd::ReleaseAll);
         assert_eq!(
             h.reply_ok(R2, false, Instant::now()),
             Some(HoldEvent::Unlocked(ReleaseWhy::User))
@@ -235,7 +263,7 @@ mod tests {
     #[test]
     fn a_reply_that_does_not_show_the_button_held_is_unknown() {
         let mut h = Hold::new();
-        h.toggle(R1);
+        h.toggle(R1, Instant::now());
         assert_eq!(h.reply_ok(R1, false, Instant::now()), None);
         assert_eq!(h.state, HoldState::Unknown);
     }
@@ -244,7 +272,7 @@ mod tests {
     fn the_limit_releases_at_120_seconds_and_not_before() {
         let t0 = Instant::now();
         let mut h = Hold::new();
-        h.toggle(R1);
+        h.toggle(R1, Instant::now());
         h.reply_ok(R1, true, t0);
         assert_eq!(h.expire(t0 + Duration::from_secs(119), R2), None);
         assert_eq!(h.expire(t0 + HOLD_LIMIT, R2), Some(HoldCmd::Release));
@@ -257,19 +285,34 @@ mod tests {
     #[test]
     fn replies_for_other_requests_are_ignored() {
         let mut h = Hold::new();
-        h.toggle(R1);
+        h.toggle(R1, Instant::now());
         assert_eq!(h.reply_ok(R2, true, Instant::now()), None);
         assert!(!h.reply_err(R2));
-        assert_eq!(h.state, HoldState::Pressing { req: R1 });
+        assert!(matches!(h.state, HoldState::Pressing { req: R1, .. }));
     }
 
     #[test]
     fn losing_pointer_emulation_drops_every_state() {
         let mut h = Hold::new();
-        h.toggle(R1);
+        h.toggle(R1, Instant::now());
         h.reply_ok(R1, true, Instant::now());
         h.lost();
         assert_eq!(h.state, HoldState::Up);
         assert!(!h.needs_release());
+    }
+
+    #[test]
+    fn a_reply_that_never_comes_is_given_up_after_a_second_and_the_next_toggle_recovers() {
+        let t0 = Instant::now();
+        let mut h = Hold::new();
+        h.toggle(R1, t0);
+        assert_eq!(h.deadline(), Some(t0 + INFLIGHT_LIMIT));
+        assert!(!h.fail_stale(t0 + Duration::from_millis(999)));
+        assert_eq!(h.toggle(R2, t0), HoldCmd::Busy, "still in flight");
+        assert!(h.fail_stale(t0 + INFLIGHT_LIMIT));
+        assert_eq!(h.state, HoldState::Unknown);
+        assert_eq!(h.toggle(R2, t0 + INFLIGHT_LIMIT), HoldCmd::ReleaseAll);
+        // a late reply of the first request is ignored
+        assert_eq!(h.reply_ok(R1, true, t0 + INFLIGHT_LIMIT), None);
     }
 }
