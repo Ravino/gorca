@@ -133,12 +133,24 @@ pub async fn top_document(conn: &AppConn, path: &str) -> Option<String> {
     top
 }
 
+/// AT-SPI relation type `ATSPI_RELATION_EMBEDS`: on Gecko's root (the frame), its target is the
+/// primary (selected) content document (`RootAccessible.cpp`; Orca's `active_document`).
+const RELATION_EMBEDS: u32 = 13;
+
 /// The toolkit's own window of the browser (GTK: a frame holding one childless panel) gets the
 /// focus when the window is activated, while the keyboard focus stays in the page: no document
-/// is an ancestor. For exactly that shape, the page is the document under the browser's own
-/// frame of the same title. Anything else outside a document (the address bar, a toolbar
-/// button, a menu) is the browser's interface and has no document.
+/// is an ancestor. For exactly that shape, the page is the selected tab's document of the
+/// browser's own frame with the same title. Anything else outside a document (the address bar,
+/// a toolbar button, a menu) is the browser's interface and has no document.
+///
+/// The answer must be unambiguous: with two frames of the same title (two windows of one page)
+/// or no single showing document there is no answer, and the focus follows the existing path.
 pub async fn window_document(conn: &AppConn, path: &str) -> Option<String> {
+    window_document_from(conn, ROOT, path).await
+}
+
+/// [`window_document`] with the application root named (the tests' fake peer has its own).
+pub async fn window_document_from(conn: &AppConn, root: &str, path: &str) -> Option<String> {
     if role_of(conn, path).await? != raw::PANEL {
         return None;
     }
@@ -174,25 +186,80 @@ pub async fn window_document(conn: &AppConn, path: &str) -> Option<String> {
         .call(
             conn.next_lane(),
             dl(STEP),
-            ROOT,
+            root,
             ACCESSIBLE,
             "GetChildren",
             &(),
         )
         .await
         .ok()?;
+    let mut twins = Vec::new();
     for (_, frame) in wire::parse_children(m.body().data().bytes()).ok()? {
-        if frame == window
-            || !matches!(role_of(conn, &frame).await, Some(raw::FRAME | raw::WINDOW))
-            || name_of(conn, &frame).await.as_deref() != Some(title.as_str())
+        if frame != window
+            && matches!(role_of(conn, &frame).await, Some(raw::FRAME | raw::WINDOW))
+            && name_of(conn, &frame).await.as_deref() == Some(title.as_str())
         {
-            continue;
+            twins.push(frame);
         }
-        if let Some(doc) = document_in(conn, &frame).await {
-            return Some(doc);
+    }
+    // Two windows with one title: nothing says which one the toolkit's window belongs to.
+    let [frame] = twins.as_slice() else {
+        return None;
+    };
+    if let Some(doc) = embedded_document(conn, frame).await {
+        return Some(doc);
+    }
+    single_showing_document(conn, frame).await
+}
+
+/// The document the frame's `EMBEDS` relation names, when it is a showing web document. Gecko
+/// builds its relations cache on the first request: an empty answer is asked again once.
+async fn embedded_document(conn: &AppConn, frame: &str) -> Option<String> {
+    for attempt in 0..2 {
+        let m = conn
+            .call(
+                conn.next_lane(),
+                dl(STEP),
+                frame,
+                ACCESSIBLE,
+                "GetRelationSet",
+                &(),
+            )
+            .await
+            .ok()?;
+        let rels = wire::parse_relations(m.body().data().bytes()).ok()?;
+        if let Some(target) = rels
+            .into_iter()
+            .find(|(t, _)| *t == RELATION_EMBEDS)
+            .and_then(|(_, ts)| ts.into_iter().next())
+            .map(|(_, p)| p)
+        {
+            let is_doc = role_of(conn, &target).await == Some(raw::DOCUMENT_WEB);
+            return (is_doc && is_showing(conn, &target).await).then_some(target);
+        }
+        if attempt == 0 {
+            tokio::time::sleep(Duration::from_millis(120)).await;
         }
     }
     None
+}
+
+async fn is_showing(conn: &AppConn, path: &str) -> bool {
+    let Ok(m) = conn
+        .call(
+            conn.next_lane(),
+            dl(STEP),
+            path,
+            ACCESSIBLE,
+            "GetState",
+            &(),
+        )
+        .await
+    else {
+        return false;
+    };
+    wire::parse_state(m.body().data().bytes())
+        .is_ok_and(|st| st & (1 << crate::roles::state_bit::SHOWING) != 0)
 }
 
 async fn name_of(conn: &AppConn, path: &str) -> Option<String> {
@@ -212,21 +279,29 @@ async fn name_of(conn: &AppConn, path: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// Breadth-first search below `top` (a few levels, a bounded number of calls) for a web
-/// document.
-async fn document_in(conn: &AppConn, top: &str) -> Option<String> {
+/// Breadth-first search below `top` (a few levels, a bounded number of calls) for web
+/// documents (not entered). The one showing document, or `None` when there are none or several
+/// (background tabs stay in Gecko's tree: without `EMBEDS` the choice would be a guess).
+async fn single_showing_document(conn: &AppConn, top: &str) -> Option<String> {
     const DEPTH: usize = 7;
     const CALLS: usize = 320;
     let mut queue: std::collections::VecDeque<(String, usize)> = std::collections::VecDeque::new();
     queue.push_back((top.to_owned(), 0));
     let mut calls = 0usize;
+    let mut showing: Option<String> = None;
     while let Some((p, depth)) = queue.pop_front() {
         if calls >= CALLS {
             return None;
         }
         calls += 1;
         if depth > 0 && role_of(conn, &p).await == Some(raw::DOCUMENT_WEB) {
-            return Some(p);
+            if is_showing(conn, &p).await {
+                if showing.is_some() {
+                    return None;
+                }
+                showing = Some(p);
+            }
+            continue;
         }
         if depth >= DEPTH {
             continue;
@@ -251,7 +326,7 @@ async fn document_in(conn: &AppConn, top: &str) -> Option<String> {
             }
         }
     }
-    None
+    showing
 }
 
 /// Breadth-first search from the application root for any web document.
