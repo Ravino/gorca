@@ -8,11 +8,9 @@ use toml_edit::{Document, DocumentMut, Item};
 
 use crate::diag::{Diag, DiagMsg, did_you_mean, fnv1a};
 use crate::keymap::{ContextName, LayerEntry, ResolvedKeymap, merge_layer};
+use crate::patch::{KeyId, SettingsPatch, Value, enum_name, set_value};
 use crate::presets::Presets;
-use crate::settings::{
-    Backend, BoundaryMode, Caps, Confirmations, InterruptPolicy, Layout, Preset, Punct, SCHEMA,
-    SETTINGS, Settings, Verbosity, WordLevel, sections,
-};
+use crate::settings::{BoundaryMode, Caps, SCHEMA, SETTINGS, SettingType, Settings, sections};
 
 /// Files larger than this are ignored (ADR-0005 7.4).
 pub const MAX_FILE_BYTES: usize = 1024 * 1024;
@@ -23,6 +21,9 @@ const KNOWN_MODIFIERS: &[&str] = &["Insert", "KP_Insert", "Caps_Lock"];
 #[derive(Clone, Debug)]
 pub struct Loaded {
     pub settings: Settings,
+    /// The keys the file sets (valid ones only), as a sparse layer: the user base L5 of the
+    /// profile stack (ADR-0016 UB-1 needs to tell "set" from "default").
+    pub patch: SettingsPatch,
     pub keymap: ResolvedKeymap,
     pub diags: Vec<Diag>,
     /// FNV-1a of the file text (of the empty string when the file is missing).
@@ -42,6 +43,7 @@ pub fn load(text: Option<&str>, presets: &Presets) -> Loaded {
     let hash = fnv1a(text.unwrap_or("").as_bytes());
     let mut out = Loaded {
         settings: Settings::default(),
+        patch: SettingsPatch::new(),
         keymap: ResolvedKeymap::default(),
         diags: Vec::new(),
         hash,
@@ -175,7 +177,7 @@ fn read_document(doc: &Document<&str>, out: &mut Loaded, diags: &mut Vec<Diag>) 
             "schema" => {}
             "keymap" => user_entries = read_keymap_section(item, out, diags, quiet),
             s if sections().any(|x| x == s) => {
-                read_section(s, item, &mut out.settings, diags, quiet);
+                read_section(s, item, out, diags, quiet);
             }
             other => {
                 if !quiet {
@@ -193,7 +195,7 @@ fn read_document(doc: &Document<&str>, out: &mut Loaded, diags: &mut Vec<Diag>) 
     user_entries
 }
 
-fn read_section(section: &str, item: &Item, s: &mut Settings, diags: &mut Vec<Diag>, quiet: bool) {
+fn read_section(section: &str, item: &Item, out: &mut Loaded, diags: &mut Vec<Diag>, quiet: bool) {
     let Some(t) = item.as_table_like() else {
         diags.push(Diag::error(
             section,
@@ -226,179 +228,99 @@ fn read_section(section: &str, item: &Item, s: &mut Settings, diags: &mut Vec<Di
             }
             continue;
         };
-        apply_key(def.section, def.key, v, s, diags);
+        if let Some(key) = KeyId::of(def.section, def.key) {
+            apply_key(key, v, out, diags);
+        }
     }
 }
 
-fn apply_key(section: &str, key: &str, v: &Item, s: &mut Settings, diags: &mut Vec<Diag>) {
-    let path = format!("{section}.{key}");
-    let b = |s: &mut bool, diags: &mut Vec<Diag>| {
-        if let Some(x) = v.as_bool() {
-            *s = x;
-        } else {
-            diags.push(Diag::error(
-                path.clone(),
-                span_of(v),
-                DiagMsg::WrongType {
-                    expected: "true or false",
-                },
-            ));
-        }
+/// Read one schema row's TOML value as a typed [`Value`], reporting problems; `None` keeps the
+/// default (CV-1). Shared by the global file and the profile files (PK-1: same type and range).
+pub(crate) fn parse_value(
+    key: KeyId,
+    v: &Item,
+    path: &str,
+    diags: &mut Vec<Diag>,
+) -> Option<Value> {
+    let def = key.def();
+    let wrong = |expected: &'static str, diags: &mut Vec<Diag>| {
+        diags.push(Diag::error(
+            path,
+            span_of(v),
+            DiagMsg::WrongType { expected },
+        ));
     };
-    match (section, key) {
-        ("keyboard", "preset") => {
-            if let Some(p) = read_enum(v, &path, Preset::parse, Preset::NAMES, diags) {
-                s.keyboard.preset = p;
+    match (def.section, def.key, def.ty) {
+        ("keyboard", "modifiers", _) => read_modifiers(v, path, diags).map(Value::StrList),
+        ("speech", "caps", _) => read_caps(v, path, diags)
+            .map(|c| Value::StrList(c.names().into_iter().map(str::to_owned).collect())),
+        ("editing", "boundary", _) => read_boundary(v, path, diags)
+            .map(|m| Value::StrList(m.names().into_iter().map(str::to_owned).collect())),
+        (_, _, SettingType::Bool) => {
+            let b = v.as_bool();
+            if b.is_none() {
+                wrong("true or false", diags);
             }
+            b.map(Value::Bool)
         }
-        ("keyboard", "layout") => {
-            if let Some(p) = read_enum(v, &path, Layout::parse, Layout::NAMES, diags) {
-                s.keyboard.layout = p;
-            }
-        }
-        ("keyboard", "modifiers") => {
-            if let Some(m) = read_modifiers(v, &path, diags) {
-                s.keyboard.modifiers = m;
-            }
-        }
-        ("keyboard", "caps_lock_layout_guard") => b(&mut s.keyboard.caps_lock_layout_guard, diags),
-        ("keyboard", "multi_press_ms") => {
-            if let Some(n) = read_int(v, &path, 100, 2000, diags) {
-                s.keyboard.multi_press_ms = u32::try_from(n).unwrap_or(500);
-            }
-        }
-        ("keyboard", "double_tap_guard_ms") => {
-            if let Some(n) = read_int(v, &path, 0, 100, diags) {
-                s.keyboard.double_tap_guard_ms = u32::try_from(n).unwrap_or(15);
-            }
-        }
-        ("keyboard", "interrupt") => {
-            if let Some(p) = read_enum(
-                v,
-                &path,
-                InterruptPolicy::parse,
-                InterruptPolicy::NAMES,
-                diags,
-            ) {
-                s.keyboard.interrupt = p;
-            }
-        }
-        ("keyboard", "stop_speech_on_control") => b(&mut s.keyboard.stop_speech_on_control, diags),
-        ("keyboard", "pause_speech_on_shift") => b(&mut s.keyboard.pause_speech_on_shift, diags),
-        ("keymap", "replace_preset") => b(&mut s.keyboard.replace_preset, diags),
-        ("speech", "rate") => {
-            if let Some(n) = read_int(v, &path, 0, 100, diags) {
-                s.speech.rate = u8::try_from(n).unwrap_or(50);
-            }
-        }
-        ("speech", "pitch") => {
-            if let Some(n) = read_int(v, &path, 0, 100, diags) {
-                s.speech.pitch = u8::try_from(n).unwrap_or(50);
-            }
-        }
-        ("speech", "volume") => {
-            if let Some(n) = read_int(v, &path, 0, 100, diags) {
-                s.speech.volume = u8::try_from(n).unwrap_or(100);
-            }
-        }
-        ("speech", "rate_step") => {
-            if let Some(n) = read_int(v, &path, 1, 25, diags) {
-                s.speech.rate_step = u8::try_from(n).unwrap_or(5);
-            }
-        }
-        ("speech", "voice") => {
-            if let Some(x) = v.as_str() {
-                x.clone_into(&mut s.speech.voice);
-            } else {
+        (_, _, SettingType::Int { min, max }) => read_int(v, path, min, max, diags).map(Value::Int),
+        (_, _, SettingType::Enum(names)) => {
+            let Some(text) = v.as_str() else {
+                wrong("a string", diags);
+                return None;
+            };
+            let name = enum_name(key, text);
+            if name.is_none() {
                 diags.push(Diag::error(
                     path,
                     span_of(v),
-                    DiagMsg::WrongType {
-                        expected: "a string",
+                    DiagMsg::UnknownEnum {
+                        value: text.to_owned(),
+                        allowed: names,
                     },
                 ));
             }
+            name.map(|n| Value::Str(n.to_owned()))
         }
-        ("echo", "typed_characters") => b(&mut s.echo.typed_characters, diags),
-        ("echo", "typed_words") => b(&mut s.echo.typed_words, diags),
-        ("echo", "command_keys") => b(&mut s.echo.command_keys, diags),
-        ("echo", "inserted_text") => b(&mut s.echo.inserted_text, diags),
-        ("editing", "announce_clipboard") => b(&mut s.editing.announce_clipboard, diags),
-        ("editing", "boundary") => {
-            if let Some(m) = read_boundary(v, &path, diags) {
-                s.editing.boundary = m;
+        (_, _, SettingType::Str) => {
+            let s = v.as_str();
+            if s.is_none() {
+                wrong("a string", diags);
             }
+            s.map(|x| Value::Str(x.to_owned()))
         }
-        ("editing", "word") => {
-            if let Some(w) = read_enum(v, &path, WordLevel::parse, WordLevel::NAMES, diags) {
-                s.editing.word = w;
+        (_, _, SettingType::StrList) => read_str_list(v, path, diags).map(Value::StrList),
+        (_, _, SettingType::Map(_)) => {
+            let Some(t) = v.as_table_like() else {
+                wrong("a table of true or false", diags);
+                return None;
+            };
+            let mut m = std::collections::BTreeMap::new();
+            for (name, item) in t.iter() {
+                match item.as_bool() {
+                    Some(b) => {
+                        m.insert(name.to_owned(), b);
+                    }
+                    None => diags.push(Diag::error(
+                        format!("{path}.{name}"),
+                        span_of(item),
+                        DiagMsg::WrongType {
+                            expected: "true or false",
+                        },
+                    )),
+                }
             }
+            Some(Value::Map(m))
         }
-        ("text", "say_all_moves_caret") => b(&mut s.text.say_all_moves_caret, diags),
-        ("text", "caret_edge_ms") => {
-            if let Some(n) = read_int(v, &path, 20, 1000, diags) {
-                s.text.caret_edge_ms = u32::try_from(n).unwrap_or(100);
-            }
-        }
-        ("text", "caret_late_ms") => {
-            if let Some(n) = read_int(v, &path, 100, 2000, diags) {
-                s.text.caret_late_ms = u32::try_from(n).unwrap_or(400);
-            }
-        }
-        ("browse", "say_all_on_load") => b(&mut s.browse.say_all_on_load, diags),
-        ("browse", "description_pause") => b(&mut s.browse.description_pause, diags),
-        ("terminal", "settle_ms") => {
-            if let Some(n) = read_int(v, &path, 10, 200, diags) {
-                s.terminal.settle_ms = u32::try_from(n).unwrap_or(30);
-            }
-        }
-        ("terminal", "burst_lines") => {
-            if let Some(n) = read_int(v, &path, 4, 400, diags) {
-                s.terminal.burst_lines = u32::try_from(n).unwrap_or(40);
-            }
-        }
-        ("terminal", "prompt_markers") => {
-            if let Some(m) = read_str_list(v, &path, diags) {
-                s.terminal.prompt_markers = m;
-            }
-        }
-        ("terminal", "prompt_regex") => read_str(v, &path, &mut s.terminal.prompt_regex, diags),
-        ("terminal", "secret_regex") => read_str(v, &path, &mut s.terminal.secret_regex, diags),
-        ("speech", "language") => read_str(v, &path, &mut s.speech.language, diags),
-        ("speech", "output_module") => read_str(v, &path, &mut s.speech.output_module, diags),
-        ("speech", "backend") => {
-            if let Some(p) = read_enum(v, &path, Backend::parse, Backend::NAMES, diags) {
-                s.speech.backend = p;
-            }
-        }
-        ("speech", "punctuation") => {
-            if let Some(p) = read_enum(v, &path, Punct::parse, Punct::NAMES, diags) {
-                s.speech.punctuation = p;
-            }
-        }
-        ("speech", "caps") => {
-            if let Some(c) = read_caps(v, &path, diags) {
-                s.speech.caps = c;
-            }
-        }
-        ("speech", "caps_pitch_change") => {
-            if let Some(n) = read_int(v, &path, 0, 100, diags) {
-                s.speech.caps_pitch_change = u8::try_from(n).unwrap_or(30);
-            }
-        }
-        ("verbosity", "level") => {
-            if let Some(p) = read_enum(v, &path, Verbosity::parse, Verbosity::NAMES, diags) {
-                s.verbosity.level = p;
-            }
-        }
-        ("verbosity", "confirmations") => {
-            if let Some(p) = read_enum(v, &path, Confirmations::parse, Confirmations::NAMES, diags)
-            {
-                s.verbosity.confirmations = p;
-            }
-        }
-        // `SETTINGS` and this match are kept in step by the `every_setting_row_is_read` test.
-        _ => {}
+    }
+}
+
+fn apply_key(key: KeyId, v: &Item, out: &mut Loaded, diags: &mut Vec<Diag>) {
+    let path = key.def().path();
+    if let Some(val) = parse_value(key, v, &path, diags)
+        && set_value(&mut out.settings, key, &val)
+    {
+        let _ = out.patch.set(key, val);
     }
 }
 
@@ -427,51 +349,6 @@ fn read_int(v: &Item, path: &str, min: i64, max: i64, diags: &mut Vec<Diag>) -> 
         ));
     }
     Some(used)
-}
-
-fn read_enum<T>(
-    v: &Item,
-    path: &str,
-    parse: fn(&str) -> Option<T>,
-    names: &'static str,
-    diags: &mut Vec<Diag>,
-) -> Option<T> {
-    let Some(text) = v.as_str() else {
-        diags.push(Diag::error(
-            path,
-            span_of(v),
-            DiagMsg::WrongType {
-                expected: "a string",
-            },
-        ));
-        return None;
-    };
-    let parsed = parse(text);
-    if parsed.is_none() {
-        diags.push(Diag::error(
-            path,
-            span_of(v),
-            DiagMsg::UnknownEnum {
-                value: text.to_owned(),
-                allowed: names,
-            },
-        ));
-    }
-    parsed
-}
-
-fn read_str(v: &Item, path: &str, into: &mut String, diags: &mut Vec<Diag>) {
-    if let Some(x) = v.as_str() {
-        x.clone_into(into);
-    } else {
-        diags.push(Diag::error(
-            path,
-            span_of(v),
-            DiagMsg::WrongType {
-                expected: "a string",
-            },
-        ));
-    }
 }
 
 /// A list of non-empty strings, at most 32 of them.
@@ -661,7 +538,9 @@ fn read_keymap_section(
     };
     for (key, v) in t.iter() {
         if key == "replace_preset" {
-            apply_key("keymap", "replace_preset", v, &mut out.settings, diags);
+            if let Some(k) = KeyId::of("keymap", "replace_preset") {
+                apply_key(k, v, out, diags);
+            }
             continue;
         }
         let Some(ctx) = ContextName::parse(key) else {
@@ -769,6 +648,7 @@ fn preset_entries(doc: &Document<&str>, diags: &mut Vec<Diag>) -> Vec<LayerEntry
 mod tests {
     use super::*;
     use crate::diag::Severity;
+    use crate::{Backend, Layout, Preset, WordLevel};
 
     fn load_text(t: &str) -> Loaded {
         load(Some(t), &Presets::builtin())
@@ -1039,7 +919,7 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         );
         assert_eq!(l.settings.editing.word, WordLevel::Coarse);
         assert!(!l.settings.editing.announce_clipboard);
-        assert_eq!(SETTINGS.len(), 40);
+        assert_eq!(SETTINGS.len(), 41);
     }
 
     #[test]

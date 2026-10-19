@@ -1243,11 +1243,7 @@ fn scenario_focus(rep: &mut Report) {
         // never publish a change here, so only the nameable chain nodes are awaited.
         // "Fused" = no longer dirty (a name patch may override the fresh observed name, in which
         // case fusing legitimately publishes nothing); every chain node must get there.
-        let need: Vec<NodeIdx> = chain
-            .iter()
-            .copied()
-            .filter(|c| w.e.is_dirty(*c))
-            .collect();
+        let need: Vec<NodeIdx> = chain.iter().copied().filter(|c| w.e.is_dirty(*c)).collect();
         let mut calls = 0usize;
         let mut need_left = need.len();
         while need_left > 0 && calls < 1500 {
@@ -1383,7 +1379,8 @@ fn scenario_burst(rep: &mut Report) {
                     None => missed += 1,
                 }
             } else {
-                let r = w.e.run(Budget::until(Instant::now() + Duration::from_millis(1)));
+                let r =
+                    w.e.run(Budget::until(Instant::now() + Duration::from_millis(1)));
                 black_box(r.fuse_calls);
             }
             round += 1;
@@ -1394,7 +1391,10 @@ fn scenario_burst(rep: &mut Report) {
     let (d, p, a) = (pct(drain_ms), pct(prio), pct(apply_ms));
     eprintln!("apply of 20k events:                      {}", a.show("ms"));
     eprintln!("drain of 20k events (1 ms runs):          {}", d.show("ms"));
-    eprintln!("priority event -> sink during the drain:  {} (missed {missed})", p.show("us"));
+    eprintln!(
+        "priority event -> sink during the drain:  {} (missed {missed})",
+        p.show("us")
+    );
     rep.put(
         "burst",
         format!(
