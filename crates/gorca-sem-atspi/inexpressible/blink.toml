@@ -1,0 +1,7 @@
+# Groups Blink can never express through AT-SPI (ADR-0024 section 2.2, H-3). See gecko.toml.
+
+# A2 corpus: no `invalid` attribute, only INVALID_ENTRY (and not on an empty required field).
+[[row]]
+group = "invalid"
+reason = "aria-invalid kind is not exported, only INVALID_ENTRY"
+decision = "docs/decisions.md 2026-10-19 M22a-B5"

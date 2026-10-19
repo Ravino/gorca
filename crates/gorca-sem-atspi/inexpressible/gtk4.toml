@@ -1,0 +1,2 @@
+# Groups GTK4 can never express through AT-SPI. None listed: the A2 gaps are lost roles, and the
+# role group is expressible (a Secondary must never replace a primary role).

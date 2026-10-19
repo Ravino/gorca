@@ -1,0 +1,9 @@
+# Groups Gecko can never express through AT-SPI (ADR-0024 section 2.2, H-3): only for these may a
+# Secondary source be an S0 candidate. First-party data; every row names its decision (D-4).
+
+# A2 corpus (expect.toml textbox.invalid.*): the `aria-invalid` kind (true/spelling/grammar) is
+# exported by no attribute; only the INVALID_ENTRY state, which also fires for empty required fields.
+[[row]]
+group = "invalid"
+reason = "aria-invalid kind is not exported, only INVALID_ENTRY"
+decision = "docs/decisions.md 2026-10-19 M22a-B5"

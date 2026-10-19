@@ -18,6 +18,7 @@ pub mod attrs;
 pub mod record;
 pub mod roles;
 pub mod states;
+pub mod tables;
 
 pub use record::{Notes, RawNode, SrcRecord, TagName, normalise};
 pub use roles::{EngineRole, RoleSource, TokenKind};

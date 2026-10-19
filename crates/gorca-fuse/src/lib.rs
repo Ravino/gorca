@@ -8,11 +8,15 @@
 //!   validity ([`side`]), S4 ranking and fill ([`s4`]), taint and hedge ([`taint`]) and `explain`
 //!   ([`explain`]). Non-primary candidates reach the strata only through [`side::NodeCands`].
 //!
+//! * B5: the S-1 quirk engine, the `PI`/`inexpressible` loaders and source-profile selection
+//!   ([`quirk`]); the AT-SPI tables are data in `gorca-sem-atspi`.
+//!
 //! Dependency rules (`cargo xtask deps`): tokio-free and transport-neutral; depends on
 //! `gorca-model` only.
 
 pub mod explain;
 pub mod profile;
+pub mod quirk;
 pub mod register;
 pub mod repair;
 pub mod s4;
@@ -23,6 +27,10 @@ pub mod value;
 
 pub use explain::{Conflict, Explain, NoTrace, ObsCand, PatchTrail, Trace, Tracer, TrailEntry};
 pub use profile::{Limits, PiRow, Profile, RoleSet, Rules};
+pub use quirk::{
+    AppFacts, PiData, ProfileSelector, QuirkAction, QuirkError, QuirkRule, QuirkSet,
+    parse_inexpressible, parse_pi,
+};
 pub use register::{MAX_PRIMARIES, NodeRegs, PrimarySlot, Reg, SrcRegs, UserOp, UserReg, slot_of};
 pub use repair::{Eff, invariant_violations, repair as repair_eff};
 pub use side::{
