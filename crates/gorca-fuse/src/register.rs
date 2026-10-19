@@ -11,7 +11,7 @@ use std::cmp::Ordering;
 
 use gorca_model::sem::Group;
 
-use crate::value::{Seq, Slot, Write};
+use crate::value::{MAX_TEXT_BYTES, Seq, Slot, Write};
 
 /// Primary sources a node can have registers for (AT-SPI and Newton today).
 pub const MAX_PRIMARIES: usize = 2;
@@ -89,6 +89,13 @@ impl SrcRegs {
 
     /// Join an observed value. Returns true iff the register changed.
     pub fn apply_obs(&mut self, seq: Seq, write: Write) -> bool {
+        self.apply_obs_capped(seq, write, MAX_TEXT_BYTES)
+    }
+
+    /// As [`SrcRegs::apply_obs`] with the text cap of the profile's `Limits`. The cap is applied
+    /// before the join, so the result stays a function of the set of writes.
+    pub fn apply_obs_capped(&mut self, seq: Seq, write: Write, max_text: usize) -> bool {
+        let write = write.capped(max_text).0;
         let slot = write.group().slot();
         let new = Reg { seq, write };
         match self
@@ -203,6 +210,10 @@ impl NodeRegs {
 
     /// Join a user override or clear. Returns true iff the register changed.
     pub fn apply_user(&mut self, group: Group, seq: Seq, op: UserOp) -> bool {
+        let op = match op {
+            UserOp::Set(w) => UserOp::Set(w.capped(MAX_TEXT_BYTES).0),
+            UserOp::Clear => UserOp::Clear,
+        };
         let new = UserReg { group, seq, op };
         match self
             .user

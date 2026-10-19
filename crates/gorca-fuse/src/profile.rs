@@ -7,32 +7,32 @@ use gorca_model::sem::{GROUP_COUNT, Group, GroupMask, SemRole};
 
 use crate::register::{MAX_PRIMARIES, PrimarySlot};
 
-/// A set of roles as a bit set over the `u16` role codes (all registered codes are below 128).
+/// A set of roles as a bit set over the `u16` role codes (256 bits; codes at or above 256 are
+/// never members, and a build-time assert fails if the registry outgrows the set).
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub struct RoleSet(u128);
+pub struct RoleSet([u64; 4]);
 
-const _: () = assert!(SemRole::ALL.len() <= 128);
+const _: () = assert!(SemRole::ALL.len() <= 256);
 
 impl RoleSet {
-    pub const EMPTY: RoleSet = RoleSet(0);
+    pub const EMPTY: RoleSet = RoleSet([0; 4]);
 
     pub fn of(roles: &[SemRole]) -> RoleSet {
         roles.iter().fold(RoleSet::EMPTY, |s, r| s.with(*r))
     }
 
     #[must_use]
-    pub const fn with(self, r: SemRole) -> RoleSet {
+    pub const fn with(mut self, r: SemRole) -> RoleSet {
         let c = r.code();
-        if c < 128 {
-            RoleSet(self.0 | (1u128 << c))
-        } else {
-            self
+        if c < 256 {
+            self.0[(c >> 6) as usize] |= 1u64 << (c & 63);
         }
+        self
     }
 
     pub const fn has(self, r: SemRole) -> bool {
         let c = r.code();
-        c < 128 && self.0 & (1u128 << c) != 0
+        c < 256 && self.0[(c >> 6) as usize] & (1u64 << (c & 63)) != 0
     }
 }
 
@@ -159,6 +159,27 @@ impl PiRow {
     }
 }
 
+/// Resource bounds of `FUSE` (security review of B1a): no input can make a fused string or a
+/// derivation walk grow with the size of the tree.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct Limits {
+    /// Maximum bytes of a `name`/`description` register value and of a derived name (ADR
+    /// string limit 1 KiB; truncated at a char boundary). Tests may lower it.
+    pub max_text: usize,
+    /// Maximum children read by one name-from-content derivation. Depth needs no separate
+    /// bound: every child name is already at most `max_text`, so a parent's is too.
+    pub max_children: usize,
+}
+
+impl Default for Limits {
+    fn default() -> Limits {
+        Limits {
+            max_text: crate::value::MAX_TEXT_BYTES,
+            max_children: 256,
+        }
+    }
+}
+
 /// The per-source-profile static tables of one app (ADR-0024 section 2.13 selects the profile).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Profile {
@@ -167,6 +188,7 @@ pub struct Profile {
     /// candidate in S0 (H-3). A dynamic `Unknown` never admits a Secondary.
     pub inexpressible: GroupMask,
     pub rules: Rules,
+    pub limits: Limits,
     /// What an unknown or absent `role` finalises to.
     pub default_role: SemRole,
 }
@@ -178,6 +200,7 @@ impl Profile {
             pi: [PiRow::new(order); GROUP_COUNT],
             inexpressible: GroupMask::EMPTY,
             rules,
+            limits: Limits::default(),
             default_role: SemRole::default(),
         }
     }
@@ -200,6 +223,18 @@ impl Profile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn role_set_covers_every_registered_role_and_the_high_words() {
+        let mut all = RoleSet::EMPTY;
+        for r in SemRole::ALL {
+            all = all.with(*r);
+        }
+        assert!(SemRole::ALL.iter().all(|r| all.has(*r)));
+        // Codes past the old 128-bit set work (DPUB roles will land there).
+        let high = RoleSet::of(&[SemRole::Presentation]);
+        assert!(high.has(SemRole::Presentation) && !high.has(SemRole::Button));
+    }
 
     #[test]
     fn role_set_membership() {

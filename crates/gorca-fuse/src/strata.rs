@@ -21,10 +21,10 @@ use gorca_model::sem::{
     Select, SemEntry, SemFlags, SemRole, Sort, TrustTier,
 };
 
-use crate::profile::Profile;
+use crate::profile::{Limits, Profile};
 use crate::register::{MAX_PRIMARIES, NodeRegs, PrimarySlot};
 use crate::repair::{Eff, ix, repair, unknown_eff};
-use crate::value::{Info, Seq, Slot, Val, Write, hedge_cap, write_default};
+use crate::value::{Info, Seq, Slot, Val, Write, hedge_cap, truncate_str, write_default};
 
 // ------------------------------------------------------------------------------------------------
 // S-1 quirks
@@ -347,6 +347,8 @@ pub struct Fused {
     pub layer: [Layer; GROUP_COUNT],
     /// Groups repair `R` overwrote (their provenance is reset to `Default`).
     pub masked: GroupMask,
+    /// Groups whose derived string was cut at the profile's text limit.
+    pub truncated: GroupMask,
 }
 
 impl Fused {
@@ -438,11 +440,13 @@ pub fn fuse_node<P: PatchSource>(
     let role = eff[ix(Group::Role)].role();
     let role_in = |set: crate::profile::RoleSet| role.is_some_and(|r| set.has(r));
 
+    let mut truncated = GroupMask::EMPTY;
     // S3 derived (a): name from content over the children's final names.
     if fillable(&eff, &layer, Group::Name)
         && role_in(profile.rules.content_named)
-        && let Some((name, inf)) = name_from_content(nb.children)
+        && let Some((name, inf, cut)) = name_from_content(nb.children, &profile.limits)
     {
+        truncated.set(Group::Name, cut);
         eff[ix(Group::Name)] = Slot::Val(Val::Name(name));
         layer[ix(Group::Name)] = Layer::Derived;
         info[ix(Group::Name)] = inf;
@@ -533,6 +537,7 @@ pub fn fuse_node<P: PatchSource>(
         entry,
         layer,
         masked,
+        truncated,
     }
 }
 
@@ -540,7 +545,12 @@ pub fn fuse_node<P: PatchSource>(
 /// children come first: tainted names (Secondary, Inferred, DerivedTainted) are used only if no
 /// untainted part exists, and then the result is `DerivedTainted` with the weakest input class and
 /// the least trusted tier (math section 10.4 item 1).
-fn name_from_content(children: &[ChildView<'_>]) -> Option<(Arc<str>, Info)> {
+fn name_from_content(
+    children: &[ChildView<'_>],
+    limits: &Limits,
+) -> Option<(Arc<str>, Info, bool)> {
+    let full_len = children.len();
+    let children = children.get(..limits.max_children).unwrap_or(children);
     let part = |c: &ChildView<'_>| -> Option<(Arc<str>, bool, ConfClass, TrustTier)> {
         let f = c.fused?;
         let name = f.name.as_ref()?;
@@ -561,12 +571,17 @@ fn name_from_content(children: &[ChildView<'_>]) -> Option<(Arc<str>, Info)> {
         .any(|(_, tainted, _, _)| !tainted);
     let mut out = String::new();
     let mut n = 0usize;
+    let mut cut = children.len() < full_len;
     let mut conf = ConfClass::Asserted;
     let mut tier = TrustTier::T0Core;
     for (name, tainted, c, t) in children.iter().filter_map(part) {
         // With an untainted part present only untainted parts count; otherwise all are tainted.
         if any_clean && tainted {
             continue;
+        }
+        if out.len() >= limits.max_text {
+            cut = true;
+            break;
         }
         if n > 0 {
             out.push(' ');
@@ -590,7 +605,12 @@ fn name_from_content(children: &[ChildView<'_>]) -> Option<(Arc<str>, Info)> {
             tier,
         }
     };
-    Some((Arc::from(out), info))
+    if out.len() > limits.max_text {
+        cut = true;
+        let keep = truncate_str(&out, limits.max_text).len();
+        out.truncate(keep);
+    }
+    Some((Arc::from(out), info, cut))
 }
 
 #[cfg(test)]
@@ -823,7 +843,7 @@ mod tests {
             TrustTier::T2FirstParty,
         );
         let kids = [view(&clean), view(&dirty)];
-        let (name, info) = name_from_content(&kids).expect("name");
+        let (name, info, _) = name_from_content(&kids, &Limits::default()).expect("name");
         assert_eq!(
             &*name, "Close",
             "the tainted child must not leak into an untainted name"
@@ -831,7 +851,7 @@ mod tests {
         assert_eq!(info.prov, ProvCode::Derived);
         // Only tainted parts: used, DerivedTainted with the weakest class and least trusted tier.
         let only = [view(&dirty)];
-        let (name, info) = name_from_content(&only).expect("name");
+        let (name, info, _) = name_from_content(&only, &Limits::default()).expect("name");
         assert_eq!(&*name, "Logo");
         assert_eq!(info.prov, ProvCode::DerivedTainted);
         assert_eq!(info.conf, ConfClass::High);
@@ -842,9 +862,9 @@ mod tests {
             ConfClass::High,
             TrustTier::T3Untrusted,
         );
-        let (_, info) = name_from_content(&[view(&t3)]).expect("name");
+        let (_, info, _) = name_from_content(&[view(&t3)], &Limits::default()).expect("name");
         assert_eq!(info.conf, ConfClass::Probable, "T3 caps at Probable");
-        assert!(name_from_content(&[]).is_none());
+        assert!(name_from_content(&[], &Limits::default()).is_none());
     }
 
     #[test]
@@ -894,6 +914,79 @@ mod tests {
         assert_eq!(
             f.entry.prov.get(Group::Name),
             Some(ProvCode::ObservedPrimary)
+        );
+    }
+
+    #[test]
+    fn wide_subtree_name_is_bounded() {
+        let e = child_entry(
+            "word",
+            ProvCode::ObservedPrimary,
+            ConfClass::Asserted,
+            TrustTier::T0Core,
+        );
+        let kids: Vec<ChildView<'_>> = (0..10_000).map(|_| view(&e)).collect();
+        let lim = Limits::default();
+        let (name, _, cut) = name_from_content(&kids, &lim).expect("name");
+        assert!(
+            cut,
+            "children beyond max_children are reported as truncation"
+        );
+        assert!(name.len() <= lim.max_text, "{} bytes", name.len());
+        // Few, huge children: cut at the text limit on a char boundary.
+        let big = child_entry(
+            &"é".repeat(2000),
+            ProvCode::ObservedPrimary,
+            ConfClass::Asserted,
+            TrustTier::T0Core,
+        );
+        let kids = [view(&big), view(&big)];
+        let (name, _, cut) = name_from_content(&kids, &lim).expect("name");
+        assert!(cut && name.len() <= lim.max_text);
+        assert!(name.chars().all(|c| c == 'é' || c == ' '), "char boundary");
+    }
+
+    #[test]
+    fn deep_chain_does_not_amplify() {
+        // Each level derives its name from two children of the level below; the string never
+        // exceeds the limit however deep the chain is, and the work per level is bounded.
+        let mut p = profile();
+        p.limits.max_text = 64;
+        let mut below = child_entry(
+            &"x".repeat(60),
+            ProvCode::ObservedPrimary,
+            ConfClass::Asserted,
+            TrustTier::T0Core,
+        );
+        for _ in 0..5_000 {
+            let kids = [view(&below), view(&below)];
+            let (name, info, _) = name_from_content(&kids, &p.limits).expect("name");
+            assert!(name.len() <= 64);
+            below = child_entry(&name, info.prov, info.conf, info.tier);
+        }
+        assert_eq!(below.name.as_deref().map(str::len), Some(64));
+    }
+
+    #[test]
+    fn registers_cap_name_and_description_at_ingestion() {
+        let mut r = alive_regs();
+        let long: Arc<str> = Arc::from("é".repeat(3000));
+        r.src_mut(PrimarySlot::P0)
+            .apply_obs(2, Write::Val(Val::Name(Arc::clone(&long))));
+        r.src_mut(PrimarySlot::P0)
+            .apply_obs(3, Write::Val(Val::Description(Arc::clone(&long))));
+        r.apply_user(
+            Group::Name,
+            4,
+            crate::register::UserOp::Set(Write::Val(Val::Name(long))),
+        );
+        let f = fuse_one(&profile(), &r, &NodeCands::default());
+        assert!(f.entry.name.as_deref().is_some_and(|n| n.len() <= 1024));
+        assert!(
+            f.entry
+                .sem
+                .description()
+                .is_some_and(|n| n.len() <= 1024 && !n.is_empty())
         );
     }
 }

@@ -16,6 +16,21 @@ use gorca_model::sem::{
     Press, ProvCode, Select, SemEntry, SemFlags, SemRole, SemText, SetPos, Sort, TrustTier,
 };
 
+/// Product limit for a name or description string (ADR string limit, 1 KiB).
+pub const MAX_TEXT_BYTES: usize = 1024;
+
+/// `s` cut to at most `max` bytes at a char boundary.
+pub fn truncate_str(s: &str, max: usize) -> &str {
+    if s.len() <= max {
+        return s;
+    }
+    let mut end = max;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    s.get(..end).unwrap_or("")
+}
+
 /// A per-source monotone sequence number (orders writes within one source only, Lemma 1).
 pub type Seq = u64;
 
@@ -246,6 +261,23 @@ impl Write {
         match self {
             Write::Absent(_) => true,
             Write::Val(v) => v.is_empty_like(),
+        }
+    }
+
+    /// This write with a `Name`/`Description` string cut to `max` bytes; the flag tells whether
+    /// it was cut.
+    #[must_use]
+    pub fn capped(self, max: usize) -> (Write, bool) {
+        match self {
+            Write::Val(Val::Name(s)) if s.len() > max => (
+                Write::Val(Val::Name(Arc::from(truncate_str(&s, max)))),
+                true,
+            ),
+            Write::Val(Val::Description(s)) if s.len() > max => (
+                Write::Val(Val::Description(Arc::from(truncate_str(&s, max)))),
+                true,
+            ),
+            w => (w, false),
         }
     }
 
