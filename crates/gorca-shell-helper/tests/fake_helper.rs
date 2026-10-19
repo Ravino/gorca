@@ -98,6 +98,8 @@ struct State {
     /// Injections that were actually performed (not expired).
     injected: u32,
     held: u32,
+    windows: Vec<HashMap<String, OwnedValue>>,
+    monitors: Vec<HashMap<String, OwnedValue>>,
 }
 
 #[derive(zbus::DBusError, Debug)]
@@ -186,6 +188,16 @@ impl Fake {
     async fn capabilities(&self) -> Result<Vec<String>, HelperErr> {
         self.gate("Capabilities").await?;
         Ok(self.with(|s| s.caps.clone()))
+    }
+
+    async fn get_windows(&self) -> Result<Vec<HashMap<String, OwnedValue>>, HelperErr> {
+        self.gate("GetWindows").await?;
+        Ok(self.with(|s| s.windows.clone()))
+    }
+
+    async fn get_monitors(&self) -> Result<Vec<HashMap<String, OwnedValue>>, HelperErr> {
+        self.gate("GetMonitors").await?;
+        Ok(self.with(|s| s.monitors.clone()))
     }
 
     async fn get_pointer(&self) -> Result<HashMap<String, OwnedValue>, HelperErr> {
@@ -475,22 +487,165 @@ async fn buttons_release_and_position_round_trip() {
     assert!(calls.iter().any(|c| c == "PointerButton b1 click"));
 }
 
+fn ov(v: Value<'_>) -> OwnedValue {
+    OwnedValue::try_from(v).unwrap()
+}
+
+fn window_row(
+    id: u64,
+    pid: u32,
+    title: &str,
+    frame: (i32, i32, i32, i32),
+    buffer: (i32, i32, i32, i32),
+) -> HashMap<String, OwnedValue> {
+    let mut m = HashMap::new();
+    m.insert("id".to_owned(), ov(Value::from(id)));
+    m.insert("pid".to_owned(), ov(Value::from(pid)));
+    m.insert("title".to_owned(), ov(Value::from(title)));
+    m.insert("client-type".to_owned(), ov(Value::from("wayland")));
+    for (p, r) in [("frame", frame), ("buffer", buffer)] {
+        m.insert(format!("{p}-x"), ov(Value::from(r.0)));
+        m.insert(format!("{p}-y"), ov(Value::from(r.1)));
+        m.insert(format!("{p}-w"), ov(Value::from(r.2)));
+        m.insert(format!("{p}-h"), ov(Value::from(r.3)));
+    }
+    m.insert("monitor".to_owned(), ov(Value::from(0_i32)));
+    m.insert("focused".to_owned(), ov(Value::from(true)));
+    m.insert("minimized".to_owned(), ov(Value::from(false)));
+    m.insert("visible".to_owned(), ov(Value::from(true)));
+    m
+}
+
+fn monitor_row(scale: f64) -> HashMap<String, OwnedValue> {
+    let mut m = HashMap::new();
+    m.insert("index".to_owned(), ov(Value::from(0_i32)));
+    m.insert("scale".to_owned(), ov(Value::from(scale)));
+    m.insert("x-scale".to_owned(), ov(Value::from(scale.ceil())));
+    m
+}
+
+fn hint(
+    pid: u32,
+    size: (i32, i32),
+    cs: gorca_output_api::ChildSpace,
+) -> gorca_output_api::ToplevelHint {
+    gorca_output_api::ToplevelHint {
+        pid,
+        title: Arc::from("T"),
+        atspi_origin: (0, 0),
+        atspi_size: size,
+        child_space: cs,
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_window_target_has_no_location_until_the_matcher_exists() {
+async fn a_window_target_is_matched_and_clicked_in_window_coordinates() {
     let bus = bus_or_skip!();
     let fake = Fake::new(2, &["capture", "pointer"]);
+    fake.with(|s| {
+        s.windows = vec![
+            window_row(7, 100, "T", (300, 200, 500, 400), (286, 188, 528, 429)),
+            window_row(8, 555, "other", (0, 0, 500, 400), (0, 0, 500, 400)),
+        ];
+        s.monitors = vec![monitor_row(1.0)];
+    });
     let (client, _srv, _conn) = ready_client(&bus, &fake).await;
-    let top = gorca_output_api::ToplevelHint {
-        pid: 1,
-        title: Arc::from("t"),
-        atspi_origin: (0, 0),
-        atspi_size: (100, 100),
-        child_space: gorca_output_api::ChildSpace::Toplevel,
-    };
-    let r = client
+    let top = hint(100, (500, 400), gorca_output_api::ChildSpace::Toplevel);
+    let o = client
+        .click_at(
+            PointTarget::Window {
+                top: top.clone(),
+                x: 46.0,
+                y: 314.0,
+            },
+            Button::Left,
+            ClickOpts::default(),
+            dl(300),
+        )
+        .await
+        .unwrap();
+    assert_eq!(o.kind, OutcomeKind::Done);
+    let calls = fake.with(|s| s.calls.clone());
+    assert!(
+        calls
+            .iter()
+            .any(|c| c.starts_with("PointerClickAt 7 frame 46 314 b1")),
+        "{calls:?}"
+    );
+    // a move uses the same matching
+    client
+        .move_to(
+            PointTarget::Window {
+                top,
+                x: 10.0,
+                y: 20.0,
+            },
+            ClickOpts::default(),
+            dl(300),
+        )
+        .await
+        .unwrap();
+    assert!(fake.with(|s| {
+        s.calls
+            .iter()
+            .any(|c| c.starts_with("PointerMove 7 frame 10 20"))
+    }));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn device_pixel_children_are_divided_by_the_monitor_scale() {
+    let bus = bus_or_skip!();
+    let fake = Fake::new(2, &["capture", "pointer"]);
+    fake.with(|s| {
+        s.windows = vec![window_row(9, 5, "T", (0, 32, 960, 688), (0, 32, 960, 688))];
+        s.monitors = vec![monitor_row(1.25)];
+    });
+    let (client, _srv, _conn) = ready_client(&bus, &fake).await;
+    let top = hint(5, (960, 688), gorca_output_api::ChildSpace::DevicePixels);
+    client
         .click_at(
             PointTarget::Window {
                 top,
+                x: 375.0,
+                y: 358.0,
+            },
+            Button::Left,
+            ClickOpts::default(),
+            dl(300),
+        )
+        .await
+        .unwrap();
+    assert!(
+        fake.with(|s| s
+            .calls
+            .iter()
+            .any(|c| c.starts_with("PointerClickAt 9 frame 300 286.4"))),
+        "{:?}",
+        fake.with(|s| s.calls.clone())
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_unmatched_or_ambiguous_toplevel_is_no_location_and_nothing_is_clicked() {
+    let bus = bus_or_skip!();
+    let fake = Fake::new(2, &["capture", "pointer"]);
+    fake.with(|s| {
+        s.windows = vec![
+            window_row(1, 100, "A", (0, 0, 500, 400), (0, 0, 500, 400)),
+            window_row(2, 100, "B", (50, 50, 500, 400), (50, 50, 500, 400)),
+        ];
+        for w in &mut s.windows {
+            w.insert("focused".to_owned(), ov(Value::from(false)));
+            w.insert("title".to_owned(), ov(Value::from("same")));
+        }
+        s.monitors = vec![monitor_row(1.0)];
+    });
+    let (client, _srv, _conn) = ready_client(&bus, &fake).await;
+    // two equal windows nothing tells apart
+    let r = client
+        .click_at(
+            PointTarget::Window {
+                top: hint(100, (500, 400), gorca_output_api::ChildSpace::Toplevel),
                 x: 1.0,
                 y: 1.0,
             },
@@ -500,6 +655,32 @@ async fn a_window_target_has_no_location_until_the_matcher_exists() {
         )
         .await;
     assert_eq!(r.unwrap_err(), PointerError::NoLocation);
+    // no window of that size at all
+    let r = client
+        .click_at(
+            PointTarget::Window {
+                top: hint(100, (123, 456), gorca_output_api::ChildSpace::Toplevel),
+                x: 1.0,
+                y: 1.0,
+            },
+            Button::Left,
+            ClickOpts::default(),
+            dl(300),
+        )
+        .await;
+    assert_eq!(r.unwrap_err(), PointerError::NoLocation);
+    assert!(
+        fake.with(|s| !s
+            .calls
+            .iter()
+            .any(|c| c.starts_with("PointerClickAt") || c.starts_with("PointerMove"))),
+        "no injection without a match"
+    );
+    assert_eq!(
+        *client.availability().borrow(),
+        PointerAvail::Ready { version: 2 },
+        "a failed match is not a helper failure"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

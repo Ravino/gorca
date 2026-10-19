@@ -665,3 +665,10 @@ MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its ow
 - E2E: `contrib/gnome-shell-extension/test-rust-client.sh` runs the Rust client (examples/pointer_cli) against the real helper in a
   private shell with a GTK4 oracle: 10/10 (click L/M/R at the pointer, position, drag lock press and release, release on shutdown,
   another holder refused, double click).
+- **MO-5a (a): window matcher** in `gorca-shell-helper` (`matcher.rs`, WM-1..4, table-tested) and `PointerSink::{click_at, move_to}` for
+  `PointTarget::Window` (GetWindows + GetMonitors + the match inside one call, same deadline; no unique match is "No location", never a
+  guess). Verified end to end by `contrib/gnome-shell-extension/test-mapping.sh SCALE`: AT-SPI extents of a real "Target" widget and of the
+  toplevel become a `ToplevelHint` and a point, the Rust client matches and clicks, and the widget fires: GTK4, GTK3, GTK3 under XWayland,
+  Firefox, Chromium, Electron at monitor scale 1, 1.25 and 2 (21/21). Not yet: the connector-side `PointerResolver` (node and text offset to
+  `ToplevelHint` + point), `route_to_review` and the item clicks (MO-5a (b), MO-5b).
+

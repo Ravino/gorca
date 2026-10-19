@@ -194,7 +194,9 @@ impl Hold {
     /// A failed or timed-out request: the state of the button is unknown. True if it was ours.
     pub fn reply_err(&mut self, req: PtrReqId) -> bool {
         match self.state {
-            HoldState::Pressing { req: r, .. } | HoldState::Releasing { req: r, .. } if r == req => {
+            HoldState::Pressing { req: r, .. } | HoldState::Releasing { req: r, .. }
+                if r == req =>
+            {
                 self.state = HoldState::Unknown;
                 true
             }

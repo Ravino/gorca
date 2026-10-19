@@ -8,6 +8,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 title = sys.argv[1] if len(sys.argv) > 1 else 'clicker'
 menu = 'menu' in sys.argv[2:]
+target = 'target' in sys.argv[2:]
 win = Gtk.Window(title=title)
 win.set_default_size(500, 400)
 box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -22,6 +23,11 @@ if menu:
     pb.set_popover(po)
     row.pack_start(mb, False, False, 0); row.pack_start(pb, False, False, 0)
     box.pack_start(row, False, False, 0)
+if target:
+    tb = Gtk.Button(label='Target')
+    tb.set_halign(Gtk.Align.START); tb.set_margin_start(120); tb.set_margin_top(80)
+    tb.connect('clicked', lambda b: print('EV activate Target', flush=True))
+    box.pack_start(tb, False, False, 0)
 ev = Gtk.EventBox(); ev.add(Gtk.DrawingArea())
 ev.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK)
 def rel(e):

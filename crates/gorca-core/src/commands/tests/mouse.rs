@@ -517,5 +517,9 @@ fn a_lost_reply_does_not_wedge_the_lock() {
     let fx = tick(&mut f, Duration::from_millis(1100));
     assert_eq!(spoken(&fx), ["Mouse not responding"]);
     let fx = f.run(CoreCmd::MouseLeftLockToggle, 1);
-    assert_eq!(pointer_reqs(&fx)[0].op, PointerOp::ReleaseAll, "recovers instead of answering busy forever");
+    assert_eq!(
+        pointer_reqs(&fx)[0].op,
+        PointerOp::ReleaseAll,
+        "recovers instead of answering busy forever"
+    );
 }

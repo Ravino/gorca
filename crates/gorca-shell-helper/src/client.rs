@@ -22,7 +22,7 @@ use futures_lite::StreamExt;
 use gorca_dbus::{DbusError, call_method};
 use gorca_output_api::{
     Button, ButtonAct, ClickCount, ClickOpts, OutcomeKind, PointTarget, PointerAvail, PointerError,
-    PointerOutcome, PointerPos, PointerSink,
+    PointerOutcome, PointerPos, PointerSink, ToplevelHint,
 };
 use gorca_rt::{BoxFuture, CancellationToken, Deadline, oneshot, watch};
 use tokio::sync::mpsc;
@@ -56,6 +56,9 @@ const SETUP_RETRY: Duration = Duration::from_secs(5);
 enum Op {
     Move(WireTarget, ClickOpts),
     ClickAt(WireTarget, Button, ClickOpts),
+    /// A point in a toplevel's own coordinate space: matched to a window inside the call (WM-1..4).
+    MoveWin(ToplevelHint, (f64, f64), ClickOpts),
+    ClickWin(ToplevelHint, (f64, f64), Button, ClickOpts),
     Button(Button, ButtonAct),
     ReleaseAll,
     GetPointer,
@@ -201,8 +204,10 @@ impl PointerSink for ShellHelperClient {
                     self.click_wire(WireTarget::stage(x, y), button, opts, deadline)
                         .await
                 }
-                // The window matcher (WM-1..4) is MO-5a; until then a window target has no location.
-                PointTarget::Window { .. } => Err(PointerError::NoLocation),
+                PointTarget::Window { top, x, y } => outcome(
+                    self.submit(Op::ClickWin(top, (x, y), button, opts), deadline)
+                        .await,
+                ),
             }
         })
     }
@@ -219,7 +224,9 @@ impl PointerSink for ShellHelperClient {
                     self.move_wire(WireTarget::stage(x, y), opts, deadline)
                         .await
                 }
-                PointTarget::Window { .. } => Err(PointerError::NoLocation),
+                PointTarget::Window { top, x, y } => {
+                    outcome(self.submit(Op::MoveWin(top, (x, y), opts), deadline).await)
+                }
             }
         })
     }
@@ -590,6 +597,50 @@ async fn late_done(
     }
 }
 
+/// `GetWindows` and `GetMonitors`, then the window matcher (WM-1..4). Any failure to find exactly one
+/// window is "no location": a click is never guessed.
+async fn resolve_window(
+    conn: &zbus::Connection,
+    dest: &str,
+    deadline: Deadline,
+    hint: &ToplevelHint,
+    p: (f64, f64),
+) -> Result<WireTarget, PointerError> {
+    async fn rows(
+        conn: &zbus::Connection,
+        dest: &str,
+        deadline: Deadline,
+        method: &str,
+    ) -> Result<Vec<HashMap<String, OwnedValue>>, PointerError> {
+        let msg = call_method(
+            conn,
+            deadline,
+            dest,
+            HELPER_PATH,
+            HELPER_INTERFACE,
+            method,
+            &(),
+        )
+        .await
+        .map_err(|e| map_dbus_error(&e))?;
+        if !from(&msg, dest) {
+            return Err(PointerError::Failed(
+                "reply from an unexpected sender".to_owned(),
+            ));
+        }
+        msg.body()
+            .deserialize()
+            .map_err(|e| PointerError::Failed(format!("bad reply: {e}")))
+    }
+    let windows = crate::matcher::decode_windows(&rows(conn, dest, deadline, "GetWindows").await?);
+    let monitors =
+        crate::matcher::decode_monitors(&rows(conn, dest, deadline, "GetMonitors").await?);
+    crate::matcher::resolve(hint, p, &windows, &monitors).map_err(|e| {
+        tracing::debug!(error = %e, "pointer: window target not resolved");
+        PointerError::NoLocation
+    })
+}
+
 /// The reply came from the verified unique name.
 fn from(m: &zbus::Message, dest: &str) -> bool {
     m.header().sender().is_some_and(|s| s.as_str() == dest)
@@ -648,7 +699,23 @@ async fn send_op(
     op: Op,
     not_after: i64,
 ) -> Result<Reply, PointerError> {
+    // A window target is matched first (GetWindows + GetMonitors, same deadline), then it is an
+    // ordinary move or click with a window-relative point.
+    let op = match op {
+        Op::MoveWin(h, p, o) => Op::Move(resolve_window(&conn, &dest, deadline, &h, p).await?, o),
+        Op::ClickWin(h, p, b, o) => {
+            Op::ClickAt(resolve_window(&conn, &dest, deadline, &h, p).await?, b, o)
+        }
+        other @ (Op::Move(..)
+        | Op::ClickAt(..)
+        | Op::Button(..)
+        | Op::ReleaseAll
+        | Op::GetPointer) => other,
+    };
     let msg = match op {
+        Op::MoveWin(..) | Op::ClickWin(..) => {
+            return Err(PointerError::Failed("unresolved window target".to_owned()));
+        }
         Op::Move(t, opts) => {
             let body = (
                 t.window,
@@ -744,6 +811,9 @@ async fn send_op(
     }
     let body = msg.body();
     match op {
+        Op::MoveWin(..) | Op::ClickWin(..) => {
+            Err(PointerError::Failed("unresolved window target".to_owned()))
+        }
         Op::Move(..) | Op::ClickAt(..) | Op::Button(..) => {
             let m: HashMap<String, OwnedValue> = body
                 .deserialize()
