@@ -34,6 +34,7 @@ gorca-text = { path = "crates/gorca-text" }
 gorca-doc-source-atspi = { path = "crates/gorca-doc-source-atspi" }
 gorca-bench-web = { path = "crates/gorca-bench-web" }
 gorca-output-api = { path = "crates/gorca-output-api" }
+gorca-shell-helper = { path = "crates/gorca-shell-helper" }
 gorca-speech = { path = "crates/gorca-speech" }
 gorca-speech-ssip = { path = "crates/gorca-speech-ssip" }
 gorca-speech-voicego = { path = "crates/gorca-speech-voicego" }

@@ -39,7 +39,7 @@ Errors: `Error.Failed` messages start with a machine prefix: `locked:` `rate:` `
 `org.gorca.ShellHelper.Error.AccessDenied` (caller not allow-listed), `org.gorca.ShellHelper.Error.Failed`
 (bad rect, locked session, rate limit, no such window).
 
-Limits: area <= 2048x2048 logical px, 100 calls/s (burst 200) for every v1 method; pointer methods including `GetPointer` have their own bucket of 20/s (burst 40, a `count = 2` click costs 2); callers that are not (yet) allow-listed share ONE global bucket of 10/s (burst 20) checked before any /proc or config work (many connections do not multiply it), the negative decision is cached per sender until the config stamp changes, the sender vanishes or 5 s pass, and `DENIED` lines are limited globally to 1/s with a suppressed counter; a `release` ignores `not-after` (a late release is always safe); work in flight when the extension is disabled (an authorization lookup) is dropped, no device is created after `disable()`; refused while the session is locked, the cursor is never
+Limits: area <= 2048x2048 logical px, 100 calls/s (burst 200) for every v1 method; pointer methods including `GetPointer` have their own bucket of 20/s (burst 40, a `count = 2` click costs 2); a caller that is not (yet) allow-listed is limited by its OWN bucket (10/s, burst 20) as the first gate, before any /proc, config or broker work; only a real lookup (unknown sender, or a cached denial past its 5 s TTL) also draws on ONE global lookup bucket (10/s, burst 20); a cached negative decision answers with no lookup; once a sender is allowed it never pays any of this and its cache entry is never evicted (only denied/unknown entries are, oldest first, bound 512); `DENIED` lines are limited globally to 1/s with a suppressed counter; a `release` ignores `not-after` (a late release is always safe); work in flight when the extension is disabled (an authorization lookup) is dropped, no device is created after `disable()`; refused while the session is locked, the cursor is never
 painted. Pixels never touch disk (MemoryOutputStream, then the D-Bus message).
 
 Access control: config `/etc/gorca/shell-helper.json` (root-owned, authoritative if present) else
@@ -57,3 +57,11 @@ Client rule: before trusting replies, check that the owner of `org.gorca.ShellHe
 
 Why PNG and not raw: GJS copies `(array)` in-parameters, so `Clutter.Stage.paint_to_buffer` / `Cogl.Texture.get_data`
 cannot fill a JS buffer (both "succeed" and leave it zeroed). `Shell.Screenshot.screenshot_area` is the safe path.
+
+Client notes (`gorca-shell-helper`, ADR-0025 MO-2): (1) the first call of a NEW bus connection goes through the helper's
+pre-auth buckets; right after an extension reload, or during a flood of strangers, the shared lookup bucket can answer
+`Error.Failed rate:` to the very first `Ping`. The client probe retries once after 250 ms and otherwise schedules its
+normal re-probe. (2) The gorca client shares one bus connection, so the helper never sees "gorca vanished"; on shutdown
+the client sends a best-effort `PointerRelease` (150 ms). The helper additionally releases when the holder's unique name
+vanishes (`NameOwnerChanged`, H-3) and after the 125 s backstop. (3) Callers' deadlines are clamped to 500 ms; every call
+goes to the verified unique name of the Shell's owner of the helper name, never to the well-known name.

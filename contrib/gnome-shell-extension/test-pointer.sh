@@ -14,6 +14,10 @@ grep -q "v2 owns" "$W/shell.log" || { echo "rig did not start (see $W/shell.log)
 rc=0
 "$D/run-as.sh" "$W" a "$D/testclients/test_pointer.py" $SLOW || rc=1
 "$D/run-as.sh" "$W" c "$D/testclients/test_roles.py" c || rc=1
+"$D/run-as.sh" "$W" c "$D/testclients/test_flood.py" flood > "$W/flood.out" 2>&1 &
+FP=$!
+"$D/run-as.sh" "$W" a "$D/testclients/test_flood.py" victim || rc=1
+wait "$FP"; cat "$W/flood.out"
 "$D/run-as.sh" "$W" b "$D/testclients/test_roles.py" b || rc=1
 echo "test-pointer.sh exit $rc (workdir $W)"
 exit $rc

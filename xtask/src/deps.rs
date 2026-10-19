@@ -5,7 +5,7 @@
 //!
 //! 1. Neutral crates must not depend, even transitively, on `atspi*`, `zbus*`, `accesskit*`,
 //!    `wayland-*`, `wasmtime*` or `reis`/libei bindings.
-//! 2. Only `gorca-dbus`, `gorca-connector-atspi`, `gorca-doc-source-atspi`, `gorca-input-mutter`,
+//! 2. Only `gorca-dbus`, `gorca-shell-helper` (ADR-0025), `gorca-connector-atspi`, `gorca-doc-source-atspi`, `gorca-input-mutter`,
 //!    `gorca-input-inject`, `gorca-daemon` and the B-6 harness `gorca-bench-web` may depend on `zbus`. Only `gorca-connector-atspi` may depend on `atspi*`.
 //! 3. `gorca-core` must not depend on any `gorca-connector-*`, `gorca-speech-*`, `gorca-input-*`
 //!    (except `-api`) or `gorca-ext-host`. Only `gorca-daemon` wires concrete implementations.
@@ -53,6 +53,7 @@ const NEUTRAL: &[&str] = &[
 ];
 const MAY_USE_ZBUS: &[&str] = &[
     "gorca-dbus",
+    "gorca-shell-helper",
     "gorca-connector-atspi",
     "gorca-input-mutter",
     "gorca-input-inject",
