@@ -15,6 +15,7 @@ use gorca_rt::EpochCell;
 
 use super::*;
 
+mod profiles;
 mod quick;
 use crate::directory::MirrorDirectory;
 use crate::mode::{BaseMode, Mode, ModeKeys};
@@ -213,6 +214,7 @@ fn loaded(text: &str, cause: LoadCause) -> Arc<LoadedSettings> {
         },
         caps_lock_dropped: dropped,
         clock_24h: true,
+        profiles: None,
     })
 }
 

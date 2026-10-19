@@ -764,6 +764,7 @@ impl Reader {
             }
         }
         self.text_after(&mut fx);
+        self.profiles_after(&mut fx);
         self.remember_spoken(is_key, &fx);
         self.after_message(record, &mut fx);
         fx

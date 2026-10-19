@@ -731,7 +731,12 @@ mod tests {
     /// chord in the source screen reader. Watched gestures (stop, pause) have none.
     #[test]
     fn presets_bind_every_m1_chord_command() {
-        let chordless = [CoreCmd::SpeechStop, CoreCmd::SpeechPauseToggle];
+        // `profiles.suspend` is unbound by design (ADR-0016 section 2.5a): a command-list item.
+        let chordless = [
+            CoreCmd::SpeechStop,
+            CoreCmd::SpeechPauseToggle,
+            CoreCmd::ProfilesSuspend,
+        ];
         let direct = [
             CoreCmd::SpeechRateUp,
             CoreCmd::SpeechRateDown,

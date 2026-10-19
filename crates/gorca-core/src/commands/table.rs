@@ -254,6 +254,13 @@ pub enum CoreCmd {
     BrowseNativeSelectionToggle,
     SpeechHistoryPrev,
     SpeechHistoryNext,
+    ProfilesSaveGlobal,
+    ProfilesCycle,
+    ProfilesToggleEnabled,
+    ProfilesEditTargetCycle,
+    ProfilesAnnounce,
+    ProfilesSuspend,
+    BrowseSaveModeDefault,
 }
 
 /// Pattern matching every command that is declared but not implemented yet.
@@ -316,12 +323,13 @@ macro_rules! planned_cmds {
             | CoreCmd::QuicknavPrevDifferentStyle
             | CoreCmd::QuicknavNextReference
             | CoreCmd::QuicknavPrevReference
+            | CoreCmd::BrowseSaveModeDefault
     };
 }
 pub(crate) use planned_cmds;
 
 /// Number of commands.
-pub const COUNT: usize = 241;
+pub const COUNT: usize = 248;
 
 impl CoreCmd {
     /// Every command, in discriminant order.
@@ -567,6 +575,13 @@ impl CoreCmd {
         CoreCmd::BrowseNativeSelectionToggle,
         CoreCmd::SpeechHistoryPrev,
         CoreCmd::SpeechHistoryNext,
+        CoreCmd::ProfilesSaveGlobal,
+        CoreCmd::ProfilesCycle,
+        CoreCmd::ProfilesToggleEnabled,
+        CoreCmd::ProfilesEditTargetCycle,
+        CoreCmd::ProfilesAnnounce,
+        CoreCmd::ProfilesSuspend,
+        CoreCmd::BrowseSaveModeDefault,
     ];
 }
 
@@ -2980,5 +2995,75 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechHistoryNext,
+    },
+    CmdSpec {
+        cmd: CoreCmd::ProfilesSaveGlobal,
+        name: "profiles.save_global",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 2,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdProfilesSaveGlobal,
+    },
+    CmdSpec {
+        cmd: CoreCmd::ProfilesCycle,
+        name: "profiles.cycle",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdProfilesCycle,
+    },
+    CmdSpec {
+        cmd: CoreCmd::ProfilesToggleEnabled,
+        name: "profiles.toggle_enabled",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdProfilesToggleEnabled,
+    },
+    CmdSpec {
+        cmd: CoreCmd::ProfilesEditTargetCycle,
+        name: "profiles.edit_target_cycle",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdProfilesEditTargetCycle,
+    },
+    CmdSpec {
+        cmd: CoreCmd::ProfilesAnnounce,
+        name: "profiles.announce",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 2,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdProfilesAnnounce,
+    },
+    CmdSpec {
+        cmd: CoreCmd::ProfilesSuspend,
+        name: "profiles.suspend",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdProfilesSuspend,
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSaveModeDefault,
+        name: "browse.save_mode_default",
+        available: Availability::Planned(Milestone::Later),
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdBrowseSaveModeDefault,
     },
 ];

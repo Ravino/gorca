@@ -8,8 +8,8 @@
 use std::collections::BTreeMap;
 
 use crate::settings::{
-    Backend, BoundaryMode, Caps, Confirmations, InterruptPolicy, Layout, Preset, Punct, SETTINGS,
-    SettingDef, SettingType, Settings, Verbosity, WordLevel,
+    Backend, BoundaryMode, Caps, Confirmations, InterruptPolicy, Layout, ModeDefault, Preset,
+    Punct, SETTINGS, SettingDef, SettingType, Settings, Verbosity, WordLevel,
 };
 
 /// Index of a row of [`SETTINGS`]: the dense key id every resolver uses.
@@ -128,6 +128,7 @@ pub(crate) fn enum_name(key: KeyId, text: &str) -> Option<&'static str> {
         ("speech", "backend") => Backend::parse(text).map(Backend::name),
         ("speech", "punctuation") => Punct::parse(text).map(Punct::name),
         ("editing", "word") => WordLevel::parse(text).map(WordLevel::name),
+        ("browse", "mode_default") => ModeDefault::parse(text).map(ModeDefault::name),
         ("verbosity", "level") => Verbosity::parse(text).map(Verbosity::name),
         ("verbosity", "confirmations") => Confirmations::parse(text).map(Confirmations::name),
         _ => None,
@@ -175,6 +176,8 @@ pub fn get_value(s: &Settings, key: KeyId) -> Value {
         ("text", "caret_late_ms") => Value::Int(i64::from(s.text.caret_late_ms)),
         ("browse", "say_all_on_load") => Value::Bool(s.browse.say_all_on_load),
         ("browse", "description_pause") => Value::Bool(s.browse.description_pause),
+        ("browse", "enabled") => Value::Bool(s.browse.enabled),
+        ("browse", "mode_default") => Value::Str(s.browse.mode_default.name().to_owned()),
         ("terminal", "settle_ms") => Value::Int(i64::from(s.terminal.settle_ms)),
         ("terminal", "burst_lines") => Value::Int(i64::from(s.terminal.burst_lines)),
         ("terminal", "prompt_markers") => Value::StrList(s.terminal.prompt_markers.clone()),
@@ -257,6 +260,10 @@ pub fn set_value(s: &mut Settings, key: KeyId, v: &Value) -> bool {
         ("text", "caret_late_ms") => put!(s.text.caret_late_ms, int_u32(v)),
         ("browse", "say_all_on_load") => put!(s.browse.say_all_on_load, boolean(v)),
         ("browse", "description_pause") => put!(s.browse.description_pause, boolean(v)),
+        ("browse", "enabled") => put!(s.browse.enabled, boolean(v)),
+        ("browse", "mode_default") => {
+            put!(s.browse.mode_default, text(v).and_then(ModeDefault::parse))
+        }
         ("terminal", "settle_ms") => put!(s.terminal.settle_ms, int_u32(v)),
         ("terminal", "burst_lines") => put!(s.terminal.burst_lines, int_u32(v)),
         ("terminal", "prompt_markers") => {
@@ -428,6 +435,7 @@ mod tests {
                     ("speech", "backend") => &["ssip", "auto"],
                     ("speech", "punctuation") => &["all", "none"],
                     ("editing", "word") => &["coarse", "auto"],
+                    ("browse", "mode_default") => &["focus", "browse"],
                     ("verbosity", "level") => &["brief", "normal"],
                     ("verbosity", "confirmations") => &["brief", "full"],
                     _ => &[],

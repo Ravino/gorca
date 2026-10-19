@@ -786,6 +786,7 @@ impl AppActor {
                         d.set_edit_quirks(self.app, self.profile.edit_quirks);
                         d.set_page_events_settle(self.app, info.page_events_settle_ms);
                         d.set_pid(self.app, info.pid);
+                        d.set_app_name(self.app, Some(&info.app_name));
                         d.set_policy(self.app, self.profile.policy);
                     }
                     self.driver.set_class(AppClass::from_info(&info));

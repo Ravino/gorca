@@ -11,6 +11,7 @@ mod handlers;
 mod info;
 mod keys;
 mod mode;
+pub(crate) mod profiles;
 mod spec;
 mod state;
 mod table;
@@ -20,11 +21,13 @@ pub use compile::{
     escape_grabs, gorca_modifiers, grab_collisions, lane_settings, letter_grabs, tab_grabs,
 };
 pub use handlers::PASS_TIMEOUT;
+pub use profiles::prewarm;
 pub use spec::{Availability, CmdSpec, CommandTable, ContextMask, Milestone};
 pub(crate) use state::CmdState;
 pub use state::{
     CapitalLevels, ConfigRequest, ControlMsg, InputNotice, LoadCause, LoadedSettings, LocalTime,
-    SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock,
+    PrewarmEntries, PrewarmRequest, ProfileFocus, ProfileSaveOutcome, ProfilesSaved, SaveKind,
+    SaveProfiles, SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock,
 };
 pub use table::CoreCmd;
 
