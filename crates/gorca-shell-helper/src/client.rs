@@ -95,6 +95,7 @@ impl ShellHelperClient {
             machine: AvailMachine::new(),
             reprobe: None,
             late: None,
+            verified: None,
         };
         let task = tokio::spawn(actor.run(cancel.clone()));
         (
@@ -264,6 +265,11 @@ struct Actor {
     reprobe: Option<tokio::time::Instant>,
     /// The call whose deadline passed; its answer (or its hard cap) ends the overdue state.
     late: Option<Flight>,
+    /// The VERIFIED unique name (`:1.x`) of the helper: owner of `org.gorca.ShellHelper` equal to the owner of
+    /// `org.gnome.Shell` at the last check (MI-7). Every call goes to this unique name, never to the well-known
+    /// name, so a process that takes the name after the check cannot receive anything. Cleared on every owner
+    /// change until re-verified.
+    verified: Option<Owner>,
 }
 
 impl Actor {
@@ -294,10 +300,12 @@ impl Actor {
                 () = cancel.cancelled() => break,
                 s = helper_ch.next() => {
                     if s.is_none() { break; }
+                    self.verified = None;
                     self.refresh_owners(&dbus).await;
                 }
                 s = shell_ch.next() => {
                     if s.is_none() { break; }
+                    self.verified = None;
                     self.refresh_owners(&dbus).await;
                 }
                 _ = poll.tick() => self.apply(AvailEvent::PollTick).await,
@@ -316,6 +324,7 @@ impl Actor {
             }
         }
         // Dropping the connection releases held buttons in the helper (H-3).
+        self.verified = None;
         self.machine = AvailMachine::new();
         self.publish();
     }
@@ -359,6 +368,10 @@ impl Actor {
     async fn refresh_owners(&mut self, dbus: &DBusProxy<'static>) {
         let helper = Self::owner_of(dbus, HELPER_NAME).await;
         let shell = Self::owner_of(dbus, SHELL_NAME).await;
+        self.verified = match (&helper, &shell) {
+            (Some(h), Some(s)) if h == s => Some(Arc::clone(h)),
+            (Some(_) | None, Some(_) | None) => None,
+        };
         self.apply(AvailEvent::Owners { helper, shell }).await;
     }
 
@@ -387,11 +400,14 @@ impl Actor {
 
     /// `Ping` then `Capabilities`, 150 ms each.
     async fn probe(&self) -> ProbeResult {
+        let Some(dest) = self.verified.clone() else {
+            return ProbeResult::Failed;
+        };
         let d = Deadline(Instant::now() + PROBE_STEP);
         let version = match call_method(
             &self.conn,
             d,
-            HELPER_NAME,
+            &dest,
             HELPER_PATH,
             HELPER_INTERFACE,
             "Ping",
@@ -399,6 +415,7 @@ impl Actor {
         )
         .await
         {
+            Ok(m) if !from(&m, &dest) => return ProbeResult::Failed,
             Ok(m) => match m.body().deserialize::<u32>() {
                 Ok(v) => v,
                 Err(_) => return ProbeResult::Failed,
@@ -409,7 +426,7 @@ impl Actor {
         let caps = match call_method(
             &self.conn,
             d,
-            HELPER_NAME,
+            &dest,
             HELPER_PATH,
             HELPER_INTERFACE,
             "Capabilities",
@@ -417,6 +434,7 @@ impl Actor {
         )
         .await
         {
+            Ok(m) if !from(&m, &dest) => return ProbeResult::Failed,
             Ok(m) => match m.body().deserialize::<Vec<String>>() {
                 Ok(v) => v,
                 Err(_) => return ProbeResult::Failed,
@@ -450,10 +468,15 @@ impl Actor {
             let _ = reply.send(Err(PointerError::Timeout));
             return;
         }
+        let Some(dest) = self.verified.clone() else {
+            // Not (re-)verified since the last owner change: nothing is dispatched.
+            let _ = reply.send(Err(PointerError::Unavailable(avail)));
+            return;
+        };
         let not_after = not_after_us(deadline, now);
         let conn = self.conn.clone();
         let hard = Deadline(deadline.0 + LATE_CAP);
-        let mut flight: Flight = tokio::spawn(send_op(conn, hard, op, not_after));
+        let mut flight: Flight = tokio::spawn(send_op(conn, dest, hard, op, not_after));
         if let Ok(joined) = gorca_rt::with_deadline(deadline, &mut flight).await {
             let res = joined
                 .unwrap_or_else(|e| Err(PointerError::Failed(format!("call task failed: {e}"))));
@@ -527,6 +550,11 @@ async fn late_done(
     }
 }
 
+/// The reply came from the verified unique name.
+fn from(m: &zbus::Message, dest: &str) -> bool {
+    m.header().sender().is_some_and(|s| s.as_str() == dest)
+}
+
 fn probe_failure(e: &DbusError) -> ProbeResult {
     match e {
         DbusError::Timeout => ProbeResult::Timeout,
@@ -575,6 +603,7 @@ fn classify(res: &Result<Reply, PointerError>) -> AvailEvent {
 /// be read after the caller's deadline.
 async fn send_op(
     conn: zbus::Connection,
+    dest: Owner,
     deadline: Deadline,
     op: Op,
     not_after: i64,
@@ -591,7 +620,7 @@ async fn send_op(
             call_method(
                 &conn,
                 deadline,
-                HELPER_NAME,
+                &dest,
                 HELPER_PATH,
                 HELPER_INTERFACE,
                 "PointerMove",
@@ -611,7 +640,7 @@ async fn send_op(
             call_method(
                 &conn,
                 deadline,
-                HELPER_NAME,
+                &dest,
                 HELPER_PATH,
                 HELPER_INTERFACE,
                 "PointerClickAt",
@@ -634,7 +663,7 @@ async fn send_op(
             call_method(
                 &conn,
                 deadline,
-                HELPER_NAME,
+                &dest,
                 HELPER_PATH,
                 HELPER_INTERFACE,
                 "PointerButton",
@@ -646,7 +675,7 @@ async fn send_op(
             call_method(
                 &conn,
                 deadline,
-                HELPER_NAME,
+                &dest,
                 HELPER_PATH,
                 HELPER_INTERFACE,
                 "PointerRelease",
@@ -658,7 +687,7 @@ async fn send_op(
             call_method(
                 &conn,
                 deadline,
-                HELPER_NAME,
+                &dest,
                 HELPER_PATH,
                 HELPER_INTERFACE,
                 "GetPointer",
@@ -668,6 +697,11 @@ async fn send_op(
         }
     };
     let msg = msg.map_err(|e| map_dbus_error(&e))?;
+    if !from(&msg, &dest) {
+        return Err(PointerError::Failed(
+            "reply from an unexpected sender".to_owned(),
+        ));
+    }
     let body = msg.body();
     match op {
         Op::Move(..) | Op::ClickAt(..) | Op::Button(..) => {

@@ -723,3 +723,77 @@ async fn the_queue_holds_one_in_flight_plus_four_and_refuses_the_rest() {
     assert_eq!(ok + busy, 8);
     assert!((5..=6).contains(&ok) && busy >= 2, "ok={ok} busy={busy}");
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_name_taken_after_the_check_never_receives_a_call() {
+    let bus = bus_or_skip!();
+    let legit = Fake::new(2, &["capture", "pointer"]);
+    let srv = serve(&bus.address, &legit, &BOTH).await;
+    let (client, _t) = ShellHelperClient::start(connect(&bus.address).await);
+    let mut rx = client.availability();
+    assert_eq!(
+        wait_avail(&mut rx, PointerAvail::can_call, 5).await,
+        PointerAvail::Ready { version: 2 }
+    );
+    // The check passed. A call is in flight (the Shell is slow) with four more queued behind it. While it
+    // is stuck, the helper name changes hands: the legitimate owner lets go of it and an attacker (not the
+    // Shell) takes it. The queued calls are dispatched around the moment the actor learns about it: sent to
+    // the well-known name some of them would reach the attacker; sent to the pinned unique name none can.
+    let client = Arc::new(client);
+    legit.with(|s| s.stall = Duration::from_millis(300));
+    let mut tasks = Vec::new();
+    for i in 0..5 {
+        let c = Arc::clone(&client);
+        tasks.push(tokio::spawn(async move {
+            c.click_at(
+                PointTarget::Stage {
+                    x: f64::from(i),
+                    y: 1.0,
+                },
+                Button::Left,
+                ClickOpts::default(),
+                dl(5_000),
+            )
+            .await
+        }));
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let evil = Fake::new(2, &["capture", "pointer"]);
+    srv.release_name("org.gorca.ShellHelper").await.unwrap();
+    let attacker = serve(&bus.address, &evil, &["org.gorca.ShellHelper"]).await;
+    legit.with(|s| s.stall = Duration::ZERO);
+    for t in tasks {
+        let _ = t.await.unwrap();
+    }
+    for i in 0..20 {
+        let _ = client
+            .click_at(
+                PointTarget::Stage {
+                    x: f64::from(i),
+                    y: 1.0,
+                },
+                Button::Left,
+                ClickOpts::default(),
+                dl(300),
+            )
+            .await;
+        let _ = client.position(dl(300)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(
+        evil.with(|s| s.calls.is_empty()),
+        "the attacker received {:?}",
+        evil.with(|s| s.calls.clone())
+    );
+    assert_eq!(
+        wait_avail(&mut rx, |a| a == PointerAvail::Squatted, 5).await,
+        PointerAvail::Squatted
+    );
+    assert_eq!(
+        client.position(dl(300)).await.unwrap_err(),
+        PointerError::Unavailable(PointerAvail::Squatted)
+    );
+    assert!(evil.with(|s| s.calls.is_empty()));
+    drop(attacker);
+}
