@@ -49,3 +49,27 @@ ADR line) that the blur is acceptable. Mention it in the user-facing notes.
 
 - `focus_key` keeps an unjoined key forever; harmless (it is looked up and filtered by document).
 - `GrabFocus` reply is ignored (bool false = not taken); log it, as `action` does (R-6).
+
+---
+
+# Delta review (1ab53c20): MERGE
+
+| Check | Result |
+|---|---|
+| merge-tree vs main | clean |
+| clippy core + doc source, tests | clean; core 943, doc source 57 + 35 pass |
+| E-1 probe Reply→Delete→Buy now | Enter 1 "Read button Delete now." (no click), Enter 2 "Read link Buy now now." (no click), Enter 3 clicks |
+| Bob→Alice | Enter 1 announces Alice, Enter 2 clicks |
+| Dave typing→online (churn between Enters) | announced twice, the click comes only after the current text was spoken |
+| Source | time window gone; `ClickAnnounced{name}` makes the pre-click read compare the live name with the announced one; a plain `Click` still compares with the mirror |
+| C-1 trigger | `keys.rs`: Control_L/R press → `web_ctrl_down`, which requires browse mode, `SelectionModel::Native` with a mirrored selection, a non-empty `sel`, a focused `passes_through` field joined to this document whose text range does not intersect the selection; the source acts on `input`/`textarea` only and reports `GrabFocus` false as `Refused`. No selection → nothing |
+
+Residual (Low, accept or document):
+- Any Control press satisfies the trigger under those conditions: Ctrl+F, Ctrl+L, Ctrl+Z, and above all the
+  bare Control tap users press to stop speech. Each releases the field (one blur). Bounded by the strict
+  preconditions; document it, or later move the release to the `c` press with Control held if the
+  keyboard monitor delivers it before Firefox handles the chord.
+- No focus restore: accepted. Putting the focus back on a field would switch browse mode to automatic focus mode,
+  which is worse than a blur the user caused by copying.
+- The owner's live Telegram case is still not reproduced; this round makes the rule safe, it does not prove
+  the Telegram fix.
