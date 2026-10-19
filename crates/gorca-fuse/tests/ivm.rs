@@ -1627,43 +1627,58 @@ fn stats_expose_the_resident_s0_store_and_the_recompute_count() {
     let e = chain_engine(5);
     let st = e.stats();
     assert_eq!(st.nodes, 5);
-    assert_eq!(st.s0_resident_nodes, 5, "alive marker per node");
+    assert_eq!(
+        st.s0_resident_nodes, 0,
+        "S0 is rebuilt from the published entries: nothing is stored"
+    );
     assert_eq!(st.s0_resident_bytes, 0);
     assert!(st.s0_computes >= 5 && st.fusions >= 5);
     assert!(st.node_record_bytes > 0 && st.node_record_bytes < 400);
-    // Selectors that read the parent role and the first child's name keep exactly those groups.
+    // A patch re-roles a child, so its S0 role differs from what the published entry rebuilds:
+    // exactly that exception is stored (the delta), for the one node that has it.
     let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], toy_rules());
     profile.default_role = SemRole::Generic;
+    let patch = ToyPatch {
+        pid: "p0".into(),
+        ext_id: "org.ext0".into(),
+        spec: 1,
+        sel_role: "generic".into(),
+        empty_name: false,
+        sel_parent: Some("group".into()),
+        group: Group::Role,
+        value: json!("button"),
+    };
     let mut p = Ivm::new(
         profile,
         ToyQuirks,
         Patches {
-            inner: ToyPatches(Vec::new()),
+            inner: ToyPatches(vec![patch]),
             narrow: true,
         },
     );
     p.add_node(nid(0), None).unwrap();
     p.add_node(nid(1), Some(nid(0))).unwrap();
-    for i in 0..2 {
-        p.apply([
-            Input::Life {
-                node: nid(i),
-                src: PrimarySlot::P0,
-                seq: 1,
-                alive: true,
-            },
-            Input::Obs {
-                node: nid(i),
-                src: PrimarySlot::P0,
-                seq: 2,
-                write: write_from_toy(Group::Role, &json!("group")),
-            },
-        ]);
-    }
+    let obs = |node: usize, role: &str| Input::Obs {
+        node: nid(node),
+        src: PrimarySlot::P0,
+        seq: 2,
+        write: write_from_toy(Group::Role, &json!(role)),
+    };
+    let life = |node: usize| Input::Life {
+        node: nid(node),
+        src: PrimarySlot::P0,
+        seq: 1,
+        alive: true,
+    };
+    p.apply([life(0), life(1), obs(0, "group"), obs(1, "generic")]);
     p.run(Budget::UNLIMITED);
+    assert_eq!(p.entry_unmasked(nid(1)).unwrap().sem.role, SemRole::Button);
     let st = p.stats();
-    assert_eq!(st.s0_resident_nodes, 2);
-    assert!(st.s0_resident_bytes > 0, "role is kept for the selectors");
+    assert_eq!(
+        st.s0_resident_nodes, 1,
+        "only the re-roled child keeps an exception"
+    );
+    assert!(st.s0_resident_bytes > 0);
     assert!(st.s0_neighbour_hits > 0);
     assert!(p.verify().is_ok());
 }

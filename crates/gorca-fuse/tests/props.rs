@@ -695,7 +695,7 @@ fn f3_provenance_is_complete_and_sound() {
                             .iter()
                             .find_map(|p| w.nodes[x].src(*p).get(g))
                             .unwrap();
-                        assert_eq!(toy_value(&first.write.slot(), g), toy_from_entry(e, g));
+                        assert_eq!(toy_value(&first.slot(), g), toy_from_entry(e, g));
                     }
                     ProvCode::ObservedSecondary => {
                         secondary += 1;

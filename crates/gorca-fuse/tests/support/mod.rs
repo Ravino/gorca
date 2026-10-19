@@ -17,8 +17,8 @@ use gorca_fuse::{
     AnchorId, AnchorIndex, Bound, ChildView, EpochSnapshot, Explain, FactIn, FactLayer, FactTrail,
     FuseCtx, Fused, Grant, Neighbours, NoTrace, NodeCands, NodeIdx, NodeRegs, PatchHit,
     PatchSource, Payload, PrimarySlot, Profile, Quirks, Ranked, Record, Resolved, RoleSet, Rules,
-    S0Node, Scratch, SideTable, Slot, SourceInfo, SourceState, Trace, TrailEntry, UserOp, Val,
-    Write, fuse_node_with, s0_with,
+    S0Node, S0View, Scratch, SideTable, Slot, SourceInfo, SourceState, Trace, TrailEntry, UserOp,
+    Val, Write, fuse_node_with, s0_with,
 };
 use gorca_model::event::Politeness;
 use gorca_model::fact::{Basis, BindGen, EvidenceValue, SourceId};
@@ -283,7 +283,7 @@ impl ToyPatch {
         (-self.spec, &self.ext_id, &self.pid)
     }
 
-    fn matches(&self, node: &S0Node, parent: Option<&S0Node>) -> bool {
+    fn matches(&self, node: &S0Node, parent: Option<S0View<'_>>) -> bool {
         if toy_str(node.slot(Group::Role)) != self.sel_role {
             return false;
         }
@@ -297,7 +297,7 @@ impl ToyPatch {
             match parent {
                 None => return false,
                 Some(p) => {
-                    if &toy_str(p.slot(Group::Role)) != sp {
+                    if &toy_str(&p.slot(Group::Role)) != sp {
                         return false;
                     }
                 }
@@ -328,7 +328,7 @@ impl PatchSource for ToyPatches {
                     .children
                     .first()
                     .and_then(|c| c.s0)
-                    .map_or(Slot::Unknown, |s| s.slot(Group::Name).clone());
+                    .map_or(Slot::Unknown, |s| s.slot(Group::Name));
                 let name = toy_str(&shown);
                 if !matches!(name.as_str(), "?" | "-" | "") {
                     hit.write = Some(Write::Val(Val::Name(Arc::from(name.as_str()))));
@@ -1020,12 +1020,14 @@ pub fn evaluate_full<Q: Quirks>(case: &Case, world: &World, quirks: &Q, trace: b
             .iter()
             .map(|&c| ChildView {
                 id: u32::try_from(c).unwrap(),
-                s0: s0s[c].as_ref(),
+                s0: s0s[c].as_ref().map(S0View::full),
                 fused: outs[c].as_ref().map(|o| &o.fused.entry),
             })
             .collect();
         let parent = if case.parent[x] >= 0 {
-            s0s[usize::try_from(case.parent[x]).unwrap()].as_ref()
+            s0s[usize::try_from(case.parent[x]).unwrap()]
+                .as_ref()
+                .map(S0View::full)
         } else {
             None
         };

@@ -40,9 +40,10 @@ use crate::side::{
     SideTable, SourceInfo, SourceState,
 };
 use crate::strata::{
-    ChildView, Neighbours, PatchSource, Quirks, S0Node, Scratch, fuse_node_with, s0_into, s0_with,
+    ChildView, Neighbours, PatchSource, Quirks, S0Node, S0View, Scratch, changed_vs, delta_of,
+    fuse_node_with, s0_into, s0_with,
 };
-use crate::value::{Seq, Write};
+use crate::value::{Seq, Slot, Write};
 
 /// Fan-out cap of the relation reverse index (ADR-0022 section 2.4).
 pub const RELATION_FANOUT_CAP: usize = 64;
@@ -159,6 +160,21 @@ pub struct RunReport {
     pub check_mismatches: Option<usize>,
 }
 
+/// Heap bytes of a stored delta.
+fn delta_bytes(d: &[(Group, Slot)]) -> usize {
+    std::mem::size_of::<Vec<(Group, Slot)>>() + std::mem::size_of_val(d)
+}
+
+/// The view of a live node's S0 (delta form), if it is alive.
+fn s0_view_of(nodes: &[Option<Node>], n: NodeIdx) -> Option<S0View<'_>> {
+    let nd = node_of(nodes, n)?;
+    let e = nd.published.as_deref()?;
+    Some(S0View::delta(
+        e,
+        nd.delta.as_deref().map_or(&[], Vec::as_slice),
+    ))
+}
+
 /// Counters for tuning the S0 storage choice (resident compact S0, recompute, neighbour reads).
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct IvmStats {
@@ -210,14 +226,41 @@ struct Node {
     regs: NodeRegs,
     /// Life seq of the highest-priority source that has an opinion, when alive.
     alive: Option<Seq>,
-    attr: Option<(Seq, Option<Arc<str>>)>,
     vis: u32,
-    doc_rev: u64,
-    s0: Option<S0Node>,
+    /// Exceptions to the S0 rebuilt from `published` over the selector-read groups (usually
+    /// empty, then no allocation).
+    delta: Option<Box<Vec<(Group, Slot)>>>,
     published: Option<Arc<SemEntry>>,
     /// Which non-primary source produced which group of the published entry (including through
     /// tainted content): what the silence mask consults at read time.
+    /// Rarely used fields (a DOM id, a document revision, the non-primary sources behind the
+    /// entry) live behind one pointer: most nodes pay 8 bytes for them.
+    cold: Option<Box<Cold>>,
+}
+
+#[derive(Debug, Default)]
+struct Cold {
+    attr: Option<(Seq, Option<Arc<str>>)>,
+    doc_rev: u64,
     contrib: Box<[(Group, SourceId)]>,
+}
+
+impl Node {
+    fn attr(&self) -> Option<&(Seq, Option<Arc<str>>)> {
+        self.cold.as_deref().and_then(|c| c.attr.as_ref())
+    }
+
+    fn doc_rev(&self) -> u64 {
+        self.cold.as_deref().map_or(0, |c| c.doc_rev)
+    }
+
+    fn contrib(&self) -> &[(Group, SourceId)] {
+        self.cold.as_deref().map_or(&[], |c| &c.contrib)
+    }
+
+    fn cold_mut(&mut self) -> &mut Cold {
+        self.cold.get_or_insert_with(Box::default)
+    }
 }
 
 /// Relation reverse index: `target -> sources` that read the target's text.
@@ -316,6 +359,8 @@ pub struct Ivm<Q: Quirks, P: PatchSource> {
     scratch: Scratch,
     /// Reused S0 buffer: one allocation for the engine instead of one per fusion.
     s0_buf: S0Node,
+    /// Nodes whose registers changed in this batch: trimmed to exact capacity at its end.
+    shrink_list: Vec<NodeIdx>,
 }
 
 fn slot(n: NodeIdx) -> usize {
@@ -387,7 +432,7 @@ fn resolve_in(
                 return Resolved::UNBOUND;
             };
             let seq = node_of(nodes, first)
-                .and_then(|nd| nd.attr.as_ref())
+                .and_then(|nd| nd.attr())
                 .map_or(0, |a| a.0);
             let Some(generation) = bind_gen(seq) else {
                 return Resolved::UNBOUND;
@@ -413,7 +458,7 @@ fn resolve_in(
 fn views<'a>(
     children: &[NodeIdx],
     cap: usize,
-    get: impl Fn(NodeIdx) -> (Option<&'a S0Node>, Option<&'a SemEntry>),
+    get: impl Fn(NodeIdx) -> (Option<S0View<'a>>, Option<&'a SemEntry>),
 ) -> (Vec<ChildView<'a>>, bool) {
     let out = children
         .iter()
@@ -497,6 +542,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             in_background: HashSet::new(),
             scratch: Scratch::default(),
             s0_buf: S0Node::default(),
+            shrink_list: Vec::new(),
         }
     }
 
@@ -527,11 +573,11 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     pub fn entry_view(&self, node: NodeIdx) -> Option<Arc<SemEntry>> {
         let n = node_of(&self.nodes, node)?;
         let e = n.published.as_ref()?;
-        if self.silenced.is_empty() || n.contrib.is_empty() {
+        if self.silenced.is_empty() || n.contrib().is_empty() {
             return Some(Arc::clone(e));
         }
         let hit: Vec<Group> = n
-            .contrib
+            .contrib()
             .iter()
             .filter(|(_, s)| self.silenced.contains(s))
             .map(|(g, _)| *g)
@@ -608,12 +654,10 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             depth,
             regs: NodeRegs::default(),
             alive: None,
-            attr: None,
             vis: 0,
-            doc_rev: 0,
-            s0: None,
+            delta: None,
             published: None,
-            contrib: Box::default(),
+            cold: None,
         });
         if let Some(p) = parent
             && let Some(Some(pn)) = self.nodes.get_mut(slot(p))
@@ -639,12 +683,12 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 continue;
             };
             stack.extend(nd.children.iter().copied());
-            if let Some(s) = nd.s0.take() {
+            if let Some(d) = nd.delta.take() {
                 self.s0_resident_nodes = self.s0_resident_nodes.saturating_sub(1);
-                self.s0_resident_bytes = self.s0_resident_bytes.saturating_sub(s.heap_bytes());
+                self.s0_resident_bytes = self.s0_resident_bytes.saturating_sub(delta_bytes(&d));
             }
             let published = nd.published.take();
-            let attr_id = nd.attr.as_ref().and_then(|a| a.1.clone());
+            let attr_id = nd.attr().and_then(|a| a.1.clone());
             self.nodes[slot(n)] = None;
             if published.is_some() {
                 removed.push(Published {
@@ -921,6 +965,17 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             }
         }
         self.reindex();
+        // A node's registers arrive in a burst (its state read) and rarely grow afterwards: trim
+        // the spare capacity of every node written in this batch.
+        if !self.shrink_list.is_empty() {
+            self.shrink_list.sort_unstable();
+            self.shrink_list.dedup();
+            for n in std::mem::take(&mut self.shrink_list) {
+                if let Some(Some(nd)) = self.nodes.get_mut(slot(n)) {
+                    nd.regs.shrink_to_fit();
+                }
+            }
+        }
         rep
     }
 
@@ -946,6 +1001,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                     .src_mut(src)
                     .apply_obs_capped(seq, write, max_text)
                 {
+                    self.shrink_list.push(node);
                     self.mark_dirty(node);
                 }
             }
@@ -996,10 +1052,10 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                     (a.0, a.1.as_deref().unwrap_or("None").to_owned())
                 };
                 let new = (seq, id);
-                if n.attr.as_ref().is_some_and(|cur| key(&new) <= key(cur)) {
+                if n.attr().is_some_and(|cur| key(&new) <= key(cur)) {
                     return Ok(());
                 }
-                let old = n.attr.replace(new.clone());
+                let old = n.cold_mut().attr.replace(new.clone());
                 if let Some((_, Some(old_id))) = old {
                     if let Some(set) = self.dom.get_mut(&old_id) {
                         set.remove(&node);
@@ -1029,8 +1085,8 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             }
             Input::DocRev { node, rev } => {
                 let n = self.node_mut(node)?;
-                if rev > n.doc_rev {
-                    n.doc_rev = rev;
+                if rev > n.doc_rev() {
+                    n.cold_mut().doc_rev = rev;
                     if self.anchor_nodes.get(&node).is_some_and(|s| !s.is_empty()) {
                         self.mark_dirty(node);
                     }
@@ -1117,7 +1173,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 });
             }
             // A holder of a DOM id going live or dead moves that id's anchors.
-            if let Some(Some((_, Some(id)))) = node_of(&self.nodes, x).map(|n| n.attr.clone()) {
+            if let Some(Some((_, Some(id)))) = node_of(&self.nodes, x).map(|n| n.attr().cloned()) {
                 dom_ids.insert(id);
             }
         }
@@ -1431,7 +1487,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 .unwrap_or_default();
             let resolved = &self.resolved;
             let resolve = |a: &AnchorId| resolved.get(a).copied().unwrap_or(Resolved::UNBOUND);
-            let (vis, doc) = (node.vis, node.doc_rev);
+            let (vis, doc) = (node.vis, node.doc_rev());
             let vis_fn = move |_: NodeIdx| vis;
             let doc_fn = move |_: NodeIdx| doc;
             let ctx = FuseCtx {
@@ -1472,16 +1528,14 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 let cap = self.profile.limits.max_children.max(1);
                 let (vs, more) = if needs_children {
                     views(&node.children, cap, |c| {
-                        node_of(nodes, c)
-                            .map_or((None, None), |cn| (cn.s0.as_ref(), cn.published.as_deref()))
+                        node_of(nodes, c).map_or((None, None), |cn| {
+                            (s0_view_of(nodes, c), cn.published.as_deref())
+                        })
                     })
                 } else {
                     (Vec::new(), false)
                 };
-                let parent_s0 = node
-                    .parent
-                    .and_then(|p| node_of(nodes, p))
-                    .and_then(|pn| pn.s0.as_ref());
+                let parent_s0 = node.parent.and_then(|p| s0_view_of(nodes, p));
                 self.s0_neighbour_hits += u64::from(parent_s0.is_some());
                 let nb = Neighbours {
                     parent: parent_s0,
@@ -1511,7 +1565,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         for c in &content_children {
             if let Some(cn) = node_of(&self.nodes, NodeIdx(*c)) {
                 contrib.extend(
-                    cn.contrib
+                    cn.contrib()
                         .iter()
                         .filter(|(g, _)| *g == Group::Name)
                         .copied(),
@@ -1527,30 +1581,38 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             self.s0_buf = buf;
             return;
         };
-        // Store only what neighbours' selectors read, and replace it only when it changed: the
-        // common fusion allocates nothing for S0.
-        let s0_changed = S0Node::changed_groups_in(node.s0.as_ref(), alive.then_some(&buf), mask);
-        if !alive {
-            if let Some(old) = node.s0.take() {
-                self.s0_resident_nodes = self.s0_resident_nodes.saturating_sub(1);
-                self.s0_resident_bytes = self.s0_resident_bytes.saturating_sub(old.heap_bytes());
+        // Neighbours read the delta form: the published entry plus the exceptions over the
+        // selector-read groups. Compare with the old view (old entry + old delta), then store the
+        // new delta; the common fusion allocates nothing for S0.
+        let old_pub_for_view = node.published.clone();
+        let s0_changed = {
+            let old_view = old_pub_for_view
+                .as_deref()
+                .map(|e| S0View::delta(e, node.delta.as_deref().map_or(&[], Vec::as_slice)));
+            changed_vs(old_view, alive.then_some(&buf), mask)
+        };
+        let new_delta: Option<Vec<(Group, Slot)>> = match (&new_entry, alive) {
+            (Some(e), true) => {
+                let d = delta_of(e, &buf, mask);
+                (!d.is_empty()).then_some(d)
             }
-        } else if node.s0.is_none() || s0_changed.0 != 0 {
-            let new = buf.filtered(mask);
-            let old_bytes = node.s0.as_ref().map(S0Node::heap_bytes);
-            self.s0_resident_bytes =
-                (self.s0_resident_bytes + new.heap_bytes()).saturating_sub(old_bytes.unwrap_or(0));
-            if old_bytes.is_none() {
-                self.s0_resident_nodes += 1;
-            }
-            node.s0 = Some(new);
-        }
+            _ => None,
+        };
+        let old_bytes = node.delta.as_deref().map(|d| delta_bytes(d));
+        let new_bytes = new_delta.as_ref().map(|d| delta_bytes(d));
+        node.delta = new_delta.map(Box::new);
+        self.s0_resident_nodes = (self.s0_resident_nodes + usize::from(new_bytes.is_some()))
+            .saturating_sub(usize::from(old_bytes.is_some()));
+        self.s0_resident_bytes = (self.s0_resident_bytes + new_bytes.unwrap_or(0))
+            .saturating_sub(old_bytes.unwrap_or(0));
         buf.clear();
         self.s0_buf = buf;
         let Some(Some(node)) = self.nodes.get_mut(slot(x)) else {
             return;
         };
-        node.contrib = contrib.into_boxed_slice();
+        if !contrib.is_empty() || node.cold.is_some() {
+            node.cold_mut().contrib = contrib.into_boxed_slice();
+        }
         let (parent, pos) = (node.parent, node.pos);
         let old_pub = node.published.clone();
         let published_entry: Option<Arc<SemEntry>> = match (&old_pub, new_entry) {
@@ -1665,7 +1727,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         let doc: Vec<u64> = self
             .nodes
             .iter()
-            .map(|n| n.as_ref().map_or(0, |n| n.doc_rev))
+            .map(|n| n.as_ref().map_or(0, Node::doc_rev))
             .collect();
         let vis_fn = |x: NodeIdx| vis.get(slot(x)).copied().unwrap_or(0);
         let doc_fn = |x: NodeIdx| doc.get(slot(x)).copied().unwrap_or(0);
@@ -1719,14 +1781,15 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             };
             let (vs, more) = views(&nd.children, cap, |c| {
                 (
-                    s0s.get(slot(c)).and_then(Option::as_ref),
+                    s0s.get(slot(c)).and_then(Option::as_ref).map(S0View::full),
                     out.get(slot(c)).and_then(Option::as_ref),
                 )
             });
             let parent = nd
                 .parent
                 .and_then(|p| s0s.get(slot(p)))
-                .and_then(Option::as_ref);
+                .and_then(Option::as_ref)
+                .map(S0View::full);
             let nb = Neighbours {
                 parent,
                 children: &vs,

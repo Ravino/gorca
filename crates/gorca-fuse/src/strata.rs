@@ -22,11 +22,12 @@ use gorca_model::sem::{
 
 use crate::explain::{Conflict, NoTrace, ObsCand, PatchTrail, Tracer};
 use crate::profile::{Profile, RoleSet};
-use crate::register::{MAX_PRIMARIES, NodeRegs, PrimarySlot, Reg, UserOp};
+use crate::register::{MAX_PRIMARIES, NodeRegs, PrimarySlot, Reg, RegRef, UserOp};
 use crate::repair::{Eff, ix, repair, unknown_eff};
 use crate::s4::{inferred_status, title_status};
 use crate::side::{Entry, NodeCands, Status, TrailStatus, cmp_secondary_like};
 use crate::taint::{inferred_info, name_from_content, secondary_info, title_info};
+use crate::value::Seq;
 use crate::value::{Info, Slot, Val, Write, write_default};
 
 // ------------------------------------------------------------------------------------------------
@@ -204,6 +205,126 @@ impl S0Node {
     }
 }
 
+/// What a neighbour's selectors see of a node's S0: either a full S0 (the node being fused, tests)
+/// or the compact **delta form** the engine stores: the published entry, from which every group is
+/// rebuilt, plus the exceptions (`delta`) where the real S0 differs from that rebuild. Exact for
+/// the groups the delta was computed over (the selector-read set); costs ~2 B per node instead
+/// of a stored S0.
+#[derive(Copy, Clone, Debug)]
+pub struct S0View<'a> {
+    inner: ViewInner<'a>,
+}
+
+#[derive(Copy, Clone, Debug)]
+enum ViewInner<'a> {
+    Full(&'a S0Node),
+    Delta {
+        entry: &'a SemEntry,
+        delta: &'a [(Group, Slot)],
+    },
+}
+
+impl<'a> S0View<'a> {
+    /// A view of a full S0.
+    pub fn full(s0: &'a S0Node) -> S0View<'a> {
+        S0View {
+            inner: ViewInner::Full(s0),
+        }
+    }
+
+    /// The delta form: `entry` is the node's published entry.
+    pub fn delta(entry: &'a SemEntry, delta: &'a [(Group, Slot)]) -> S0View<'a> {
+        S0View {
+            inner: ViewInner::Delta { entry, delta },
+        }
+    }
+
+    /// The S0 value of `g` (`Unknown` included). Owned: a rebuilt value is constructed.
+    pub fn slot(&self, g: Group) -> Slot {
+        match self.inner {
+            ViewInner::Full(s) => s.slot(g).clone(),
+            ViewInner::Delta { entry, delta } => delta
+                .iter()
+                .find(|(x, _)| *x == g)
+                .map_or_else(|| rebuild_slot(entry, g), |(_, s)| s.clone()),
+        }
+    }
+
+    /// The S0 role, if any source reported one.
+    pub fn role(&self) -> Option<SemRole> {
+        self.slot(Group::Role).role()
+    }
+}
+
+/// The S0 value of `g` implied by a published entry: `Unknown` when the entry does not know the
+/// group, else the entry's value (an `Absent` option reads `Absent`). Any deterministic rebuild
+/// works, the delta records where the real S0 differs from it.
+pub fn rebuild_slot(e: &SemEntry, g: Group) -> Slot {
+    if !e.known.has(g) {
+        return Slot::Unknown;
+    }
+    let s = &e.sem;
+    Slot::Val(match g {
+        Group::Role => Val::Role(s.role),
+        Group::Name => Val::Name(e.name.clone().unwrap_or_else(|| Arc::from(""))),
+        Group::Description => {
+            Val::Description(s.description().map_or_else(|| Arc::from(""), Arc::from))
+        }
+        Group::Check => Val::Check(s.check),
+        Group::Press => Val::Press(s.press),
+        Group::Expand => Val::Expand(s.expand),
+        Group::Select => Val::Select(s.select),
+        Group::Current => Val::Current(s.current),
+        Group::Invalid => Val::Invalid(s.invalid),
+        Group::Popup => Val::Popup(s.popup),
+        Group::Avail => Val::Avail(s.avail),
+        Group::Flags => Val::Flags(s.flags),
+        Group::Level => Val::Level(s.level),
+        Group::SetPos => match s.pos {
+            Some(p) => Val::SetPos(p),
+            None => return Slot::Absent,
+        },
+        Group::Grid => match s.grid {
+            Some(p) => Val::Grid(p),
+            None => return Slot::Absent,
+        },
+        Group::Live => Val::Live(s.live),
+        Group::Orientation => Val::Orientation(s.orientation),
+        Group::Sort => Val::Sort(s.sort),
+    })
+}
+
+/// The exceptions to [`rebuild_slot`] over the groups in `mask`: where `s0` holds something the
+/// published `entry` does not give back.
+pub fn delta_of(entry: &SemEntry, s0: &S0Node, mask: GroupMask) -> Vec<(Group, Slot)> {
+    let mut v = Vec::new();
+    for g in Group::ALL.iter().copied().filter(|g| mask.has(*g)) {
+        let real = s0.slot(g);
+        if &rebuild_slot(entry, g) != real {
+            v.push((g, real.clone()));
+        }
+    }
+    v
+}
+
+/// The groups in `mask` whose S0 value differs between the stored view (`old`) and the new S0
+/// (`None` = not alive): everything when liveness differs.
+pub fn changed_vs(old: Option<S0View<'_>>, new: Option<&S0Node>, mask: GroupMask) -> GroupMask {
+    match (old, new) {
+        (None, None) => GroupMask::EMPTY,
+        (Some(_), None) | (None, Some(_)) => GroupMask(u32::MAX),
+        (Some(a), Some(b)) => {
+            let mut m = GroupMask::EMPTY;
+            for g in Group::ALL.iter().copied().filter(|g| mask.has(*g)) {
+                if &a.slot(g) != b.slot(g) {
+                    m = m.with(g);
+                }
+            }
+            m
+        }
+    }
+}
+
 /// Existence is the lifecycle of the highest-priority source that has an opinion
 /// (`PI[profile][role]`); the secondary cannot keep a node alive (FS-3).
 pub fn is_alive(profile: &Profile, regs: &NodeRegs) -> bool {
@@ -262,9 +383,7 @@ pub fn s0_into<Q: Quirks, T: Tracer>(
             let Some(p) = PrimarySlot::new(i) else {
                 continue;
             };
-            for r in regs.src(p).regs() {
-                rec.slots[ix(r.write.group())] = r.write.slot();
-            }
+            regs.src(p).for_each_slot(|g, s| rec.slots[ix(g)] = s);
             quirks.apply(p, rec);
         }
         Some(recs)
@@ -285,13 +404,12 @@ fn s0_fast(
     cands: NodeCands<'_>,
     slots: &mut Vec<(Group, S0Slot)>,
 ) {
-    let rs: [&[Reg]; MAX_PRIMARIES] = [
-        regs.src(PrimarySlot::P0).regs(),
-        regs.src(PrimarySlot::P1).regs(),
-    ];
+    let (s0r, s1r) = (regs.src(PrimarySlot::P0), regs.src(PrimarySlot::P1));
+    let rs: [&[Reg]; MAX_PRIMARIES] = [s0r.regs(), s1r.regs()];
+    let ab: [&[(Seq, GroupMask)]; MAX_PRIMARIES] = [s0r.absent_runs(), s1r.absent_runs()];
     let mut cur = [0usize; MAX_PRIMARIES];
     for g in Group::ALL.iter().copied() {
-        let mut found: [Option<&Reg>; MAX_PRIMARIES] = [None; MAX_PRIMARIES];
+        let mut found: [Option<RegRef<'_>>; MAX_PRIMARIES] = [None; MAX_PRIMARIES];
         for k in 0..MAX_PRIMARIES {
             while rs[k]
                 .get(cur[k])
@@ -299,7 +417,16 @@ fn s0_fast(
             {
                 cur[k] += 1;
             }
-            found[k] = rs[k].get(cur[k]).filter(|r| r.write.group() == g);
+            found[k] = rs[k]
+                .get(cur[k])
+                .filter(|r| r.write.group() == g)
+                .map(RegRef::Val)
+                .or_else(|| {
+                    ab[k]
+                        .iter()
+                        .find(|(_, m)| m.has(g))
+                        .map(|(s, _)| RegRef::Absent(*s, g))
+                });
         }
         if found.iter().all(Option::is_none) && !profile.inexpressible.has(g) {
             continue;
@@ -313,7 +440,7 @@ fn s0_fast(
 fn s0_group_fast(
     profile: &Profile,
     regs: &NodeRegs,
-    found: [Option<&Reg>; MAX_PRIMARIES],
+    found: [Option<RegRef<'_>>; MAX_PRIMARIES],
     cands: NodeCands<'_>,
     g: Group,
 ) -> Option<S0Slot> {
@@ -322,11 +449,11 @@ fn s0_group_fast(
         match found[p.index()] {
             Some(r) => {
                 return Some(S0Slot {
-                    slot: r.write.slot(),
+                    slot: r.slot(),
                     info: Info::plain(ProvCode::ObservedPrimary),
                     src: Some(p),
                     fallback,
-                    stale: regs.src(p).inval().is_some_and(|i| i > r.seq),
+                    stale: regs.src(p).inval().is_some_and(|i| i > r.seq()),
                     hit: 0,
                     sec_src: None,
                 });
@@ -366,7 +493,7 @@ fn s0_group<T: Tracer>(
                 let v = &rec.slots[ix(g)];
                 (!v.is_unknown()).then(|| (v.clone(), rec.hit[ix(g)]))
             }
-            None => src.get(g).map(|r| (r.write.slot(), 0)),
+            None => src.get(g).map(|r| (r.slot(), 0)),
         };
         if T::ON
             && let Some(r) = recs
@@ -376,7 +503,7 @@ fn s0_group<T: Tracer>(
                 g,
                 ObsCand {
                     src: p,
-                    seq: src.get(g).map(|r| r.seq),
+                    seq: src.get(g).map(|r| r.seq()),
                     value: rec.slots[ix(g)].clone(),
                     rule: rec.hit[ix(g)],
                     stale: src.is_stale(g),
@@ -512,7 +639,7 @@ fn trace_disagreement<T: Tracer>(
 /// The neighbourhood a patch selector or a derived rule may read.
 #[derive(Copy, Clone, Debug)]
 pub struct Neighbours<'a> {
-    pub parent: Option<&'a S0Node>,
+    pub parent: Option<S0View<'a>>,
     /// The first children in a stable order (dead ones included, with `None` views). A writer
     /// passes at most `Limits::max_children` of them: nothing reads further.
     pub children: &'a [ChildView<'a>],
@@ -534,8 +661,8 @@ impl Neighbours<'_> {
 pub struct ChildView<'a> {
     /// The child's writer-local id (reported by `explain`).
     pub id: u32,
-    /// The child's S0 (None when the child is not alive).
-    pub s0: Option<&'a S0Node>,
+    /// The child's S0 view (None when the child is not alive).
+    pub s0: Option<S0View<'a>>,
     /// The child's final entry (None when not alive); S3 name from content reads it.
     pub fused: Option<&'a SemEntry>,
 }

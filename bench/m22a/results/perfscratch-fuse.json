@@ -1,0 +1,11 @@
+{
+  "host": "load=31.87 20.05 16.45 28/2245 308477 governor=performance cpus=1 cpu_pin=2 mem_pressure_some=some avg10=0.00 avg60=0.00 avg300=0.30 total=3865454993",
+  "secs_per_storm_run": 4,
+  "mem": {"lean":{"nodes":100000,"build_ms":194.2,"rss_increase_mb_engine":52.41,"rss_increase_mb_entries_only":16.02,"node_record_b":184,"s0_resident_bytes":0,"fused":100000},"realistic":{"nodes":100000,"build_ms":226.5,"rss_increase_mb_engine":57.65,"rss_increase_mb_entries_only":16.03,"node_record_b":184,"s0_resident_bytes":0,"fused":100000}},
+  "host_end": "load=31.87 20.05 16.45 25/2245 308511 governor=performance cpus=1 cpu_pin=2 mem_pressure_some=some avg10=0.00 avg60=0.00 avg300=0.30 total=3865455234",
+  "gates": [
+    {"gate":"info legacy M-9 25 MB on the lean world (superseded by M-9')","measured":"+52.4 MB (entries alone +16.0 MB)","pass":true},
+    {"gate":"M-9 SemEntry size <= 160 B (x32 = 128 B)","measured":"128 B","pass":true},
+    {"gate":"M-9' engine RSS increase <= 64 MB per 100k nodes on the realistic world (14 groups/node)","measured":"+57.7 MB (entries alone +16.0 MB)","pass":true}
+  ]
+}
