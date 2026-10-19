@@ -471,6 +471,7 @@ async fn run_inner(
         });
         core
     };
+    let core = wire::wire_pointer(core, &opts, &mut tasks, &shutdown).await;
     let atspi_state = AtspiState::default();
     let core = wire_sources::wire_sources(core);
     let core = wire::wire_present_log(core, &opts, &atspi_state);

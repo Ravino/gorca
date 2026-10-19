@@ -23,6 +23,7 @@ mouse-locked-session = Not available while the screen is locked
 mouse-not-responding = Mouse not responding
 mouse-busy = Mouse busy
 mouse-nothing = Nothing under the mouse
+mouse-window = window
 mouse-position = {window}, {x}, {y}
 mouse-position-screen = Screen {x}, {y}, monitor {n}
 mouse-not-available-now = not available now

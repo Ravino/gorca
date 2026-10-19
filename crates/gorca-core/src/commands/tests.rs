@@ -157,6 +157,7 @@ fn spoken(fx: &ReaderEffects) -> Vec<String> {
             | ReaderEffect::QueryActiveWindowFocus
             | ReaderEffect::ArmTimer(_)
             | ReaderEffect::SetGrabSet(_)
+            | ReaderEffect::Pointer(_)
             | ReaderEffect::SpeechCtl(_)
             | ReaderEffect::Config(_)
             | ReaderEffect::ReviewNav { .. }
@@ -184,6 +185,7 @@ fn ctls(fx: &ReaderEffects) -> Vec<SpeechCtl> {
             | ReaderEffect::QueryActiveWindowFocus
             | ReaderEffect::ArmTimer(_)
             | ReaderEffect::SetGrabSet(_)
+            | ReaderEffect::Pointer(_)
             | ReaderEffect::Config(_)
             | ReaderEffect::ReviewNav { .. }
             | ReaderEffect::ReviewBuild(_)

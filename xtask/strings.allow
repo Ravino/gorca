@@ -155,4 +155,3 @@ extensions/ext-vte/src/prompt.rs | \u{43f}\u{438}\u{43d}-?\u{43a}\u{43e}\u{434}
 extensions/ext-vte/src/prompt.rs | [^:?\u{ff1a}\u{ff1f}]{0,60}[:?\u{ff1a}\u{ff1f}]\s*$
 crates/gorca-core/src/commands/keys.rs | modifier key
 crates/gorca-input-api/src/keys.rs | KP_Insert
-crates/gorca-core/src/commands/mouse.rs | mouse command with a usable helper: not wired yet

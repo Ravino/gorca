@@ -66,13 +66,13 @@ pub use builtin_ext::{AppPolicy, PolicyFacts, PolicyMoment, PolicyVerdict};
 pub use commands::{
     ATSPI_SOURCE, Availability, CapitalLevels, CmdSpec, CommandTable, Compiled, ConfigRequest,
     ContextMask, ControlMsg, CoreCmd, ExplainReport, GateOut, InputNotice, LoadCause,
-    LoadedSettings, LocalTime, Milestone, OPEN_AFTER, PASS_TIMEOUT, PlatformFacts, PointerGate,
-    PointerMsg, PrewarmEntries, PrewarmRequest, ProfileFocus, ProfileSaveOutcome, ProfilesSaved,
-    RuntimeGate, SaveKind, SaveProfiles, SaveResult, SegLine, SettingsMsg, SourceDirectory,
-    SourceEntry, SpeechCtl, SystemWallClock, VoiceLevels, WallClock, browse_grabs, chord_grabs,
-    command_id, compile, compile_with, escape_grabs, explain_utterance, gated_chord_grabs,
-    gorca_modifiers, grab_collisions, lane_settings, letter_grabs, prewarm, set_explain_text,
-    tab_grabs,
+    LoadedSettings, LocalTime, Milestone, OPEN_AFTER, PASS_TIMEOUT, PlatformFacts, PointerDone,
+    PointerGate, PointerMsg, PointerOp, PointerReply, PointerReq, PrewarmEntries, PrewarmRequest,
+    ProfileFocus, ProfileSaveOutcome, ProfilesSaved, PtrReqId, RuntimeGate, SaveKind, SaveProfiles,
+    SaveResult, SegLine, SettingsMsg, SourceDirectory, SourceEntry, SpeechCtl, SystemWallClock,
+    VoiceLevels, WallClock, browse_grabs, chord_grabs, command_id, compile, compile_with,
+    escape_grabs, explain_utterance, gated_chord_grabs, gorca_modifiers, grab_collisions,
+    lane_settings, letter_grabs, prewarm, set_explain_text, tab_grabs,
 };
 pub use directory::{MirrorDirectory, Owner};
 pub use doc_actor::agree::{

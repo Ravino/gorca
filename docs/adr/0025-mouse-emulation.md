@@ -653,5 +653,15 @@ MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its ow
   `docs/reports/shell-segfault-20261019.md` are untouched); RG-6 relies on the existing `Ambiguous` classification; RG-7 learn-mode note.
   The ten `mouse.*` commands exist and answer "not available / not responding / off"; the click path is MO-4. The daemon does not feed
   `PointerMsg` yet, so in a running gorca the gate stays closed and the keypad types.
-- Not done: the `mouse.enabled` settings key (schema, patch, save: MO-4 together with the daemon wiring).
-
+- **MO-4 (click at the pointer, locks):** `mouse.enabled` is a Base key (`[mouse] enabled`, default true). The Reader never does
+  pointer I/O: a command is a `ReaderEffect::Pointer(PointerReq)`, the runtime runs it on the `PointerSink` (150 ms per call, at
+  most 16 tasks) and the answer returns as `ControlMsg::PointerReply`. `Holds` (one pure `Hold` per lockable button): press and
+  release are confirmed by the `held` mask of the reply, the lock is released by gorca at 120 s (`Left button released after 2
+  minutes`), a failed or timed-out request leaves the button `Unknown` and the next toggle sends `ReleaseAll`, losing the helper
+  or `mouse.enabled = false` drops the state (the latter first sends a best-effort `ReleaseAll`). `mouse.say_position` says the
+  window-relative position once and the screen position twice (window titles need the MO-5a matcher). The route and item-click
+  commands answer "No location" until MO-5. The daemon wires a `ShellHelperClient` on its own session-bus connection
+  (`--no-pointer` disables) and releases held buttons on shutdown.
+- E2E: `contrib/gnome-shell-extension/test-rust-client.sh` runs the Rust client (examples/pointer_cli) against the real helper in a
+  private shell with a GTK4 oracle: 10/10 (click L/M/R at the pointer, position, drag lock press and release, release on shutdown,
+  another holder refused, double click).

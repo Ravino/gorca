@@ -364,6 +364,7 @@ impl Reader {
                 | ReaderEffect::QueryActiveWindowFocus
                 | ReaderEffect::ArmTimer(_)
                 | ReaderEffect::SetGrabSet(_)
+                | ReaderEffect::Pointer(_)
                 | ReaderEffect::SpeechCtl(_)
                 | ReaderEffect::Config(_)
                 | ReaderEffect::ReviewNav { .. }

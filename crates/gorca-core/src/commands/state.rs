@@ -193,6 +193,8 @@ pub enum ControlMsg {
     Input(InputNotice),
     /// Pointer availability and `mouse.enabled` (ADR-0025): moves the keypad-chord gate.
     Pointer(super::pointer_gate::PointerMsg),
+    /// The answer to a pointer request (ADR-0025 EX-1).
+    PointerReply(super::pointer_req::PointerReply),
 }
 
 /// Voice parameters, 0 to 100 (ADR-0005 6.2). Backends map them to their own ranges.
@@ -372,6 +374,10 @@ pub(crate) struct CmdState {
     pub quick: crate::quick::QuickState,
     /// When the keypad mouse chords are grabbed (ADR-0025 RG-5).
     pub pointer: super::pointer_gate::PointerGate,
+    /// Drag locks (ADR-0025 2.6).
+    pub holds: super::mouse::Holds,
+    pub ptr_next: u64,
+    pub ptr_pending: std::collections::HashMap<super::pointer_req::PtrReqId, super::mouse::Pending>,
 }
 
 impl CmdState {
@@ -379,6 +385,9 @@ impl CmdState {
         let file = Settings::default();
         Self {
             pointer: super::pointer_gate::PointerGate::new(),
+            holds: super::mouse::Holds::default(),
+            ptr_next: 0,
+            ptr_pending: std::collections::HashMap::new(),
             effective: Arc::new(file.clone()),
             file,
             file_hash: 0,

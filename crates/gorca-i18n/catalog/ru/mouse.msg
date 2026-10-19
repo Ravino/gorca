@@ -23,6 +23,7 @@ mouse-locked-session = Недоступно при заблокированно�
 mouse-not-responding = Мышь не отвечает
 mouse-busy = Мышь занята
 mouse-nothing = Под мышью ничего нет
+mouse-window = окно
 mouse-position = {window}, {x}, {y}
 mouse-position-screen = Экран {x}, {y}, монитор {n}
 mouse-not-available-now = сейчас недоступно

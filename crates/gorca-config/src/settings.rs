@@ -580,6 +580,19 @@ impl Default for EditingSettings {
     }
 }
 
+/// Mouse emulation (ADR-0025 2.8).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MouseSettings {
+    /// Master switch: false closes the pointer gate, so the keypad keys type.
+    pub enabled: bool,
+}
+
+impl Default for MouseSettings {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
 /// Caret and text presentation (ADR-0007 section 12).
 #[derive(Clone, Debug, Eq, PartialEq)]
 // One switch and two durations; a state enum would not be clearer.
@@ -676,6 +689,7 @@ pub struct Settings {
     pub text: TextSettings,
     pub browse: BrowseSettings,
     pub terminal: TerminalSettings,
+    pub mouse: MouseSettings,
     pub verbosity: VerbositySettings,
     pub profiles: ProfilesSettings,
 }
@@ -879,6 +893,9 @@ const fn classify(section: &str, key: &str) -> (KeyScope, bool, bool) {
         } else {
             (KeyScope::App, true, false)
         }
+    } else if same(section, "mouse") {
+        // ADR-0025 2.8: the master switch is a Base key (never inside a profile, no row sets it).
+        (KeyScope::Base, false, false)
     } else if same(section, "text") || same(section, "verbosity") {
         // Presentation.
         (KeyScope::Focus, true, false)
@@ -1078,6 +1095,7 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     row("terminal", "prompt_regex", SettingType::Str, "\"\""),
     row("terminal", "secret_regex", SettingType::Str, "\"\""),
+    row("mouse", "enabled", SettingType::Bool, "true"),
     row(
         "verbosity",
         "level",
@@ -1232,6 +1250,11 @@ static DOCS: &[(&str, &str, &str)] = &[
         "editing",
         "word",
         "How coarse a word is: fine (letters and digits, each punctuation mark apart), medium (option tokens like --color=auto, identifiers and file names stay whole; slashes and other punctuation separate), coarse (everything between blanks); auto lets the application decide (terminals use medium).",
+    ),
+    (
+        "mouse",
+        "enabled",
+        "Mouse emulation with the keypad keys (click, lock, route). When false the keypad types its characters.",
     ),
     (
         "text",
@@ -1455,6 +1478,7 @@ mod tests {
             "text",
             "browse",
             "terminal",
+            "mouse",
             "verbosity",
             "profiles",
         ];
@@ -1491,6 +1515,7 @@ mod tests {
                 "text",
                 "browse",
                 "terminal",
+                "mouse",
                 "verbosity",
                 "profiles"
             ]

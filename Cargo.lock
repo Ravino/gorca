@@ -1207,6 +1207,7 @@ dependencies = [
  "gorca-model",
  "gorca-output-api",
  "gorca-rt",
+ "gorca-shell-helper",
  "gorca-speech",
  "gorca-speech-ssip",
  "gorca-speech-voicego",
