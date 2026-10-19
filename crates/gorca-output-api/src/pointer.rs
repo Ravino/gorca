@@ -67,6 +67,11 @@ pub struct ToplevelHint {
     pub atspi_origin: (i32, i32),
     pub atspi_size: (i32, i32),
     pub child_space: ChildSpace,
+    /// The connector VERIFIED that `pid` is not the application's own (a Flatpak or bus-proxy application
+    /// reports the proxy's pid). Only then may the sink match without the pid, and then only on an exact
+    /// title and exact size with a single candidate. `false` (the default) never matches other processes'
+    /// windows: a hostile application must not receive clicks meant for another one.
+    pub pid_is_proxy: bool,
 }
 
 /// Where to put the pointer.

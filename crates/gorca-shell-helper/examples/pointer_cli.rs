@@ -112,6 +112,7 @@ async fn main() {
                             } else {
                                 ChildSpace::Toplevel
                             },
+                            pid_is_proxy: false,
                         };
                         let t = PointTarget::Window { top, x, y };
                         if op == "movewin" {

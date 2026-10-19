@@ -208,8 +208,10 @@ window is on (a 2x laptop plus a 1x external screen: ratio 2 on both).
 
 Window matching (sink, pure function, table-tested):
 
-- **WM-1** Candidates: `GetWindows` rows that are visible, not minimized, with `pid == hint.pid`. If none (Flatpak:
-  the AT-SPI pid may be the a11y bus proxy's), all visible rows.
+- **WM-1** Candidates: `GetWindows` rows that are visible, not minimized, with `pid == hint.pid`. **No fallback** (security review,
+  2026-10-19): a process without a visible window is "No location"; a hostile application must not receive clicks meant for another.
+  Only a connector-verified proxy pid (`ToplevelHint::pid_is_proxy`, Flatpak) matches without the pid, and then only on an exact title,
+  an exact size and a single candidate.
 - **WM-2** Keep rows whose frame or buffer size matches `atspi_size / ratio` within ±2 px, with ratio = 1 for
   Wayland rows (`client-type`) and ratio = `x-scale` for X11 rows; this also picks `origin`.
 - **WM-3** Tie-break: equal title, then the focused window, then the topmost. Still ambiguous or empty ⇒

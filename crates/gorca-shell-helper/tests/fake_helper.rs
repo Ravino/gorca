@@ -535,6 +535,7 @@ fn hint(
         atspi_origin: (0, 0),
         atspi_size: size,
         child_space: cs,
+        pid_is_proxy: false,
     }
 }
 

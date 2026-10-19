@@ -67,8 +67,8 @@ pub enum MatchError {
     BadHint,
 }
 
-fn size_matches(r: &IRect, w: f64, h: f64) -> bool {
-    (f64::from(r.w) - w).abs() <= SIZE_TOLERANCE && (f64::from(r.h) - h).abs() <= SIZE_TOLERANCE
+fn size_matches(r: &IRect, w: f64, h: f64, tol: f64) -> bool {
+    (f64::from(r.w) - w).abs() <= tol && (f64::from(r.h) - h).abs() <= tol
 }
 
 /// Resolve a point in the toplevel's coordinate space `p` to a window and an offset.
@@ -85,17 +85,20 @@ pub fn resolve(
         return Err(MatchError::BadHint);
     }
     let x_scale = monitors.first().map_or(1.0, |m| m.x_scale.max(1.0));
-    // WM-1: visible windows of the toplevel's process; if the pid is not ours to compare (Flatpak:
-    // the AT-SPI pid may be the bus proxy's) every visible window.
+    // WM-1: visible windows of the toplevel's process. NO fallback to other processes' windows: when the
+    // process has none, the answer is "no location" (a hostile application could place a window of the same
+    // size and title to receive a click meant for another application). The one exception is a
+    // connector-verified proxy pid (`pid_is_proxy`, Flatpak): then every visible window is a candidate, but
+    // only on an exact title, an exact size and as the single candidate.
     let usable = |w: &&WindowRow| w.visible && !w.minimized;
-    let mut cands: Vec<&WindowRow> = windows
+    let exact = hint.pid_is_proxy;
+    let cands: Vec<&WindowRow> = windows
         .iter()
         .filter(usable)
-        .filter(|w| w.pid == hint.pid)
+        .filter(|w| exact || w.pid == hint.pid)
+        .filter(|w| !exact || w.title == *hint.title)
         .collect();
-    if cands.is_empty() {
-        cands = windows.iter().filter(usable).collect();
-    }
+    let tol = if exact { 0.0 } else { SIZE_TOLERANCE };
     // WM-2: the size of the frame or the buffer equals the toplevel's size divided by the ratio.
     let mut matched: Vec<(&WindowRow, Origin, f64)> = Vec::new();
     for w in cands {
@@ -104,11 +107,14 @@ pub fn resolve(
             f64::from(hint.atspi_size.0) / ratio,
             f64::from(hint.atspi_size.1) / ratio,
         );
-        if size_matches(&w.frame, aw, ah) {
+        if size_matches(&w.frame, aw, ah, tol) {
             matched.push((w, Origin::Frame, ratio));
-        } else if size_matches(&w.buffer, aw, ah) {
+        } else if size_matches(&w.buffer, aw, ah, tol) {
             matched.push((w, Origin::Buffer, ratio));
         }
+    }
+    if exact && matched.len() > 1 {
+        return Err(MatchError::Ambiguous);
     }
     // WM-3: equal title, then the focused window. Still ambiguous: no guess (two windows of the same size
     // that nothing tells apart are genuinely ambiguous).
@@ -267,6 +273,7 @@ mod tests {
             atspi_origin: origin,
             atspi_size: size,
             child_space: cs,
+            pid_is_proxy: false,
         }
     }
 
@@ -400,24 +407,32 @@ mod tests {
     }
 
     #[test]
-    fn only_visible_windows_of_the_process_are_candidates_and_a_missing_pid_falls_back_to_all() {
+    fn only_visible_windows_of_the_process_are_candidates_and_there_is_no_fallback() {
         let mut hidden = win(1, 100, "T", rect(0, 0, 500, 400), rect(0, 0, 500, 400));
         hidden.minimized = true;
         let other = win(2, 999, "T", rect(0, 0, 500, 400), rect(0, 0, 500, 400));
         let h = hint(100, "T", (0, 0), (500, 400), ChildSpace::Toplevel);
-        // pid 100 has only a minimized window: falls back to all visible rows (Flatpak case).
+        // The process has no visible window: a same-titled, same-sized window of ANOTHER process must not
+        // receive the click.
         assert_eq!(
             resolve(
                 &h,
                 (1.0, 1.0),
                 &[hidden.clone(), other.clone()],
                 &mons(1.0, 1.0)
-            )
-            .unwrap()
-            .window,
-            2
+            ),
+            Err(MatchError::NoCandidate)
         );
-        // but with a visible window of the pid, the other process is never considered
+        assert_eq!(
+            resolve(
+                &h,
+                (1.0, 1.0),
+                std::slice::from_ref(&other),
+                &mons(1.0, 1.0)
+            ),
+            Err(MatchError::NoCandidate)
+        );
+        // with a visible window of the pid, the other process is never considered
         let mine = win(3, 100, "T", rect(0, 0, 500, 400), rect(0, 0, 500, 400));
         assert_eq!(
             resolve(&h, (1.0, 1.0), &[other, mine], &mons(1.0, 1.0))
@@ -427,6 +442,43 @@ mod tests {
         );
         assert_eq!(
             resolve(&h, (1.0, 1.0), &[hidden], &mons(1.0, 1.0)),
+            Err(MatchError::NoCandidate)
+        );
+    }
+
+    #[test]
+    fn a_verified_proxy_pid_matches_without_the_pid_only_on_exact_title_exact_size_and_one_candidate()
+     {
+        let mut h = hint(100, "App", (0, 0), (500, 400), ChildSpace::Toplevel);
+        h.pid_is_proxy = true;
+        let ok = win(5, 4242, "App", rect(0, 0, 500, 400), rect(0, 0, 500, 400));
+        assert_eq!(
+            resolve(&h, (1.0, 1.0), std::slice::from_ref(&ok), &mons(1.0, 1.0))
+                .unwrap()
+                .window,
+            5
+        );
+        // a different title, a size one pixel off, or a second candidate: refused
+        let wrong_title = win(6, 1, "Other", rect(0, 0, 500, 400), rect(0, 0, 500, 400));
+        assert_eq!(
+            resolve(&h, (1.0, 1.0), &[wrong_title], &mons(1.0, 1.0)),
+            Err(MatchError::NoCandidate)
+        );
+        let off_by_one = win(7, 1, "App", rect(0, 0, 501, 400), rect(0, 0, 501, 400));
+        assert_eq!(
+            resolve(&h, (1.0, 1.0), &[off_by_one], &mons(1.0, 1.0)),
+            Err(MatchError::NoCandidate)
+        );
+        let twin = win(8, 2, "App", rect(9, 9, 500, 400), rect(9, 9, 500, 400));
+        assert_eq!(
+            resolve(&h, (1.0, 1.0), &[ok, twin], &mons(1.0, 1.0)),
+            Err(MatchError::Ambiguous)
+        );
+        // without the flag the same windows are not candidates at all
+        let h2 = hint(100, "App", (0, 0), (500, 400), ChildSpace::Toplevel);
+        let foreign = win(5, 4242, "App", rect(0, 0, 500, 400), rect(0, 0, 500, 400));
+        assert_eq!(
+            resolve(&h2, (1.0, 1.0), &[foreign], &mons(1.0, 1.0)),
             Err(MatchError::NoCandidate)
         );
     }
