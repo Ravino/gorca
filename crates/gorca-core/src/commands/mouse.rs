@@ -108,6 +108,10 @@ impl Reader {
         let out = self.cmd.pointer.tick(now);
         self.apply_gate(out, fx);
         for b in [Button::Left, Button::Right] {
+            // A press or release whose reply never came: give up (the next toggle sends ReleaseAll).
+            if self.cmd.holds.of(b).is_some_and(|h| h.fail_stale(now)) {
+                self.say(t(M::MouseNotResponding), fx);
+            }
             let req = self.next_ptr_id();
             let cmd = self
                 .cmd
@@ -215,7 +219,8 @@ impl Reader {
 
     fn mouse_lock(&mut self, b: Button, fx: &mut ReaderEffects) {
         let req = self.next_ptr_id();
-        let Some(cmd) = self.cmd.holds.of(b).map(|h| h.toggle(req)) else {
+        let now = self.now;
+        let Some(cmd) = self.cmd.holds.of(b).map(|h| h.toggle(req, now)) else {
             return;
         };
         match cmd {

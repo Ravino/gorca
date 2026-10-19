@@ -507,3 +507,15 @@ fn mouse_enabled_in_the_settings_drives_the_gate() {
             .all(|c| !sets.last().is_some_and(|s| s.exact.contains(c)))
     );
 }
+
+#[test]
+fn a_lost_reply_does_not_wedge_the_lock() {
+    let mut f = ready_fixture();
+    let first = pointer_reqs(&f.run(CoreCmd::MouseLeftLockToggle, 1));
+    assert_eq!(first.len(), 1);
+    // The reply never comes (dropped channel, cleared table): the Reader's timer gives up after 1 s.
+    let fx = tick(&mut f, Duration::from_millis(1100));
+    assert_eq!(spoken(&fx), ["Mouse not responding"]);
+    let fx = f.run(CoreCmd::MouseLeftLockToggle, 1);
+    assert_eq!(pointer_reqs(&fx)[0].op, PointerOp::ReleaseAll, "recovers instead of answering busy forever");
+}

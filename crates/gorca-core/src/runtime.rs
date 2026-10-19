@@ -393,9 +393,16 @@ impl Core {
     /// `mouse.*` commands run on it. Call before [`Core::run`].
     #[must_use]
     pub fn with_pointer(mut self, sink: Arc<dyn gorca_output_api::PointerSink>) -> Self {
-        if let Some(sh) = Arc::get_mut(&mut self.shared) {
-            sh.pointer = Some(sink);
-        }
+        let Some(sh) = Arc::get_mut(&mut self.shared) else {
+            // A silent no-op would leave the mouse keys without a sink.
+            tracing::error!("Core::with_pointer called after the shared state was cloned: ignored");
+            debug_assert!(
+                false,
+                "Core::with_pointer must run before anything clones the shared state"
+            );
+            return self;
+        };
+        sh.pointer = Some(sink);
         self
     }
 
@@ -1211,6 +1218,14 @@ async fn reader_loop(
                 ReaderEffect::ArmTimer(at) => {
                     // Deadlines within a millisecond share one wake; the set is bounded.
                     if timers.len() < MAX_TIMERS {
+                        timers.insert(at);
+                    } else if let Some(last) = timers.last().copied()
+                        && at < last
+                    {
+                        // Full: the farthest deadline gives way to a nearer one. Every subsystem re-arms its own
+                        // pending deadline when the Reader timer fires (N1), so nothing due soon is ever lost,
+                        // in particular not the drag-lock release (ADR-0025 MI-6).
+                        timers.pop_last();
                         timers.insert(at);
                     }
                 }

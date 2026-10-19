@@ -65,3 +65,9 @@ normal re-probe. (2) The gorca client shares one bus connection, so the helper n
 the client sends a best-effort `PointerRelease` (150 ms). The helper additionally releases when the holder's unique name
 vanishes (`NameOwnerChanged`, H-3) and after the 125 s backstop. (3) Callers' deadlines are clamped to 500 ms; every call
 goes to the verified unique name of the Shell's owner of the helper name, never to the well-known name.
+
+Release safety (MO-4 review Q-2): `PointerRelease` needs no cap (any allow-listed caller may let go of what it holds). While buttons are
+held the helper re-reads the allow-list once a second; a holder whose rule lost `pointer` (or vanished) has its buttons released at once.
+Client side (Q-1, Q-4, Q-5): a press or release whose reply is more than 1 s late is given up (state unknown, the next toggle sends
+`ReleaseAll`); a full Reader timer set evicts the farthest deadline, never the nearest; `Core::with_pointer` after the shared state was
+cloned logs an error and asserts in debug builds.

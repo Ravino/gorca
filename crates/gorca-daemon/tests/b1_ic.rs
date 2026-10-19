@@ -36,16 +36,24 @@ const DAEMON_WORKERS: usize = 4;
 
 static BUILT: std::sync::Once = std::sync::Once::new();
 
-/// `target/<profile>/b1-fakeapp`, built (a no-op when current) so that it never lags the source.
+/// `b1-fakeapp`, built (a no-op when current) so that it never lags the source. The nested build has
+/// its OWN target directory: building into the workspace's shared one while `cargo test` is running
+/// replaces artifacts that later doc-tests link against (E0463).
 fn fakeapp_bin() -> PathBuf {
     let exe = std::env::current_exe().unwrap();
-    let dir = exe.parent().and_then(|d| d.parent()).unwrap().to_path_buf();
-    let bin = dir.join("b1-fakeapp");
+    let profile = exe
+        .parent()
+        .and_then(|d| d.parent())
+        .and_then(|d| d.file_name())
+        .map_or_else(|| "debug".into(), std::ffi::OsStr::to_owned);
+    let target = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("b1-fakeapp-target");
+    let bin = target.join(&profile).join("b1-fakeapp");
     BUILT.call_once(|| {
         let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
         let mut cmd = std::process::Command::new(cargo);
-        cmd.args(["build", "-p", "b1-fakeapp", "--offline"]);
-        if dir.file_name().is_some_and(|n| n == "release") {
+        cmd.args(["build", "-p", "b1-fakeapp", "--offline", "--target-dir"]);
+        cmd.arg(&target);
+        if profile == "release" {
             cmd.arg("--release");
         }
         let ok = cmd.status().is_ok_and(|s| s.success());
