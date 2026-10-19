@@ -465,6 +465,11 @@ impl SideTable {
         self.sources.keys().copied()
     }
 
+    /// True when `id` is registered.
+    pub fn has_source(&self, id: SourceId) -> bool {
+        self.sources.contains_key(&id)
+    }
+
     /// The stable name of a registered source.
     pub fn source_name(&self, id: SourceId) -> Option<Arc<str>> {
         self.sources.get(&id).map(|s| Arc::clone(&s.name))
@@ -879,10 +884,16 @@ pub struct FactCand {
     conf: ConfClass,
     tier: TrustTier,
     source: Arc<str>,
+    id: SourceId,
     seq: Seq,
 }
 
 impl FactCand {
+    /// The registered source that produced the fact (slot and generation).
+    pub const fn source_id(&self) -> SourceId {
+        self.id
+    }
+
     /// The value (or `Absent`) the fact proposes; the group is the write's.
     pub fn write(&self) -> &Write {
         &self.write
@@ -990,6 +1001,7 @@ fn build_entry(bf: &Bf<'_>, node: NodeIdx, ctx: &FuseCtx<'_>) -> (FactLayer, Ent
         conf: class.unwrap_or(ConfClass::High),
         tier: bf.info.tier,
         source: Arc::clone(&bf.info.name),
+        id: bf.info.id,
         seq: f.seq,
     });
     let mut trail = trail_of(bf, layer, st, class);

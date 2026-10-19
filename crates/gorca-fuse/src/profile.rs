@@ -184,7 +184,7 @@ impl Default for Limits {
             max_text: crate::value::MAX_TEXT_BYTES,
             max_children: 256,
             max_priority: 1024,
-            max_sync_drain: 200,
+            max_sync_drain: 64,
         }
     }
 }

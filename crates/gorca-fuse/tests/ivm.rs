@@ -1454,3 +1454,115 @@ fn focus_change_and_global_epoch_with_100k_dirty_nodes_stay_under_half_a_millise
         "{best_epoch:?}"
     );
 }
+
+// ---- the silence mask -------------------------------------------------------------------------------
+
+/// A star of `n` leaves, each named "Save" by the (active) OCR source; the first `window` leaves are
+/// the visible window.
+fn named_star(n: usize, window: usize) -> Ivm<NoQuirks, NoPatches> {
+    let mut e = star(n);
+    e.set_source(source_info(&SOURCES[1])).unwrap();
+    e.set_source_state(id(3), 1, SourceState::Active);
+    for i in 1..=n {
+        let Input::Fact(mut f) = ocr_name(i, "Save", &e, 300_000) else {
+            panic!()
+        };
+        f.seq = i as u64;
+        e.apply([Input::Fact(f)]);
+    }
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry(nid(n)).unwrap().name.as_deref(), Some("Save"));
+    let win: Vec<NodeIdx> = (1..=window).map(nid).collect();
+    e.set_visible(&win);
+    e
+}
+
+fn revoke_scenario(n: usize, window: usize) -> std::time::Duration {
+    let mut e = named_star(n, window);
+    // Dirty every node so the backlog is huge.
+    for i in 1..=n {
+        e.apply([Input::Obs {
+            node: nid(i),
+            src: PrimarySlot::P0,
+            seq: 10,
+            write: write_from_toy(Group::Description, &json!("Required")),
+        }]);
+    }
+    assert!(
+        window > e.profile().limits.max_sync_drain,
+        "the cap must bite"
+    );
+    let t = std::time::Instant::now();
+    e.set_source_state(id(3), 5, SourceState::Revoked);
+    let took = t.elapsed();
+    assert!(e.pending() > n / 2, "most of the backlog is still pending");
+    // Right after the call no node reads a revoked value, drained or not.
+    for i in 0..=n {
+        let v = e.entry_view(nid(i)).unwrap();
+        assert_ne!(
+            v.name.as_deref(),
+            Some("Save"),
+            "node {i} still speaks the revoked source"
+        );
+    }
+    // The raw published entry of an unreached node still carries it (the proper re-fusion is
+    // pending), which is exactly what the mask covers.
+    assert!(
+        (window + 1..=n).any(|i| e.entry(nid(i)).unwrap().name.as_deref() == Some("Save")),
+        "the cap left nodes unfused"
+    );
+    e.run(Budget::UNLIMITED);
+    for i in 0..=n {
+        assert_eq!(e.entry_view(nid(i)).unwrap().name.as_deref(), None);
+    }
+    assert!(e.verify().is_ok());
+    took
+}
+
+#[test]
+fn a_revoked_source_is_never_read_even_beyond_the_sync_drain_cap() {
+    // 1024 priority nodes, far above the cap of 200, and a backlog behind them.
+    revoke_scenario(3000, 1024);
+}
+
+#[test]
+fn the_silence_mask_follows_content_names_and_lifts_with_the_epoch() {
+    let mut e = fact_engine();
+    let f = ocr_name(1, "Save", &e, 300_000);
+    e.apply([f]);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(
+        e.entry(nid(0)).unwrap().name.as_deref(),
+        Some("Save"),
+        "derived through content"
+    );
+    // No priority nodes at all: the mask alone silences both the child and the derived parent.
+    e.set_source_state(id(3), 5, SourceState::Revoked);
+    assert_eq!(e.entry_view(nid(1)).unwrap().name.as_deref(), None);
+    assert_eq!(e.entry_view(nid(0)).unwrap().name.as_deref(), None);
+    assert_eq!(
+        e.entry_view(nid(0)).unwrap().prov.get(Group::Name),
+        Some(gorca_model::sem::ProvCode::Default)
+    );
+    // Lifting the epoch lifts the mask; the (unchanged) published value reads again.
+    e.set_source_state(id(3), 6, SourceState::Active);
+    assert_eq!(e.entry_view(nid(1)).unwrap().name.as_deref(), Some("Save"));
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry_view(nid(0)).unwrap().name.as_deref(), Some("Save"));
+    // A released source is masked too, until its nodes are re-fused.
+    e.release_source(id(3));
+    assert_eq!(e.entry_view(nid(1)).unwrap().name.as_deref(), None);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry_view(nid(1)).unwrap().name.as_deref(), None);
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn revoking_with_a_huge_backlog_stays_under_half_a_millisecond_and_silences_every_node() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let took = revoke_scenario(50_000, 1024);
+    eprintln!("revoke sync part (1024 priority nodes, 50k dirty): {took:?}");
+    assert!(took < std::time::Duration::from_micros(500), "{took:?}");
+}
