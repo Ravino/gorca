@@ -787,3 +787,77 @@ fn an_entry_never_sticks_to_a_replaced_or_missing_snapshot() {
     assert!(!w.attach_sem(key(1), &rec1, entry), "tombstoned");
     w.check_invariants().unwrap();
 }
+
+fn big_text(n: usize) -> Arc<gorca_model::sem::SemText> {
+    Arc::new(gorca_model::sem::SemText {
+        description: Some(Arc::from("d".repeat(n))),
+        placeholder: Some(Arc::from("p".repeat(n))),
+        ..Default::default()
+    })
+}
+
+fn hostile(n: u64, len: usize) -> (Arc<NodeSnapshot>, Arc<gorca_model::sem::SrcRecord>) {
+    let sem = gorca_model::sem::Semantics {
+        text: Some(big_text(len)),
+        ..Default::default()
+    };
+    let rec = Arc::new(gorca_model::sem::SrcRecord {
+        name: Some(Arc::from("n".repeat(len))),
+        sem,
+        ..Default::default()
+    });
+    let mut s = (*node(n, "x")).clone();
+    s.sem = gorca_model::NodeSem {
+        rec: Some(Arc::clone(&rec)),
+        entry: None,
+    };
+    (Arc::new(s), rec)
+}
+
+#[test]
+fn semantic_text_is_charged_by_its_real_heap() {
+    let (small, _) = hostile(1, 10);
+    let (big, _) = hostile(2, 100_000);
+    // name + description + placeholder of the record: three 100 kB strings at least.
+    assert!(node_bytes(&big) >= node_bytes(&small) + 290_000);
+}
+
+#[test]
+fn a_hostile_app_with_long_semantic_text_hits_the_budget() {
+    let budget = MirrorBudget::new(1 << 20);
+    let (mut w, r) = mirror_for(app(), Some(Arc::clone(&budget)));
+    let nodes: Vec<_> = (1..=100).map(|n| hostile(n, 20_000).0).collect();
+    w.apply(batch(nodes), ApplyOrigin::Push);
+    assert!(budget.total() <= 1 << 20, "{}", budget.total());
+    let live = (1..=100).filter(|n| r.get(key(*n)).hit().is_some()).count();
+    assert!(live < 100, "the cap must refuse or evict some of them");
+    w.check_invariants().unwrap();
+}
+
+#[test]
+fn attach_keeps_the_budget_balanced_when_the_entry_keeps_the_text() {
+    let budget = MirrorBudget::new(64 << 20);
+    let (mut w, r) = mirror_for(app(), Some(Arc::clone(&budget)));
+    let (s, rec) = hostile(1, 50_000);
+    w.apply(batch(vec![s]), ApplyOrigin::Push);
+    let before = budget.total();
+    // The entry keeps the same text and name (own allocations: charged in full).
+    let mut e = gorca_model::sem::SemEntry::default();
+    e.sem.text = rec.sem.text.clone();
+    e.name = rec.name.clone();
+    assert!(w.attach_sem(key(1), &rec, Arc::new(e)));
+    let after = budget.total();
+    let snap = r.get(key(1)).hit().unwrap();
+    assert!(
+        after >= before - 10_000,
+        "text kept: no large refund ({before} -> {after})"
+    );
+    assert_eq!(
+        after,
+        node_bytes(&snap),
+        "budget equals the recomputed size"
+    );
+    w.check_invariants().unwrap();
+    w.tombstone(key(1), Instant::now(), RemovalCause::Event);
+    assert_eq!(budget.total(), 0, "everything is refunded on removal");
+}

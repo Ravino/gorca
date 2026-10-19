@@ -358,3 +358,28 @@ fn the_pump_stays_cheap_when_there_is_nothing_to_fuse() {
     // 1000 idle pumps: far below a millisecond each (generous bound for a loaded host).
     assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
 }
+
+#[test]
+fn what_the_writer_holds_is_capped_in_bytes_not_only_in_nodes() {
+    let mut w = FuseWriter::new(None);
+    let (mut mirror, _read) = gorca_mirror::mirror();
+    // 400 snapshots with 1 MiB names: 400 MiB if held, far below the node-count caps.
+    for n in 1..=400u64 {
+        let name = "x".repeat(1 << 20);
+        let s = snap_of(n, None, &name);
+        w.enqueue([&s], 1);
+        let (q, a, e) = w.held_bytes();
+        assert!(
+            q <= 32 << 20 && a <= 32 << 20 && e <= 96 << 20,
+            "{q} {a} {e}"
+        );
+    }
+    assert!(w.stats().view().dropped > 300);
+    while w.step(&mut mirror, Duration::from_millis(50)) {
+        let (q, a, e) = w.held_bytes();
+        assert!(
+            q <= 32 << 20 && a <= 32 << 20 && e <= 96 << 20,
+            "{q} {a} {e}"
+        );
+    }
+}

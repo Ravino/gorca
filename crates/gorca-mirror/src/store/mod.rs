@@ -24,7 +24,7 @@ use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::Instant;
 
 use arc_swap::ArcSwap;
-use gorca_model::sem::{SemEntry, SrcRecord};
+use gorca_model::sem::{SemEntry, SemText, SrcRecord};
 use gorca_model::{
     AppId, ChildList, Freshness, FreshnessEvent, Lookup, NodeKey, NodeSem, NodeSnapshot, NodeView,
     PropMask, SnapshotBatch, Value,
@@ -180,6 +180,7 @@ impl Hasher for KeyHasher {
 /// Deterministic size of a snapshot for the byte counters: a function of the snapshot only, so
 /// the counter can be recomputed from the structure (MA-1).
 pub fn node_bytes(n: &NodeSnapshot) -> u64 {
+    const HDR: usize = 2 * std::mem::size_of::<usize>();
     let mut b = std::mem::size_of::<NodeSnapshot>() + INDEX_OVERHEAD;
     b += n.name.as_deref().map_or(0, str::len);
     b += n.description.as_deref().map_or(0, str::len);
@@ -193,14 +194,24 @@ pub fn node_bytes(n: &NodeSnapshot) -> u64 {
         b += v.len() + std::mem::size_of::<(gorca_model::AttrKey, Arc<str>)>();
     }
     b += n.relations.len() * std::mem::size_of::<NodeKey>();
-    // The dual-carried semantics (M22a-C1b): an `Arc` header (two counters) plus the value.
+    // The dual-carried semantics (M22a-C1b), real heap: each `Arc` header (two counters), the
+    // value, its name unless it is the snapshot's own allocation, and every string of its text.
+    let own_name = |name: &Option<Arc<str>>| match (name, &n.name) {
+        (Some(a), Some(b)) if Arc::ptr_eq(a, b) => 0,
+        (Some(a), _) => HDR + a.len(),
+        (None, _) => 0,
+    };
     if let Some(r) = &n.sem.rec {
-        b += 2 * std::mem::size_of::<usize>()
+        b += HDR
             + std::mem::size_of::<SrcRecord>()
-            + r.name.as_deref().map_or(0, str::len);
+            + own_name(&r.name)
+            + r.sem.text.as_deref().map_or(0, SemText::heap_bytes);
     }
-    if n.sem.entry.is_some() {
-        b += 2 * std::mem::size_of::<usize>() + std::mem::size_of::<SemEntry>();
+    if let Some(e) = &n.sem.entry {
+        b += HDR
+            + std::mem::size_of::<SemEntry>()
+            + own_name(&e.name)
+            + e.sem.text.as_deref().map_or(0, SemText::heap_bytes);
     }
     b as u64
 }

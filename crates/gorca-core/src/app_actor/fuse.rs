@@ -25,12 +25,22 @@ use gorca_fuse::{
     Write, parse_inexpressible, parse_pi,
 };
 use gorca_mirror::MirrorWriter;
-use gorca_model::sem::{Group, SemEntry, SrcRecord};
+use gorca_model::sem::{Group, SemEntry, SemText, SrcRecord};
 use gorca_model::{NodeKey, NodeSnapshot, SemTables};
 
 /// Snapshots waiting to be written into the registers. A flood beyond this drops the **oldest**
 /// (the newer content supersedes it anyway); the dropped nodes simply carry no fused entry.
 const QUEUE_CAP: usize = 8192;
+/// Bytes of snapshots waiting to be written (mirror accounting, `node_bytes`): a hostile app's
+/// long names must not grow what the writer holds beyond a bound of its own.
+const QUEUE_BYTES: usize = 32 << 20;
+/// Bytes of source records waiting for their entry (they outlive a replaced mirror snapshot).
+const AWAITING_BYTES: usize = 32 << 20;
+/// Bytes the engine's registers may hold (strings plus a fixed share per node) before it is
+/// rebuilt, next to the node-count bound.
+const ENGINE_BYTES: usize = 96 << 20;
+/// Fixed register bytes charged per engine node.
+const NODE_FIXED: usize = 256;
 /// Fused entries waiting to be attached to the mirror.
 const AWAITING_CAP: usize = 8192;
 /// Entries examined per step when the engine still has dirty nodes.
@@ -146,11 +156,13 @@ pub fn writes_of(rec: &SrcRecord) -> impl Iterator<Item = Write> + '_ {
 }
 
 struct Queued {
+    bytes: usize,
     snap: Arc<NodeSnapshot>,
     seq: u64,
 }
 
 struct Awaiting {
+    bytes: usize,
     key: NodeKey,
     idx: NodeIdx,
     rec: Arc<SrcRecord>,
@@ -166,6 +178,11 @@ pub(super) struct FuseWriter {
     free: Vec<u32>,
     queue: VecDeque<Queued>,
     awaiting: VecDeque<Awaiting>,
+    queue_bytes: usize,
+    awaiting_bytes: usize,
+    engine_bytes: usize,
+    /// Register bytes charged per engine node, by `NodeIdx`.
+    reg_bytes: Vec<u32>,
     focus: Option<NodeKey>,
     focus_dirty: bool,
     started: Instant,
@@ -222,6 +239,10 @@ impl FuseWriter {
             free: Vec::new(),
             queue: VecDeque::new(),
             awaiting: VecDeque::new(),
+            queue_bytes: 0,
+            awaiting_bytes: 0,
+            engine_bytes: 0,
+            reg_bytes: Vec::new(),
             focus: None,
             focus_dirty: false,
             started: Instant::now(),
@@ -254,6 +275,9 @@ impl FuseWriter {
         self.ivm = build_ivm(self.tables);
         self.index.clear();
         self.nodes.clear();
+        self.reg_bytes.clear();
+        self.engine_bytes = 0;
+        self.awaiting_bytes = 0;
         self.free.clear();
         self.awaiting.clear();
         self.focus_dirty = self.focus.is_some();
@@ -272,16 +296,38 @@ impl FuseWriter {
             if s.sem.rec.is_none() {
                 continue;
             }
-            if self.queue.len() >= QUEUE_CAP {
-                self.queue.pop_front();
+            let bytes = usize::try_from(gorca_mirror::node_bytes(s)).unwrap_or(usize::MAX);
+            while !self.queue.is_empty()
+                && (self.queue.len() >= QUEUE_CAP || self.queue_bytes + bytes > QUEUE_BYTES)
+            {
+                self.pop_queue();
                 bump(&self.stats.dropped, 1);
             }
+            self.queue_bytes += bytes;
             self.queue.push_back(Queued {
+                bytes,
                 snap: Arc::clone(s),
                 seq,
             });
             bump(&self.stats.queued, 1);
         }
+    }
+
+    fn pop_queue(&mut self) -> Option<Queued> {
+        let q = self.queue.pop_front()?;
+        self.queue_bytes = self.queue_bytes.saturating_sub(q.bytes);
+        Some(q)
+    }
+
+    fn pop_awaiting(&mut self) -> Option<Awaiting> {
+        let a = self.awaiting.pop_front()?;
+        self.awaiting_bytes = self.awaiting_bytes.saturating_sub(a.bytes);
+        Some(a)
+    }
+
+    fn push_awaiting(&mut self, a: Awaiting) {
+        self.awaiting_bytes += a.bytes;
+        self.awaiting.push_back(a);
     }
 
     /// The node is gone (a tombstone, a `Gone` reply): its subtree leaves the engine.
@@ -304,6 +350,10 @@ impl FuseWriter {
         {
             self.index.remove(&key);
             self.free.push(idx.0);
+            if let Some(b) = self.reg_bytes.get_mut(i) {
+                self.engine_bytes = self.engine_bytes.saturating_sub(*b as usize);
+                *b = 0;
+            }
         }
     }
 
@@ -322,6 +372,12 @@ impl FuseWriter {
 
     pub(super) fn work_left(&self) -> usize {
         self.queue.len() + self.awaiting.len() + self.ivm.pending()
+    }
+
+    /// Bytes the writer holds: queued snapshots, waiting records, engine registers.
+    #[cfg(test)]
+    pub(super) fn held_bytes(&self) -> (usize, usize, usize) {
+        (self.queue_bytes, self.awaiting_bytes, self.engine_bytes)
     }
 
     pub(super) fn node_count(&self) -> usize {
@@ -377,10 +433,31 @@ impl FuseWriter {
                 write: w,
             });
         }
-        if self.awaiting.len() >= AWAITING_CAP {
-            self.awaiting.pop_front();
+        let strings =
+            rec.name.as_deref().map_or(0, str::len) + rec.sem.description().map_or(0, str::len);
+        let regs = NODE_FIXED + strings;
+        if self.reg_bytes.len() <= idx.0 as usize {
+            self.reg_bytes.resize(idx.0 as usize + 1, 0);
         }
-        self.awaiting.push_back(Awaiting { key, idx, rec });
+        let old = std::mem::replace(
+            &mut self.reg_bytes[idx.0 as usize],
+            u32::try_from(regs).unwrap_or(u32::MAX),
+        ) as usize;
+        self.engine_bytes = (self.engine_bytes + regs).saturating_sub(old);
+        let bytes = std::mem::size_of::<SrcRecord>()
+            + rec.name.as_deref().map_or(0, str::len)
+            + rec.sem.text.as_deref().map_or(0, SemText::heap_bytes);
+        while !self.awaiting.is_empty()
+            && (self.awaiting.len() >= AWAITING_CAP || self.awaiting_bytes + bytes > AWAITING_BYTES)
+        {
+            self.pop_awaiting();
+        }
+        self.push_awaiting(Awaiting {
+            bytes,
+            key,
+            idx,
+            rec,
+        });
         bump(&self.stats.applied, 1);
     }
 
@@ -408,14 +485,14 @@ impl FuseWriter {
         if !self.has_work() && !self.focus_dirty {
             return false;
         }
-        if self.index.len() >= MAX_NODES {
+        if self.index.len() >= MAX_NODES || self.engine_bytes >= ENGINE_BYTES {
             bump(&self.stats.resets, 1);
             self.reset();
         }
         let deadline = Instant::now() + budget;
         let mut inputs: Vec<Input> = Vec::new();
         let mut n = 0u32;
-        while let Some(q) = self.queue.pop_front() {
+        while let Some(q) = self.pop_queue() {
             self.apply_one(&q, &mut inputs);
             n += 1;
             // The clock is read every few nodes: a node is a handful of register writes.
@@ -439,7 +516,7 @@ impl FuseWriter {
             Budget::until(deadline)
         };
         let run = self.ivm.run_with(budget, &mut |_| {});
-        self.attach(mirror, run.pending == 0);
+        self.attach(mirror, run.pending == 0, deadline);
         let more = self.has_work();
         if more {
             bump(&self.stats.carried, 1);
@@ -449,19 +526,26 @@ impl FuseWriter {
 
     /// Attach the entries of the nodes that are no longer dirty. With nothing pending every
     /// waiting entry is ready; otherwise only a bounded prefix is examined.
-    fn attach(&mut self, mirror: &mut MirrorWriter, all: bool) {
+    fn attach(&mut self, mirror: &mut MirrorWriter, all: bool, deadline: Instant) {
         let mut scan = if all {
             self.awaiting.len()
         } else {
             self.awaiting.len().min(AWAITING_SCAN)
         };
+        let mut done = 0u32;
         while scan > 0 {
+            // Bounded like the rest of the step: after a large dump the waiting entries drain
+            // over several steps, never in one multi-millisecond burst (the first 16 always go).
+            if done >= 16 && done.is_multiple_of(16) && Instant::now() >= deadline {
+                break;
+            }
+            done += 1;
             scan -= 1;
-            let Some(a) = self.awaiting.pop_front() else {
+            let Some(a) = self.pop_awaiting() else {
                 break;
             };
             if self.ivm.is_dirty(a.idx) {
-                self.awaiting.push_back(a);
+                self.push_awaiting(a);
                 continue;
             }
             if self.index.get(&a.key) != Some(&a.idx) {

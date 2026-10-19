@@ -118,14 +118,6 @@ pub const DEVIATIONS: &[Deviation] = &[
                  item focus); the model says `not selectable` and the legacy word never applied",
     },
     Deviation {
-        id: "empty-state-set",
-        group: Group::Avail,
-        reason: "an application that reports no state at all (a hidden option) is *disabled* to \
-                 the normaliser (neither ENABLED nor SENSITIVE) and *unknown* to the legacy \
-                 mapping, which only reads DISABLED off a non-empty set; such a node is not \
-                 presented either way",
-    },
-    Deviation {
         id: "pressed-without-toggle",
         group: Group::Check,
         reason: "the engine sets PRESSED or CHECKED on a role that is no toggle (GTK page tabs); \
@@ -161,7 +153,6 @@ fn applies(id: &str, c: &Ctx<'_>) -> bool {
             c.snap.states.contains(StateSet::SELECTED)
                 && c.entry.sem.select == Select::NotSelectable
         }
-        "empty-state-set" => c.snap.states.is_empty() && c.entry.sem.avail == Avail::Disabled,
         "pressed-without-toggle" => {
             c.entry.sem.check == Check::NotCheckable && c.entry.sem.press == Press::NotToggle
         }
