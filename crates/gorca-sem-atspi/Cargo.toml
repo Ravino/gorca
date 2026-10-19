@@ -1,0 +1,14 @@
+[package]
+name = "gorca-sem-atspi"
+description = "The one AT-SPI semantic normaliser: raw role/states/attributes to facts, quirk, trust and inexpressible tables (M22a; empty until B2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+
+[lints]
+workspace = true

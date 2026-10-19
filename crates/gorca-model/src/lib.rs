@@ -13,11 +13,13 @@
 
 pub mod doc;
 pub mod event;
+pub mod fact;
 pub mod geometry;
 pub mod ids;
 pub mod node;
 pub mod redact;
 pub mod role;
+pub mod sem;
 pub mod speech;
 pub mod text;
 
@@ -29,6 +31,7 @@ pub use event::{
     AppInfo, AppLifecycle, CaretOrigin, ConnectorKind, DocKind, LazyText, NodeEvent, Politeness,
     RawEvent, RawMsg, TextDelta, WebEngine, WindowKind,
 };
+pub use fact::{Fact, Subject};
 pub use geometry::{Point, Rect};
 pub use ids::{AppId, ConnectorId, Epoch, LocalId, NodeKey, ReqId, UttId};
 pub use node::{
@@ -37,6 +40,7 @@ pub use node::{
 };
 pub use redact::RedactKey;
 pub use role::Role;
+pub use sem::{SemEntry, SemRole, Semantics};
 pub use speech::{Prio, Segment, SegmentKind, Utterance};
 pub use text::{
     EditQuirks, MAX_SELECTION_TEXT, ScriptPosition, TextFormat, TextGranularity, TextLine,

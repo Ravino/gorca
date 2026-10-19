@@ -1278,6 +1278,7 @@ name = "gorca-ext-api"
 version = "0.0.0"
 dependencies = [
  "gorca-i18n",
+ "gorca-model",
  "wit-bindgen",
  "wit-parser 0.261.0",
 ]
@@ -1303,6 +1304,20 @@ dependencies = [
  "toml_edit",
  "tracing",
  "wasmtime",
+]
+
+[[package]]
+name = "gorca-fact-api"
+version = "0.0.0"
+dependencies = [
+ "gorca-model",
+]
+
+[[package]]
+name = "gorca-fuse"
+version = "0.0.0"
+dependencies = [
+ "gorca-model",
 ]
 
 [[package]]
@@ -1390,6 +1405,7 @@ version = "0.0.0"
 dependencies = [
  "bitflags",
  "gorca-i18n",
+ "serde_json",
  "smallvec",
 ]
 
@@ -1413,6 +1429,13 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "gorca-sem-atspi"
+version = "0.0.0"
+dependencies = [
+ "gorca-model",
 ]
 
 [[package]]

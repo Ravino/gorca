@@ -12,5 +12,8 @@ bitflags = { workspace = true }
 smallvec = { workspace = true }
 gorca-i18n = { workspace = true }
 
+[dev-dependencies]
+serde_json = "1"
+
 [lints]
 workspace = true

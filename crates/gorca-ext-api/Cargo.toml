@@ -16,6 +16,8 @@ wit-bindgen = { version = "=0.46.0" }
 
 [dev-dependencies]
 wit-parser = { workspace = true }
+# Test-only: the equality test compares the generated copy with the model registries.
+gorca-model = { workspace = true }
 
 [lints]
 workspace = true
