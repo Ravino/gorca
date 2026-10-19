@@ -67,7 +67,8 @@ two cases below), `origin` = the Meta `frame` or `buffer` rect origin, whichever
 | GTK3 under XWayland (X scale = ceil(1.5) = 2) | `SCREEN` = X root space = stage x 2; toplevel 500x438 vs Meta frame 250x219; toplevel `WINDOW` origin (0,-38) (SSD titlebar) | stage = SCREEN/2 (equivalently frame.xy + (WINDOW - toplevelWINDOWorigin)/2). Click fired. An X11 GTK4 window at scale 1 also got clicks at the right place. |
 | St (shell) | stage coordinates for all types (ADR-0006 facts) | stage = extent |
 
-Not verified: popup menus on Wayland (xdg_popup, no Meta window; GTK4 popover `WINDOW` is parent-relative per the ADR-0006
+Not verified: popup menus on Wayland (correction 2026-10-19: an xdg_popup DOES get a Meta window, type DROPDOWN_MENU,
+transient for its parent, `refs/mutter/src/wayland/meta-wayland-xdg-shell.c:1686-1697`; GTK4 popover `WINDOW` is parent-relative per the ADR-0006
 probes, so the toplevel origin should apply but no real click on an open menu was made); Qt; Electron; windows straddling two
 monitors (use the `monitor` field of `GetWindows`); XWayland on a shell with `xwayland-native-scaling` actually in effect (the
 rig keyfile enabled it, the effect was not separated); first-click flake: one XWayland run lost the first click right after

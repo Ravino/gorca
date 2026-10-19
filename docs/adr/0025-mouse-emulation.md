@@ -1,6 +1,7 @@
 # ADR-0025: Mouse emulation (pointer routing, clicks, drag lock) through the gorca-helper virtual pointer
 
-Status: **Proposed** (2026-10-19). Owner: architect. Review: reviewer (pending).
+Status: **Accepted** (r2, 2026-10-19; r1 Proposed 5c517151). Owner: architect. Review: `docs/reports/adr-0025-review.md`
+(r1 ACCEPT-WITH-CHANGES, C-1..C-9 integrated, mapping in §13). QM-1 (Orca laptop chord) is pending the owner.
 Study and probes: `docs/reports/mouse-emulation-design.md`, `tools/platform-probes/mouse-emulation/`.
 Owner decisions (fixed): `docs/decisions.md` row 2026-10-19 "Owner: mouse emulation via the gorca-helper virtual
 pointer (A) ...". Relates to: ADR-0001 R3 (results as messages, deadlines), ADR-0005 (closed command set, KM-1,
@@ -78,11 +79,11 @@ would get a new interface name (`org.gorca.ShellHelper2`), never a reused one.
 |---|---|---|---|---|
 | `Ping` | - | `u` version | any | v1 |
 | `Capabilities` | - | `as` caps granted to **this caller** | any | `["capture"]`, `["capture","pointer"]`, ... |
-| `GetWindows`, `GetMonitors` | | | any | v1; v2 adds `transient-for` t and `type` already present |
+| `GetWindows`, `GetMonitors` | | | any | v1; v2 adds `transient-for` t to windows and `x-scale` d (XWayland's global effective scale, C-5) to every monitor row |
 | `CaptureArea`, `CaptureWindowArea` | | | `capture` | v1 |
 | `GetPointer` | - | `a{sv}`: `x` `y` d (stage), `window` t (topmost window at the pointer, 0 = Shell UI or none), `wx` `wy` d (relative to that window's frame), `monitor` i | `pointer` | read-only |
 | `PointerMove` | `t` window, `s` origin, `d` x, `d` y, `a{sv}` opts | `a{sv}` reply (below) | `pointer` | moves only |
-| `PointerClickAt` | `t` window, `s` origin, `d` x, `d` y, `u` button, `a{sv}` opts | `a{sv}` reply | `pointer` | guard + occlusion + move + click in one main-loop turn |
+| `PointerClickAt` | `t` window, `s` origin, `d` x, `d` y, `u` button, `a{sv}` opts | `a{sv}` reply | `pointer` | expiry + guard + occlusion + move + press/release in one main-loop turn (`count = 2`: second click from a timer, H-7) |
 | `PointerButton` | `u` button, `s` action, `a{sv}` opts | `a{sv}` reply | `pointer` | at the current pointer; action `click` (opts `count` 1 or 2, 30 ms gap), `press`, `release` |
 | `PointerRelease` | - | `u` buttons released | `pointer` | releases every button this caller holds |
 
@@ -93,16 +94,25 @@ would get a new interface name (`org.gorca.ShellHelper2`), never a reused one.
   opts `logical` b (default true): swap 1 and 3 when `org.gnome.desktop.peripherals.mouse left-handed` is true,
   so "left click" means the primary button (NVDA `mouseHandler.py:310-330` parity; spike S-5).
 - opts `if-occluded` s = `"refuse"` (default) | `"proceed"`.
+- opts `not-after` x (**required** on every injecting method; CLOCK_MONOTONIC µs, the clock of
+  `GLib.get_monotonic_time()` and Rust `Instant`; C-1): if the handler runs after it, nothing is injected and
+  `outcome = "expired"`. A call without it is `bad-args:`. gorca sets it to the command's dispatch time + 150 ms.
 - Reply `a{sv}`: `x` `y` d (stage point used), `window-at` t (topmost window at the point), `occluded` b, `clamped` b,
-  `outcome` s = `"done"` | `"refused-occluded"` | `"refused-outside"`, `held` u (bitmask of buttons this caller holds).
-- **Window guard (MI-5):** for `window ≠ 0` the stage point must lie inside the frame or buffer rect of `window`
-  or of a window whose `transient-for` chain reaches `window` (xdg_popup menus are Meta windows of type
-  DROPDOWN_MENU transient for the parent: `refs/mutter/src/wayland/meta-wayland-xdg-shell.c:1390,1696`), else
-  `outcome = refused-outside` and nothing is injected.
+  `outcome` s = `"done"` | `"expired"` | `"refused-occluded"` | `"refused-outside"`, `held` u (bitmask of buttons this caller holds).
+- **Popup family (C-2).** `family(window)` = `window` plus every window whose `transient-for` chain reaches
+  `window` **through popup-type windows only**: `DROPDOWN_MENU`, `POPUP_MENU`, `COMBO`, `TOOLTIP`, `MENU`
+  (xdg_popup menus are Meta windows of type DROPDOWN_MENU transient for the parent:
+  `refs/mutter/src/wayland/meta-wayland-xdg-shell.c:1390,1686-1697`). A `NORMAL`, `DIALOG` or `MODAL_DIALOG`
+  transient (an attached "Discard changes?" sheet) is **not** in the family; it is an occluder.
+- **Window guard (MI-5):** for `window ≠ 0` the stage point must lie inside the frame or buffer rect of a member of
+  `family(window)`, else `outcome = refused-outside` and nothing is injected.
 - **Occlusion:** `occluded` is true when the reactive actor picked at the point
-  (`global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, x, y)`) does not belong to `window` or one of its
-  transients: another window, a notification banner, the top bar, the Overview or a modal dialog. Falls back to the
-  v1 stacking-rect test if the pick is unavailable. Not computed for `window = 0`.
+  (`global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, x, y)`) does not belong to a member of `family(window)`:
+  another window, a modal or attached dialog over the parent, a notification banner, the top bar, the Overview.
+  Falls back to the v1 stacking-rect test (same family rule) if the pick is unavailable.
+- **Stage guard (C-4):** for `window = 0` the picked actor must not be inside any `MetaWindowActor` (the St element
+  that was resolved is gone if an app window is now under the point, e.g. quick settings closed between resolve and
+  click), else `outcome = refused-outside`.
 - **Errors:** `Error.AccessDenied` (not allow-listed or cap missing), `Error.Failed` with a short machine prefix:
   `locked:`, `rate:`, `bad-args:`, `no-window:`.
 
@@ -110,16 +120,26 @@ Helper-side rules (all handlers are a few Clutter calls plus validation, never a
 
 - **H-1 Rate limit.** Own token bucket for `pointer` methods: 20 tokens/s, burst 40; a call costs 1, a `count = 2`
   click costs 2. `GetPointer` uses the v1 bucket (100/s).
+- **H-1a Denied callers (C-6, also fixes v1).** A per-sender bucket (10 calls/s, burst 20) runs **before**
+  `_authorize`; over it the call fails `rate:` with no `/proc` or config work. A negative authorization is cached per
+  sender until the sender vanishes or the config stamp changes, and `DENIED` is logged at most once per (sender,
+  stamp). Total sender-cache size stays bounded (v1: 256).
 - **H-2 Validation.** Finite numbers only, |x|,|y| ≤ 65535; points outside the monitor union clamp (Clutter does it,
   `clamped` reports it).
-- **H-3 Held buttons.** Tracked per caller and button. Released on: `release`, `PointerRelease`, caller's unique name
-  vanishing (`NameOwnerChanged`, already watched), `disable()`, session lock, and 125 s after the press (backstop;
-  gorca releases at 120 s, §2.6). A `press` of a held button is a no-op that reports `held`.
+- **H-3 Held buttons, single holder (C-7d).** The device has at most one **holder** (a unique bus name). A `press`
+  from another caller while any button is held fails `busy:`; `release`/`PointerRelease` from a non-holder release
+  nothing. Holds are released on: `release`, `PointerRelease`, the holder's name vanishing (`NameOwnerChanged`,
+  already watched), `disable()`, session lock (the unlock dialog never sees a drag), and 125 s after the press
+  (backstop; gorca releases at 120 s, §2.6). A `press` of a held button by the holder is a no-op that reports `held`.
 - **H-4 Lock.** Every `pointer` method fails `locked:` while `Main.sessionMode.isLocked` (v1 `_guard` already does).
 - **H-5 Audit.** One journal line per injection, rate-limited to 1/s with a suppressed counter:
   `gorca-helper: pointer <op> b<n> stage=(x,y) win=<id> outcome=<o> caller=<exe>`.
 - **H-6 One device.** One `POINTER_DEVICE` virtual device, created lazily on the first `pointer` call, destroyed in
   `stop()`. No keyboard or touch device is ever created.
+- **H-7 Double click timer (C-7e).** `count = 2` presses/releases once, then a 30 ms `GLib.timeout_add` does the second
+  click after re-checking `not-after` + 30 ms, the lock state and that the caller is still present. The timer id is
+  kept and removed in `stop()`, on lock and on caller vanish; the reply is sent after the second click (or with
+  `outcome = expired` if it was dropped).
 
 ### 2.3 Allow-list format with capabilities
 
@@ -132,7 +152,9 @@ Helper-side rules (all handlers are a few Clutter calls plus validation, never a
 ```
 
 - **AL-1** `caps` absent ⇒ `["capture"]` (v1 files keep working, pointer stays off). Unknown cap strings are ignored
-  with one warning. A rule without `"capture"` denies capture.
+  with one warning. A rule without `"capture"` denies capture. **First matching rule wins** (as v1 `_authorize`
+  already returns on the first match); caps of later matching rules are not merged (C-7f), so a narrower rule
+  placed first can never be widened by a later one.
 - **AL-2** `"pointer"` is opt-in. Only the owner writes it (root-owned `/etc/gorca/shell-helper.json`, authoritative
   if present, or the user's `~/.config/gorca/shell-helper.json`, mode not group/world-writable). gorca never writes or
   rewrites either file (MI-9); its "Mouse not available" message names the file and the cap instead.
@@ -164,13 +186,19 @@ the helper adds the origin at call time. The rule from the study, verified by a 
 `atspi_size / ratio`; `ratio` = 1, or `ceil(monitor scale)` for an XWayland window whose AT-SPI size is that multiple
 of the frame; `child_div` = monitor scale for `ChildSpace::DevicePixels`, else 1.
 
+**XWayland ratio is global (C-5).** Mutter's X scale is one value for the whole X screen: `ceil(highest monitor
+scale)`, or the `xwayland-scaling-factor` override, or 1 in physical layout mode
+(`refs/mutter/src/wayland/meta-xwayland.c:1368-1392`). The helper reports it as `x-scale` in `GetMonitors` (read
+from the same Mutter state, not recomputed in gorca), and `ratio` for X11 windows is that value whatever monitor the
+window is on (a 2x laptop plus a 1x external screen: ratio 2 on both).
+
 | Client | AT-SPI space | Mapping (study §3) |
 |---|---|---|
 | GTK4 Wayland | `WINDOW` relative to the GtkWindow = Meta frame | frame + WINDOW |
 | GTK3 Wayland | `WINDOW` = `SCREEN`, relative to the buffer incl. CSD shadow | buffer + WINDOW |
 | Firefox Wayland | toplevel (0,0) = Meta frame | frame + extent |
 | Chromium / Electron Wayland | toplevel logical, children in device px | frame + child / scale (quirk row `child_space = DevicePixels`, toolkit Chromium; Electron unverified, spike S-2) |
-| XWayland (X scale = ceil(scale)) | X root space; toplevel `WINDOW` origin includes the SSD title bar | frame + (WINDOW - toplevel origin) / ratio |
+| XWayland (global X scale, C-5) | X root space; toplevel `WINDOW` origin includes the SSD title bar | frame + (WINDOW - toplevel origin) / `x-scale` |
 | St (Shell) | stage | `PointTarget::Stage` |
 | Qt | unverified | spike S-3; until then `NoLocation` is acceptable, action-first still works |
 
@@ -178,8 +206,8 @@ Window matching (sink, pure function, table-tested):
 
 - **WM-1** Candidates: `GetWindows` rows that are visible, not minimized, with `pid == hint.pid`. If none (Flatpak:
   the AT-SPI pid may be the a11y bus proxy's), all visible rows.
-- **WM-2** Keep rows whose frame or buffer size matches `atspi_size / ratio` for ratio ∈ {1, ceil(scale of the row's
-  monitor)} within ±2 px; this also picks `origin`.
+- **WM-2** Keep rows whose frame or buffer size matches `atspi_size / ratio` within ±2 px, with ratio = 1 for
+  Wayland rows (`client-type`) and ratio = `x-scale` for X11 rows; this also picks `origin`.
 - **WM-3** Tie-break: equal title, then the focused window, then the topmost. Still ambiguous or empty ⇒
   `NoLocation` ("No location"), never a guess.
 - **WM-4** The final safety net is the helper's window guard: a wrong mapping is refused, not clicked.
@@ -208,11 +236,17 @@ enum PointerAvail {                 // owned by the pointer actor, mirrored to t
 | any | helper or Shell `NameOwnerChanged`, owner present | (probe) | owner check, `Ping`, `Capabilities` (150 ms each) |
 | probe | owner mismatch / AccessDenied / v<2 / no cap / ok | Squatted / Denied / TooOld / NoCap / Ready | publish |
 | any | helper owner gone | Absent | publish; held buttons reported released |
-| Ready | 3 consecutive deadline misses | Unresponsive | publish; re-probe after 2 s, 4 s, ... 30 s |
-| Denied, NoCap, TooOld, Unresponsive | poll every 10 s (one `Ping`/`Capabilities`) or any mouse command | (probe) | owner may have just edited the allow-list |
+| Ready | 3 consecutive deadline misses or expired outcomes | Unresponsive | publish; re-probe after 2 s, 4 s, ... 30 s; **gate stays open** (C-3) |
+| Unresponsive | probe succeeds | Ready | publish |
+| Denied, NoCap, TooOld | poll every 10 s (one `Ping`/`Capabilities`) or any mouse command | (probe) | owner may have just edited the allow-list |
 | Ready | `AccessDenied` or `Error.Failed locked:` on a call | probe / stays Ready | locked is not loss; the command speaks "not available while locked" |
 
-Gate (Reader): `pointer_open = avail == Ready && settings.mouse.enabled`.
+Gate (Reader): `pointer_open = avail ∈ {Ready, Unresponsive} && settings.mouse.enabled` (C-3). A Shell stall
+stalls key delivery on the same main loop, so closing the gate then buys nothing, queues a `SetKeyGrabs` into the
+stalled Mutter and, with RG-5 hysteresis, lets KP/ and KP* type into the focused field for ≥ 2 s after recovery.
+While `Unresponsive` the keys stay grabbed and the commands say "Mouse not responding" without calling the helper
+(except one probe). The gate closes only on `Absent`, `Squatted`, `Denied`, `TooOld`, `NoCap` or
+`mouse.enabled = false`.
 
 - **RG-1 Static availability stays static.** `Availability` keeps `Implemented | Planned`; `CmdSpec` gains
   `gate: Option<RuntimeGate>` with `enum RuntimeGate { Pointer }`. `bound_of()` is unchanged (gated commands are
@@ -229,8 +263,8 @@ Gate (Reader): `pointer_open = avail == Ready && settings.mouse.enabled`.
   `GrabKeyboard`/`UngrabKeyboard` (only a real `grab_all` change does), and never ends a session on a slow reply
   (`decisions.md` 2026-10-19 Mutter 48.7 mitigation).
 - **RG-5 Hysteresis.** Closing is immediate (fail-safe: the keys type again). Opening waits until `Ready` has held
-  for 2 s, and a gate changes the grab set at most once per 2 s (latest state wins), so a helper toggled by the
-  owner's hot reload costs two `SetKeyGrabs`, and a flapping helper at most one per 2 s.
+  for 2 s and happens at most once per 2 s (latest state wins), so a helper toggled by the owner's hot reload costs
+  two `SetKeyGrabs`, and a flapping helper at most one open and one close per 2 s.
 - **RG-6 Keys in flight.** A gated chord that arrives while the committed `GrabView` does not contain it is watched,
   not grabbed: the lane must not execute it (the app already received it). Existing `Ambiguous` classification
   covers the window between wanted and committed.
@@ -254,17 +288,21 @@ read as a double click at the same point; no multi-press delay is added).
 `ActionReq` (connector API) gains `Click { node }` and `ContextMenu { node }`; AT-SPI maps names as above,
 AccessKit/Newton maps to `Action::Click` / `Action::ShowContextMenu`.
 
-Drag lock and button state (Reader-owned, pure):
+Drag lock and button state (Reader-owned, pure, **one machine per lockable button**, C-7c):
 
 ```rust
 enum HoldState { Up, Pressing { req: PtrReqId }, Held { since: Instant }, Releasing { req: PtrReqId }, Unknown }
+struct Holds { left: HoldState, right: HoldState }   // independent; both may be Held (left drag with right held)
 ```
+
+The 120 s timer is per button and is a Reader timer message (`PointerMsg::HoldExpired { button, since }`, ignored if
+`since` no longer matches). The table below applies to each button separately.
 
 | From | Event | To | Effect |
 |---|---|---|---|
 | Up | lock toggle | Pressing | `PointerButton(press)` |
 | Pressing | reply `held` has button | Held | speak "locked", arm 120 s timer |
-| Pressing / Releasing | deadline miss or error | Unknown | speak error; next successful call sends `PointerRelease` first |
+| Pressing / Releasing | deadline miss, `expired` or error | Unknown | speak error; next successful call sends `PointerRelease` first |
 | Held | lock toggle / click of same button | Releasing | `PointerButton(release)` |
 | Held | 120 s timer | Releasing | speak "released after 2 minutes" when done |
 | Held | focus window changes | Held | speak "Left button locked" (MP-2 reminder; no release, drags between windows are legitimate) |
@@ -277,11 +315,17 @@ enum HoldState { Up, Pressing { req: PtrReqId }, Held { since: Instant }, Releas
   the target taken at key time) and receives `PointerMsg::{Done, Refused, Failed, Avail}`. One pointer actor owns
   the helper proxy, the `PointerAvail` machine and the window cache; it runs on its own task and connection-call
   budget (ADR-0001 R3), never on the input lane.
-- **EX-2 Deadlines.** Each helper call 150 ms; a whole command (resolve extents + `GetWindows` + `PointerClickAt`)
-  250 ms; `review_to_pointer` 500 ms. A late reply is ignored (D-Bus cannot cancel: the click may still land; the
-  user already heard "Mouse not responding").
-- **EX-3 Queue.** One in flight plus at most 4 pending (FIFO, user clicks are not coalesced); overflow drops the new
-  request with "Mouse busy". Epoch advances do not cancel pointer requests (they are user actions), only speech.
+- **EX-2 Deadlines and expiry (C-1).** Each helper call 150 ms; a whole command (resolve extents + `GetWindows` +
+  `PointerClickAt`) 250 ms; `review_to_pointer` 500 ms. Every injecting call carries `not-after` = command dispatch
+  time + 150 ms (item clicks: time of the injecting call + 150 ms, within the 250 ms command budget), so a call the
+  Shell runs late injects nothing (`expired`). A late reply is still read: `done` after gorca already said "Mouse not
+  responding" is logged (cannot happen when the helper honours `not-after`, so it is a helper bug signal).
+- **EX-3 Queue and overdue stop (C-1).** One in flight plus at most 4 pending (FIFO, user clicks are not
+  coalesced); overflow drops the new request with "Mouse busy". **While the in-flight call is past its deadline
+  nothing else is dispatched**: every pending request is dropped with one "Mouse not responding", and new requests
+  are refused the same way until the overdue call answers or the probe succeeds. A plain click that speaks at
+  dispatch (EX-4) and then expires adds "Mouse not responding". Epoch advances do not cancel pointer requests (they
+  are user actions), only speech.
 - **EX-4 Speech timing.** Plain clicks and lock toggles speak at dispatch (gorca-side work is a table lookup and an
   effect: within the 15 ms budget). Item clicks and routes speak on the outcome (study p99 1.3 ms per helper call,
   so typically ≤ 5 ms after the key). Speech produced by the clicked application's focus change supersedes ours.
@@ -326,9 +370,14 @@ pub trait PointerSink: Send + Sync {
   content can only influence *where* a user-requested click lands, through its extents.
 - **MI-2** Pointer I/O never blocks the Reader or the input lane (EX-1).
 - **MI-3** Non-gorca mouse chords are grabbed iff the gate is open, Num Lock off variants only (RG-3).
-- **MI-4** Gate-driven grab changes: same connection, `SetKeyGrabs` only, ≤ 1 per 2 s (RG-4, RG-5).
-- **MI-5** A window-targeted injection lands inside the target window or its transient, or not at all (helper guard).
-- **MI-6** A held button is released by gorca at 120 s and by the helper at 125 s at the latest.
+- **MI-4** Gate-driven grab changes: same connection, `SetKeyGrabs` only; ≤ 1 open per 2 s, close immediate, so
+  ≤ 2 changes per 2 s (RG-4, RG-5).
+- **MI-5** A window-targeted injection lands inside `family(window)` (popup-type transients only) or not at all
+  (helper guard). It lands on an *unoccluded* point unless the caller passed `if-occluded = proceed`
+  (`mouse.if_covered = click`), in which case it may hit whatever covers the point. A stage target lands only
+  outside every app window (C-4). Nothing lands after `not-after` (C-1).
+- **MI-6** A held button is released by gorca at 120 s and by the helper at 125 s at the latest; the helper has at
+  most one holder (H-3).
 - **MI-7** gorca calls the helper only if its owner equals the owner of `org.gnome.Shell` (v1 client rule).
 - **MI-8** Nothing is injected while the session is locked (H-4).
 - **MI-9** gorca never writes the helper allow-list.
@@ -341,14 +390,16 @@ pub trait PointerSink: Send + Sync {
 | Helper v1 | `TooOld`; message asks to update the helper |
 | No `pointer` cap | `NoCap`; message names the allow-list file and the cap |
 | Squatter owns the name | `Squatted`; no call is made; logged once |
-| Shell stalls (host load) | deadline misses → "Mouse not responding", `Unresponsive` after 3, gate closes, keys type; key→speech unaffected |
+| Shell stalls (host load) | deadline miss → "Mouse not responding", pending requests dropped, nothing dispatched while overdue; queued calls the Shell runs later are `expired` and inject nothing; `Unresponsive` after 3, gate stays open (keys stay grabbed, no `/` typed); key→speech unaffected |
 | Shell restarts / hot reload | owner change → `Absent` → probe → `Ready`; helper released buttons on `disable()`; gorca reports a lock it held as released |
 | Window moved/closed between resolve and click | origin resolved at call time; closed ⇒ `no-window:` ⇒ "No location" |
-| Target covered (other window, banner, Overview, modal) | `refused-occluded` ⇒ "Covered by {window}" (or "Covered" for Shell UI); `mouse.if_covered = click` proceeds |
+| Target covered (other window, banner, Overview, modal or attached dialog over the parent) | `refused-occluded` ⇒ "Covered by {window}" (or "Covered" for Shell UI); `mouse.if_covered = click` proceeds |
 | Mapping ambiguous or wrong | `NoLocation` (WM-3) or `refused-outside` (guard) ⇒ "No location" |
 | Item off-screen | `ActionReq::ScrollTo`, re-fetch extents once (bounded), else "No location" |
 | Session locked | `locked:` ⇒ "Not available while the screen is locked"; held buttons already released by the helper |
 | Rate limit | `rate:` ⇒ "Mouse busy" |
+| Another caller holds a button | `busy:` ⇒ "Mouse busy" |
+| St element gone (popover closed) | stage guard `refused-outside` ⇒ "No location" |
 | gorca crashes with a button held | helper releases on name vanish (H-3); Mutter also releases when the device is destroyed |
 
 ## 3. Preset bindings (conflict-checked against all four presets, 2026-10-19)
@@ -431,6 +482,9 @@ or partly compromised gorca, or a non-gorca caller, can do.
 | Threat | Mitigation |
 |---|---|
 | Another local process uses the helper to click | allow-list identity (exe + cgroup + pidfd), `pointer` cap opt-in (AL-1..3) |
+| Non-allow-listed caller floods the helper (compositor main-loop work, journal spam) | H-1a pre-auth bucket, negative cache, one DENIED line per sender and stamp |
+| Click into a destructive dialog that appeared over the target | C-2 popup-only family; dialogs are occluders |
+| Clicks gorca reported as failed land later | C-1 `not-after`, overdue stop |
 | Squatter impersonates the helper (fake `GetPointer`, swallowed clicks) | MI-7 owner check before every session |
 | Web page or app content steers gorca into clicking | MI-1 (user command only); window guard MI-5; occlusion refusal; every click spoken |
 | Extension/WASM plugin injects | no WIT pointer effect (MI-1); plugins run in the host, not the core |
@@ -456,6 +510,7 @@ session: no pointer injection, no `org.gnome.Orca.KeyboardMonitor` ownership, no
 | Mapping (Rust unit, table) | every study §3 row as data (AT-SPI rects + Meta rects + scale → expected stage point); WM-1..3 incl. Flatpak pid miss, two same-size windows, XWayland ratio 2, Chromium device px at 1, 1.25, 1.5, 2 |
 | Core (fake helper on a private bus) | `PointerAvail` table; gate flips ⇒ exactly one `SetKeyGrabs` each, zero Grab/UngrabKeyboard, zero reconnects; 50 flips in 10 s ⇒ ≤ 5 `SetKeyGrabs`; laptop preset ⇒ zero grab changes; `HoldState` table incl. Unknown; queue overflow; late replies ignored; Reader K1 unchanged with the helper stalled 5 s |
 | Keyboard (private shell + KeyboardMonitor harness) | Num Lock on: KP/ and KP* type `/` `*` (0 swallowed in 1000 presses); gate closed, Num Lock off: type too; gate open, Num Lock off: grabbed and executed |
+| Review r1 rows (C-9) | (1) stall burst: SIGSTOP the private shell, queue 5 clicks, SIGCONT ⇒ 0 clicks in the client log, all `expired`; (2) GTK modal and attached dialog over a parent button ⇒ `refused-occluded`, 0 clicks on the dialog; (3) lock taken while a button is held ⇒ released before the unlock dialog shows, no drag seen by it; (4) stale St target: close quick settings between resolve and click ⇒ `refused-outside`; (5) mixed scales 1 + 2 with an XWayland window on each monitor ⇒ both clicked; (6) denied-caller flood 1000 calls/s for 10 s ⇒ main-loop p99 within M-7, ≤ 1 DENIED journal line; (7) `disable()` during the `count = 2` gap ⇒ no second click, no stuck button, timer removed; (8) C-3: 3 s SIGSTOP then 5 s of KP/ presses ⇒ 0 `/` typed; (9) `tools/platform-probes/shell-segfault/repro.py` modes re-run with gate flips interleaved ⇒ 0 shell crashes |
 | End to end matrix (oracle: client click log or page title) | toolkits GTK3, GTK4, Firefox ESR, Chromium, Electron, XWayland GTK3; scales 1, 1.25, 1.5, 2; two monitors with an offset; popups: GTK3 menu, GTK4 popover, Firefox `<select>` dropdown, Chromium context menu; St: top bar, quick settings; item click action-first vs `pointer`; route then click; drag lock across two windows; `review_to_pointer` round trip |
 
 ## 7. Rollout
@@ -501,8 +556,8 @@ session: no pointer injection, no `org.gnome.Orca.KeyboardMonitor` ownership, no
 
 Revisit when any of these holds: (a) the K-2 key re-injection work (`gorca-input-inject`) builds an EIS client
 anyway (cost of B drops to one slice); (b) a GNOME release breaks the extension for longer than one release cycle;
-(c) the compositor exposes window origins or a pointer query to ATs (e.g. `PointerLocator.QueryPointer` reaches a
-release); (d) the Newton connector needs injection without a Shell extension.
+(c) the compositor exposes window origins or a pointer query to ATs (`PointerLocator.QueryPointer` already exists in
+`refs/mutter` main, `meta-a11y-manager.c:handle_query_pointer`, d82671c; track it per GNOME release); (d) the Newton connector needs injection without a Shell extension.
 
 ## 9. Consequences
 
@@ -519,7 +574,8 @@ release); (d) the Newton connector needs injection without a Shell extension.
 | M-1 | mouse key → feedback speech (plain click, lock), gorca side | p99 ≤ 15 ms (same budget as every key) |
 | M-2 | mouse key → click delivered in the client (private shell, item click, pointer path) | p99 ≤ 20 ms gorca + helper, ≤ 50 ms wall (phase-3 R3) |
 | M-3 | accuracy matrix (§6) | 100 % intended control clicked; 0 clicks outside the target window |
-| M-4 | gate flip → grabs committed | ≤ 2.5 s open, ≤ 0.5 s close; exactly 1 `SetKeyGrabs` per flip; 0 Grab/Ungrab; 0 reconnects |
+| M-4 | gate flip → grabs committed | ≤ 2.5 s open, ≤ 0.5 s close; exactly 1 `SetKeyGrabs` per flip; 0 Grab/Ungrab; 0 reconnects; 0 flips caused by `Unresponsive` |
+| M-9 | stall burst (C-9 row 1) | 0 clicks injected after their `not-after` |
 | M-5 | Num Lock on, or gate closed | 0 swallowed `/` `*` in 1000 presses |
 | M-6 | held button lifetime | gorca release at 120 s ± 1 s; helper backstop 125 s; release ≤ 1 s after caller vanish |
 | M-7 | helper handler main-loop time (`GORCA_TRACE`) | p99 ≤ 1 ms per pointer call |
@@ -530,20 +586,39 @@ release); (d) the Newton connector needs injection without a Shell extension.
 | Slice | Content | Owner | Depends |
 |---|---|---|---|
 | MO-0 | Spikes in the private rig: S-1 GTK3/GTK4 popup coordinates, S-2 Electron, S-3 Qt extents, S-4 scales 1.25 and 2 incl. Chromium, S-5 left-handed swap of a virtual device, S-6 pick-based occlusion cost | linux-platform-engineer | - |
-| MO-1 | Helper v2: caps in the allow-list, `Capabilities`, pointer bucket, `GetPointer`, `PointerMove`, `PointerClickAt`, `PointerButton`, `PointerRelease`, H-3 holds, guard, occlusion, audit; `test-pointer.sh`; platform doc | linux-platform-engineer | MO-0 S-6 |
+| MO-1a | Helper v2 part 1: caps (AL-1 first match), `Capabilities`, H-1 and H-1a buckets + negative cache, `GetPointer`, `PointerMove`, `PointerButton` (with `not-after`, H-7 timer), `PointerRelease`, H-3 single holder, `x-scale` in `GetMonitors`, audit; `test-pointer.sh` part 1; platform doc | linux-platform-engineer | - |
+| MO-1b | Helper v2 part 2: `PointerClickAt` with expiry, popup family, window guard, stage guard, pick occlusion; C-9 rows 1-4, 6, 7 | linux-platform-engineer | MO-1a, MO-0 S-6 |
 | MO-2 | `gorca-output-api` pointer types + `PointerSink`; `gorca-shell-helper` client: owner check, `PointerAvail`, probe/poll, deadlines, queue; fake helper for tests | rust-engineer | - |
 | MO-3 | Core gating: `RuntimeGate` in `CmdSpec`, gated grab split, `Mode::grab_set(keys, gates)`, RG-5 hysteresis, RG-6/RG-7; SetKeyGrabs-count tests | rust-engineer | MO-2 |
 | MO-4 | Commands click at pointer (L/R/M), locks + `HoldState` + 120 s, `say_position`; NVDA preset rows; strings en/ru; preset conflict test | rust-engineer | MO-3 |
-| MO-5 | `PointerResolver` + window matcher (table tests from study §3), `ActionReq::Click/ContextMenu`, `route_to_review`, item clicks; Orca preset rows | rust-engineer | MO-1, MO-4 |
-| MO-6 | `review_to_pointer` (inverse mapping, `GetAccessibleAtPoint` descent) | rust-engineer | MO-5 |
-| MO-7 | End-to-end matrix and gates M-2..M-8 in the private rig | test-engineer + perf-engineer | MO-5, MO-6 |
+| MO-5a | `PointerResolver` + window matcher (table tests from study §3, global `x-scale`), `route_to_review` | rust-engineer | MO-1b, MO-4 |
+| MO-5b | `ActionReq::Click/ContextMenu`, item clicks (action first, `ScrollTo` once, pointer path), `mouse.item_click`/`if_covered`; Orca preset rows | rust-engineer | MO-5a |
+| MO-6 | `review_to_pointer` (inverse mapping, `GetAccessibleAtPoint` descent) | rust-engineer | MO-5a |
+| MO-7 | End-to-end matrix, C-9 rows 5, 8, 9, gates M-2..M-9 in the private rig | test-engineer + perf-engineer | MO-5b, MO-6 |
 
-MO-1 and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its own once MO-1 is hot-reloaded.
+MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its own once MO-1a is hot-reloaded.
 
 ## 12. Open questions
 
-- **QM-1** Orca laptop left click chord: `gorca+shift+7` (recommended) or `gorca+0`.
+- **QM-1** Orca laptop left click chord: `gorca+shift+7` (recommended) or `gorca+0`. **Pending the owner**; MO-5b
+  binds whichever is confirmed.
 - **QM-2** Item clicks default `action_first` (Orca parity); should the NVDA presets' `gorca+kp_enter`
   (`review.activate`) and Orca item click stay distinct when both exist? (Recommended: yes, activate = default action
   only, item click = click semantics.)
 - **QM-3** Spikes S-1..S-6 may add quirk rows or move a toolkit to "action only" until fixed upstream.
+
+## 13. Review r1 mapping (`docs/reports/adr-0025-review.md`)
+
+| Item | Where |
+|---|---|
+| C-1 stale clicks after a stall | §2.2 `not-after` + `expired`, H-7, EX-2, EX-3 overdue stop, MI-5, failure table, M-9, C-9 row 1 |
+| C-2 transients | §2.2 popup family, guard and occlusion, MI-5, threat table, C-9 row 2 |
+| C-3 Unresponsive closes the gate | §2.5 gate formula and table, M-4, failure table, C-9 row 8 |
+| C-4 stage targets | §2.2 stage guard, MI-5, failure table, C-9 row 4 |
+| C-5 global XWayland scale | §2.2 `x-scale`, §2.4 rule, table row, WM-2, C-9 row 5 |
+| C-6 denied callers | H-1a, threat table, C-9 row 6, MO-1a |
+| C-7 a-f | MI-4 (a), MI-5 (b), `Holds` per button + timer message (c), H-3 single holder (d), H-7 timer (e), AL-1 first match (f) |
+| C-8 slices | MO-1a/1b, MO-5a/5b |
+| C-9 tests | §6 "Review r1 rows" (nine rows) |
+| Study correction | `docs/reports/mouse-emulation-design.md` §3 (popups have Meta windows) |
+| Note: QueryPointer in mutter main | §8 revisit trigger (c) |
