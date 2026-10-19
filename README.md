@@ -124,6 +124,7 @@ Newton connector ---/      ^                           \--> speech-dispatcher (S
   (`org.a11y.Bus`).
 - A speech server: speech-dispatcher with a working output module, or voicego.
 - Rust 1.99 or newer with the `wasm32-wasip2` target (for the extensions).
+- `clang` and `lld`: `.cargo/config.toml` links native code with `clang -fuse-ld=lld`.
 - For the tests: `dbus-daemon`, `at-spi2-core` and `python3` with PyGObject.
 
 ## Build

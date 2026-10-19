@@ -132,6 +132,7 @@ Newton connector ---/      ^                           \--> speech-dispatcher (S
   (`org.a11y.Bus`).
 - Речевой сервер: speech-dispatcher с рабочим модулем вывода или voicego.
 - Rust 1.99 или новее с целью `wasm32-wasip2` (для расширений).
+- `clang` и `lld`: `.cargo/config.toml` компонует нативный код через `clang -fuse-ld=lld`.
 - Для тестов: `dbus-daemon`, `at-spi2-core` и `python3` с PyGObject.
 
 ## Сборка
