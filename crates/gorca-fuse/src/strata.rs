@@ -22,12 +22,13 @@ use gorca_model::sem::{
 
 use crate::explain::{Conflict, NoTrace, ObsCand, PatchTrail, Tracer};
 use crate::profile::{Profile, RoleSet};
-use crate::register::{MAX_PRIMARIES, NodeRegs, PrimarySlot};
+use crate::register::{MAX_PRIMARIES, NodeRegs, PrimarySlot, Reg, RegRef, UserOp};
 use crate::repair::{Eff, ix, repair, unknown_eff};
 use crate::s4::{inferred_status, title_status};
 use crate::side::{Entry, NodeCands, Status, TrailStatus, cmp_secondary_like};
 use crate::taint::{inferred_info, name_from_content, secondary_info, title_info};
-use crate::value::{Info, Seq, Slot, Val, Write, write_default};
+use crate::value::Seq;
+use crate::value::{Info, Slot, Val, Write, write_default};
 
 // ------------------------------------------------------------------------------------------------
 // S-1 quirks
@@ -53,6 +54,10 @@ impl Record {
 /// Stratum S-1: a pure function of one source's record of one node (`quirk_src`). The closed
 /// `QuirkAction` engine and its loader are B5; B1a fixes the seam.
 pub trait Quirks {
+    /// True when `apply` never changes a record: S0 then reads the registers directly and
+    /// builds no per-source record (the hot path of a profile without quirk rows).
+    const NOOP: bool = false;
+
     fn apply(&self, src: PrimarySlot, rec: &mut Record);
 }
 
@@ -61,6 +66,8 @@ pub trait Quirks {
 pub struct NoQuirks;
 
 impl Quirks for NoQuirks {
+    const NOOP: bool = true;
+
     fn apply(&self, _src: PrimarySlot, _rec: &mut Record) {}
 }
 
@@ -75,8 +82,6 @@ pub struct S0Slot {
     pub info: Info,
     /// The primary that won (None for `Unknown`, a Secondary or a default).
     pub src: Option<PrimarySlot>,
-    /// The winning register's seq.
-    pub seq: Option<Seq>,
     /// A higher-priority primary has not answered (the winner is a fallback).
     pub fallback: bool,
     /// The winner is older than the source's newest invalidation.
@@ -87,31 +92,84 @@ pub struct S0Slot {
     pub sec_src: Option<SourceId>,
 }
 
-impl S0Slot {
-    fn unknown() -> S0Slot {
-        S0Slot {
-            slot: Slot::Unknown,
-            info: Info::DEFAULT,
-            src: None,
-            seq: None,
-            fallback: false,
-            stale: false,
-            hit: 0,
-            sec_src: None,
-        }
-    }
-}
+/// What every group without an S0 winner reads as.
+static UNKNOWN_SLOT: S0Slot = S0Slot {
+    slot: Slot::Unknown,
+    info: Info::DEFAULT,
+    src: None,
+    fallback: false,
+    stale: false,
+    hit: 0,
+    sec_src: None,
+};
 
-/// S0 of an alive node: per group the observed winner (or `Unknown`). Patch selectors read only
-/// this (the CSS-cascade rule), never S1 output.
-#[derive(Clone, Debug)]
+/// S0 of an alive node: the observed winner of every group that has one (a sparse list; a group
+/// without an entry is `Unknown`). Patch selectors read only this (the CSS-cascade rule), never
+/// S1 output.
+#[derive(Clone, Debug, Default)]
 pub struct S0Node {
-    slots: [S0Slot; GROUP_COUNT],
+    /// Sorted by group slot, at most one entry per group.
+    slots: Vec<(Group, S0Slot)>,
 }
 
 impl S0Node {
     pub fn get(&self, g: Group) -> &S0Slot {
-        &self.slots[ix(g)]
+        self.slots
+            .iter()
+            .find(|(x, _)| *x == g)
+            .map_or(&UNKNOWN_SLOT, |(_, s)| s)
+    }
+
+    /// Empty the list, keeping its allocation (the engine reuses one scratch S0).
+    pub fn clear(&mut self) {
+        self.slots.clear();
+    }
+
+    /// A copy with only the groups in `mask`, sized exactly (no allocation when none remain).
+    #[must_use]
+    pub fn filtered(&self, mask: GroupMask) -> S0Node {
+        let n = self.slots.iter().filter(|(g, _)| mask.has(*g)).count();
+        let mut slots = Vec::with_capacity(n);
+        slots.extend(self.slots.iter().filter(|(g, _)| mask.has(*g)).cloned());
+        S0Node { slots }
+    }
+
+    /// As [`S0Node::changed_groups`], looking only at the groups in `mask`.
+    pub fn changed_groups_in(
+        old: Option<&S0Node>,
+        new: Option<&S0Node>,
+        mask: GroupMask,
+    ) -> GroupMask {
+        match (old, new) {
+            (None, None) => GroupMask::EMPTY,
+            (Some(_), None) | (None, Some(_)) => GroupMask(u32::MAX),
+            (Some(a), Some(b)) => {
+                let mut m = GroupMask::EMPTY;
+                for g in Group::ALL.iter().copied().filter(|g| mask.has(*g)) {
+                    if a.slot(g) != b.slot(g) {
+                        m = m.with(g);
+                    }
+                }
+                m
+            }
+        }
+    }
+
+    /// Heap bytes this S0 holds (its slot list).
+    pub fn heap_bytes(&self) -> usize {
+        self.slots.capacity() * std::mem::size_of::<(Group, S0Slot)>()
+    }
+
+    /// The groups with a winner, in slot order.
+    pub fn iter(&self) -> impl Iterator<Item = (Group, &S0Slot)> {
+        self.slots.iter().map(|(g, s)| (*g, s))
+    }
+
+    /// Keep only the groups in `mask` and release the rest of the allocation: the compact form
+    /// the engine stores per node (neighbours read only what selectors declare they read).
+    pub fn retain_groups(&mut self, mask: GroupMask) {
+        self.slots.retain(|(g, _)| mask.has(*g));
+        self.slots.shrink_to_fit();
     }
 
     /// The groups whose S0 **value** differs (what neighbours' selectors can read): all groups
@@ -122,8 +180,15 @@ impl S0Node {
             (Some(_), None) | (None, Some(_)) => GroupMask(u32::MAX),
             (Some(a), Some(b)) => {
                 let mut m = GroupMask::EMPTY;
-                for g in Group::ALL.iter().copied() {
-                    m.set(g, a.slot(g) != b.slot(g));
+                for (g, s) in a.iter() {
+                    if &s.slot != b.slot(g) {
+                        m = m.with(g);
+                    }
+                }
+                for (g, s) in b.iter() {
+                    if &s.slot != a.slot(g) {
+                        m = m.with(g);
+                    }
                 }
                 m
             }
@@ -138,6 +203,126 @@ impl S0Node {
     /// The S0 role, if any source reported one.
     pub fn role(&self) -> Option<SemRole> {
         self.slot(Group::Role).role()
+    }
+}
+
+/// What a neighbour's selectors see of a node's S0: either a full S0 (the node being fused, tests)
+/// or the compact **delta form** the engine stores: the published entry, from which every group is
+/// rebuilt, plus the exceptions (`delta`) where the real S0 differs from that rebuild. Exact for
+/// the groups the delta was computed over (the selector-read set); costs ~2 B per node instead
+/// of a stored S0.
+#[derive(Copy, Clone, Debug)]
+pub struct S0View<'a> {
+    inner: ViewInner<'a>,
+}
+
+#[derive(Copy, Clone, Debug)]
+enum ViewInner<'a> {
+    Full(&'a S0Node),
+    Delta {
+        entry: &'a SemEntry,
+        delta: &'a [(Group, Slot)],
+    },
+}
+
+impl<'a> S0View<'a> {
+    /// A view of a full S0.
+    pub fn full(s0: &'a S0Node) -> S0View<'a> {
+        S0View {
+            inner: ViewInner::Full(s0),
+        }
+    }
+
+    /// The delta form: `entry` is the node's published entry.
+    pub fn delta(entry: &'a SemEntry, delta: &'a [(Group, Slot)]) -> S0View<'a> {
+        S0View {
+            inner: ViewInner::Delta { entry, delta },
+        }
+    }
+
+    /// The S0 value of `g` (`Unknown` included). Owned: a rebuilt value is constructed.
+    pub fn slot(&self, g: Group) -> Slot {
+        match self.inner {
+            ViewInner::Full(s) => s.slot(g).clone(),
+            ViewInner::Delta { entry, delta } => delta
+                .iter()
+                .find(|(x, _)| *x == g)
+                .map_or_else(|| rebuild_slot(entry, g), |(_, s)| s.clone()),
+        }
+    }
+
+    /// The S0 role, if any source reported one.
+    pub fn role(&self) -> Option<SemRole> {
+        self.slot(Group::Role).role()
+    }
+}
+
+/// The S0 value of `g` implied by a published entry: `Unknown` when the entry does not know the
+/// group, else the entry's value (an `Absent` option reads `Absent`). Any deterministic rebuild
+/// works, the delta records where the real S0 differs from it.
+pub fn rebuild_slot(e: &SemEntry, g: Group) -> Slot {
+    if !e.known.has(g) {
+        return Slot::Unknown;
+    }
+    let s = &e.sem;
+    Slot::Val(match g {
+        Group::Role => Val::Role(s.role),
+        Group::Name => Val::Name(e.name.clone().unwrap_or_else(|| Arc::from(""))),
+        Group::Description => {
+            Val::Description(s.description().map_or_else(|| Arc::from(""), Arc::from))
+        }
+        Group::Check => Val::Check(s.check),
+        Group::Press => Val::Press(s.press),
+        Group::Expand => Val::Expand(s.expand),
+        Group::Select => Val::Select(s.select),
+        Group::Current => Val::Current(s.current),
+        Group::Invalid => Val::Invalid(s.invalid),
+        Group::Popup => Val::Popup(s.popup),
+        Group::Avail => Val::Avail(s.avail),
+        Group::Flags => Val::Flags(s.flags),
+        Group::Level => Val::Level(s.level),
+        Group::SetPos => match s.pos {
+            Some(p) => Val::SetPos(p),
+            None => return Slot::Absent,
+        },
+        Group::Grid => match s.grid {
+            Some(p) => Val::Grid(p),
+            None => return Slot::Absent,
+        },
+        Group::Live => Val::Live(s.live),
+        Group::Orientation => Val::Orientation(s.orientation),
+        Group::Sort => Val::Sort(s.sort),
+    })
+}
+
+/// The exceptions to [`rebuild_slot`] over the groups in `mask`: where `s0` holds something the
+/// published `entry` does not give back.
+pub fn delta_of(entry: &SemEntry, s0: &S0Node, mask: GroupMask) -> Vec<(Group, Slot)> {
+    let mut v = Vec::new();
+    for g in Group::ALL.iter().copied().filter(|g| mask.has(*g)) {
+        let real = s0.slot(g);
+        if &rebuild_slot(entry, g) != real {
+            v.push((g, real.clone()));
+        }
+    }
+    v
+}
+
+/// The groups in `mask` whose S0 value differs between the stored view (`old`) and the new S0
+/// (`None` = not alive): everything when liveness differs.
+pub fn changed_vs(old: Option<S0View<'_>>, new: Option<&S0Node>, mask: GroupMask) -> GroupMask {
+    match (old, new) {
+        (None, None) => GroupMask::EMPTY,
+        (Some(_), None) | (None, Some(_)) => GroupMask(u32::MAX),
+        (Some(a), Some(b)) => {
+            let mut m = GroupMask::EMPTY;
+            for g in Group::ALL.iter().copied().filter(|g| mask.has(*g)) {
+                if &a.slot(g) != b.slot(g) {
+                    m = m.with(g);
+                }
+            }
+            m
+        }
     }
 }
 
@@ -170,69 +355,176 @@ pub fn s0_with<Q: Quirks, T: Tracer>(
     quirks: &Q,
     tr: &mut T,
 ) -> Option<S0Node> {
+    let mut out = S0Node::default();
+    s0_into(profile, regs, cands, quirks, tr, &mut out).then_some(out)
+}
+
+/// As [`s0_with`], writing into `out` (cleared first, allocation reused). Returns false, with
+/// `out` empty, when the node is not alive.
+pub fn s0_into<Q: Quirks, T: Tracer>(
+    profile: &Profile,
+    regs: &NodeRegs,
+    cands: NodeCands<'_>,
+    quirks: &Q,
+    tr: &mut T,
+    out: &mut S0Node,
+) -> bool {
+    out.slots.clear();
     if !is_alive(profile, regs) {
-        return None;
+        return false;
     }
-    let mut recs: [Record; MAX_PRIMARIES] = std::array::from_fn(|_| Record::new());
-    for (i, rec) in recs.iter_mut().enumerate() {
-        let Some(p) = PrimarySlot::new(i) else {
-            continue;
-        };
-        for r in regs.src(p).regs() {
-            rec.slots[ix(r.write.group())] = r.write.slot();
+    if Q::NOOP && !T::ON {
+        s0_fast(profile, regs, cands, &mut out.slots);
+        return true;
+    }
+    // Per-source records exist only when quirks may rewrite them or a trace wants every candidate.
+    let recs: Option<[Record; MAX_PRIMARIES]> = {
+        let mut recs: [Record; MAX_PRIMARIES] = std::array::from_fn(|_| Record::new());
+        for (i, rec) in recs.iter_mut().enumerate() {
+            let Some(p) = PrimarySlot::new(i) else {
+                continue;
+            };
+            regs.src(p).for_each_slot(|g, s| rec.slots[ix(g)] = s);
+            quirks.apply(p, rec);
         }
-        quirks.apply(p, rec);
+        Some(recs)
+    };
+    for g in Group::ALL.iter().copied() {
+        if let Some(s) = s0_group(profile, regs, recs.as_ref(), cands, g, tr) {
+            out.slots.push((g, s));
+        }
     }
-    let slots = std::array::from_fn(|i| {
-        let Some(g) = Group::ALL.get(i).copied() else {
-            return S0Slot::unknown();
-        };
-        s0_group(profile, regs, &recs, cands, g, tr)
-    });
-    Some(S0Node { slots })
+    true
+}
+
+/// S0 without per-source records (no quirks, no trace): one merge pass over the two sparse
+/// register lists instead of a lookup per group and source.
+fn s0_fast(
+    profile: &Profile,
+    regs: &NodeRegs,
+    cands: NodeCands<'_>,
+    slots: &mut Vec<(Group, S0Slot)>,
+) {
+    let (s0r, s1r) = (regs.src(PrimarySlot::P0), regs.src(PrimarySlot::P1));
+    let rs: [&[Reg]; MAX_PRIMARIES] = [s0r.regs(), s1r.regs()];
+    let ab: [&[(Seq, GroupMask)]; MAX_PRIMARIES] = [s0r.absent_runs(), s1r.absent_runs()];
+    let mut cur = [0usize; MAX_PRIMARIES];
+    for g in Group::ALL.iter().copied() {
+        let mut found: [Option<RegRef<'_>>; MAX_PRIMARIES] = [None; MAX_PRIMARIES];
+        for k in 0..MAX_PRIMARIES {
+            while rs[k]
+                .get(cur[k])
+                .is_some_and(|r| r.write.group().slot() < g.slot())
+            {
+                cur[k] += 1;
+            }
+            found[k] = rs[k]
+                .get(cur[k])
+                .filter(|r| r.write.group() == g)
+                .map(RegRef::Val)
+                .or_else(|| {
+                    ab[k]
+                        .iter()
+                        .find(|(_, m)| m.has(g))
+                        .map(|(s, _)| RegRef::Absent(*s, g))
+                });
+        }
+        if found.iter().all(Option::is_none) && !profile.inexpressible.has(g) {
+            continue;
+        }
+        if let Some(s) = s0_group_fast(profile, regs, found, cands, g) {
+            slots.push((g, s));
+        }
+    }
+}
+
+fn s0_group_fast(
+    profile: &Profile,
+    regs: &NodeRegs,
+    found: [Option<RegRef<'_>>; MAX_PRIMARIES],
+    cands: NodeCands<'_>,
+    g: Group,
+) -> Option<S0Slot> {
+    let mut fallback = false;
+    for &p in profile.pi(g) {
+        match found[p.index()] {
+            Some(r) => {
+                return Some(S0Slot {
+                    slot: r.slot(),
+                    info: Info::plain(ProvCode::ObservedPrimary),
+                    src: Some(p),
+                    fallback,
+                    stale: regs.src(p).inval().is_some_and(|i| i > r.seq()),
+                    hit: 0,
+                    sec_src: None,
+                });
+            }
+            None => fallback = true,
+        }
+    }
+    // Every primary is Unknown: a Secondary may win a statically inexpressible group (H-3).
+    if profile.inexpressible.has(g) {
+        return cands
+            .secondary()
+            .iter()
+            .filter(|e| e.target() == g)
+            .filter_map(Entry::cand)
+            .min_by(|a, b| cmp_cand(a, b))
+            .map(secondary_slot);
+    }
+    None
 }
 
 fn s0_group<T: Tracer>(
     profile: &Profile,
     regs: &NodeRegs,
-    recs: &[Record; MAX_PRIMARIES],
+    recs: Option<&[Record; MAX_PRIMARIES]>,
     cands: NodeCands<'_>,
     g: Group,
     tr: &mut T,
-) -> S0Slot {
+) -> Option<S0Slot> {
     let mut fallback = false;
     let mut win: Option<S0Slot> = None;
     for &p in profile.pi(g) {
-        let rec = &recs[p.index()];
-        let v = &rec.slots[ix(g)];
         let src = regs.src(p);
-        if T::ON {
+        // The value this primary reports for `g` after quirks (None = Unknown).
+        let found: Option<(Slot, u16)> = match recs {
+            Some(r) => {
+                let rec = &r[p.index()];
+                let v = &rec.slots[ix(g)];
+                (!v.is_unknown()).then(|| (v.clone(), rec.hit[ix(g)]))
+            }
+            None => src.get(g).map(|r| (r.slot(), 0)),
+        };
+        if T::ON
+            && let Some(r) = recs
+        {
+            let rec = &r[p.index()];
             tr.observed(
                 g,
                 ObsCand {
                     src: p,
-                    seq: src.get(g).map(|r| r.seq),
-                    value: v.clone(),
+                    seq: src.get(g).map(|r| r.seq()),
+                    value: rec.slots[ix(g)].clone(),
                     rule: rec.hit[ix(g)],
                     stale: src.is_stale(g),
                 },
             );
         }
-        if v.is_unknown() {
+        let Some((value, hit)) = found else {
             if win.is_none() {
                 fallback = true;
             }
             continue;
-        }
+        };
         if win.is_none() {
             win = Some(S0Slot {
-                slot: v.clone(),
+                slot: value,
                 info: Info::plain(ProvCode::ObservedPrimary),
                 src: Some(p),
-                seq: src.get(g).map(|r| r.seq),
                 fallback,
                 stale: src.is_stale(g),
-                hit: rec.hit[ix(g)],
+                hit,
                 sec_src: None,
             });
             if !T::ON {
@@ -240,8 +532,10 @@ fn s0_group<T: Tracer>(
             }
         }
     }
-    if T::ON {
-        trace_disagreement(profile, recs, g, tr);
+    if T::ON
+        && let Some(r) = recs
+    {
+        trace_disagreement(profile, r, g, tr);
     }
     let inexpressible = profile.inexpressible.has(g);
     // A Secondary is a candidate only for a statically inexpressible group (H-3); a dynamic
@@ -278,7 +572,7 @@ fn s0_group<T: Tracer>(
             .min_by(|a, b| cmp_cand(a, b));
         sec_win = best.map(secondary_slot);
     }
-    win.or(sec_win).unwrap_or_else(S0Slot::unknown)
+    win.or(sec_win)
 }
 
 fn secondary_slot(c: &crate::side::FactCand) -> S0Slot {
@@ -286,7 +580,6 @@ fn secondary_slot(c: &crate::side::FactCand) -> S0Slot {
         slot: c.write().slot(),
         info: secondary_info(c),
         src: None,
-        seq: Some(c.seq()),
         fallback: false,
         stale: false,
         hit: 0,
@@ -347,7 +640,7 @@ fn trace_disagreement<T: Tracer>(
 /// The neighbourhood a patch selector or a derived rule may read.
 #[derive(Copy, Clone, Debug)]
 pub struct Neighbours<'a> {
-    pub parent: Option<&'a S0Node>,
+    pub parent: Option<S0View<'a>>,
     /// The first children in a stable order (dead ones included, with `None` views). A writer
     /// passes at most `Limits::max_children` of them: nothing reads further.
     pub children: &'a [ChildView<'a>],
@@ -369,8 +662,8 @@ impl Neighbours<'_> {
 pub struct ChildView<'a> {
     /// The child's writer-local id (reported by `explain`).
     pub id: u32,
-    /// The child's S0 (None when the child is not alive).
-    pub s0: Option<&'a S0Node>,
+    /// The child's S0 view (None when the child is not alive).
+    pub s0: Option<S0View<'a>>,
     /// The child's final entry (None when not alive); S3 name from content reads it.
     pub fused: Option<&'a SemEntry>,
 }
@@ -409,6 +702,13 @@ impl PatchHit {
 pub trait PatchSource {
     fn hits(&self, node: &S0Node, nb: &Neighbours<'_>, out: &mut Vec<PatchHit>);
 
+    /// Which groups the patches can write. When `Role` is not among them and the node's own role
+    /// is not named from content, the engine skips building the children views. The default
+    /// (everything) is always correct.
+    fn writes(&self) -> GroupMask {
+        GroupMask(u32::MAX)
+    }
+
     /// Which groups of the neighbours' S0 the selectors read (the selector-read set). Incremental
     /// maintenance re-fuses a neighbour only when one of these groups changed. The default reads
     /// everything: always correct, never narrower than needed.
@@ -446,6 +746,10 @@ impl PatchSource for NoPatches {
 
     fn reads(&self) -> SelectorReads {
         SelectorReads::NONE
+    }
+
+    fn writes(&self) -> GroupMask {
+        GroupMask::EMPTY
     }
 }
 
@@ -498,8 +802,7 @@ pub struct Scratch {
 pub fn default_slot(g: Group, default_role: SemRole) -> Slot {
     match g {
         Group::Role => Slot::Val(Val::Role(default_role)),
-        Group::Name => Slot::Val(Val::Name(Arc::from(""))),
-        Group::Description => Slot::Val(Val::Description(Arc::from(""))),
+        // Empty text defaults to `Absent` (finalised to no string): no allocation per fusion.
         Group::Check => Slot::Val(Val::Check(Check::NotCheckable)),
         Group::Press => Slot::Val(Val::Press(Press::NotToggle)),
         Group::Expand => Slot::Val(Val::Expand(Expand::NotExpandable)),
@@ -511,7 +814,12 @@ pub fn default_slot(g: Group, default_role: SemRole) -> Slot {
         Group::Flags => Slot::Val(Val::Flags(SemFlags::empty())),
         Group::Orientation => Slot::Val(Val::Orientation(Orientation::NotApplicable)),
         Group::Sort => Slot::Val(Val::Sort(Sort::None)),
-        Group::Level | Group::SetPos | Group::Grid | Group::Live => Slot::Absent,
+        Group::Name
+        | Group::Description
+        | Group::Level
+        | Group::SetPos
+        | Group::Grid
+        | Group::Live => Slot::Absent,
     }
 }
 
@@ -555,8 +863,7 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
     let mut winner: [Option<PrimarySlot>; GROUP_COUNT] = [None; GROUP_COUNT];
     let mut win_src: [Option<SourceId>; GROUP_COUNT] = [None; GROUP_COUNT];
     let mut content_children: Vec<u32> = Vec::new();
-    for g in Group::ALL.iter().copied() {
-        let s = node.get(g);
+    for (g, s) in node.iter() {
         let i = ix(g);
         eff[i] = s.slot.clone();
         info[i] = s.info;
@@ -617,14 +924,14 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
     }
 
     // S2 user override (a Clear register reads as no override).
-    for g in Group::ALL.iter().copied() {
-        if let Some((seq, w)) = regs.user_value(g) {
-            eff[ix(g)] = w.slot();
-            layer[ix(g)] = Layer::User;
-            info[ix(g)] = Info::plain(ProvCode::User);
-            if T::ON {
-                tr.user(g, seq, &eff[ix(g)]);
-            }
+    for u in regs.user() {
+        let UserOp::Set(w) = &u.op else { continue };
+        let g = u.group;
+        eff[ix(g)] = w.slot();
+        layer[ix(g)] = Layer::User;
+        info[ix(g)] = Info::plain(ProvCode::User);
+        if T::ON {
+            tr.user(g, u.seq, &eff[ix(g)]);
         }
     }
 
@@ -752,6 +1059,14 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
     let mut entry = SemEntry::default();
     for g in Group::ALL.iter().copied() {
         let i = ix(g);
+        // A group nothing set keeps `SemEntry::default()` (type defaults, `Default` provenance,
+        // plain, untainted); only the profile's default role needs writing.
+        if matches!(layer[i], Layer::Default) && !masked.has(g) {
+            if g == Group::Role {
+                write_default(&mut entry, g, profile.default_role);
+            }
+            continue;
+        }
         match &eff[i] {
             Slot::Val(v) => v.write_to(&mut entry),
             Slot::Absent | Slot::Unknown => write_default(&mut entry, g, profile.default_role),

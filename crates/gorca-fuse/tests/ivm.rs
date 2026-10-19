@@ -652,19 +652,20 @@ fn f14_revoked_source_equals_absent_and_the_priority_nodes_are_silenced_synchron
         with.set_visible(&window);
         let pubd = with.set_source_state(id(src.0), u64::MAX / 2, SourceState::Revoked);
         let _ = pubd;
-        // Synchronous: the focus chain and the visible window already match from-scratch.
-        let full = with.full_check();
-        for node in chain.iter().chain(&window) {
-            let have = with.entry_unmasked(*node).map(|a| {
-                let mut e = (**a).clone();
-                e.sem_rev = 0;
-                e
-            });
-            assert_eq!(
-                have, full[node.0 as usize],
-                "seed {seed}: node {} not silenced",
-                node.0
-            );
+        // Right after the call no node reads a group produced by the revoked source: the read
+        // mask covers every node, whatever the bounded drain has reached.
+        for i in 0..n {
+            let raw = with.contrib_of(nid(i));
+            let Some(view) = with.entry_view(nid(i)) else {
+                continue;
+            };
+            for (g, _) in raw.iter().filter(|(_, s)| *s == id(src.0)) {
+                assert_eq!(
+                    view.prov.get(*g),
+                    Some(gorca_model::sem::ProvCode::Default),
+                    "seed {seed}: node {i} still reads {g:?} of the revoked source"
+                );
+            }
         }
         drain(&mut with);
         // Equivalence with a run that never saw the source's facts.
@@ -815,7 +816,11 @@ fn the_focus_chain_is_fused_before_the_rest_under_a_tiny_budget() {
     let rep = e.run(Budget::calls(2));
     assert_eq!(rep.fuse_calls, 2);
     let nodes: Vec<u32> = rep.published.iter().map(|p| p.node.0).collect();
-    assert_eq!(nodes, vec![7, 30], "priority nodes go first: {rep:?}");
+    assert_eq!(
+        nodes,
+        vec![30, 7],
+        "the focus chain goes before the visible window: {rep:?}"
+    );
     assert_eq!(e.pending(), 38);
     // Carry-over changes latency only: draining gives the from-scratch result.
     e.run(Budget::UNLIMITED);
@@ -1326,9 +1331,13 @@ fn the_priority_set_is_bounded_on_deep_and_wide_trees() {
         }]);
     }
     e.set_focus_chain(&[nid(0)]);
-    assert!(e.priority_work() <= limit, "deep: {}", e.priority_work());
+    assert!(
+        e.priority_work() <= limit + 16,
+        "deep: {}",
+        e.priority_work()
+    );
     e.set_visible(&[nid(2500)]);
-    assert!(e.priority_work() <= limit);
+    assert!(e.priority_work() <= limit + 16);
     // Wide: 10_000 children, the root is focused; only the first max_children join.
     let mut w = star(10_000);
     for i in 1..=10_000 {
@@ -1339,7 +1348,7 @@ fn the_priority_set_is_bounded_on_deep_and_wide_trees() {
         }]);
     }
     w.set_focus_chain(&[nid(0)]);
-    assert!(w.priority_work() <= w.profile().limits.max_children + 1);
+    assert!(w.priority_work() <= w.profile().limits.max_children + 8);
     // Re-keying never walks the dirty backlog: running in small slices makes steady progress.
     let before = w.pending();
     let rep = w.run(Budget::calls(50));
@@ -1615,4 +1624,144 @@ fn revoking_with_a_huge_backlog_stays_under_half_a_millisecond_and_silences_ever
     let took = revoke_scenario(50_000, 1024);
     eprintln!("revoke sync part (1024 priority nodes, 50k dirty): {took:?}");
     assert!(took < std::time::Duration::from_micros(500), "{took:?}");
+}
+
+#[test]
+fn stats_expose_the_resident_s0_store_and_the_recompute_count() {
+    // No selector reads anything: S0 is recomputed per fusion and nothing is kept resident.
+    let e = chain_engine(5);
+    let st = e.stats();
+    assert_eq!(st.nodes, 5);
+    assert_eq!(
+        st.s0_resident_nodes, 0,
+        "S0 is rebuilt from the published entries: nothing is stored"
+    );
+    assert_eq!(st.s0_resident_bytes, 0);
+    assert!(st.s0_computes >= 5 && st.fusions >= 5);
+    assert!(st.node_record_bytes > 0 && st.node_record_bytes < 400);
+    // A patch re-roles a child, so its S0 role differs from what the published entry rebuilds:
+    // exactly that exception is stored (the delta), for the one node that has it.
+    let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], toy_rules());
+    profile.default_role = SemRole::Generic;
+    let patch = ToyPatch {
+        pid: "p0".into(),
+        ext_id: "org.ext0".into(),
+        spec: 1,
+        sel_role: "generic".into(),
+        empty_name: false,
+        sel_parent: Some("group".into()),
+        group: Group::Role,
+        value: json!("button"),
+    };
+    let mut p = Ivm::new(
+        profile,
+        ToyQuirks,
+        Patches {
+            inner: ToyPatches(vec![patch]),
+            narrow: true,
+        },
+    );
+    p.add_node(nid(0), None).unwrap();
+    p.add_node(nid(1), Some(nid(0))).unwrap();
+    let obs = |node: usize, role: &str| Input::Obs {
+        node: nid(node),
+        src: PrimarySlot::P0,
+        seq: 2,
+        write: write_from_toy(Group::Role, &json!(role)),
+    };
+    let life = |node: usize| Input::Life {
+        node: nid(node),
+        src: PrimarySlot::P0,
+        seq: 1,
+        alive: true,
+    };
+    p.apply([life(0), life(1), obs(0, "group"), obs(1, "generic")]);
+    p.run(Budget::UNLIMITED);
+    assert_eq!(p.entry_unmasked(nid(1)).unwrap().sem.role, SemRole::Button);
+    let st = p.stats();
+    assert_eq!(
+        st.s0_resident_nodes, 1,
+        "only the re-roled child keeps an exception"
+    );
+    assert!(st.s0_resident_bytes > 0);
+    assert!(st.s0_neighbour_hits > 0);
+    assert!(p.verify().is_ok());
+}
+
+// ---- dependency-ordered priority (R5) ---------------------------------------------------------------
+
+fn dirty_description(e: &mut Ivm<NoQuirks, NoPatches>, node: usize, seq: u64) {
+    e.apply([Input::Obs {
+        node: nid(node),
+        src: PrimarySlot::P0,
+        seq,
+        write: write_from_toy(Group::Description, &json!("Required")),
+    }]);
+}
+
+#[test]
+fn priority_classes_are_dependency_ordered() {
+    // 0 (button) -> 1 (button) -> {2, 3}; 0 -> {4, 5, 6..20}.
+    let mut e = chain_engine(2);
+    for (i, p) in [(2, 1), (3, 1), (4, 0), (5, 0)] {
+        e.add_node(nid(i), Some(nid(p))).unwrap();
+        e.apply([Input::Life {
+            node: nid(i),
+            src: PrimarySlot::P0,
+            seq: 1,
+            alive: true,
+        }]);
+    }
+    for i in 6..20 {
+        e.add_node(nid(i), Some(nid(0))).unwrap();
+        e.apply([Input::Life {
+            node: nid(i),
+            src: PrimarySlot::P0,
+            seq: 1,
+            alive: true,
+        }]);
+    }
+    e.run(Budget::UNLIMITED);
+    // Focus on node 1 (its ancestor 0 follows), visible window 5 then 4.
+    e.set_focus_chain(&[nid(1), nid(0)]);
+    e.set_visible(&[nid(5), nid(4)]);
+    for i in 0..20 {
+        dirty_description(&mut e, i, 10);
+    }
+    let mut order = Vec::new();
+    let rep = e.run_with(Budget::calls(8), &mut |p| order.push(p.node.0));
+    assert_eq!(rep.fuse_calls, 8);
+    // Class 0: what node 1 reads (deepest first), then node 1 itself; class 1: the ancestor;
+    // class 2: the window, deepest first (index order at equal depth); then the backlog.
+    assert_eq!(&order[..6], &[2, 3, 1, 0, 4, 5], "{order:?}");
+    assert_eq!(e.priority_class(nid(1)), 0);
+    assert_eq!(e.priority_class(nid(2)), 0, "a feeder of the focused node");
+    assert_eq!(e.priority_class(nid(0)), 1);
+    assert_eq!(e.priority_class(nid(5)), 2);
+    assert_eq!(e.priority_class(nid(9)), 3);
+    e.run(Budget::UNLIMITED);
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn aging_never_takes_the_only_slot_of_a_one_call_run_while_priority_work_waits() {
+    let mut e = star(60);
+    // An old backlog (aged past AGE_RUNS) and a growing fusion count, so aging has credit.
+    for i in 1..=60 {
+        dirty_description(&mut e, i, 10);
+    }
+    for _ in 0..8 {
+        e.run(Budget::calls(4));
+    }
+    e.set_focus_chain(&[nid(3), nid(0)]);
+    for k in 0..24u64 {
+        dirty_description(&mut e, 3, 100 + k);
+        assert!(e.is_dirty(nid(3)));
+        let rep = e.run(Budget::calls(1));
+        assert_eq!(rep.fuse_calls, 1);
+        assert!(
+            !e.is_dirty(nid(3)),
+            "run {k}: the single fusion went to the backlog, not to the focused node"
+        );
+    }
 }

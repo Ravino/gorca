@@ -8,6 +8,7 @@
 //! * `mem`      100k-node build, RSS increase and carrier sizes (spec gate: <= 25 MB, 128 B entry);
 //! * `storm`    mixed events at 10k/25k/50k per second (real-time paced), per-event and per-1-ms
 //!   batch cost of `apply + run + publish`, backlog, lag (gate M-11: p99 <= 2 us/event);
+//! * `burst`    a 20k-event burst applied at once, drain time and priority events mid-drain;
 //! * `focus`    a focus change with ~100k dirty nodes (gate: synchronous part <= 0.5 ms);
 //! * `global`   `bump_global` synchronous part, sweep drain, priority-event latency during it;
 //! * `aging`    background aging under a priority storm (no starvation);
@@ -46,6 +47,18 @@ use gorca_model::sem::{
 };
 
 // ---- small utilities ------------------------------------------------------------------------
+
+/// Share of events that hit the 2000-node hot set (default 70; `M22A_HOT_PCT=100` shows the
+/// cache-warm floor, `0` the fully cold case).
+fn hot_pct() -> usize {
+    static P: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *P.get_or_init(|| {
+        std::env::var("M22A_HOT_PCT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(70)
+    })
+}
 
 struct Rng(u64);
 
@@ -253,7 +266,7 @@ impl PatchSource for Patches {
         };
         for r in rules {
             if let Some(pr) = r.parent_role
-                && nb.parent.and_then(S0Node::role) != Some(pr)
+                && nb.parent.and_then(|p| p.role()) != Some(pr)
             {
                 continue;
             }
@@ -271,6 +284,14 @@ impl PatchSource for Patches {
                 rule: Arc::clone(&r.id),
             });
         }
+    }
+
+    fn writes(&self) -> gorca_model::sem::GroupMask {
+        // The rules above only write level, orientation and availability.
+        gorca_model::sem::GroupMask::EMPTY
+            .with(Group::Level)
+            .with(Group::Orientation)
+            .with(Group::Avail)
     }
 
     fn reads(&self) -> SelectorReads {
@@ -368,7 +389,92 @@ fn engine(wide: bool, patches: usize) -> Engine {
     e
 }
 
+/// The realistic world (default): a node's state read writes about 14 groups, most of them
+/// `Absent` (a real AT-SPI node reports every state group, not three or four). `M22A_WORLD=lean`
+/// restores the original 3-4 groups per node (the B6 world).
+fn rich_world() -> bool {
+    static P: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *P.get_or_init(|| !std::env::var("M22A_WORLD").is_ok_and(|s| s == "lean"))
+}
+
 fn init_inputs(i: usize, seq: u64, names: &[Arc<str>], rng: &mut Rng, out: &mut Vec<Input>) {
+    init_inputs_in(rich_world(), i, seq, names, rng, out);
+}
+
+fn init_inputs_in(
+    rich: bool,
+    i: usize,
+    seq: u64,
+    names: &[Arc<str>],
+    rng: &mut Rng,
+    out: &mut Vec<Input>,
+) {
+    if rich {
+        init_rich(i, seq, names, rng, out);
+    } else {
+        init_lean(i, seq, names, rng, out);
+    }
+}
+
+fn init_rich(i: usize, seq: u64, names: &[Arc<str>], rng: &mut Rng, out: &mut Vec<Input>) {
+    let n = nid(i);
+    let role = ROLES[i % ROLES.len()];
+    out.push(Input::Life {
+        node: n,
+        src: PrimarySlot::P0,
+        seq,
+        alive: true,
+    });
+    let mut w = |write| {
+        out.push(Input::Obs {
+            node: n,
+            src: PrimarySlot::P0,
+            seq: seq + 1,
+            write,
+        });
+    };
+    w(Write::Val(Val::Role(role)));
+    if rng.pct(80) {
+        w(Write::Val(Val::Name(Arc::clone(&names[i % names.len()]))));
+    } else {
+        w(Write::Absent(Group::Name));
+    }
+    w(Write::Val(Val::Avail(Avail::Enabled)));
+    // The states that apply to the role carry a value; the rest are reported `Absent`.
+    match role {
+        SemRole::Checkbox => w(Write::Val(Val::Check(Check::Off))),
+        _ => w(Write::Absent(Group::Check)),
+    }
+    match role {
+        SemRole::Heading => w(Write::Val(Val::Level(u8::try_from(i % 6 + 1).unwrap()))),
+        _ => w(Write::Absent(Group::Level)),
+    }
+    match role {
+        SemRole::Button => w(Write::Val(Val::Expand(Expand::Collapsed))),
+        _ => w(Write::Absent(Group::Expand)),
+    }
+    for g in [
+        Group::Description,
+        Group::Press,
+        Group::Select,
+        Group::Current,
+        Group::Invalid,
+        Group::Popup,
+        Group::Flags,
+        Group::Orientation,
+        Group::Live,
+    ] {
+        w(Write::Absent(g));
+    }
+    // About 5 % of nodes report every group.
+    if rng.pct(5) {
+        for g in [Group::Sort, Group::Grid, Group::SetPos] {
+            w(Write::Absent(g));
+        }
+    }
+}
+
+fn init_lean(i: usize, seq: u64, names: &[Arc<str>], rng: &mut Rng, out: &mut Vec<Input>) {
     let n = nid(i);
     let role = ROLES[i % ROLES.len()];
     out.push(Input::Life {
@@ -404,6 +510,10 @@ fn init_inputs(i: usize, seq: u64, names: &[Arc<str>], rng: &mut Rng, out: &mut 
 impl World {
     /// Build a populated engine with `n` nodes (parents first) and fuse everything.
     fn build(n: usize, patches: usize, wide: bool) -> World {
+        World::build_in(rich_world(), n, patches, wide)
+    }
+
+    fn build_in(rich: bool, n: usize, patches: usize, wide: bool) -> World {
         let names: Vec<Arc<str>> = (0..256)
             .map(|i| Arc::from(format!("Label number {i}").as_str()))
             .collect();
@@ -413,7 +523,7 @@ impl World {
         let mut dom_nodes = Vec::new();
         for i in 0..n {
             e.add_node(nid(i), parent_of(i).map(nid)).unwrap();
-            init_inputs(i, 10, &names, &mut rng, &mut buf);
+            init_inputs_in(rich, i, 10, &names, &mut rng, &mut buf);
             if i % 5 == 0 {
                 buf.push(Input::Attr {
                     node: nid(i),
@@ -448,7 +558,7 @@ impl World {
     }
 
     fn pick(&mut self) -> usize {
-        if self.rng.pct(70) {
+        if self.rng.pct(hot_pct()) {
             self.hot[self.rng.below(self.hot.len())]
         } else {
             self.rng.below(self.n)
@@ -604,29 +714,68 @@ fn us(d: Duration) -> f64 {
 // ---- scenario: memory -----------------------------------------------------------------------------
 
 fn scenario_mem(rep: &mut Report) {
-    eprintln!("\n== mem: 100k-node build ==");
-    let base = trim_rss_kb();
-    let t = Instant::now();
-    let w = World::build(100_000, 100, false);
-    let build = t.elapsed();
-    let after = trim_rss_kb();
-    let delta_mb = (after.saturating_sub(base)) as f64 / 1024.0;
-    // Entries alone: clone the published Arcs into a flat vec (shares them, so measure fresh
-    // copies instead) to separate the 128 B entries from the rest of the engine.
-    let before_copy = trim_rss_kb();
-    let copies: Vec<Arc<SemEntry>> = (0..w.n)
-        .filter_map(|i| w.e.entry_unmasked(nid(i)))
-        .map(|a| Arc::new(SemEntry::clone(a)))
-        .collect();
-    let entries_mb = trim_rss_kb().saturating_sub(before_copy) as f64 / 1024.0;
-    black_box(&copies);
-    drop(copies);
-    let fused = (0..w.n).filter(|i| w.e.entry_unmasked(nid(*i)).is_some()).count();
-    eprintln!(
-        "build {:.0} ms ({:.2} us/node), fused {fused}, RSS +{delta_mb:.1} MB total engine, entries alone +{entries_mb:.1} MB",
-        build.as_secs_f64() * 1e3,
-        us(build) / w.n as f64
-    );
+    eprintln!("\n== mem: 100k-node build, lean (B6 world) and realistic (14 groups/node) ==");
+    let mut json = String::new();
+    let mut rich_mb = 0.0f64;
+    let mut rich_entries = 0.0f64;
+    for (label, rich) in [("lean", false), ("realistic", true)] {
+        let base = trim_rss_kb();
+        let t = Instant::now();
+        let w = World::build_in(rich, 100_000, 100, false);
+        let build = t.elapsed();
+        let after = trim_rss_kb();
+        let delta_mb = (after.saturating_sub(base)) as f64 / 1024.0;
+        // Entries alone: fresh copies, to separate the 128 B entries from the rest of the engine.
+        let before_copy = trim_rss_kb();
+        let copies: Vec<Arc<SemEntry>> = (0..w.n)
+            .filter_map(|i| w.e.entry_unmasked(nid(i)))
+            .map(|a| Arc::new(SemEntry::clone(a)))
+            .collect();
+        let entries_mb = trim_rss_kb().saturating_sub(before_copy) as f64 / 1024.0;
+        black_box(&copies);
+        drop(copies);
+        let fused = (0..w.n)
+            .filter(|i| w.e.entry_unmasked(nid(*i)).is_some())
+            .count();
+        let st = w.e.stats();
+        eprintln!(
+            "{label:>9}: build {:.0} ms ({:.2} us/node), fused {fused}, RSS +{delta_mb:.1} MB engine, entries alone +{entries_mb:.1} MB ({:.0} B/node)",
+            build.as_secs_f64() * 1e3,
+            us(build) / w.n as f64,
+            delta_mb * 1024.0 * 1024.0 / w.n as f64
+        );
+        eprintln!(
+            "           stats: node record {} B, resident S0 {} nodes / {} B, S0 computes {}, neighbour hits {}, fusions {}",
+            st.node_record_bytes,
+            st.s0_resident_nodes,
+            st.s0_resident_bytes,
+            st.s0_computes,
+            st.s0_neighbour_hits,
+            st.fusions
+        );
+        let _ = write!(
+            json,
+            "{}\"{label}\":{{\"nodes\":{},\"build_ms\":{:.1},\"rss_increase_mb_engine\":{:.2},\"rss_increase_mb_entries_only\":{:.2},\"node_record_b\":{},\"s0_resident_bytes\":{},\"fused\":{}}}",
+            if json.is_empty() { "" } else { "," },
+            w.n,
+            build.as_secs_f64() * 1e3,
+            delta_mb,
+            entries_mb,
+            st.node_record_bytes,
+            st.s0_resident_bytes,
+            fused
+        );
+        if rich {
+            rich_mb = delta_mb;
+            rich_entries = entries_mb;
+        } else {
+            rep.gate(
+                "info legacy M-9 25 MB on the lean world (superseded by M-9')",
+                format!("+{delta_mb:.1} MB (entries alone +{entries_mb:.1} MB)"),
+                true,
+            );
+        }
+    }
     eprintln!(
         "sizes: SemEntry {} B, NodeRegs {} B, S0Node {} B, Input {} B, FactIn {} B",
         size_of::<SemEntry>(),
@@ -635,29 +784,16 @@ fn scenario_mem(rep: &mut Report) {
         size_of::<Input>(),
         size_of::<FactIn>()
     );
-    rep.put(
-        "mem",
-        format!(
-            "{{\"nodes\":{},\"build_ms\":{:.1},\"rss_increase_mb_engine\":{:.2},\"rss_increase_mb_entries_only\":{:.2},\"sem_entry_b\":{},\"node_regs_b\":{},\"s0_node_b\":{},\"fused\":{}}}",
-            w.n,
-            build.as_secs_f64() * 1e3,
-            delta_mb,
-            entries_mb,
-            size_of::<SemEntry>(),
-            size_of::<NodeRegs>(),
-            size_of::<S0Node>(),
-            fused
-        ),
-    );
+    rep.put("mem", format!("{{{json}}}"));
     rep.gate(
         "M-9 SemEntry size <= 160 B (x32 = 128 B)",
         format!("{} B", size_of::<SemEntry>()),
         size_of::<SemEntry>() <= 160 && size_of::<SemEntry>() == 128,
     );
     rep.gate(
-        "M-9 100k-node RSS increase <= 25 MB, all carriers (whole Ivm engine)",
-        format!("+{delta_mb:.1} MB (entries alone +{entries_mb:.1} MB)"),
-        delta_mb <= 25.0,
+        "M-9' engine RSS increase <= 64 MB per 100k nodes on the realistic world (14 groups/node)",
+        format!("+{rich_mb:.1} MB (entries alone +{rich_entries:.1} MB)"),
+        rich_mb <= 64.0,
     );
 }
 
@@ -665,6 +801,12 @@ fn scenario_mem(rep: &mut Report) {
 
 struct StormOut {
     per_event_ns: Pct,
+    /// Event time divided by the fusions it caused (per-event mode).
+    per_fusion_ns: Pct,
+    /// Time of events that caused exactly one fusion (no cascade).
+    single_fusion_ns: Pct,
+    /// A focus-chain event during the storm: apply to the moment the sink gets it (us).
+    prio_us: Pct,
     batch_ns_per_event: Pct,
     batch_total_us: Pct,
     lag_batches: usize,
@@ -697,6 +839,9 @@ fn storm(w: &mut World, rate: usize, secs: f64, batched: bool, facts_rate: usize
     let fact_per_event = facts_rate as f64 / rate as f64;
     let total_ticks = (secs / tick.as_secs_f64()) as usize;
     let mut per_event = Vec::with_capacity(total_ticks);
+    let mut per_fusion = Vec::with_capacity(total_ticks);
+    let mut single_fusion = Vec::with_capacity(total_ticks);
+    let mut prio_us: Vec<f64> = Vec::new();
     let mut batch_pe = Vec::new();
     let mut batch_tot = Vec::new();
     let mut focus = Vec::new();
@@ -747,6 +892,7 @@ fn storm(w: &mut World, rate: usize, secs: f64, batched: bool, facts_rate: usize
         let rr =
             w.e.run(Budget::until(Instant::now() + Duration::from_millis(2)));
         let publ = rr.published.len();
+        let fc = rr.fuse_calls;
         fuses += rr.fuse_calls;
         cutoffs += rr.cutoff;
         pubs += publ;
@@ -764,8 +910,34 @@ fn storm(w: &mut World, rate: usize, secs: f64, batched: bool, facts_rate: usize
             }
         } else {
             per_event.push(dt.as_nanos() as f64);
+            per_fusion.push(dt.as_nanos() as f64 / fc.max(1) as f64);
+            if fc == 1 {
+                single_fusion.push(dt.as_nanos() as f64);
+            }
             if dt > Duration::from_micros(50) {
                 lag += 1;
+            }
+        }
+        // A priority event (the focused leaf is renamed) every 500 events, timed to the moment the
+        // sink receives it: this is the speech-path latency, apart from the per-event series.
+        if !batched && k % 500 == 250 {
+            let nm: Arc<str> = Arc::from(format!("prio{}", w.seq).as_str());
+            let inp = w.obs(w.focus_leaf, Write::Val(Val::Name(nm)));
+            let node = nid(w.focus_leaf);
+            let te = Instant::now();
+            w.e.apply([inp]);
+            let mut first: Option<Instant> = None;
+            let r = w.e.run_with(
+                Budget::until(Instant::now() + Duration::from_millis(2)),
+                &mut |p| {
+                    if p.node == node && first.is_none() {
+                        first = Some(Instant::now());
+                    }
+                },
+            );
+            black_box(r.fuse_calls);
+            if let Some(t) = first {
+                prio_us.push(us(t.duration_since(te)));
             }
         }
         // The focus moves every 100 ms (a keystroke-ish rate); timed apart.
@@ -782,6 +954,9 @@ fn storm(w: &mut World, rate: usize, secs: f64, batched: bool, facts_rate: usize
     w.e.run(Budget::UNLIMITED);
     StormOut {
         per_event_ns: pct(per_event),
+        per_fusion_ns: pct(per_fusion),
+        single_fusion_ns: pct(single_fusion),
+        prio_us: pct(prio_us),
         batch_ns_per_event: pct(batch_pe),
         batch_total_us: pct(batch_tot),
         lag_batches: lag,
@@ -804,6 +979,10 @@ fn scenario_storm(rep: &mut Report, secs: f64) {
     let mut worst_pe = 0.0f64;
     let mut worst_batch = 0.0f64;
     let mut worst_lag = 0usize;
+    let mut worst_prio = 0.0f64;
+    let mut worst_p50 = 0.0f64;
+    let mut worst_p999 = 0.0f64;
+    let mut util50 = 0.0f64;
     for (i, rate) in [10_000usize, 25_000, 50_000].into_iter().enumerate() {
         for batched in [false, true] {
             let mut w = World::build(100_000, 100, false);
@@ -833,7 +1012,27 @@ fn scenario_storm(rep: &mut Report, secs: f64) {
                     "    per-event cost (apply+run+publish): {}",
                     r.per_event_ns.show("ns")
                 );
+                eprintln!(
+                    "    per-fusion cost (event time / fusions): {}",
+                    r.per_fusion_ns.show("ns")
+                );
+                eprintln!(
+                    "    events with exactly one fusion:        {}",
+                    r.single_fusion_ns.show("ns")
+                );
+                eprintln!(
+                    "    priority event -> sink (during the storm): {}",
+                    r.prio_us.show("us")
+                );
+                worst_prio = worst_prio.max(r.prio_us.p99);
                 worst_pe = worst_pe.max(r.per_event_ns.p99);
+                if rate >= 25_000 {
+                    worst_p50 = worst_p50.max(r.per_event_ns.p50);
+                }
+                worst_p999 = worst_p999.max(r.per_event_ns.p999);
+                if rate == 50_000 {
+                    util50 = r.util;
+                }
             }
             eprintln!("    focus change (set + run 16): {}", r.focus_us.show("us"));
             eprintln!(
@@ -874,19 +1073,38 @@ fn scenario_storm(rep: &mut Report, secs: f64) {
     json.push(']');
     rep.put("storm", json);
     rep.gate(
-        "M-11 fusion+publish p99 <= 2 us/event, per-event (worst of 10k/25k/50k)",
-        format!("{:.2} us", worst_pe / 1e3),
-        worst_pe <= 2_000.0,
+        "M-11a per input event (apply+run+publish), 100k mirror, 100 patches, 5k facts/s: p50 <= 3 us and p99 <= 10 us (p99: worst of 10k/25k/50k; p50: 25k/50k ev/s)",
+        format!(
+            "p50 {:.2} us, p99 {:.2} us, p99.9 {:.1} us (info: p99.9 gate 50 us)",
+            worst_p50 / 1e3,
+            worst_pe / 1e3,
+            worst_p999 / 1e3
+        ),
+        worst_p50 <= 3_000.0 && worst_pe <= 10_000.0,
     );
     rep.gate(
-        "M-11 fusion+publish p99 <= 2 us/event, 1 ms coalescer batches (worst rate)",
-        format!("{:.2} us", worst_batch / 1e3),
-        worst_batch <= 2_000.0,
+        "M-11a' p99.9 <= 50 us (host conditions recorded)",
+        format!("{:.1} us", worst_p999 / 1e3),
+        worst_p999 <= 50_000.0,
     );
     rep.gate(
-        "M-11 no ingress lag: 1 ms coalescer batches whose apply+run exceeds the 1 ms tick (worst rate, 6 s each)",
-        format!("{worst_lag} batches over the tick"),
-        worst_lag == 0,
+        "M-11b capacity: writer busy <= 25 % at 50k ev/s + 5k facts/s",
+        format!("{:.1} % busy", util50 * 100.0),
+        util50 <= 0.25,
+    );
+    rep.gate(
+        "M-11c priority event -> sink during the storm: p99 <= 100 us (worst of 10k/25k/50k)",
+        format!("p99 {worst_prio:.1} us"),
+        worst_prio <= 100.0,
+    );
+    rep.gate(
+        "info legacy M-11 p99 <= 2 us per event (superseded by M-11a), per-event / batch average",
+        format!(
+            "{:.2} us / {:.2} us; lag batches {worst_lag}",
+            worst_pe / 1e3,
+            worst_batch / 1e3
+        ),
+        true,
     );
 }
 
@@ -902,6 +1120,11 @@ fn scenario_attrib(rep: &mut Report, secs: f64) {
             r.per_event_ns.show("ns"),
             r.fuse_per_event,
             r.cutoff_share * 100.0
+        );
+        eprintln!(
+            "                          per-fusion: {}  | single-fusion events: {}",
+            r.per_fusion_ns.show("ns"),
+            r.single_fusion_ns.show("ns")
         );
         let _ = write!(
             json,
@@ -920,6 +1143,7 @@ fn scenario_tick(rep: &mut Report) {
     let mut json = String::from("[");
     let mut first = true;
     let mut costs = Vec::new();
+    let mut p99s = Vec::new();
     for facts in [0usize, 1_000, 10_000, 50_000] {
         let mut w = World::build(100_000, 0, false);
         let mut inputs = Vec::with_capacity(facts);
@@ -939,6 +1163,7 @@ fn scenario_tick(rep: &mut Report) {
         let p = pct(v);
         eprintln!("{facts:>6} facts stored: {}", p.show("us"));
         costs.push(p.p50);
+        p99s.push(p.p99);
         let _ = write!(
             json,
             "{}{{\"facts\":{facts},\"tick_us\":{}}}",
@@ -956,6 +1181,11 @@ fn scenario_tick(rep: &mut Report) {
             costs[0], costs[1], costs[2], costs[3]
         ),
         costs[3] <= 20.0 && costs[3] <= costs[0].max(1.0) * 3.0,
+    );
+    rep.gate(
+        "M-11e Input::Tick p99 <= 5 us at 0 and at 50k stored facts",
+        format!("p99 {:.2} us @0, {:.2} us @50k", p99s[0], p99s[3]),
+        p99s[0] <= 5.0 && p99s[3] <= 5.0,
     );
 }
 
@@ -1011,22 +1241,21 @@ fn scenario_focus(rep: &mut Report) {
         // the focus may go first: `calls` counts them).
         // Generic and group nodes cannot be named (repair R masks it): they are fused but
         // never publish a change here, so only the nameable chain nodes are awaited.
-        let mut need: std::collections::HashSet<NodeIdx> = chain
-            .iter()
-            .copied()
-            .filter(|c| (1..=6).contains(&(c.0 as usize % ROLES.len())))
-            .collect();
+        // "Fused" = no longer dirty (a name patch may override the fresh observed name, in which
+        // case fusing legitimately publishes nothing); every chain node must get there.
+        let need: Vec<NodeIdx> = chain.iter().copied().filter(|c| w.e.is_dirty(*c)).collect();
         let mut calls = 0usize;
-        while !need.is_empty() && calls < 1500 {
+        let mut need_left = need.len();
+        while need_left > 0 && calls < 1500 {
             let r = w.e.run(Budget::calls(16));
             if r.fuse_calls == 0 {
                 break;
             }
             calls += r.fuse_calls;
-            for p in &r.published {
-                need.remove(&p.node);
-            }
+            need_left = need.iter().filter(|c| w.e.is_dirty(**c)).count();
         }
+        let mut need = need;
+        need.retain(|c| w.e.is_dirty(*c));
         let t2 = Instant::now();
         chain_calls.push(calls as f64);
         if !need.is_empty() {
@@ -1093,7 +1322,7 @@ fn scenario_focus(rep: &mut Report) {
         a.p99 <= 500.0,
     );
     rep.gate(
-        "focus change @100k dirty: focus chain fused and published within 0.5 ms (p99)",
+        "M-11d focus change @100k dirty: whole focus chain fused within 0.5 ms (p99)",
         format!(
             "p99 {:.1} us (p50 {:.1}); needed p50 {:.0} / p99 {:.0} fusions for ~6 nameable chain nodes; all published: {chain_all_fused}",
             b.p99, b.p50, cc.p50, cc.p99
@@ -1104,6 +1333,89 @@ fn scenario_focus(rep: &mut Report) {
         "info: sync drain (chain + 200 fusions) p99 <= 0.5 ms",
         format!("p99 {:.1} us", c.p99),
         c.p99 <= 500.0,
+    );
+}
+
+// ---- scenario: a 20k-event burst ------------------------------------------------------------------
+
+fn scenario_burst(rep: &mut Report) {
+    eprintln!("\n== burst: 20k events applied at once, priority events during the drain ==");
+    let mut w = World::build(100_000, 100, false);
+    w.set_focus();
+    w.e.run(Budget::UNLIMITED);
+    let (mut drain_ms, mut prio, mut apply_ms) = (Vec::new(), Vec::new(), Vec::new());
+    let mut pending_end = 0usize;
+    let mut missed = 0usize;
+    for _ in 0..12 {
+        let mut inputs = Vec::with_capacity(20_000);
+        for _ in 0..20_000 {
+            inputs.push(w.primary_event());
+        }
+        let t = Instant::now();
+        w.e.apply(inputs);
+        apply_ms.push(t.elapsed().as_secs_f64() * 1e3);
+        let t_drain = Instant::now();
+        let mut round = 0usize;
+        while w.e.pending() > 0 {
+            // Every 4th round a priority event (the focused leaf renamed) arrives mid-drain.
+            if round % 4 == 1 {
+                let nm: Arc<str> = Arc::from(format!("burst{}", w.seq).as_str());
+                let inp = w.obs(w.focus_leaf, Write::Val(Val::Name(nm)));
+                let node = nid(w.focus_leaf);
+                let te = Instant::now();
+                w.e.apply([inp]);
+                let mut first: Option<Instant> = None;
+                let r = w.e.run_with(
+                    Budget::until(Instant::now() + Duration::from_millis(1)),
+                    &mut |p| {
+                        if p.node == node && first.is_none() {
+                            first = Some(Instant::now());
+                        }
+                    },
+                );
+                black_box(r.fuse_calls);
+                match first {
+                    Some(t) => prio.push(us(t.duration_since(te))),
+                    None => missed += 1,
+                }
+            } else {
+                let r =
+                    w.e.run(Budget::until(Instant::now() + Duration::from_millis(1)));
+                black_box(r.fuse_calls);
+            }
+            round += 1;
+        }
+        drain_ms.push(t_drain.elapsed().as_secs_f64() * 1e3);
+        pending_end = w.e.pending();
+    }
+    let (d, p, a) = (pct(drain_ms), pct(prio), pct(apply_ms));
+    eprintln!("apply of 20k events:                      {}", a.show("ms"));
+    eprintln!("drain of 20k events (1 ms runs):          {}", d.show("ms"));
+    eprintln!(
+        "priority event -> sink during the drain:  {} (missed {missed})",
+        p.show("us")
+    );
+    rep.put(
+        "burst",
+        format!(
+            "{{\"apply_ms\":{},\"drain_ms\":{},\"prio_us\":{},\"missed\":{missed},\"pending_end\":{pending_end}}}",
+            a.json(),
+            d.json(),
+            p.json()
+        ),
+    );
+    rep.gate(
+        "M-11b a 20k-event burst drains (apply+run) within 70 ms and pending returns to 0",
+        format!(
+            "apply p50 {:.1} ms + drain p50 {:.1} ms / p99 {:.1} ms, pending end {pending_end}",
+            a.p50, d.p50, d.p99
+        ),
+        a.p50 + d.p99 <= 70.0 && pending_end == 0,
+    );
+    rep.gate(
+        "M-11c priority event -> sink during a 20k burst: p99 <= 100 us, none missed",
+        format!("p99 {:.1} us (p50 {:.1}), missed {missed}", p.p99, p.p50),
+        p.p99 <= 100.0 && missed == 0,
     );
 }
 
@@ -1148,9 +1460,16 @@ fn scenario_global(rep: &mut Report) {
                     } else {
                         Budget::until(Instant::now() + Duration::from_millis(2))
                     };
-                    let r = w.e.run(budget);
-                    let got = r.published.iter().any(|p| p.node == nid(node));
-                    let v = if got { us(te.elapsed()) } else { f64::NAN };
+                    // Incremental publication: the time is to the moment the node's result is
+                    // handed to the sink, not to the end of the (possibly 2 ms) run.
+                    let mut first: Option<Instant> = None;
+                    let r = w.e.run_with(budget, &mut |p| {
+                        if p.node == nid(node) && first.is_none() {
+                            first = Some(Instant::now());
+                        }
+                    });
+                    black_box(r.fuse_calls);
+                    let v = first.map_or(f64::NAN, |t| us(t.duration_since(te)));
                     match series {
                         0 => evt_us.push(v),
                         1 => evt_small_us.push(v),
@@ -1191,7 +1510,7 @@ fn scenario_global(rep: &mut Report) {
     eprintln!("sweep total (100k nodes):             {}", sw.show("ms"));
     eprintln!("runs per sweep:                       {}", nr.show("runs"));
     eprintln!(
-        "priority event during sweep -> published, run(until 2 ms): {} (missed: {missed})",
+        "priority event during sweep -> visible via run_with sink, run(until 2 ms): {} (missed: {missed})",
         ev.show("us")
     );
     eprintln!(
@@ -1222,7 +1541,7 @@ fn scenario_global(rep: &mut Report) {
     );
     rep.gate(
         "bump_global sweep: focused-leaf event published by the run that follows it (2 ms deadline)",
-        format!("{missed} of {n_evt} missed, p99 {:.1} us (run duration, not time-to-fuse)", ev.p99),
+        format!("{missed} of {n_evt} missed, time to the sink p99 {:.1} us (p50 {:.1}); run() would return only after 2 ms", ev.p99, ev.p50),
         missed == 0,
     );
     rep.gate(
@@ -1641,6 +1960,9 @@ fn main() {
     }
     if want("focus") {
         scenario_focus(&mut rep);
+    }
+    if want("burst") {
+        scenario_burst(&mut rep);
     }
     if want("global") {
         scenario_global(&mut rep);

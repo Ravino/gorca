@@ -22,6 +22,7 @@ pub mod quirk;
 pub mod register;
 pub mod repair;
 pub mod s4;
+mod sched;
 pub mod side;
 pub mod strata;
 pub mod taint;
@@ -30,14 +31,16 @@ pub mod value;
 pub use epoch::{Epochs, silences};
 pub use explain::{Conflict, Explain, NoTrace, ObsCand, PatchTrail, Trace, Tracer, TrailEntry};
 pub use ivm::{
-    ApplyReport, Budget, Input, Ivm, IvmError, Published, RELATION_FANOUT_CAP, RunReport,
+    ApplyReport, Budget, Input, Ivm, IvmError, IvmStats, Published, RELATION_FANOUT_CAP, RunReport,
 };
 pub use profile::{Limits, PiRow, Profile, RoleSet, Rules};
 pub use quirk::{
     AppFacts, PiData, ProfileSelector, QuirkAction, QuirkError, QuirkRule, QuirkSet,
     parse_inexpressible, parse_pi,
 };
-pub use register::{MAX_PRIMARIES, NodeRegs, PrimarySlot, Reg, SrcRegs, UserOp, UserReg, slot_of};
+pub use register::{
+    MAX_PRIMARIES, NodeRegs, PrimarySlot, Reg, RegRef, SrcRegs, UserOp, UserReg, slot_of,
+};
 pub use repair::{Eff, invariant_violations, repair as repair_eff};
 pub use side::{
     AnchorId, AnchorIndex, Bound, EpochSnapshot, FactCand, FactIn, FactLayer, FactTrail, FuseCtx,
@@ -46,7 +49,7 @@ pub use side::{
 };
 pub use strata::{
     ChildView, Fused, Layer, Neighbours, NoPatches, NoQuirks, PatchHit, PatchSource, Quirks,
-    Record, S0Node, S0Slot, Scratch, SelectorReads, default_slot, fuse_node, fuse_node_with,
-    is_alive, s0, s0_with,
+    Record, S0Node, S0Slot, S0View, Scratch, SelectorReads, default_slot, fuse_node,
+    fuse_node_with, is_alive, rebuild_slot, s0, s0_with,
 };
 pub use value::{Info, MAX_TEXT_BYTES, Seq, Slot, Val, Write, hedge_cap};

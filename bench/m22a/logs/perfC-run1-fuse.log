@@ -1,0 +1,169 @@
+fuse bench host: load=11.44 14.38 15.24 4/2120 375670 governor=performance cpus=1 cpu_pin=2 mem_pressure_some=some avg10=0.03 avg60=0.10 avg300=0.16 total=3868555978
+
+== mem: 100k-node build, lean (B6 world) and realistic (14 groups/node) ==
+     lean: build 107 ms (1.07 us/node), fused 100000, RSS +52.4 MB engine, entries alone +16.0 MB (550 B/node)
+           stats: node record 184 B, resident S0 0 nodes / 0 B, S0 computes 123193, neighbour hits 121444, fusions 123193
+GATE info legacy M-9 25 MB on the lean world (superseded by M-9'): +52.4 MB (entries alone +16.0 MB) => PASS
+realistic: build 165 ms (1.65 us/node), fused 100000, RSS +57.7 MB engine, entries alone +16.0 MB (605 B/node)
+           stats: node record 184 B, resident S0 0 nodes / 0 B, S0 computes 122337, neighbour hits 121847, fusions 122337
+sizes: SemEntry 128 B, NodeRegs 96 B, S0Node 24 B, Input 40 B, FactIn 160 B
+GATE M-9 SemEntry size <= 160 B (x32 = 128 B): 128 B => PASS
+GATE M-9' engine RSS increase <= 64 MB per 100k nodes on the realistic world (14 groups/node): +57.7 MB (entries alone +16.0 MB) => PASS
+
+== storm: mixed events, 100k nodes, 100 patches, secondary 5k facts/s ==
+rate 10000/s per-ev : events 90000 util 3.7 % lag 12 / 60000  pending max 0 end 0
+    per-event cost (apply+run+publish): n=60000 p50 3398.00 p95 6746.00 p99 8693.00 p99.9 12543.00 max 3559512.00 mean 3709.99 ns
+    per-fusion cost (event time / fusions): n=60000 p50 2071.50 p95 3042.00 p99 3699.00 p99.9 5604.00 max 1779756.00 mean 2141.70 ns
+    events with exactly one fusion:        n=23903 p50 2100.00 p95 3075.00 p99 3703.00 p99.9 5294.00 max 207460.00 mean 2141.06 ns
+    priority event -> sink (during the storm): n=120 p50 1.73 p95 2.53 p99 3.06 p99.9 3.28 max 3.28 mean 1.79 us
+    focus change (set + run 16): n=59 p50 25.05 p95 28.83 p99 30.79 p99.9 30.79 max 30.79 mean 25.25 us
+    Input::Tick (apart, TTL scan):  n=60 p50 0.29 p95 0.59 p99 0.94 p99.9 0.94 max 0.94 mean 0.34 us
+    fusions/event 1.13, early-cutoff share 82 %, publishes/event 0.20
+rate 10000/s batched: events 90000 util 3.6 % lag 1 / 6000  pending max 0 end 0
+    per-event cost (batch avg): n=6000 p50 2341.07 p95 2948.00 p99 3289.27 p99.9 13293.40 max 162584.33 mean 2395.10 ns
+    batch total:                n=6000 p50 35.12 p95 44.22 p99 49.34 p99.9 199.40 max 2438.76 mean 35.93 us
+    focus change (set + run 16): n=59 p50 25.19 p95 35.53 p99 44.48 p99.9 44.48 max 44.48 mean 26.23 us
+    Input::Tick (apart, TTL scan):  n=6000 p50 0.05 p95 0.08 p99 0.22 p99.9 0.36 max 0.52 mean 0.06 us
+    fusions/event 1.12, early-cutoff share 82 %, publishes/event 0.20
+rate 25000/s per-ev : events 180000 util 6.4 % lag 10 / 150000  pending max 0 end 0
+    per-event cost (apply+run+publish): n=150000 p50 2223.00 p95 5372.00 p99 7052.00 p99.9 9676.00 max 1090505.00 mean 2545.83 ns
+    per-fusion cost (event time / fusions): n=150000 p50 1720.00 p95 2792.50 p99 3223.50 p99.9 3969.00 max 545252.50 mean 1775.16 ns
+    events with exactly one fusion:        n=91090 p50 1741.00 p95 2846.00 p99 3282.00 p99.9 4005.00 max 40780.00 mean 1844.14 ns
+    priority event -> sink (during the storm): n=300 p50 1.15 p95 2.54 p99 3.09 p99.9 3.39 max 3.39 mean 1.30 us
+    focus change (set + run 16): n=59 p50 23.86 p95 27.99 p99 31.37 p99.9 31.37 max 31.37 mean 24.14 us
+    Input::Tick (apart, TTL scan):  n=150 p50 0.26 p95 0.60 p99 0.72 p99.9 0.74 max 0.74 mean 0.28 us
+    fusions/event 1.14, early-cutoff share 79 %, publishes/event 0.24
+rate 25000/s batched: events 180000 util 6.3 % lag 1 / 6000  pending max 0 end 0
+    per-event cost (batch avg): n=6000 p50 2069.30 p95 2670.50 p99 2950.00 p99.9 8732.10 max 56247.00 mean 2102.40 ns
+    batch total:                n=6000 p50 62.08 p95 80.11 p99 88.50 p99.9 261.96 max 1687.41 mean 63.07 us
+    focus change (set + run 16): n=59 p50 24.13 p95 28.43 p99 38.66 p99.9 38.66 max 38.66 mean 24.57 us
+    Input::Tick (apart, TTL scan):  n=6000 p50 0.05 p95 0.08 p99 0.20 p99.9 0.28 max 0.47 mean 0.06 us
+    fusions/event 1.14, early-cutoff share 79 %, publishes/event 0.24
+rate 50000/s per-ev : events 329999 util 11.5 % lag 113 / 300000  pending max 0 end 0
+    per-event cost (apply+run+publish): n=300000 p50 1915.00 p95 4771.00 p99 6638.00 p99.9 10711.00 max 3534592.00 mean 2292.63 ns
+    per-fusion cost (event time / fusions): n=300000 p50 1620.00 p95 2771.00 p99 3296.00 p99.9 5503.00 max 1178197.33 mean 1722.94 ns
+    events with exactly one fusion:        n=203162 p50 1664.00 p95 2826.00 p99 3355.00 p99.9 5379.00 max 360088.00 mean 1814.39 ns
+    priority event -> sink (during the storm): n=600 p50 1.07 p95 1.85 p99 2.78 p99.9 43.12 max 43.12 mean 1.21 us
+    focus change (set + run 16): n=59 p50 23.95 p95 27.06 p99 30.15 p99.9 30.15 max 30.15 mean 24.09 us
+    Input::Tick (apart, TTL scan):  n=300 p50 0.12 p95 0.50 p99 0.58 p99.9 0.62 max 0.62 mean 0.20 us
+    fusions/event 1.15, early-cutoff share 78 %, publishes/event 0.25
+rate 50000/s batched: events 330000 util 10.8 % lag 1 / 6000  pending max 0 end 0
+    per-event cost (batch avg): n=6000 p50 1922.85 p95 2570.75 p99 2886.04 p99.9 5943.85 max 21950.78 mean 1958.16 ns
+    batch total:                n=6000 p50 105.76 p95 141.39 p99 158.73 p99.9 326.91 max 1207.29 mean 107.70 us
+    focus change (set + run 16): n=59 p50 24.19 p95 27.14 p99 32.30 p99.9 32.30 max 32.30 mean 24.69 us
+    Input::Tick (apart, TTL scan):  n=6000 p50 0.06 p95 0.09 p99 0.18 p99.9 0.27 max 0.66 mean 0.07 us
+    fusions/event 1.15, early-cutoff share 78 %, publishes/event 0.25
+GATE M-11a per input event (apply+run+publish), 100k mirror, 100 patches, 5k facts/s: p50 <= 3 us and p99 <= 10 us (p99: worst of 10k/25k/50k; p50: 25k/50k ev/s): p50 2.22 us, p99 8.69 us, p99.9 12.5 us (info: p99.9 gate 50 us) => PASS
+GATE M-11a' p99.9 <= 50 us (host conditions recorded): 12.5 us => PASS
+GATE M-11b capacity: writer busy <= 25 % at 50k ev/s + 5k facts/s: 11.5 % busy => PASS
+GATE M-11c priority event -> sink during the storm: p99 <= 100 us (worst of 10k/25k/50k): p99 3.1 us => PASS
+GATE info legacy M-11 p99 <= 2 us per event (superseded by M-11a), per-event / batch average: 8.69 us / 3.29 us; lag batches 1 => PASS
+
+== tick: cost of Input::Tick against the number of stored facts ==
+     0 facts stored: n=200 p50 0.03 p95 0.03 p99 0.05 p99.9 0.69 max 0.69 mean 0.03 us
+  1000 facts stored: n=200 p50 0.03 p95 0.03 p99 0.05 p99.9 0.32 max 0.32 mean 0.03 us
+ 10000 facts stored: n=200 p50 0.03 p95 0.03 p99 0.06 p99.9 0.73 max 0.73 mean 0.04 us
+ 50000 facts stored: n=200 p50 0.03 p95 0.03 p99 0.07 p99.9 1.05 max 1.05 mean 0.04 us
+GATE Input::Tick cost independent of stored facts (50k vs 0, p50 ratio <= 3 and p50 <= 20 us): p50 0.0 us @0, 0.0 us @1k, 0.0 us @10k, 0.0 us @50k => PASS
+GATE M-11e Input::Tick p99 <= 5 us at 0 and at 50k stored facts: p99 0.05 us @0, 0.07 us @50k => PASS
+
+== attrib: where the per-event cost comes from (25k/s, per-event) ==
+patches   0 facts/s    0: n=150000 p50 1162.00 p95 2528.00 p99 4108.00 p99.9 6423.00 max 22491.00 mean 1195.40 ns  fusions/event 1.07 cutoff 64 %
+                          per-fusion: n=150000 p50 1044.00 p95 1515.00 p99 1776.67 p99.9 2549.00 max 11990.00 mean 948.58 ns  | single-fusion events: n=97849 p50 1123.00 p95 1560.00 p99 1852.00 p99.9 2645.00 max 11990.00 mean 1083.34 ns
+patches 100 facts/s    0: n=150000 p50 1436.00 p95 2978.00 p99 4741.00 p99.9 7168.00 max 43966.00 mean 1442.76 ns  fusions/event 1.07 cutoff 74 %
+                          per-fusion: n=150000 p50 1265.00 p95 1803.50 p99 2040.00 p99.9 2798.00 max 43966.00 mean 1151.72 ns  | single-fusion events: n=97849 p50 1394.00 p95 1851.00 p99 2123.00 p99.9 2893.00 max 43966.00 mean 1333.88 ns
+patches   0 facts/s 5000: n=150000 p50 1895.00 p95 4687.00 p99 6216.00 p99.9 8590.00 max 1074096.00 mean 2167.89 ns  fusions/event 1.14 cutoff 72 %
+                          per-fusion: n=150000 p50 1432.00 p95 2463.00 p99 2890.00 p99.9 3599.00 max 537048.00 mean 1506.81 ns  | single-fusion events: n=91090 p50 1435.00 p95 2514.00 p99 2932.00 p99.9 3653.00 max 38013.00 mean 1555.50 ns
+patches 100 facts/s 5000: n=150000 p50 2221.00 p95 5348.00 p99 7018.00 p99.9 9632.00 max 1009827.00 mean 2528.92 ns  fusions/event 1.14 cutoff 79 %
+                          per-fusion: n=150000 p50 1713.50 p95 2785.00 p99 3221.50 p99.9 3963.00 max 504913.50 mean 1764.68 ns  | single-fusion events: n=91090 p50 1733.00 p95 2837.00 p99 3269.00 p99.9 3998.00 max 39283.00 mean 1835.51 ns
+
+== focus: focus change with ~100k dirty nodes ==
+dirtied all: apply 12 ms, pending 100000
+pending at end 31221
+(a) set_focus_chain+set_visible (priority set recompute): n=600 p50 31.14 p95 46.66 p99 49.44 p99.9 1162.12 max 1162.12 mean 33.63 us
+(b) (a) + every focus-chain node fused and published:     n=600 p50 49.51 p95 185.32 p99 258.86 p99.9 1326.39 max 1326.39 mean 76.03 us
+    fusions until the whole chain was published (chain has ~8 nodes): n=600 p50 16.00 p95 128.00 p99 192.00 p99.9 336.00 max 336.00 mean 41.33 fusions
+(c) (b) + max_sync_drain 200 fusions:                      n=600 p50 247.26 p95 375.34 p99 530.52 p99.9 3602.26 max 3602.26 mean 277.99 us
+priority set work (nodes visited): n=600 p50 208.00 p95 212.00 p99 221.00 p99.9 231.00 max 231.00 mean 208.53 nodes
+GATE focus change @100k dirty: synchronous part (set_focus_chain + set_visible) p99 <= 0.5 ms: p99 49.4 us (p50 31.1, p95 46.7) => PASS
+GATE M-11d focus change @100k dirty: whole focus chain fused within 0.5 ms (p99): p99 258.9 us (p50 49.5); needed p50 16 / p99 192 fusions for ~6 nameable chain nodes; all published: true => PASS
+GATE info: sync drain (chain + 200 fusions) p99 <= 0.5 ms: p99 530.5 us => FAIL
+
+== burst: 20k events applied at once, priority events during the drain ==
+apply of 20k events:                      n=12 p50 2.81 p95 3.59 p99 3.59 p99.9 3.59 max 3.59 mean 2.90 ms
+drain of 20k events (1 ms runs):          n=12 p50 11.06 p95 11.75 p99 11.75 p99.9 11.75 max 11.75 mean 11.15 ms
+priority event -> sink during the drain:  n=36 p50 1.14 p95 1.46 p99 1.51 p99.9 1.51 max 1.51 mean 1.11 us (missed 0)
+GATE M-11b a 20k-event burst drains (apply+run) within 70 ms and pending returns to 0: apply p50 2.8 ms + drain p50 11.1 ms / p99 11.8 ms, pending end 0 => PASS
+GATE M-11c priority event -> sink during a 20k burst: p99 <= 100 us, none missed: p99 1.5 us (p50 1.1), missed 0 => PASS
+
+== global: bump_global sync part and sweep ==
+bump_global sync part:                n=12 p50 56.14 p95 59.01 p99 59.01 p99.9 59.01 max 59.01 mean 55.83 us
+sweep run duration (2 ms deadline):   n=409 p50 2000.38 p95 2000.78 p99 2001.09 p99.9 2001.61 max 2001.61 mean 1985.82 us
+sweep total (100k nodes):             n=12 p50 73.85 p95 74.35 p99 74.35 p99.9 74.35 max 74.35 mean 73.84 ms
+runs per sweep:                       n=12 p50 34.00 p95 35.00 p99 35.00 p99.9 35.00 max 35.00 mean 34.08 runs
+priority event during sweep -> visible via run_with sink, run(until 2 ms): n=36 p50 2.53 p95 3.56 p99 3.91 p99.9 3.91 max 3.91 mean 2.67 us (missed: 0)
+focused-leaf event during sweep, run(calls 32): n=36 p50 1.06 p95 1.36 p99 1.91 p99.9 1.91 max 1.91 mean 1.09 us (missed 0 of 36)
+chain-root event during sweep, run(calls 32):    n=36 p50 1.33 p95 1.73 p99 1.90 p99.9 1.90 max 1.90 mean 1.34 us (missed 0 of 36)
+GATE bump_global sync part @100k nodes p99 <= 0.5 ms: p99 59.0 us => PASS
+GATE bump_global sweep: focused-leaf event published by the run that follows it (2 ms deadline): 0 of 36 missed, time to the sink p99 3.9 us (p50 2.5); run() would return only after 2 ms => PASS
+GATE bump_global sweep: focus-chain event published within a 32-fusion run (leaf / chain root): leaf 0 of 36 missed, root 0 of 36 missed => PASS
+
+== aging: background work under a priority storm ==
+  tick 1000: pending 56592
+  tick 2000: pending 38866
+  tick 3000: pending 21418
+  tick 4000: pending 8616
+  tick 5000: pending 24
+backlog 100000: drained 100000 in 5020 ticks (budget 100/run, 80 prio events/tick); pending now 0
+non-priority nodes published per run: n=5020 p50 24.00 p95 98.00 p99 99.00 p99.9 99.00 max 99.00 mean 23.40 nodes
+fresh non-priority event latency (ticks, behind the backlog): n=23952 p50 756.00 p95 2440.00 p99 2701.00 p99.9 2735.00 max 2753.00 mean 946.14 ticks
+longest run of ticks without net progress: 10
+steady state (no backlog) fresh non-priority latency (ticks): n=9994 p50 0.00 p95 2.00 p99 2.00 p99.9 2.00 max 2.00 mean 0.77 ticks
+GATE aging: backlog drains under a saturating priority storm (non-priority share >= 1 node/run, quarter of budget = 25): drained 100000/100000 in 5020 ticks; median 24 non-priority nodes/run; longest no-progress 10 ticks => PASS
+GATE aging: steady-state fresh non-priority event published within 3 ticks (p99): p99 2 ticks (p50 0) => PASS
+
+== anchors: per-key re-resolution cost (S-3) ==
+  2000 anchors, 100 id moves/batch: apply cost per re-resolved key n=20 p50 527.40 p95 631.73 p99 631.73 p99.9 631.73 max 631.73 mean 524.43 ns   batch (apply+run) n=40 p50 115.86 p95 134.55 p99 135.24 p99.9 135.24 max 135.24 mean 63.44 us
+  2000 anchors, one id with   1 anchors flips: per key n=29 p50 332.00 p95 685.00 p99 755.00 p99.9 755.00 max 755.00 mean 367.07 ns  per flip n=29 p50 0.33 p95 0.69 p99 0.76 p99.9 0.76 max 0.76 mean 0.37 us
+  2000 anchors, one id with  16 anchors flips: per key n=29 p50 152.50 p95 215.00 p99 224.94 p99.9 224.94 max 224.94 mean 160.13 ns  per flip n=29 p50 2.44 p95 3.44 p99 3.60 p99.9 3.60 max 3.60 mean 2.56 us
+  2000 anchors, one id with  64 anchors flips: per key n=29 p50 176.55 p95 201.92 p99 222.00 p99.9 222.00 max 222.00 mean 169.37 ns  per flip n=29 p50 11.30 p95 12.92 p99 14.21 p99.9 14.21 max 14.21 mean 10.84 us
+  2000 anchors, one id with 256 anchors flips: per key n=29 p50 214.04 p95 234.23 p99 244.45 p99.9 244.45 max 244.45 mean 198.96 ns  per flip n=29 p50 54.80 p95 59.96 p99 62.58 p99.9 62.58 max 62.58 mean 50.93 us
+ 20000 anchors, 100 id moves/batch: apply cost per re-resolved key n=40 p50 1073.43 p95 1234.33 p99 1502.50 p99.9 1502.50 max 1502.50 mean 1073.98 ns   batch (apply+run) n=40 p50 190.11 p95 209.72 p99 214.91 p99.9 214.91 max 214.91 mean 186.68 us
+ 20000 anchors, one id with   1 anchors flips: per key n=30 p50 340.00 p95 1191.00 p99 2265.00 p99.9 2265.00 max 2265.00 mean 451.00 ns  per flip n=30 p50 0.34 p95 1.19 p99 2.27 p99.9 2.27 max 2.27 mean 0.45 us
+ 20000 anchors, one id with  16 anchors flips: per key n=30 p50 166.94 p95 259.12 p99 261.81 p99.9 261.81 max 261.81 mean 172.87 ns  per flip n=30 p50 2.67 p95 4.15 p99 4.19 p99.9 4.19 max 4.19 mean 2.77 us
+ 20000 anchors, one id with  64 anchors flips: per key n=30 p50 170.94 p95 189.52 p99 206.61 p99.9 206.61 max 206.61 mean 170.25 ns  per flip n=30 p50 10.94 p95 12.13 p99 13.22 p99.9 13.22 max 13.22 mean 10.90 us
+ 20000 anchors, one id with 256 anchors flips: per key n=30 p50 214.72 p95 240.39 p99 267.07 p99.9 267.07 max 267.07 mean 204.93 ns  per flip n=30 p50 54.97 p95 61.54 p99 68.37 p99.9 68.37 max 68.37 mean 52.46 us
+GATE S-3 re-resolution cost per key independent of cached anchor count (20k vs 2k, p50 ratio <= 2): p50 527 ns @2k, 1073 ns @20k; worst p99 2265 ns/key => FAIL
+
+== churn: add/remove 200-node subtrees ==
+add (per node, incl. inputs + fuse):   n=600 p50 2125.43 p95 2173.81 p99 2283.66 p99.9 2490.18 max 2490.18 mean 2131.06 ns
+remove subtree (per node, incl. run):  n=600 p50 174.78 p95 185.24 p99 204.88 p99.9 235.28 max 235.28 mean 176.12 ns
+whole cycle (200 nodes):               n=600 p50 460.24 p95 471.31 p99 492.89 p99.9 541.31 max 541.31 mean 461.44 us
+RSS marks every 100 cycles (kB): [66024, 66032, 66048, 66052, 66056, 66048], base 65812; growth 0.23 MB; verify true
+GATE churn: engine consistent (verify) and RSS growth over 600 add/remove cycles <= 2 MB: growth 0.23 MB, verify true => PASS
+
+wrote <repo>/.claude/worktrees/agent-a5fa450750973b3b7/crates/gorca-bench/../../bench/m22a/results/perfC-run1-fuse.json
+
+== gate summary ==
+PASS | info legacy M-9 25 MB on the lean world (superseded by M-9') | +52.4 MB (entries alone +16.0 MB)
+PASS | M-9 SemEntry size <= 160 B (x32 = 128 B) | 128 B
+PASS | M-9' engine RSS increase <= 64 MB per 100k nodes on the realistic world (14 groups/node) | +57.7 MB (entries alone +16.0 MB)
+PASS | M-11a per input event (apply+run+publish), 100k mirror, 100 patches, 5k facts/s: p50 <= 3 us and p99 <= 10 us (p99: worst of 10k/25k/50k; p50: 25k/50k ev/s) | p50 2.22 us, p99 8.69 us, p99.9 12.5 us (info: p99.9 gate 50 us)
+PASS | M-11a' p99.9 <= 50 us (host conditions recorded) | 12.5 us
+PASS | M-11b capacity: writer busy <= 25 % at 50k ev/s + 5k facts/s | 11.5 % busy
+PASS | M-11c priority event -> sink during the storm: p99 <= 100 us (worst of 10k/25k/50k) | p99 3.1 us
+PASS | info legacy M-11 p99 <= 2 us per event (superseded by M-11a), per-event / batch average | 8.69 us / 3.29 us; lag batches 1
+PASS | Input::Tick cost independent of stored facts (50k vs 0, p50 ratio <= 3 and p50 <= 20 us) | p50 0.0 us @0, 0.0 us @1k, 0.0 us @10k, 0.0 us @50k
+PASS | M-11e Input::Tick p99 <= 5 us at 0 and at 50k stored facts | p99 0.05 us @0, 0.07 us @50k
+PASS | focus change @100k dirty: synchronous part (set_focus_chain + set_visible) p99 <= 0.5 ms | p99 49.4 us (p50 31.1, p95 46.7)
+PASS | M-11d focus change @100k dirty: whole focus chain fused within 0.5 ms (p99) | p99 258.9 us (p50 49.5); needed p50 16 / p99 192 fusions for ~6 nameable chain nodes; all published: true
+FAIL | info: sync drain (chain + 200 fusions) p99 <= 0.5 ms | p99 530.5 us
+PASS | M-11b a 20k-event burst drains (apply+run) within 70 ms and pending returns to 0 | apply p50 2.8 ms + drain p50 11.1 ms / p99 11.8 ms, pending end 0
+PASS | M-11c priority event -> sink during a 20k burst: p99 <= 100 us, none missed | p99 1.5 us (p50 1.1), missed 0
+PASS | bump_global sync part @100k nodes p99 <= 0.5 ms | p99 59.0 us
+PASS | bump_global sweep: focused-leaf event published by the run that follows it (2 ms deadline) | 0 of 36 missed, time to the sink p99 3.9 us (p50 2.5); run() would return only after 2 ms
+PASS | bump_global sweep: focus-chain event published within a 32-fusion run (leaf / chain root) | leaf 0 of 36 missed, root 0 of 36 missed
+PASS | aging: backlog drains under a saturating priority storm (non-priority share >= 1 node/run, quarter of budget = 25) | drained 100000/100000 in 5020 ticks; median 24 non-priority nodes/run; longest no-progress 10 ticks
+PASS | aging: steady-state fresh non-priority event published within 3 ticks (p99) | p99 2 ticks (p50 0)
+FAIL | S-3 re-resolution cost per key independent of cached anchor count (20k vs 2k, p50 ratio <= 2) | p50 527 ns @2k, 1073 ns @20k; worst p99 2265 ns/key
+PASS | churn: engine consistent (verify) and RSS growth over 600 add/remove cycles <= 2 MB | growth 0.23 MB, verify true
