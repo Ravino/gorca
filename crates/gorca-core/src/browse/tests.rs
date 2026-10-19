@@ -3468,3 +3468,52 @@ fn a_late_repair_does_not_move_the_cursor_after_the_rejoin_window() {
     mirror_the_late_link(&mut r, 2);
     assert_eq!(cursor_node(&r), at_top);
 }
+
+#[test]
+fn a_second_change_after_the_announcement_is_announced_again_not_clicked() {
+    let mut r = rig();
+    relabel_button(&mut r, "Delete message from Bob", "Delete", 2);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    refuse_click(&mut r, "Delete message from Alice");
+    // The page re-uses the row again before the Enter: not what was spoken.
+    relabel_button(&mut r, "Delete message from Carol", "Delete", 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(
+        !click_of(&fx),
+        "clicked an object whose name was never said"
+    );
+    assert!(!spoken(&fx).is_empty(), "the new object is announced");
+}
+
+#[test]
+fn a_refusal_without_a_name_gives_no_bypass() {
+    let mut r = rig();
+    relabel_button(&mut r, "Reply", "Reply", 2);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::ActionDisplaced {
+            doc: DocId(1),
+            now: None,
+        }),
+        r.now,
+    );
+    assert_eq!(spoken(&fx), ["that item changed"]);
+    relabel_button(&mut r, "Forward", "Forward", 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx), "nothing was said about the new object");
+}
+
+#[test]
+fn an_announcement_expires() {
+    let mut r = rig();
+    relabel_button(&mut r, "Delete message from Bob", "Delete", 2);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    refuse_click(&mut r, "Delete message from Alice");
+    r.now += super::ANNOUNCE_WINDOW + Duration::from_secs(1);
+    relabel_button(&mut r, "Delete message from Alice", "Delete", 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx), "a late refresh is a new change");
+}

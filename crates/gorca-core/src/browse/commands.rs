@@ -1700,13 +1700,29 @@ impl Reader {
                 if let Some(b) = self.web.as_mut()
                     && b.mode.doc() == Some(doc)
                 {
+                    let target = b.activated_node.map(|a| a.target);
                     b.activated = None;
                     b.click_target = None;
                     b.activated_node = None;
                     b.displaced = None;
-                    b.announced_change = true;
+                    b.announced_change = None;
+                    // Remember what is said only when a name is said: without one the next
+                    // Enter must still announce the refreshed object.
                     let said = match now {
                         Some(name) if !name.is_empty() => {
+                            let role = target.and_then(|n| {
+                                b.docs.get(doc).and_then(|h| {
+                                    h.read.with(|d| d.node(n).map(|_| role_states(d, n).0))
+                                })
+                            });
+                            if let (Some(node), Some(role)) = (target, role) {
+                                b.announced_change = Some(super::AnnouncedChange {
+                                    node,
+                                    name: Arc::clone(&name),
+                                    role,
+                                    at: self.now,
+                                });
+                            }
                             format!("{}: {name}", t(M::WebItemChanged))
                         }
                         Some(_) | None => t(M::WebItemChanged).to_owned(),
@@ -2025,9 +2041,18 @@ impl Reader {
                     && h.read
                         .with(|dd| content_sig(dd, n).is_some_and(|now| now != sig))
                 {
-                    if b.announced_change {
-                        b.announced_change = false;
-                    } else {
+                    // The refresh of the object whose new name was just spoken is not a new
+                    // displacement; any other change (another label, another role, too late)
+                    // is, and the next Enter announces it again.
+                    let spoken = b.announced_change.take().is_some_and(|a| {
+                        self.now.saturating_duration_since(a.at) <= super::ANNOUNCE_WINDOW
+                            && h.read.with(|dd| {
+                                dd.node(a.node).is_some_and(|v| {
+                                    v.name == Some(&*a.name) && role_states(dd, a.node).0 == a.role
+                                })
+                            })
+                    });
+                    if !spoken {
                         b.displaced = Some(n);
                     }
                 }
@@ -2398,7 +2423,7 @@ impl Reader {
         if let Some(b) = self.web.as_mut() {
             b.grace_fallback = None;
             if c != CoreCmd::BrowseActivate {
-                b.announced_change = false;
+                b.announced_change = None;
             }
         }
         self.browse_command_inner(c, rep, now, fx);
@@ -2555,6 +2580,25 @@ impl Reader {
             // one before anything is clicked; a second Enter activates it.
             self.web_speak_line_here(fx);
             return;
+        }
+        // After a refused click the user heard a name. Act on it only if the mirror shows exactly
+        // that name and role on that object and the announcement is fresh; otherwise say what is
+        // there now first (a second change, a late refresh).
+        if let Some(b) = self.web.as_mut()
+            && let Some(a) = b.announced_change.take()
+        {
+            let matches = self.now.saturating_duration_since(a.at) <= super::ANNOUNCE_WINDOW
+                && b.docs.get(doc).is_some_and(|h| {
+                    h.read.with(|dd| {
+                        dd.node(a.node).is_some_and(|v| {
+                            v.name == Some(&*a.name) && role_states(dd, a.node).0 == a.role
+                        })
+                    })
+                });
+            if !matches {
+                self.web_speak_line_here(fx);
+                return;
+            }
         }
         let Some(b) = self.web.as_ref() else { return };
         let Some(h) = b.docs.get(doc) else { return };

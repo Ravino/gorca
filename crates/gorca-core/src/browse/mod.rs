@@ -63,6 +63,20 @@ pub struct GraceFallback {
     pub at: Instant,
 }
 
+/// What the Reader said when a click was refused because the object had changed: the object, its
+/// name and role as spoken, and when. Only a refresh that shows exactly this, soon after, is the
+/// announced change and not a new one.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AnnouncedChange {
+    pub node: DocNodeId,
+    pub name: std::sync::Arc<str>,
+    pub role: gorca_model::Role,
+    pub at: Instant,
+}
+
+/// How long an [`AnnouncedChange`] stays valid.
+pub const ANNOUNCE_WINDOW: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// How long after the loading grace a repair may still move the cursor to the focus (review F-7).
 pub const GRACE_REJOIN_WINDOW: std::time::Duration = std::time::Duration::from_secs(30);
 
@@ -601,7 +615,7 @@ pub struct BrowseState {
     pub grace_fallback: Option<GraceFallback>,
     /// The Reader just said what a refused click's object says now: the refresh that follows is
     /// not a second displacement (the next Enter acts on the name that was spoken).
-    pub announced_change: bool,
+    pub announced_change: Option<AnnouncedChange>,
     /// The node we last clicked: the cursor node it was clicked from, the control itself, its
     /// role, and when. Only a relabel of exactly this control right after the click is the
     /// click's answer and not a swap.
@@ -677,7 +691,7 @@ impl BrowseState {
             restore_until: None,
             displaced: None,
             grace_fallback: None,
-            announced_change: false,
+            announced_change: None,
             activated_node: None,
             cursor_sig: None,
             single_letter: true,
