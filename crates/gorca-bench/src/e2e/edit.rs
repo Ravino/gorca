@@ -318,6 +318,21 @@ pub fn script(t: Target) -> Vec<Step> {
             typed("clip: restore", "xy"),
         ]);
     }
+    if matches!(t, Target::Web(WebField::ComposerA | WebField::ComposerB)) {
+        // A run of Backspaces and of Deletes in an editor that rebuilds its text node on every
+        // edit: each press is spoken, not only the first.
+        s.extend([
+            st("End 3", END),
+            st("BackSpace 2", BKSP),
+            st("BackSpace 3", BKSP),
+            st("BackSpace 4", BKSP),
+            st("BackSpace 5", BKSP),
+            st("Home 4", HOME),
+            st("Delete 2", DEL),
+            st("Delete 3", DEL),
+            st("Delete 4", DEL),
+        ]);
+    }
     if std::env::var("GORCA_ED_PHASE").as_deref() == Ok("multi") {
         s.clear();
     }

@@ -37,7 +37,7 @@ use crate::SpeechIntent;
 use crate::mode::Mode;
 use crate::present::message;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
-use caret::{CaretState, Cfg, Ctx, Edit, In, Kind, Out, Reply, Spell, Spoken};
+use caret::{CaretState, Cfg, Ctx, Edit, In, Kind, LeafDiff, Out, Reply, Spell, Spoken};
 use say_all::{Act, Run, SayAll, Target};
 
 /// Most parent hops followed to place a node inside the focused rich editable.
@@ -790,7 +790,13 @@ impl Reader {
         let Some(new) = decode(text.as_ref()) else {
             return false;
         };
-        let Some((offset, len, removed)) = self.text.caret.leaf_removal(&new) else {
+        let now_ms = u64::try_from(
+            self.now
+                .saturating_duration_since(self.text.origin)
+                .as_millis(),
+        )
+        .unwrap_or(u64::MAX);
+        let Some(diff) = self.text.caret.leaf_diff(&new, self.now, now_ms) else {
             return false;
         };
         if self.text_ancestry(root, node) == Ancestry::Outside {
@@ -798,16 +804,43 @@ impl Reader {
         }
         self.text.stats.retargets += 1;
         self.text_step(In::Retarget { node, at: None }, fx);
-        self.text_step(
-            In::Edit(Edit::Delete {
+        // The new node starts as the old text, so the machine applies the change to a window
+        // that holds what the user was typing in (the word before a separator, the next erase).
+        let mut old: Vec<char> = new.chars().collect();
+        match &diff {
+            LeafDiff::Removed { offset, text, .. } => {
+                let at = (*offset as usize).min(old.len());
+                old.splice(at..at, text.chars());
+            }
+            LeafDiff::Inserted { offset, len, .. } => {
+                let at = (*offset as usize).min(old.len());
+                old.drain(at..(at + *len as usize).min(old.len()));
+            }
+        }
+        let old: String = old.into_iter().collect();
+        self.text.caret.seed_leaf(&old, None);
+        // Where the caret lands after the change, for the caret event that follows it.
+        let (edit, caret) = match diff {
+            LeafDiff::Removed { offset, len, text } => (
+                Edit::Delete {
+                    offset,
+                    len,
+                    text: Some(text),
+                },
                 offset,
-                len,
-                text: Some(removed),
-            }),
-            fx,
-        );
+            ),
+            LeafDiff::Inserted { offset, len, text } => (
+                Edit::Insert {
+                    offset,
+                    len,
+                    text: Some(text),
+                },
+                offset.saturating_add(len),
+            ),
+        };
+        self.text_step(In::Edit(edit), fx);
         let now = self.now;
-        self.text.caret.leaf_erased(offset, now);
+        self.text.caret.leaf_erased(caret, now);
         true
     }
 

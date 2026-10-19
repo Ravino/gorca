@@ -2126,6 +2126,114 @@ fn the_rebuilt_node_is_diffed_even_when_the_editors_root_churned_in_between() {
     assert!(spoken(&fx).is_empty(), "no second speech: {fx:?}");
 }
 
+/// A run of Backspaces (or Deletes) in a rebuilding editor: every key is spoken, whatever the
+/// event order (root churn first, or the new node first) and the pace.
+fn run_of_erases(root_churn_first: bool, delay_ms: u64, forward: bool, count: usize) {
+    let mut g = gecko_rig();
+    let text = "hello, world";
+    g.rich(leaf(96), text);
+    g.advance(1000);
+    let mut cur: Vec<char> = text.chars().collect();
+    for i in 0..count {
+        let (idx, key) = if forward {
+            (0, 0xffff) // Delete at the start
+        } else {
+            (cur.len() - 1, BACKSPACE)
+        };
+        let gone = cur.remove(idx);
+        let new: String = cur.iter().collect();
+        let q = leaf(200 + u64::try_from(i).unwrap_or(0));
+        let mut said = spoken(&g.key(key, if forward { 0x7f } else { 0 }, NONE));
+        if root_churn_first {
+            let _ = g.delete_on(node(), 0, 1, "\u{FFFC}");
+            let _ = g.insert_on(node(), 0, 1, "\u{FFFC}");
+        }
+        let len = u32::try_from(cur.len()).unwrap_or(0);
+        said.extend(spoken(&g.insert_on(q, 0, len, &new)));
+        if !root_churn_first {
+            let _ = g.delete_on(node(), 0, 1, "\u{FFFC}");
+            let _ = g.insert_on(node(), 0, 1, "\u{FFFC}");
+        }
+        let at = if forward { 0 } else { len };
+        said.extend(spoken(&g.caret_on(q, at)));
+        assert_eq!(
+            said,
+            [gone.to_string()],
+            "press {i} (churn first {root_churn_first}, delay {delay_ms}, forward {forward})"
+        );
+        g.advance(delay_ms);
+    }
+}
+
+#[test]
+fn consecutive_backspaces_in_a_rebuilding_editor_are_all_spoken() {
+    for churn in [true, false] {
+        for delay in [0, 30, 400] {
+            for n in [2, 3, 5] {
+                run_of_erases(churn, delay, false, n);
+            }
+        }
+    }
+}
+
+#[test]
+fn consecutive_deletes_in_a_rebuilding_editor_are_all_spoken() {
+    for churn in [true, false] {
+        for delay in [0, 30, 400] {
+            run_of_erases(churn, delay, true, 4);
+        }
+    }
+}
+
+/// Typing in a rebuilding editor: the typed key speaks the character, the new node (the old text
+/// plus the char) and its caret event say nothing more: not the growing word, not the line.
+#[test]
+fn typing_in_an_editor_that_rebuilds_its_text_node_is_spoken_once_per_key() {
+    for churn_first in [true, false] {
+        for words in [false, true] {
+            typing_in_a_rebuilding_editor(churn_first, words);
+        }
+    }
+}
+
+fn typing_in_a_rebuilding_editor(churn_first: bool, words: bool) {
+    {
+        let mut g = gecko_rig();
+        if words {
+            g.r.cmd.overlay.typed_words = Some(true);
+            g.r.cmd.republish();
+        }
+        g.rich(leaf(96), "he");
+        g.advance(1000);
+        let mut text = String::from("he");
+        for (i, c) in "llo wor".chars().enumerate() {
+            text.push(c);
+            let q = leaf(300 + u64::try_from(i).unwrap_or(0));
+            let len = u32::try_from(text.chars().count()).unwrap_or(0);
+            let mut said = spoken(&g.typed(c));
+            if churn_first {
+                let _ = g.delete_on(node(), 0, 1, "\u{FFFC}");
+                let _ = g.insert_on(node(), 0, 1, "\u{FFFC}");
+            }
+            said.extend(spoken(&g.insert_on(q, 0, len, &text)));
+            if !churn_first {
+                let _ = g.delete_on(node(), 0, 1, "\u{FFFC}");
+                let _ = g.insert_on(node(), 0, 1, "\u{FFFC}");
+            }
+            said.extend(spoken(&g.caret_on(q, len)));
+            g.advance(60);
+            let want = if c == ' ' && words {
+                vec![String::from("space"), String::from("hello")]
+            } else if c == ' ' {
+                vec![String::from("space")]
+            } else {
+                vec![c.to_string()]
+            };
+            assert_eq!(said, want, "key {c:?} (churn first {churn_first})");
+        }
+    }
+}
+
 #[test]
 fn a_whole_text_insert_that_is_not_a_removal_of_the_last_text_is_not_ours() {
     let mut g = gecko_rig();

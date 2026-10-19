@@ -135,3 +135,22 @@ Commands: `tests/web/m8/run_m8.sh <label> --only M8-FLB,M8-FLR,M8-FLT --no-fail`
 `tests/edit/run_edit.sh target/release/e2e run --only ED-CHLA,ED-CHLB --repeats 3 --reader daemon:<gorca>,--impersonate-orca
 --reader-env GORCA_ED=1 --reader-env GORCA_ED_STRICT=1 --reader-env GORCA_M7=1` with `GORCA_M7_BROWSER=chromium` and
 `GORCA_M7_CHROMIUM=<chrome | tools/electron-probe/electron-wrapper.sh>`.
+
+## Review round (2026-10-19, after "merge after fixes")
+* HIGH fixed: only the first Backspace of a run was spoken. After the change the new node had no window, so the next
+  press had nothing to diff. Now `leaf_replaced` seeds the new node's window with the old text before feeding the edit
+  (the machine splices it), the memo carries the leaf's node, text and caret and is restored when the caret event
+  returns to the same leaf after the root's churn (TTL 500 ms), and the caret echo has its own slot.
+  Tests: `consecutive_backspaces_...` (2, 3, 5 presses x churn first/last x delay 0/30/400 ms),
+  `consecutive_deletes_...`, `typing_in_an_editor_..._once_per_key` (typed words on and off).
+  e2e: ED-CHLA/CHLB now press End, 4 Backspaces, Home, 3 Deletes: all spoken, 3 of 3 repeats, Chromium and Electron 44
+  (`bench/results/e2e/ed-fix3`, `ed-el-fix3`).
+* Security: the `/var/tmp/gorca-fl-dump` debug dump was removed from `m8.rs`; the dump data stays in this report.
+* Low fixed: `leaf_diff` compares lengths before copying the text.
+* Typing echo "h, e, he, l, hel" (on main): cause = the typed char was spoken from its key, then the new text node
+  (old text + char as one insert at 0 on an unknown node) was dropped and its caret event retargeted the machine with no
+  window and no expectation, so it was read as an unexplained caret move and the line spoke. Fix: the same diff also
+  recognises a pure insertion (only while a typed key is waiting, so an unrelated node starting with the old text is
+  not taken) and feeds it as `Edit::Insert`, so the key's expectation is matched and the caret echo absorbed.
+  ED-CHLA/B `type` step: "h e l l o comma space b r a v e ..." exactly once per key (the remaining failure in one
+  repeat is a dropped typed letter, the known typist flake). ED-CHIN/CHTA 0 failures, ED-CHCE unchanged (known failing selection step).

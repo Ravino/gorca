@@ -517,21 +517,6 @@ fn act(w: &mut Web, doc: &DocRef, a: Act, node: &mut Option<String>) -> Result<(
                 &format!("\"bus\":\"{}\",\"root\":\"{}\"", w.bus, doc.path),
                 Duration::from_secs(30),
             )?;
-            if i == 0 {
-                // What the browser exposes at every Tab stop (name, description, attributes,
-                // relations), kept next to the speech for the label-source investigation.
-                let dir = "/var/tmp/gorca-fl-dump";
-                let engine = if super::chromium_selected() {
-                    "chromium"
-                } else {
-                    "firefox"
-                };
-                let _ = std::fs::create_dir_all(dir);
-                let _ = std::fs::write(
-                    format!("{dir}/{engine}-{}.json", doc.name.replace(' ', "_")),
-                    &r,
-                );
-            }
             let path = r
                 .split("\"path\":\"")
                 .skip(1)
