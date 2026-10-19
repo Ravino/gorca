@@ -643,6 +643,15 @@ pub struct Settings {
     pub browse: BrowseSettings,
     pub terminal: TerminalSettings,
     pub verbosity: VerbositySettings,
+    pub profiles: ProfilesSettings,
+}
+
+/// `[profiles]` (ADR-0016 PF-2): a `Base` section, never inside a profile.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ProfilesSettings {
+    /// Rows switched on or off by the user, by row id (`gorca/vscode`, `ext-foo/bar`). Absent =
+    /// the row's default state (first-party on, third-party off).
+    pub rows: std::collections::BTreeMap<String, bool>,
 }
 
 /// Runtime changes made by commands. Never written to disk except by `settings.save` (Q-1).
@@ -736,10 +745,29 @@ impl Overlay {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SettingType {
     Bool,
-    Int { min: i64, max: i64 },
+    Int {
+        min: i64,
+        max: i64,
+    },
     Enum(&'static str),
     Str,
     StrList,
+    /// A table of `name = true|false` (ADR-0016 L-8: `profiles.rows`). The payload says the
+    /// value type is a boolean; no other map type exists.
+    Map(bool),
+}
+
+/// Where a key is resolved (ADR-0016 section 2.3).
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum KeyScope {
+    /// L0 to L2 and L5 only: never in any profile or row.
+    Base,
+    /// Resolved per application: `App` triggers.
+    App,
+    /// Resolved per (application, document): `App` and `Site` triggers.
+    Doc,
+    /// Resolved per profile key: every trigger kind.
+    Focus,
 }
 
 /// Whether a change takes effect while gorca runs (HR-6).
@@ -758,6 +786,67 @@ pub struct SettingDef {
     pub default: &'static str,
     pub since: u32,
     pub apply: Apply,
+    /// Where the key is resolved (ADR-0016 section 2.3).
+    pub scope: KeyScope,
+    /// Rows of installed extensions and products may set it (presentation, mode defaults).
+    pub vendor: bool,
+    /// Never settable by rows; an L5 value always beats rows (UB-1).
+    pub privacy: bool,
+}
+
+/// `const` string equality (`==` on `str` is not `const`).
+const fn same(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// The ADR-0016 section 2.3 table as code: `(scope, vendor, privacy)` of a key.
+const fn classify(section: &str, key: &str) -> (KeyScope, bool, bool) {
+    if same(section, "keyboard") || same(section, "keymap") || same(section, "profiles") {
+        (KeyScope::Base, false, false)
+    } else if same(section, "speech") {
+        if same(key, "backend") {
+            (KeyScope::Base, false, false)
+        } else if same(key, "punctuation") || same(key, "caps") || same(key, "caps_pitch_change") {
+            (KeyScope::Focus, true, false)
+        } else {
+            // rate, pitch, volume, rate_step, voice, language, output_module (SW-3, PC-1, PC-4).
+            (KeyScope::Focus, false, false)
+        }
+    } else if same(section, "echo") {
+        (KeyScope::Focus, false, true)
+    } else if same(section, "editing") {
+        if same(key, "announce_clipboard") {
+            (KeyScope::Focus, false, true)
+        } else {
+            (KeyScope::Focus, true, false)
+        }
+    } else if same(section, "browse") {
+        if same(key, "say_all_on_load") {
+            (KeyScope::Doc, true, false)
+        } else {
+            (KeyScope::Focus, true, false)
+        }
+    } else if same(section, "terminal") {
+        if same(key, "secret_regex") {
+            (KeyScope::App, false, true)
+        } else {
+            (KeyScope::App, true, false)
+        }
+    } else {
+        // text.*, verbosity.*: presentation.
+        (KeyScope::Focus, true, false)
+    }
 }
 
 impl SettingDef {
@@ -772,6 +861,7 @@ const fn row(
     ty: SettingType,
     default: &'static str,
 ) -> SettingDef {
+    let (scope, vendor, privacy) = classify(section, key);
     SettingDef {
         section,
         key,
@@ -779,6 +869,9 @@ const fn row(
         default,
         since: 1,
         apply: Apply::Live,
+        scope,
+        vendor,
+        privacy,
     }
 }
 
@@ -950,6 +1043,7 @@ pub static SETTINGS: &[SettingDef] = &[
         SettingType::Enum("\"full\" or \"brief\""),
         "\"full\"",
     ),
+    row("profiles", "rows", SettingType::Map(true), "{}"),
 ];
 
 /// Section names of the schema, for unknown-section detection.
@@ -1148,6 +1242,11 @@ static DOCS: &[(&str, &str, &str)] = &[
         "confirmations",
         "Full or brief confirmations of settings changes.",
     ),
+    (
+        "profiles",
+        "rows",
+        "Switch profile rows from the product or add-ons on or off, by row id.",
+    ),
 ];
 
 /// The description of a key, if it has one.
@@ -1164,6 +1263,7 @@ fn type_text(t: SettingType) -> String {
         SettingType::Enum(names) => format!("one of {names}"),
         SettingType::Str => "string".to_owned(),
         SettingType::StrList => "list of strings".to_owned(),
+        SettingType::Map(_) => "table of names to true or false".to_owned(),
     }
 }
 
@@ -1299,7 +1399,8 @@ mod tests {
                 "text",
                 "browse",
                 "terminal",
-                "verbosity"
+                "verbosity",
+                "profiles"
             ]
         );
         let text = defaults_toml();

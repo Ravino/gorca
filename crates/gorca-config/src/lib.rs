@@ -11,20 +11,25 @@
 //!   preset, then the user file (KC-1 to KC-6). Mapping names to commands is `gorca-core`'s job.
 
 mod diag;
+pub mod glob;
 mod keymap;
 mod load;
+mod patch;
 mod presets;
+pub mod profiles;
 mod save;
 mod settings;
 
 pub use diag::{Diag, DiagMsg, Severity, diags_hash, did_you_mean, fnv1a};
 pub use keymap::{Binding, ChordMods, ChordSpec, ContextName, ResolvedKeymap};
 pub use load::{Loaded, MAX_FILE_BYTES, load};
+pub use patch::{KeyId, SettingsPatch, Value, get_value, is_default, set_value};
 pub use presets::Presets;
 pub use save::{SaveError, save};
 pub use settings::{
     Apply, Backend, BoundaryMode, Caps, Confirmations, EchoSettings, EditingSettings,
-    InterruptPolicy, KeyboardSettings, Layout, Overlay, Preset, Punct, SCHEMA, SETTINGS,
-    SettingDef, SettingType, Settings, SpeechSettings, TextSettings, Verbosity, VerbositySettings,
-    WordLevel, defaults_toml, defaults_toml_commented, resolve_language, sections,
+    InterruptPolicy, KeyScope, KeyboardSettings, Layout, Overlay, Preset, ProfilesSettings, Punct,
+    SCHEMA, SETTINGS, SettingDef, SettingType, Settings, SpeechSettings, TextSettings, Verbosity,
+    VerbositySettings, WordLevel, defaults_toml, defaults_toml_commented, resolve_language,
+    sections,
 };
