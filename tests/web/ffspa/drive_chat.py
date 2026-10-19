@@ -103,7 +103,8 @@ SEQ = os.environ.get("FFSPA_SEQ", "A")
 step("tab menu", TAB)
 step("tab alice", TAB)
 step("enter opens alice", ENTER, wait=1.5)
-check("R1 first Enter opens the chat", status_text(), "Opened chat")
+if SEQ != "E":
+    check("R1 first Enter opens the chat", status_text(), "Opened chat")
 print("   status", status_text(), flush=True)
 
 if SEQ == "A":
@@ -126,9 +127,6 @@ elif SEQ == "D":
     sys.exit(1 if fails else 0)
 elif SEQ == "E":
     # rows are rewritten by the page every second: Enter must still open a chat (second Enter at the latest)
-    step("esc", ESC, wait=1.0)
-    step("esc closes", ESC, wait=1.5)
-    step("tab", TAB, wait=1.0)
     step("tab", TAB, wait=1.0)
     time.sleep(2.5)
     step("enter 1", ENTER, wait=1.5)
