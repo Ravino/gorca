@@ -109,3 +109,51 @@ The e2e results cited in `chr0-implementation.md` (`bench/results/e2e/chr0-*`) a
 No `unwrap()` on runtime paths in the diff; `Flight` aborts its task on drop; a lost source answers the
 repair's waiter with an error that counts as fruitless; the young checks and the load-end follow-ups are bounded
 (3 and 2); the gate caps the gap at 60 s and keeps one repair in flight per document.
+
+---
+
+# Delta review, round 2 (head `f46afdbe`)
+
+Date 2026-10-19. **Verdict: MERGE AFTER FIXES** (D-1 and D-2 before merge).
+
+| Check | Result |
+|---|---|
+| `git merge-tree main(689dd995) HEAD` | **conflict in `crates/gorca-bench/benches/fuse.rs`**: the branch carries a `cargo fmt` reflow of main's line 624 and main rewrote the file since. Take main's version (the branch has no real change there) |
+| HEAD `cargo clippy --workspace --all-targets -D warnings` | clean |
+| HEAD `cargo test -p gorca-core -p gorca-doc-source-atspi -p gorca-config` | core 866, config 137 pass; **fake_peer 29/30**: `incremental_updates_are_applied_while_a_repair_runs_and_survive_it` fails at `fake_peer.rs:2040` ("a later list dropped the node"), 1 of 3 standalone runs and in the suite run (load ~8) |
+| F-2, F-4, F-5, F-6 | fixed as described; tests present |
+| Gecko | `RepairPolicy::for_engine(Gecko) = NONE` |
+| F-3 (security change) | matches the stated rule: bypass only if the mirror shows exactly the spoken name on the same node, with the role the mirror had at refusal, within `ANNOUNCE_WINDOW` (2 s); an empty name stores nothing; a mismatch speaks the line instead of clicking; the source guard still re-checks on the next click. The role is the mirror's *old* role (the notice carries only the name), so a role change fails closed (extra announcement, never a blind click) |
+
+## D-1 (High) A repair still reverts an update made during it; only the re-read puts it back
+
+`finish_flight` applies the older snapshot with `apply_resync` first and only then marks the touched nodes
+dirty, so the revert goes out to the sink and the restore comes one settle later. Delta trace of the
+branch's own test (prints added): after the repair, `children of doc: n=1` + `Removed 1` (the paragraph the
+update added), `Settled`, then `Upsert 3` + `children of doc: n=2`, `Settled`. The Reader therefore sees the
+new paragraph vanish and come back in two publishes (a cursor on it is lost and goes through position restore,
+and main's displacement mark can cost the next Enter). The test's last-list check is order-dependent, which is
+why it flakes rather than failing every time.
+**Fix:** in `finish_flight`, re-read the touched nodes (bounded, `MAX_TOUCHED`) *before* emitting, and push
+the resync difference and the re-read as one batch ending in a single `Settled`. Alternatively, leave the
+child lists and removals of touched parents out of the resync. Then make the test assert that no `Removed` or
+child list without the node is ever emitted, not just the last one.
+
+## D-2 (Medium) A fruitless cheap check never escalates
+
+`top_unchanged` (48 BFS nodes, 150 ms) answers `Orphans`/`RootState` repairs with "nothing changed". When the
+staleness sits below those 48 nodes, every later orphan request gets the same answer, `quiet[Orphans]` climbs
+to the 60 s cap, and no whole-document refetch runs, although the actor can see that the orphan keys are still
+unknown after the "repair". Exact signals (load end, focus miss, young) still refetch in full, so this is
+bounded to staleness that only orphans reveal (dropped adds after the load).
+**Fix:** when a cheap pass returns and the sampled orphan keys are still not in the join, send the next
+orphan repair with `cheap_check: false`.
+
+## D-3 (Low)
+
+- `DocHandle::request_repair`: if `try_send` fails it stores 0, which can wipe a reason a concurrent caller
+  (hub vs. router) just raised. The next event re-raises it.
+- `top_unchanged` runs inline in `handle_request`, so a click or selection queued behind it waits up to
+  150 ms. No key-to-speech path: the core sends the source only Action/Select/Activity/Rebuild/Repair.
+- Open as stated: orphans still go to `DocDirectory::of_app` (the first document of the app); dormant
+  documents now drop them, so the cost is a wrong-document guess on an awake tab.
