@@ -390,6 +390,60 @@ impl Trigger {
     }
 }
 
+fn matcher_inline(m: &AppMatcher) -> toml_edit::InlineTable {
+    let mut t = toml_edit::InlineTable::new();
+    let arr = |g: &[Glob]| -> toml_edit::Array { g.iter().map(Glob::as_str).collect() };
+    if !m.name.is_empty() {
+        t.insert("name", toml_edit::Value::Array(arr(&m.name)));
+    }
+    if !m.exe.is_empty() {
+        t.insert("exe", toml_edit::Value::Array(arr(&m.exe)));
+    }
+    if !m.desktop_id.is_empty() {
+        t.insert("desktop_id", toml_edit::Value::Array(arr(&m.desktop_id)));
+    }
+    t
+}
+
+impl Trigger {
+    /// The trigger as a `[[profile.trigger]]` table (the inverse of the parser).
+    pub fn to_table(&self) -> toml_edit::Table {
+        use toml_edit::{InlineTable, Value, value};
+        let mut t = toml_edit::Table::new();
+        match self {
+            Trigger::App { app } => {
+                t["app"] = value(matcher_inline(app));
+            }
+            Trigger::Window { app, title, kind } => {
+                let mut w = InlineTable::new();
+                if !app.is_empty() {
+                    w.insert("app", Value::InlineTable(matcher_inline(app)));
+                }
+                w.insert("title", title.as_str().into());
+                if let Some(k) = kind {
+                    w.insert("kind", k.name().into());
+                }
+                t["window"] = value(w);
+            }
+            Trigger::Context { ctx } => {
+                t["context"] = value(ctx.name());
+            }
+            Trigger::Site { app, host, path } => {
+                let mut w = InlineTable::new();
+                if !app.is_empty() {
+                    w.insert("app", Value::InlineTable(matcher_inline(app)));
+                }
+                w.insert("host", host.as_str().into());
+                if let Some(p) = path {
+                    w.insert("path", p.as_str().into());
+                }
+                t["site"] = value(w);
+            }
+        }
+        t
+    }
+}
+
 fn span(item: &Item) -> Option<(u32, u32)> {
     item.span().map(|r| {
         (
