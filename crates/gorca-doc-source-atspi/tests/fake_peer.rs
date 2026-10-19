@@ -1770,3 +1770,166 @@ async fn duplicate_names_are_ambiguous_so_the_click_is_refused_not_shifted() {
     b.shutdown.cancel();
     let _ = b.task.await;
 }
+
+// ---------------------------------------------------------------------------------------------
+// CHR-0: act only on what was spoken, and repairs that do not block the request loop
+
+#[tokio::test]
+async fn a_click_on_an_object_that_no_longer_says_what_was_spoken_is_refused() {
+    let (b, _ul, lis, ids) = browse_list().await;
+    // The page re-used the object for another row: same object, new name, no event yet.
+    b.fake.rename(lis[1], "item 1 (draft)");
+    let r = click(&b, ids[1]).await;
+    assert!(
+        matches!(r, Err(gorca_doc_source_api::SourceError::Displaced)),
+        "{r:?}"
+    );
+    assert!(b.fake.tree.lock().unwrap().acted.is_empty());
+    // An untouched sibling still clicks.
+    click(&b, ids[2]).await.unwrap();
+    assert_eq!(b.fake.tree.lock().unwrap().acted, vec![lis[2]]);
+    b.shutdown.cancel();
+    let _ = b.task.await;
+}
+
+#[tokio::test]
+async fn text_requests_are_served_while_a_repair_fetches() {
+    let (fake, conn) = Fake::start(2).await;
+    let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+    let p = fake.node(raw::PARAGRAPH, "", "p", None).await;
+    fake.link(doc, p);
+    fake.set_text(p, "one");
+    let mut b = start_browse(fake, conn, doc).await;
+    let first = until_settled(&mut b).await;
+    let para = upserts_of(&first)
+        .into_iter()
+        .find(|n| n.role == Role::Paragraph)
+        .map(|n| n.id)
+        .expect("paragraph mirrored");
+    // The repair role pass now takes 400 ms.
+    b.fake
+        .tree
+        .lock()
+        .unwrap()
+        .nodes
+        .get_mut(&p)
+        .unwrap()
+        .role_delay = Duration::from_millis(400);
+    let (reply, repaired) = gorca_rt::oneshot::channel();
+    b.requests.send(DocRequest::Repair { reply }).await.unwrap();
+    let t = Instant::now();
+    let (reply, text) = gorca_rt::oneshot::channel();
+    b.requests
+        .send(DocRequest::Text {
+            node: para,
+            range: 0..3,
+            deadline: gorca_rt::Deadline(Instant::now() + Duration::from_secs(2)),
+            reply,
+        })
+        .await
+        .unwrap();
+    let got = tokio::time::timeout(Duration::from_secs(3), text)
+        .await
+        .expect("the text answers")
+        .expect("reply sent");
+    assert_eq!(got.as_deref(), Ok("one"));
+    assert!(
+        t.elapsed() < Duration::from_millis(300),
+        "the text request waited for the repair: {:?}",
+        t.elapsed()
+    );
+    // The repair itself still ends, with a report and a Settled marker.
+    let report = tokio::time::timeout(Duration::from_secs(5), repaired)
+        .await
+        .expect("the repair answers")
+        .expect("reply sent")
+        .expect("repair ok");
+    assert!(report.took >= Duration::from_millis(350), "{report:?}");
+    assert!(!report.failed);
+    let _ = until_settled(&mut b).await;
+    b.shutdown.cancel();
+    let _ = b.task.await;
+}
+
+#[tokio::test]
+async fn growth_without_events_stays_invisible_until_a_repair_finds_it() {
+    // Chromium sends no children-changed:add while a page loads and nothing when the load ends:
+    // the tree grows under a known node and the source is told nothing (step 0, CHR-0).
+    let (fake, conn) = Fake::start(2).await;
+    let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+    let main = fake.node(raw::SECTION, "App", "main", None).await;
+    fake.link(doc, main);
+    let mut b = start_browse(fake, conn, doc).await;
+    let _ = until_settled(&mut b).await;
+    for i in 0..40 {
+        let p = b
+            .fake
+            .node(raw::PARAGRAPH, "", "p", Some(&format!("p{i}")))
+            .await;
+        b.fake.set_text(p, &format!("paragraph {i}"));
+        b.fake.link(main, p);
+    }
+    assert!(
+        tokio::time::timeout(Duration::from_millis(400), b.rx.deltas.recv())
+            .await
+            .is_err(),
+        "no event, so nothing is pushed"
+    );
+    let (reply, report) = gorca_rt::oneshot::channel();
+    b.requests.send(DocRequest::Repair { reply }).await.unwrap();
+    let pushed = until_settled(&mut b).await;
+    let report = report.await.unwrap().unwrap();
+    assert!(report.nodes >= 42, "{report:?}");
+    assert!(!report.failed);
+    let paragraphs = upserts_of(&pushed)
+        .iter()
+        .filter(|n| n.role == Role::Paragraph)
+        .count();
+    assert_eq!(paragraphs, 40, "every grown paragraph reaches the mirror");
+    b.shutdown.cancel();
+    let _ = b.task.await;
+}
+
+#[tokio::test]
+async fn a_heavy_subtree_is_expanded_by_the_next_fetch_so_no_get_tree_covers_it_whole() {
+    // CHR-0 B-3: a GetTree on a big subtree blocks the browser's main thread for its whole
+    // length. The first fetch finds the heavy root; the next one splits it with GetChildren.
+    let (fake, conn) = Fake::start(3).await;
+    let doc = fake.node(raw::DOCUMENT_WEB, "doc", "body", None).await;
+    let big = fake.node(raw::SECTION, "big", "section", None).await;
+    let small = fake.node(raw::SECTION, "small", "section", None).await;
+    fake.link(doc, big);
+    fake.link(doc, small);
+    for i in 0..60 {
+        let p = fake.node(raw::PARAGRAPH, &format!("p{i}"), "p", None).await;
+        fake.link(big, p);
+    }
+    let sp = fake.node(raw::PARAGRAPH, "only", "p", None).await;
+    fake.link(small, sp);
+    let conn = Arc::new(conn);
+    let interner = Arc::new(AttrInterner::default());
+    let mut paths = PathTable::default();
+    let mut opts = fast_opts(Split::Frontier {
+        min_subtrees: 2,
+        max_depth: 1,
+    });
+    opts.heavy_nodes = 30;
+    let first = fetch_document(&conn, &interner, &mut paths, &path_of(doc), &opts)
+        .await
+        .unwrap();
+    assert_eq!(first.timings.heavy_roots, vec![path_of(big)]);
+    assert!(first.timings.heaviest_get_tree_nodes >= 61);
+
+    opts.heavy = Arc::new(first.timings.heavy_roots.iter().cloned().collect());
+    let second = fetch_document(&conn, &interner, &mut paths, &path_of(doc), &opts)
+        .await
+        .unwrap();
+    assert!(
+        second.timings.heaviest_get_tree_nodes <= 2,
+        "the heavy section was fetched in pieces: {} nodes in the biggest call",
+        second.timings.heaviest_get_tree_nodes
+    );
+    assert!(second.timings.heavy_roots.is_empty());
+    // The same document either way.
+    assert_eq!(first.block.nodes.len(), second.block.nodes.len());
+}
