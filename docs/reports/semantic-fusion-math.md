@@ -721,3 +721,170 @@ expected state before writing.
 - Static trees (as in §6): structural events and synthetic nodes are not simulated.
 - Size numbers come from a C model of `Arc` + glibc on a live desktop host; the Rust A4 bench on
   the real layout supersedes them.
+
+---
+
+## 11. Memory vs latency of the fusion engine (M22a-B6 follow-up)
+
+Added 2026-10-19. Inputs: B6 (`docs/reports/m22a-b6-fuse-bench.md`, result set `20261019e`), the
+in-progress fix branch (`perfA-run1-fuse.json` in worktree `agent-a5fa450750973b3b7`: S0 projected
+to selector-read groups), and two new probes:
+
+```
+. ./env.sh
+cd research/fuse-mem && CARGO_TARGET_DIR=/var/tmp/fuse-mem-target cargo build --release \
+  && taskset -c 2 /var/tmp/fuse-mem-target/release/fuse-mem      # type sizes, s0/fuse cost
+OMP_NUM_THREADS=1 python research/fuse-mem/model.py all          # memory model + 3 simulations
+```
+
+Engineering decisions and the budget policy derived from this section are in
+`docs/reports/fuse-memory-tradeoff.md`.
+
+### 11.1 What S0 is used for (from `ivm.rs`/`strata.rs`)
+
+The stored `S0Node` has exactly two consumers: (a) neighbours' patch selectors read the parent's
+and children's S0 **values** (`Slot` only, never `info/src/seq`), restricted to the declared
+selector-read set `R = reads.parent ∪ reads.children`; (b) `changed_groups(old, new)` decides
+whether to re-dirty neighbours, again only over `R`. The node's own fusion recomputes its S0 from
+registers every time. Content names read children's **published** entries, not S0.
+
+### 11.2 Measured costs (probe `research/fuse-mem/src/main.rs`, pinned CPU 2, load 12)
+
+Type sizes (main): `Reg` 32 B, `Write`/`Val`/`Slot` 24 B, `S0Slot` 64 B (48 B on the fix branch),
+`NodeRegs` 136 B inline, `SemEntry` 128 B (160 B glibc chunk under `Arc`).
+
+| per node, ns (p50 / p99) | main: `s0_with` | main: `fuse_node_with` | fix branch: `s0_with` | fix branch: `fuse_node_with` |
+|---|---|---|---|---|
+| 4 registers, hot (1 node) | 380 / 400 | 213 / 240 | 74 / 82 | 76 / 99 |
+| 4 registers, 100k nodes, random order | 562-581 / 843-939 | 209 / 367 | 254 / 482 | 88 / 231 |
+| 14 registers (9 `Absent`), hot | 565 / 587 | 150 / 180 | 213 / 227 | 140 / 170 |
+| 14 registers, 100k, random order | 913 / 1173-1330 | 152 / 310 | 537 / 785 | 147 / 303 |
+
+**[M]** The pure FUSE compute is 0.15-0.35 µs hot and 0.34-0.68 µs cold (p50) on the fix branch.
+The B6/perfA per-event p50 of 1.4-3.0 µs is therefore dominated by `Ivm` bookkeeping (dirty
+`BTreeSet`, `dirty_of`/`age` hash maps, anchor lookups, publish), not by FUSE.
+
+### 11.3 S0 = published entry ⊕ sparse delta (exact)
+
+Let `rebuild(e, g)` map a published entry back to an S0 slot: the entry's value of `g` when
+`prov(g) ∈ {ObservedPrimary, ObservedSecondary}`, else `Unknown`. Store per node only
+
+  `Δ[x] = { (g, s0[x][g]) : g ∈ R, rebuild(pub[x], g) ≠ s0[x][g] }`.
+
+**[P] Invariant.** For every alive `x` and `g ∈ R`: `s0[x][g] = Δ[x][g]` if `g ∈ dom Δ[x]`, else
+`rebuild(pub[x], g)`. *Proof.* `process(x)` is the only writer of `s0`, `pub` (values and prov) and
+`Δ`; it sets `Δ` from the new pair by definition, so the invariant holds after it whatever
+`rebuild` loses (lossy encodings, `Absent` vs default, patched or filled groups simply land in `Δ`).
+`defer_stale` changes only the `stale` mask, which `rebuild` does not read; read-time silencing
+does not modify `pub`; `s0 = None ⇔ pub = None` (a dead node fuses to no entry). ∎
+Consequences: neighbour reads and `changed_groups` are exact with zero recomputation; the old S0
+projection is `rebuild(old_pub, ·) ⊕ Δ_old`, taken before the overwrite.
+
+**Caveat (R changes).** `Δ` is complete only for the `R` it was computed with. When a patch reload
+grows `R` to `R'`, reads of `g ∈ R' \ R` must recompute that neighbour's S0 (`s0_with`, 0.25-0.54 µs
+cold) until the epoch sweep has re-fused the node; keep a per-writer `delta_groups` mask and a
+per-node "swept at epoch" stamp. Shrinking `R` needs nothing.
+
+**Expected |Δ| [H/M].** A node has `Δ ≠ ∅` only if a group in `R` is won by Patch/User/Derived/
+Inferred/repair while S0 had a value, or the encoding is lossy for it. With `R = {role}` (the B6
+patch set) that is the role-patched or role-overridden nodes. Bounds: oracle stress mix 3.9 % of
+cells non-observed (§10.3, deliberately dense in patches/users); real browser dumps
+(`research/web-graph/real-trees`) have 0-0.02 % content-nameable nodes with an observed empty name
+on the large pages (10 % on a 30-node form fixture), relevant only if `name ∈ R`. Model value:
+3 % of nodes, ≈ 64 B each → ≈ 2 B/node.
+
+### 11.4 Alternative: an LRU of S0 for neighbour reads [M, simulation]
+
+`model.py s0cache`: real-shape tree (Chrome `static-large10000` tiled to 100k; 40 % internal,
+mean fan-out 2.5, p99 6), storm as B6 (70 % of events on a 2k hot set, 30 % uniform), miss cost =
+one cold `s0_with` (0.25-0.54 µs):
+
+| reads per fusion | C = 1k | 4k | 16k | 64k |
+|---|---|---|---|---|
+| parent only (1.00) | hit 0.29, +0.18-0.38 µs | 0.71, +0.07-0.15 | 0.84, +0.04-0.09 | 0.86, +0.03-0.07 |
+| parent + children (1.96) | 0.15, +0.42-0.90 | 0.48, +0.26-0.55 | 0.76, +0.12-0.25 | 0.84, +0.08-0.16 |
+
+Hit rate saturates at ≈ 0.85 because the 30 % uniform tail is never resident; a miss on a wide
+node (≤ `max_children` = 256 children) costs up to 256 × 0.5 µs = 128 µs, a p99 killer. A 16k cache
+costs ≈ 1.3 MB but still adds misses and a tail; the delta (11.3) has no misses and ≈ 2 B/node.
+**The LRU is dominated by the delta; do not build it.**
+
+### 11.5 Memory model per node [M calibrated, H for the realistic profiles]
+
+`model.py mem` (glibc chunks, `RawVec` growth 4→8→16→32, one primary). Calibration on the bench
+world (4 registers): model 728 B/node vs measured 687 (perfA), 1672 vs 1539 (B6) — the model
+over-predicts by 6-9 %.
+
+| design | bench world (4 regs) | AT-SPI full state read (14 regs, 9 `Absent`) | rich widget (18 regs, 10 `Absent`) |
+|---|---|---|---|
+| A: B6 (full S0 inline 1008 B) | 1672 B → 167 MB/100k | 2056 B → 206 MB | 2568 B → 257 MB |
+| B: fix branch (S0 projected to `R`, Vec) | 728 → 73 | 1112 → 111 | 1624 → 162 |
+| C: S0 delta + node diet (≤ 176 B inline) + exact-capacity registers | 542 → 54 | 862 → 86 | 990 → 99 |
+| D: C + `Absent` runs + 24 B `Reg` (thin name `Arc`) | 478 → 48 | 494 → 49 | 574 → 57 |
+
+At 10k / 500k nodes multiply by 0.1 / 5 (all terms are per node; e.g. D realistic: 4.9 / 247 MB).
+**[M] The bench world under-reports registers**: it writes 3-4 groups per node, a full AT-SPI
+state read writes ≈ 14 (the `Absent` ones are values, not `Unknown`). One-by-one inserts give a
+`Vec<Reg>` capacity of 16 for 14 registers (528 B chunk) and 32 for 17-18 (1040 B): the register
+store, not S0, becomes the largest term once S0 is gone. **[P] 25 MB/100k is unreachable** with
+any design that keeps registers (the source of truth: 14 × 24 B = 336 B/node ≥ 33.6 MB before the
+entry); D is ≈ 2× that.
+
+### 11.6 Reader access patterns: lazily materialised entries [M, simulation]
+
+`model.py reader`: keypress mix 55 % sequential line (90 % forward), 25 % quick nav (heading 40 %,
+link 25 %, form 20 %, landmark 10 %, list 5 %), 15 % Tab with Zipf(2) skip over focusables, 5 %
+uniform jump (find/elements list). Each keypress reads the target and ≤ 12 ancestors (context):
+4.5-5.5 entries. LRU of entries, miss = one cold fusion (3 µs incl. bookkeeping):
+
+| N | cache 1 % | 5 % | 20 % |
+|---|---|---|---|
+| 10k | hit 0.75, 1.13 miss/key, p99 4 → +12 µs | 0.78, 0.98, +12 µs | 0.87, 0.54, +9 µs |
+| 100k | 0.76, 1.30, +12 µs | 0.80, 1.04, +12 µs | 0.84, 0.83, +9 µs |
+| 500k | 0.76, 1.30, +12 µs | 0.79, 1.16, +12 µs | 0.79, 1.16, +12 µs |
+
+**[M]** Compute-on-access is latency-safe for per-key navigation (+≤ 12 µs p99 against 15 ms) at any
+cache size, because each keypress reads ≤ 4 cold entries. It is not safe for bulk reads: an
+elements list of k items costs k × 3 µs (5k links = 15 ms) and must be streamed asynchronously.
+The memory it can save is the entry itself (160 B/node, 16 MB/100k). The ancestors (the context
+chain) are the hot part; the hit rate is bounded by jumps, not by cache size.
+
+### 11.7 Queueing: what the per-event p99 means for speech [M, simulation]
+
+`model.py queue`: one writer, service per event lognormal fitted to measured (p50, p99), Poisson
+arrivals with 1 % priority (focus-chain / visible) events, optionally a burst of 20k non-priority
+events at once (page load). Priority event → published, p99 µs:
+
+| service (p50/p99 µs) | rate | ρ | FIFO, Poisson | prio, Poisson | FIFO, burst | prio + incremental publish, burst | prio + publish at end of 2 ms run, burst |
+|---|---|---|---|---|---|---|---|
+| 1.4 / 5.1 (perfA clean) | 50k/s | 0.08 | 6.4 | 6.3 | 23 005 | 5.8 | 1 365 |
+| 2.65 / 7.8 (perfA + facts) | 50k/s | 0.15 | 8.9 | 8.8 | 50 806 | 9.6 | 1 607 |
+| 3.2 / 13.0 (B6 worst) | 50k/s | 0.19 | 15.5 | 13.0 | 65 148 | 15.8 | 1 567 |
+
+**[M]** At ρ ≤ 0.2 the queue adds < 2× to the per-event p99; what decides user-visible latency is
+(1) priority-first service (FIFO behind a page-load burst: 23-65 ms, over the whole 15 ms budget)
+and (2) publishing priority nodes as soon as they are fused (end-of-run publish: 0.9-1.6 ms). The
+difference between a 2 µs and a 10 µs per-event p99 is ≤ 10 µs of speech latency (< 0.1 % of
+15 ms).
+
+### 11.8 Is M-11 (≤ 2 µs p99 per event) realistic?
+
+**[M/H] No, not as a p99 on a 100k mirror with cold traffic.** Lower bound sketch: 30 % of B6
+events hit nodes outside any cache level (working set 50-170 MB ≫ 24 MB shared L3); a cold
+fusion is ≥ 0.34-0.68 µs of pure compute (11.2) plus a chain of dependent misses (node → register
+heap → entry `Arc` → parent/children → dirty-set and hash-map lines, ≈ 10-20 lines at ≈ 90 ns
+with partial overlap ≈ 1-2 µs), and ≈ 10 % of events fuse 2-3 nodes (name change → content-named
+parent). The p99 event is a multi-fusion cold event: ≥ 3-5 µs with ideal bookkeeping. 2 µs is
+achievable as a **p50** and as a hot-set metric. Restated gates: see
+`docs/reports/fuse-memory-tradeoff.md` §4.
+
+### 11.9 Unverified
+
+- Real register counts per node come from reading the AT-SPI state model, not from a connector
+  wired to `Ivm` (C1b not done); 14 and 18 are modelled profiles.
+- `rebuild` cost (≈ 5-20 ns per group) is estimated, not measured; the fix branch should measure it.
+- Δ fraction for real patch sets is unknown until profiles ship (D-4); 3 % is a modelling value.
+- The reader-access mix and the 3 µs cold fusion cost are assumptions; tiling one 21k-node page
+  to 500k repeats its structure.
+- Queue simulation is single-writer, non-preemptive, lognormal service; heavy tails beyond the
+  fitted p99 (host jitter of 1-7 ms in B6) are not modelled and dominate p99.9.
