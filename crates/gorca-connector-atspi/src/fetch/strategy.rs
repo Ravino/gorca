@@ -113,7 +113,9 @@ async fn fetch_node(
         let _ = required_done.send(());
         r
     };
-    let ((role, state, name, desc, parent, count), attrs) = tokio::join!(required_fut, attrs_fut);
+    // Boxed: unboxed, the seven calls and the select make `fetch_node` a 20 KB future.
+    let ((role, state, name, desc, parent, count), attrs) =
+        tokio::join!(Box::pin(required_fut), Box::pin(attrs_fut));
     // Role and state are required; a failed name only costs the name.
     let role = role.map_err(|e| backend_error(&e))?;
     let state_words = state.map_err(|e| backend_error(&e))?;
