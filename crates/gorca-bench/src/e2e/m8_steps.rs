@@ -1320,7 +1320,7 @@ pub fn scenarios() -> Vec<Scenario> {
         sc("M8-SLOW", "CHR-0: tree grows while the load is held open", "slowload.html", "M8 SlowLoad", Body::Steps(slow)),
         sc("M8-SLOW0", "CHR-0 control: the same page without the slow image", "slowload-ctl.html", "M8 SlowLoad Control", Body::Steps(slow_ctl)),
         sc("M8-MSG", "web messenger: lists, browse mode and sticky focus mode", "messenger.html", "M8 Messenger", Body::Steps(msg)),
-        sc("M8-MSGK", "web messenger with real arrow keys typed into the browser (Chromium)", "messenger.html", "M8 Messenger", Body::Steps(msg_keys)),
+        sc("M8-MSGK", "web messenger with real arrow keys typed into the browser", "messenger.html", "M8 Messenger", Body::Steps(msg_keys)),
         sc("M8-RDESC", "review: description flood", "../../m8b/review/r_desc.html", "M8b Review Desc", Body::Steps(rv_desc)),
         sc("M8-RNAME", "review: name flood", "../../m8b/review/r_name.html", "M8b Review Name", Body::Steps(rv_name)),
         sc("M8-RINV", "review: invalid flood", "../../m8b/review/r_invalid.html", "M8b Review Invalid", Body::Steps(rv_inv)),

@@ -133,6 +133,127 @@ pub async fn top_document(conn: &AppConn, path: &str) -> Option<String> {
     top
 }
 
+/// The toolkit's own window of the browser (GTK: a frame holding one childless panel) gets the
+/// focus when the window is activated, while the keyboard focus stays in the page: no document
+/// is an ancestor. For exactly that shape, the page is the document under the browser's own
+/// frame of the same title. Anything else outside a document (the address bar, a toolbar
+/// button, a menu) is the browser's interface and has no document.
+pub async fn window_document(conn: &AppConn, path: &str) -> Option<String> {
+    if role_of(conn, path).await? != raw::PANEL {
+        return None;
+    }
+    let m = conn
+        .call(
+            conn.next_lane(),
+            dl(STEP),
+            path,
+            ACCESSIBLE,
+            "GetChildren",
+            &(),
+        )
+        .await
+        .ok()?;
+    if !wire::parse_children(m.body().data().bytes())
+        .ok()?
+        .is_empty()
+    {
+        return None;
+    }
+    let (_, window) = parent_of(conn, path).await?;
+    if window.is_empty() || window.ends_with("/null") {
+        return None;
+    }
+    if !matches!(role_of(conn, &window).await?, raw::FRAME | raw::WINDOW) {
+        return None;
+    }
+    let title = name_of(conn, &window).await?;
+    if title.is_empty() {
+        return None;
+    }
+    let m = conn
+        .call(
+            conn.next_lane(),
+            dl(STEP),
+            ROOT,
+            ACCESSIBLE,
+            "GetChildren",
+            &(),
+        )
+        .await
+        .ok()?;
+    for (_, frame) in wire::parse_children(m.body().data().bytes()).ok()? {
+        if frame == window
+            || !matches!(role_of(conn, &frame).await, Some(raw::FRAME | raw::WINDOW))
+            || name_of(conn, &frame).await.as_deref() != Some(title.as_str())
+        {
+            continue;
+        }
+        if let Some(doc) = document_in(conn, &frame).await {
+            return Some(doc);
+        }
+    }
+    None
+}
+
+async fn name_of(conn: &AppConn, path: &str) -> Option<String> {
+    let m = conn
+        .call(
+            conn.next_lane(),
+            dl(STEP),
+            path,
+            PROPERTIES,
+            "Get",
+            &(ACCESSIBLE, "Name"),
+        )
+        .await
+        .ok()?;
+    wire::parse_variant_string(m.body().data().bytes())
+        .ok()
+        .map(str::to_owned)
+}
+
+/// Breadth-first search below `top` (a few levels, a bounded number of calls) for a web
+/// document.
+async fn document_in(conn: &AppConn, top: &str) -> Option<String> {
+    const DEPTH: usize = 7;
+    const CALLS: usize = 320;
+    let mut queue: std::collections::VecDeque<(String, usize)> = std::collections::VecDeque::new();
+    queue.push_back((top.to_owned(), 0));
+    let mut calls = 0usize;
+    while let Some((p, depth)) = queue.pop_front() {
+        if calls >= CALLS {
+            return None;
+        }
+        calls += 1;
+        if depth > 0 && role_of(conn, &p).await == Some(raw::DOCUMENT_WEB) {
+            return Some(p);
+        }
+        if depth >= DEPTH {
+            continue;
+        }
+        calls += 1;
+        let Ok(m) = conn
+            .call(
+                conn.next_lane(),
+                dl(STEP),
+                &p,
+                ACCESSIBLE,
+                "GetChildren",
+                &(),
+            )
+            .await
+        else {
+            continue;
+        };
+        if let Ok(kids) = wire::parse_children(m.body().data().bytes()) {
+            for (_, kid) in kids {
+                queue.push_back((kid, depth + 1));
+            }
+        }
+    }
+    None
+}
+
 /// Breadth-first search from the application root for any web document.
 pub async fn any_document(conn: &AppConn) -> Option<String> {
     let mut queue: std::collections::VecDeque<(String, usize)> = std::collections::VecDeque::new();
@@ -309,7 +430,11 @@ impl DocSourceFactory for AtspiDocSourceFactory {
                 return Ok(None);
             };
             let entry = me.entry(app).await?;
-            let Some(top) = top_document(&entry.conn, &path).await else {
+            let top = match top_document(&entry.conn, &path).await {
+                Some(t) => Some(t),
+                None => window_document(&entry.conn, &path).await,
+            };
+            let Some(top) = top else {
                 return Ok(None);
             };
             let key = NodeKey {

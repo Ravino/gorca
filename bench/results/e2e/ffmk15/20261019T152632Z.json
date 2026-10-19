@@ -1,0 +1,17 @@
+{
+  "meta": {"utc": "2026-10-19T15:26:32Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "18.40 16.15 17.66 6/3018 1613273", "git_rev": "c337e2c3", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "ffmk15", "reader": "daemon:<repo>/.claude/worktrees/agent-a5d84df93b510291c/target/release/gorca", "backend": "voicego", "repeats": "1", "samples_per_series": "1200", "quick": "false", "loadavg_before": "18.11 15.92 17.62 8/2626 1610191", "loadavg_end": "18.40 16.15 17.66 13/3018 1613270", "gates": "fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats", "reader_args": "--impersonate-orca", "ext_dir": "none", "extensions": "none"},
+  "rows": [
+    {"id": "M8-MSGK.mode_ms.n", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 4, "min": 4, "max": 4, "runs": 1, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-MSGK.mode_ms.p50", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 0.685067, "min": 0.685067, "max": 0.685067, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-MSGK.mode_ms.p95", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 1.042698, "min": 1.042698, "max": 1.042698, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-MSGK.mode_ms.p99", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 1.042698, "min": 1.042698, "max": 1.042698, "runs": 1, "unit": "ms", "op": "<=", "threshold": 15, "verdict": "PASS", "note": ""},
+    {"id": "M8-MSGK.mode_ms.max", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 1.042698, "min": 1.042698, "max": 1.042698, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-MSGK.fail", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "steps that fail and are not marked expected-fail"},
+    {"id": "M8-MSGK.gap", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "core ok, NVDA extras missing"},
+    {"id": "M8-MSGK.p0_not_pass", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-MSGK.pass", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 22, "min": 22, "max": 22, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-MSGK.steps", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 22, "min": 22, "max": 22, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-MSGK.xfail", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "expected-fail steps that fail (gap table)"},
+    {"id": "M8-MSGK.xpass", "scenario": "M8-MSGK", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "expected-fail steps that pass: remove their xf() mark"}
+  ]
+}
