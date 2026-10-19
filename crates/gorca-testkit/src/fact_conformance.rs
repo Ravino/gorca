@@ -103,6 +103,7 @@ pub struct RefWriter {
     pub pinned: Scope,
     nodes: Vec<(NodeKey, Scope)>,
     unknown: Vec<NodeKey>,
+    recent_docs: Vec<Option<u64>>,
     binds: Vec<(Subject, Scope, BindInfo)>,
     privacy: Vec<(Subject, PrivacyClass)>,
     regs: Vec<Reg>,
@@ -125,6 +126,10 @@ impl ScopeLookup for SourceLookup<'_> {
             Some((_, s)) => Some(*s),
             None => Some(self.w.pinned),
         }
+    }
+
+    fn was_recent_doc(&self, doc: Option<u64>, _pinned: Scope) -> bool {
+        self.w.recent_docs.contains(&doc)
     }
 
     fn bind(&self, subject: &Subject, pinned: Scope) -> BindInfo {
@@ -167,6 +172,7 @@ impl RefWriter {
             pinned,
             nodes: Vec::new(),
             unknown: Vec::new(),
+            recent_docs: Vec::new(),
             binds: Vec::new(),
             privacy: Vec::new(),
             regs: Vec::new(),
@@ -178,6 +184,11 @@ impl RefWriter {
     /// Declare that `node` lives in `scope` (a node of another document of the same app).
     pub fn add_node(&mut self, node: NodeKey, scope: Scope) {
         self.nodes.push((node, scope));
+    }
+
+    /// The pinned tab just navigated away from `doc` (inside the race window).
+    pub fn note_navigation(&mut self, doc: Option<u64>) {
+        self.recent_docs.push(doc);
     }
 
     /// The writer learned the node's scope.
@@ -973,6 +984,7 @@ pub fn state_machine_exhaustive() -> Report {
     let mut events = vec![
         E::Hello { remembered: None },
         E::Violation { at_ms: 5 },
+        E::DocRace { at_ms: 6 },
         E::RateExceeded,
         E::Quiet,
         E::TransportClosed,
@@ -1137,6 +1149,74 @@ pub fn identity_keyed_on_peer() -> Report {
     r
 }
 
+/// Cross-document writes are `DocChanged` only with evidence of a recent navigation of the
+/// pinned tab; otherwise a strike. Repeated races turn into strikes.
+pub fn doc_changed_needs_evidence() -> Report {
+    let mut r = Report::default();
+    let sec = full_grant(SourceClass::Secondary, TrustTier::T3Untrusted);
+    let src = SourceId {
+        slot: 4,
+        generation: 0,
+    };
+    let other = NodeKey {
+        app: kit_scope(1).app,
+        local: LocalId(77),
+    };
+    let other_doc = Scope {
+        doc: Some(5),
+        ..kit_scope(1)
+    };
+    let mut s = FakeFactSource::new("s", SourceClass::Secondary);
+    s.name(Subject::Node(other), "x", 990);
+    let Some(f) = s.facts().next().cloned() else {
+        r.check("fact", false);
+        return r;
+    };
+    let mut w = RefWriter::new(Scope {
+        doc: Some(6),
+        ..kit_scope(1)
+    });
+    w.add_node(other, other_doc);
+    r.check(
+        "other document without navigation evidence is a ScopeMismatch (strike)",
+        offer_once(&mut w, src, &sec, &f) == Offer::Rejected(RejectReason::ScopeMismatch)
+            && RejectReason::ScopeMismatch.severity() == gorca_fact_api::Severity::Violation,
+    );
+    w.note_navigation(Some(5));
+    r.check(
+        "previous document of a just-navigated tab is a benign DocChanged",
+        offer_once(&mut w, src, &sec, &f) == Offer::Rejected(RejectReason::DocChanged),
+    );
+    r.check("DocChanged never stores", w.registers().is_empty());
+    // Repeats turn into strikes: the 4th inside 10 s is a strike, 10 s later the count resets.
+    let st = SourceState::Active(Strikes::NONE);
+    let mut s2 = st;
+    for t in [0, 1000, 2000] {
+        s2 = step(s2, SourceEvent::DocRace { at_ms: t }).0;
+    }
+    r.check(
+        "3 races in 10 s are free",
+        matches!(s2, SourceState::Active(_)),
+    );
+    let mut q = s2;
+    for t in [3000, 3100, 3200] {
+        q = step(q, SourceEvent::DocRace { at_ms: t }).0;
+    }
+    r.check(
+        "races beyond the limit strike until quarantine",
+        q == SourceState::Quarantined,
+    );
+    let mut spaced = st;
+    for k in 0..20u64 {
+        spaced = step(spaced, SourceEvent::DocRace { at_ms: k * 4000 }).0;
+    }
+    r.check(
+        "slow races never strike",
+        matches!(spaced, SourceState::Active(_)),
+    );
+    r
+}
+
 /// A page can flip a field to `type=password` between the add-on's send and admission: such
 /// rejections and navigation races must not strike the source (review B-1).
 pub fn page_caused_rejections_do_not_strike() -> Report {
@@ -1206,6 +1286,7 @@ pub fn run_all(seed: u64) -> Report {
     r.merge(identity_memory());
     r.merge(identity_keyed_on_peer());
     r.merge(page_caused_rejections_do_not_strike());
+    r.merge(doc_changed_needs_evidence());
     r
 }
 
@@ -1266,6 +1347,11 @@ mod tests {
     #[test]
     fn state_machine() {
         assert_ok(&state_machine_exhaustive());
+    }
+
+    #[test]
+    fn doc_changed_evidence() {
+        assert_ok(&doc_changed_needs_evidence());
     }
 
     #[test]

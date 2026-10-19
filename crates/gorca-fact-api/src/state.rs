@@ -16,6 +16,9 @@ pub const STRIKE_LIMIT: usize = 3;
 pub const WIDE_LIMIT: usize = 3;
 pub const WIDE_WINDOW_MS: u64 = 600_000;
 /// Bound on the quarantine log per peer and on tracked per-scope memory (review B-4).
+/// Benign navigation races tolerated per window before they count as strikes (review).
+pub const RACE_LIMIT: usize = 3;
+pub const RACE_WINDOW_MS: u64 = 10_000;
 pub const MAX_QUARANTINE_LOG: usize = 64;
 pub const MAX_TRACKED_SCOPES: usize = 4096;
 
@@ -24,12 +27,17 @@ pub const MAX_TRACKED_SCOPES: usize = 4096;
 pub struct Strikes {
     at: [u64; STRIKE_LIMIT],
     n: u8,
+    /// Navigation-race rejections inside `RACE_WINDOW_MS`; more than `RACE_LIMIT` strike.
+    races: [u64; RACE_LIMIT + 1],
+    nr: u8,
 }
 
 impl Strikes {
     pub const NONE: Strikes = Strikes {
         at: [0; STRIKE_LIMIT],
         n: 0,
+        races: [0; RACE_LIMIT + 1],
+        nr: 0,
     };
 
     pub const fn count(self) -> usize {
@@ -39,7 +47,11 @@ impl Strikes {
     /// Record a strike at `now_ms`; the bool is true when the limit is reached.
     #[must_use]
     pub fn record(self, now_ms: u64) -> (Strikes, bool) {
-        let mut out = Strikes::NONE;
+        let mut out = Strikes {
+            at: [0; STRIKE_LIMIT],
+            n: 0,
+            ..self
+        };
         for t in self.at.iter().take(self.count()) {
             if now_ms.saturating_sub(*t) <= STRIKE_WINDOW_MS {
                 out.push(*t);
@@ -48,6 +60,31 @@ impl Strikes {
         out.push(now_ms);
         let hit = out.count() >= STRIKE_LIMIT;
         (out, hit)
+    }
+
+    /// Record a benign `DocChanged` race; the bool is true when there are more than
+    /// `RACE_LIMIT` inside the window, which the machine turns into a strike.
+    #[must_use]
+    pub fn record_race(self, now_ms: u64) -> (Strikes, bool) {
+        let mut out = Strikes {
+            races: [0; RACE_LIMIT + 1],
+            nr: 0,
+            ..self
+        };
+        for t in self.races.iter().take(self.nr as usize) {
+            if now_ms.saturating_sub(*t) <= RACE_WINDOW_MS
+                && let Some(slot) = out.races.get_mut(out.nr as usize)
+            {
+                *slot = *t;
+                out.nr += 1;
+            }
+        }
+        if let Some(slot) = out.races.get_mut(out.nr as usize) {
+            *slot = now_ms;
+            out.nr += 1;
+        }
+        let exceeded = out.nr as usize > RACE_LIMIT;
+        (out, exceeded)
     }
 
     fn push(&mut self, t: u64) {
@@ -128,6 +165,10 @@ pub enum SourceEvent {
     Violation {
         at_ms: u64,
     },
+    /// A `DocChanged` rejection: benign up to `RACE_LIMIT` per `RACE_WINDOW_MS`, then a strike.
+    DocRace {
+        at_ms: u64,
+    },
     /// `Severity::Overload`, or the port cap.
     RateExceeded,
     /// No overload for 10 s.
@@ -164,7 +205,10 @@ pub enum SourceEffect {
     ReFuseFocus,
     Notice(Notice),
     Remember(Remembered),
-    Forget,
+    /// Forget this scope's memory only (end of a privacy pause, automatic resume).
+    ForgetScope,
+    /// Forget the scope's memory and the source-wide memory: explicit user resume only.
+    ForgetAll,
 }
 
 type Out = (SourceState, Vec<SourceEffect>);
@@ -210,11 +254,15 @@ fn revoke(purge: bool) -> Out {
     (SourceState::Revoked, v)
 }
 
-fn resume() -> Out {
+fn resume(by_user: bool) -> Out {
     (
         SourceState::Active(Strikes::NONE),
         vec![
-            SourceEffect::Forget,
+            if by_user {
+                SourceEffect::ForgetAll
+            } else {
+                SourceEffect::ForgetScope
+            },
             SourceEffect::Unmask,
             SourceEffect::OpenPort,
             SourceEffect::ReFuseFocus,
@@ -267,12 +315,23 @@ pub fn step(s: SourceState, e: SourceEvent) -> (SourceState, Vec<SourceEffect>) 
             SourceEvent::RateExceeded
             | SourceEvent::Quiet
             | SourceEvent::Resume { .. }
+            | SourceEvent::DocRace { .. }
             | SourceEvent::DetachExpired => stay(s),
         },
         SourceState::Active(st) | SourceState::Throttled(st) => {
             let throttled = matches!(s, SourceState::Throttled(_));
             match e {
                 SourceEvent::Violation { at_ms } => strike(s, st, at_ms, throttled),
+                SourceEvent::DocRace { at_ms } => {
+                    let (st, exceeded) = st.record_race(at_ms);
+                    if exceeded {
+                        strike(s, st, at_ms, throttled)
+                    } else if throttled {
+                        (SourceState::Throttled(st), Vec::new())
+                    } else {
+                        (SourceState::Active(st), Vec::new())
+                    }
+                }
                 SourceEvent::RateExceeded => {
                     if throttled {
                         stay(s)
@@ -307,7 +366,7 @@ pub fn step(s: SourceState, e: SourceEvent) -> (SourceState, Vec<SourceEffect>) 
         SourceState::Paused => match e {
             SourceEvent::TransportClosed => (s, vec![SourceEffect::PurgeRegisters]),
             SourceEvent::UserRevoke => revoke(false),
-            SourceEvent::Resume { .. } => resume(),
+            SourceEvent::Resume { by_user } => resume(by_user),
             SourceEvent::WideQuarantine => (
                 SourceState::Quarantined,
                 vec![SourceEffect::Remember(Remembered::Quarantined)],
@@ -317,6 +376,7 @@ pub fn step(s: SourceState, e: SourceEvent) -> (SourceState, Vec<SourceEffect>) 
             | SourceEvent::RateExceeded
             | SourceEvent::Quiet
             | SourceEvent::PrivacyPause
+            | SourceEvent::DocRace { .. }
             | SourceEvent::DetachExpired => stay(s),
         },
         SourceState::Detached { purged } => match e {
@@ -345,6 +405,7 @@ pub fn step(s: SourceState, e: SourceEvent) -> (SourceState, Vec<SourceEffect>) 
                 }
             }
             SourceEvent::Violation { .. }
+            | SourceEvent::DocRace { .. }
             | SourceEvent::RateExceeded
             | SourceEvent::Quiet
             | SourceEvent::TransportClosed
@@ -353,13 +414,14 @@ pub fn step(s: SourceState, e: SourceEvent) -> (SourceState, Vec<SourceEffect>) 
         SourceState::Quarantined => match e {
             SourceEvent::TransportClosed => (s, vec![SourceEffect::PurgeRegisters]),
             SourceEvent::UserRevoke => revoke(false),
-            SourceEvent::Resume { by_user: true } => resume(),
+            SourceEvent::Resume { by_user: true } => resume(true),
             SourceEvent::Resume { by_user: false }
             | SourceEvent::Hello { .. }
             | SourceEvent::Violation { .. }
             | SourceEvent::RateExceeded
             | SourceEvent::Quiet
             | SourceEvent::PrivacyPause
+            | SourceEvent::DocRace { .. }
             | SourceEvent::DetachExpired
             | SourceEvent::WideQuarantine => stay(s),
         },
@@ -430,12 +492,29 @@ impl SourceBook {
             | SourceEvent::UserRevoke
             | SourceEvent::PrivacyPause
             | SourceEvent::Resume { .. }
+            | SourceEvent::DocRace { .. }
             | SourceEvent::DetachExpired
             | SourceEvent::WideQuarantine) => other,
         };
         let mut out = Vec::new();
         let mut wide = false;
-        let cur = self.state(id, scope);
+        let mut cur = self.state(id, scope);
+        // A remembered quarantine or revocation wins over any resume: bring the machine to the
+        // remembered state first, so a non-user resume cannot reactivate the peer.
+        if let SourceEvent::Resume { .. } = event
+            && let SourceState::Registered | SourceState::Paused = cur
+        {
+            let pre = match self.remembered(id, scope) {
+                Some(Remembered::Revoked) => Some(SourceEvent::UserRevoke),
+                Some(Remembered::Quarantined) => Some(SourceEvent::WideQuarantine),
+                Some(Remembered::Paused) | None => None,
+            };
+            if let Some(pre) = pre {
+                let (n, fx) = step(cur, pre);
+                cur = n;
+                out.extend(fx.into_iter().map(|effect| ScopedEffect { scope, effect }));
+            }
+        }
         let (next, effects) = step(cur, event);
         self.states.insert((id.clone(), scope), next);
         self.evict(id, scope, next);
@@ -449,10 +528,13 @@ impl SourceBook {
                         wide |= self.note_quarantine(id, scope, now_ms);
                     }
                 }
-                SourceEffect::Forget => {
+                SourceEffect::ForgetScope => {
                     self.scope_memory.remove(&(id.peer.clone(), scope));
-                    // A user resume also clears the source-wide memory, or the next reconnect
-                    // would re-quarantine the source the user just resumed (review B-3).
+                }
+                SourceEffect::ForgetAll => {
+                    self.scope_memory.remove(&(id.peer.clone(), scope));
+                    // Only an explicit user resume clears the source-wide memory (review B-3);
+                    // an automatic resume must never lift a source-wide quarantine.
                     self.wide_memory.remove(&id.peer);
                     self.quarantines.remove(&id.peer);
                 }
@@ -735,6 +817,59 @@ mod tests {
         b.apply(&i, doc(1, 1), SourceEvent::Hello { remembered: None }, 120);
         assert!(b.state(&i, doc(1, 1)).facts_win());
         assert!(b.remembered(&i, doc(50, 50)).is_none());
+    }
+
+    #[test]
+    fn privacy_pause_end_does_not_lift_a_wide_quarantine() {
+        let mut b = SourceBook::new();
+        let i = named("bus");
+        let paused = doc(50, 50);
+        b.apply(&i, paused, SourceEvent::Hello { remembered: None }, 0);
+        b.apply(&i, paused, SourceEvent::PrivacyPause, 1);
+        for d in 1..=3u64 {
+            quarantine(&mut b, &i, doc(d, d), d * 10);
+        }
+        // The wide quarantine moved the paused scope to Quarantined; the pause end is automatic.
+        b.apply(&i, paused, SourceEvent::Resume { by_user: false }, 100);
+        assert_eq!(b.state(&i, paused), SourceState::Quarantined);
+        // Even a machine that was Paused when the memory appeared is not reactivated.
+        let late = doc(60, 60);
+        b.apply(&i, late, SourceEvent::PrivacyPause, 101);
+        b.apply(&i, late, SourceEvent::Resume { by_user: false }, 102);
+        assert!(!b.state(&i, late).facts_win());
+        assert_eq!(b.remembered(&i, doc(70, 70)), Some(Remembered::Quarantined));
+        // The explicit user resume does lift it.
+        b.apply(&i, paused, SourceEvent::Resume { by_user: true }, 200);
+        assert!(b.state(&i, paused).facts_win());
+        assert!(b.remembered(&i, doc(70, 70)).is_none());
+    }
+
+    #[test]
+    fn scopes_without_a_site_are_not_collapsed() {
+        let nosite = |d: u64| Scope {
+            site: None,
+            ..doc(d, 0)
+        };
+        let mut b = SourceBook::new();
+        let i = named("bus");
+        b.apply(&i, nosite(100), SourceEvent::Hello { remembered: None }, 0);
+        for d in 1..=3u64 {
+            quarantine(&mut b, &i, nosite(d), d * 10);
+        }
+        // Three distinct documents without site info count as three keys, not one.
+        assert_eq!(b.state(&i, nosite(100)), SourceState::Quarantined);
+        // Yet reloading the *same* document scope repeatedly is still one key.
+        let mut b = SourceBook::new();
+        for k in 0..5u64 {
+            quarantine(&mut b, &i, nosite(1), k * 100);
+        }
+        b.apply(
+            &i,
+            nosite(100),
+            SourceEvent::Hello { remembered: None },
+            9999,
+        );
+        assert!(b.state(&i, nosite(100)).facts_win());
     }
 
     #[test]
