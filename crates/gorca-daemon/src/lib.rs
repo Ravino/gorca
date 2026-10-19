@@ -382,6 +382,7 @@ async fn run_inner(
     let mut tasks = TaskSet::new(shutdown.clone());
     let mut core = Core::new(CoreConfig {
         shutdown_grace: SHUTDOWN_GRACE,
+        lazy_attrs: opts.lazy_attrs,
         ..CoreConfig::default()
     });
     // A caller-supplied factory (tests of the shared fill code) wins over the flag.

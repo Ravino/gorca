@@ -1,0 +1,60 @@
+# e2e c1a-lk-on-r1
+# utc=2026-10-19T13:11:33Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=11.95 12.18 11.26 1/2705 867931
+# git_rev=b87193ec
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx6
+# topology_expected=-
+# label=c1a-lk-on-r1
+# reader=daemon:<repo>/.claude/worktrees/agent-ae1e5a6f5402c52c9/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=11.95 12.18 11.26 6/2705 867928
+# reader_env=GORCA_TOPOLOGY_REPORT=bench/results/e2e/c1a-lk-on-r1/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=K1: correlated by echoed character and time
+
+metric                     bus                median          min          max  n op    threshold  res   note
+L1.l0_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+L1.l0_ms.p50               daemon/voicego        0.127        0.119        0.134  3                  info   [ms]
+L1.l0_ms.p95               daemon/voicego        0.363        0.344        0.366  3                  info   [ms]
+L1.l0_ms.p99               daemon/voicego        0.456        0.448        0.461  3                  info   [ms]
+L1.l0_ms.p999              daemon/voicego        0.565        0.549        0.640  3                  info   [ms]
+L1.l0_ms.max               daemon/voicego        0.856        0.592        1.025  3                  info   [ms]
+L1.l1_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+L1.l1_ms.p50               daemon/voicego        5.575        5.420        5.632  3                  info   [ms]
+L1.l1_ms.p95               daemon/voicego        5.951        5.875        5.958  3                  info   [ms]
+L1.l1_ms.p99               daemon/voicego        6.069        5.984        6.102  3 <=           15  PASS   [ms]
+L1.l1_ms.p999              daemon/voicego        6.227        6.203        6.265  3                  info   [ms]
+L1.l1_ms.max               daemon/voicego        6.299        6.251        6.323  3                  info   [ms]
+L1.l1g_ms.n                daemon/voicego         1200         1200         1200  3                  info   [samples]
+L1.l1g_ms.p50              daemon/voicego        5.411        5.272        5.486  3                  info   [ms]
+L1.l1g_ms.p95              daemon/voicego        5.780        5.679        5.785  3                  info   [ms]
+L1.l1g_ms.p99              daemon/voicego        5.888        5.857        5.888  3                  info  gorca side: bus arrival to SPEAK [ms]
+L1.l1g_ms.p999             daemon/voicego        6.013        5.995        6.018  3                  info   [ms]
+L1.l1g_ms.max              daemon/voicego        6.070        6.002        6.095  3                  info   [ms]
+L1.cpu_pct                 daemon/voicego         15.2         13.5         16.2  3                  info   [% of one core]
+L1.cpu_us_per_event        daemon/voicego        601.0        539.3        636.9  3                  info   [us/event]
+L1.idle_cpu_pct            daemon/voicego        0.659        0.648        0.746  3                  info   [% of one core]
+L1.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K1.k1_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+K1.k1_ms.p50               daemon/voicego        0.536        0.524        0.541  3                  info   [ms]
+K1.k1_ms.p95               daemon/voicego        0.801        0.774        0.801  3                  info   [ms]
+K1.k1_ms.p99               daemon/voicego        0.909        0.899        0.920  3 <=           15  PASS   [ms]
+K1.k1_ms.p999              daemon/voicego        1.011        0.992        1.100  3                  info   [ms]
+K1.k1_ms.max               daemon/voicego        1.034        1.022        1.133  3                  info   [ms]
+K1.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]

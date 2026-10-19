@@ -72,6 +72,8 @@ pub struct Options {
     /// monitor, no Orca identity, no `org.a11y.Status` writes, no event registration, speech
     /// to a null sink, and only the read calls of the connector's allowlist.
     pub shadow: bool,
+    /// `GORCA_LAZY_ATTRS=1`: the M-6b fallback, the cold focus fetch leaves `ATTRS` out.
+    pub lazy_attrs: bool,
     /// `--bench-fill-policy=r0|prefetch|candidate`: default is the adopted focus-window prefetch.
     pub fill_policy: FillChoice,
     /// `--topology=...` / `GORCA_TOPOLOGY`: where the lanes run (bake-off B-5). Default `auto`:
@@ -274,6 +276,7 @@ impl Options {
     ///   replace the `gsettings` probe (the e2e harness and tests use them).
     /// - `GORCA_TOPOLOGY`, `GORCA_TOPOLOGY_REPORT`: same as `--topology`, `--topology-report`.
     /// - `GORCA_SHADOW=1`: shadow mode (PW-11).
+    /// - `GORCA_LAZY_ATTRS=1`: the M-6b fallback (no `ATTRS` in the cold focus fetch).
     #[must_use]
     pub fn with_env(self, get: impl Fn(&str) -> Option<String>) -> Self {
         let mut o = self;
@@ -326,6 +329,9 @@ impl Options {
         o.default_ext_settings(&get);
         if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
             o.impersonate_orca = true;
+        }
+        if get("GORCA_LAZY_ATTRS").is_some_and(|v| v == "1") {
+            o.lazy_attrs = true;
         }
         if get("GORCA_SHADOW").is_some_and(|v| v == "1") {
             o.shadow = true;

@@ -133,6 +133,11 @@ pub(super) fn chromium_selected() -> bool {
     std::env::var("GORCA_M7_BROWSER").as_deref() == Ok("chromium")
 }
 
+/// M22a C1a: the application under test is a real GTK4 window (`GORCA_M7_BROWSER=gtk4`).
+pub(super) fn gtk4_selected() -> bool {
+    std::env::var("GORCA_M7_BROWSER").as_deref() == Ok("gtk4")
+}
+
 /// A Firefox of ours (or, with `GORCA_M7_BROWSER=chromium`, a Chromium): own profile, own process group, signalled only through that group.
 #[derive(Debug)]
 pub(super) struct Firefox {
@@ -170,7 +175,13 @@ impl Firefox {
         let err = log.try_clone()?;
         let mut cmd = Command::new(&bin);
         let mut decoy: Option<Child> = None;
-        if chromium {
+        if gtk4_selected() {
+            // M22a C1a: a real GTK4 window (tests/harness/c1a_gtk4.py) instead of a browser.
+            let script = std::env::var("GORCA_E2E_SCRIPTS").context("GORCA_E2E_SCRIPTS not set")?;
+            cmd = Command::new("/usr/bin/python3");
+            cmd.arg(PathBuf::from(script).join("c1a_gtk4.py"))
+                .env("GDK_BACKEND", "wayland");
+        } else if chromium {
             // M9: a Chromium of ours. `GORCA_M9_AT` says how it finds out that a screen reader
             // runs: `isenabled` (default: only the a11y bus `IsEnabled` flag, what gorca writes),
             // `force` (`--force-renderer-accessibility`).
@@ -1665,6 +1676,122 @@ pub fn fm(
         out.s("fm_grab_ms", grab_ms);
     }
     Ok(())
+}
+
+/// The page of the cold-focus scenario: 150 text fields, each with a long `class` (Chromium
+/// exports it in `GetAttributes`, which is what M-6b has to bound).
+fn cold_page(dir: &Path) -> Result<PathBuf> {
+    let class: String = (0..160)
+        .map(|i| format!("tw-flex-{i} md:hover:bg-slate-{i}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut html = String::from(
+        "<!doctype html><html lang=en><head><meta charset=utf-8><title>C1a Cold</title></head><body><main>",
+    );
+    for i in 0..150 {
+        html.push_str("<p><input type=text class=\"");
+        html.push_str(&class);
+        html.push_str("\" aria-label=\"Field ");
+        html.push_str(&i.to_string());
+        html.push_str("\"></p>");
+    }
+    html.push_str("</main></body></html>");
+    let p = dir.join("c1a-cold.html");
+    std::fs::write(&p, html)?;
+    Ok(p)
+}
+
+/// CF (M22a C1a, M-6b): cold focus. Every trial focuses a field the reader has never fetched
+/// (150 of them, in Firefox, Chromium or a real GTK4 window by `GORCA_M7_BROWSER`); the metric is
+/// the focus event's arrival on the bus to the first speech after it, gorca side. A/B by
+/// `--reader-env GORCA_LAZY_ATTRS=1` (the pre-M22a mask).
+pub fn cf(
+    host: &HostEnv,
+    reader: &super::apps::ReaderSpec,
+    flavor: Flavor,
+    size: Size,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "CF", out)? {
+        return Ok(());
+    }
+    let urls = if gtk4_selected() {
+        Vec::new()
+    } else {
+        let dir =
+            PathBuf::from(std::env::var("GORCA_HARNESS_DIR").context("GORCA_HARNESS_DIR not set")?);
+        vec![file_url(&cold_page(&dir)?)?]
+    };
+    let (mut w, doc) = Web::start(host, reader, flavor, &urls, "C1a Cold")?;
+    if gtk4_selected() {
+        w.ff.click();
+        std::thread::sleep(Duration::from_millis(800));
+    } else {
+        w.prime(&doc)?;
+    }
+    let r = w.ax.request(
+        "list",
+        &format!(
+            "\"bus\":\"{}\",\"root\":\"{}\",\"role\":\"entry\",\"prefix\":\"Field \"",
+            w.bus, doc.path
+        ),
+        Duration::from_secs(60),
+    )?;
+    let fields = json_paths(&r);
+    if fields.len() < 20 {
+        bail!("CF: only {} fields found", fields.len());
+    }
+    // The first few are warm-up (the reader's first fetch of the app, its registration).
+    const WARM: usize = 3;
+    let (mut cf, mut lost) = (Vec::new(), 0u64);
+    let n = size.n.clamp(30, 150).min(fields.len());
+    for (i, path) in fields.iter().take(n).enumerate() {
+        std::thread::sleep(Duration::from_millis(120));
+        let mark = w.mark();
+        // GTK4 does not implement `Component.GrabFocus`: Tab moves the focus (the first field
+        // is reached by the first Tab), through the compositor's virtual keyboard.
+        let (t_call, arrival) = if gtk4_selected() {
+            let t0 = super::mono::now_ns();
+            w.ff.keys(&[15]);
+            let end = Instant::now() + Duration::from_secs(2);
+            let mut at = None;
+            while at.is_none() && Instant::now() < end {
+                at = w.tap.first_after(FOCUS, &w.bus, None, t0);
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            (t0, at)
+        } else {
+            let t_call = w.focus(path)?;
+            (t_call, w.tap.first_after(FOCUS, &w.bus, Some(path), t_call))
+        };
+        let heard = w.speech(mark, Duration::from_secs(3), |_| true);
+        let arrival = arrival.unwrap_or(t_call);
+        match heard {
+            Some(r) if i >= WARM => cf.push(ms(r.t_ns.saturating_sub(arrival))),
+            Some(_) => {}
+            None => lost += 1,
+        }
+    }
+    out.s("cf_ms", cf);
+    out.x("lost", lost as f64, "trials");
+    Ok(())
+}
+
+/// The node paths of a `list` reply (`"nodes":["/org/a11y/atspi/accessible/..",...]`).
+fn json_paths(reply: &str) -> Vec<String> {
+    let mut v = Vec::new();
+    let mut rest = reply;
+    let needle = "\"/";
+    while let Some(i) = rest.find(needle) {
+        let tail = &rest[i + 1..];
+        if let Some(end) = tail.find('"') {
+            v.push(tail[..end].to_owned());
+            rest = &tail[end..];
+        } else {
+            break;
+        }
+    }
+    v
 }
 
 /// W3: two tabs; back to the first, which slept while the second was read.

@@ -90,10 +90,10 @@ pub use present::{
     is_notice_role, lead_segments, notice_segments, reads_content,
 };
 pub use present::{
-    FOCUS_FIELDS, NoLabels, NodeLabel, PresentContext, PresentJob, PresentKind, PresentLog,
-    PresentRecord, PresentSource, Presented, Presenter, PresenterRegistry, RAPID_FOCUS,
-    REFINE_WINDOW, STORM_HOLD, SpeechIntent, focus_need, key_echo_text, present_focus,
-    present_selected_item,
+    FOCUS_FIELDS, FOCUS_FIELDS_LAZY, NoLabels, NodeLabel, PresentContext, PresentJob, PresentKind,
+    PresentLog, PresentRecord, PresentSource, Presented, Presenter, PresenterRegistry, RAPID_FOCUS,
+    REFINE_WINDOW, STORM_HOLD, SpeechIntent, focus_fields_for, focus_need, key_echo_text,
+    present_focus, present_selected_item,
 };
 pub use quick::{
     BATTERY_DEADLINE, BatteryState, HISTORY_CAP, PowerInfo, PowerSource, install_power_source,

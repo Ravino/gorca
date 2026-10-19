@@ -383,6 +383,8 @@ impl ReaderInbox {
 
 #[derive(Debug)]
 pub struct Reader {
+    /// M-6b fallback (`CoreConfig::lazy_attrs`): the focus fetch leaves `ATTRS` out.
+    pub(crate) lazy_attrs: bool,
     pub(crate) focus: FocusState,
     pub(crate) mode: Mode,
     pub(crate) keys: ModeKeys,
@@ -483,6 +485,7 @@ impl Reader {
     pub fn new(epoch: Arc<EpochCell>, dir: Arc<MirrorDirectory>, keys: ModeKeys) -> Self {
         Self {
             focus: FocusState::NoFocus,
+            lazy_attrs: false,
             mode: Mode::Focus,
             keys,
             epoch,
@@ -519,6 +522,13 @@ impl Reader {
             app_policy: None,
             term_provider: None,
         }
+    }
+
+    /// Set once at construction from `CoreConfig::lazy_attrs`.
+    #[must_use]
+    pub fn with_lazy_attrs(mut self, lazy: bool) -> Self {
+        self.lazy_attrs = lazy;
+        self
     }
 
     /// Terminals without an extension of their own are tracked with `provider`'s sessions.
@@ -798,7 +808,7 @@ mod tests {
             attrs: gorca_model::AttrMap::default(),
             relations: gorca_model::Relations::default(),
             bounds: None,
-            have: gorca_model::PropMask::PRESENT,
+            have: gorca_model::PropMask::PRESENT | gorca_model::PropMask::ATTRS,
             confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
         })
@@ -2381,7 +2391,7 @@ mod tests {
     fn a_partial_node_missing_only_non_blocking_fields_is_spoken() {
         let mut f = fixture();
         let mut row = (*with_name(1, "Row", StateSet::empty())).clone();
-        row.have = PropMask::CACHE_ITEM;
+        row.have = PropMask::CACHE_ITEM | PropMask::ATTRS;
         row.interfaces = gorca_model::Ifaces::ACTION;
         f.writer.apply(
             SnapshotBatch::new(vec![Arc::new(row)]),
@@ -2396,6 +2406,24 @@ mod tests {
                 ..
             })
         ));
+        // M22a C1a: a dump row that never had its attributes is spoken from memory too, as a
+        // partial hit that the revalidation fills.
+        let mut bare = (*with_name(3, "Bare", StateSet::empty())).clone();
+        bare.have = PropMask::CACHE_ITEM;
+        bare.interfaces = gorca_model::Ifaces::ACTION;
+        f.writer.apply(
+            SnapshotBatch::new(vec![Arc::new(bare)]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let fx = focus_on(&mut f, 3, Instant::now() + Duration::from_secs(1));
+        assert!(matches!(
+            fx.last(),
+            Some(ReaderEffect::Demand {
+                outcome: DemandOutcome::Partial { missing },
+                ..
+            }) if *missing == PropMask::ATTRS
+        ));
+        assert_eq!(utterance(&fx).segments[0].text.as_ref(), "Bare");
         let mut slider = (*with_name(2, "Vol", StateSet::empty())).clone();
         slider.have = PropMask::CACHE_ITEM;
         slider.interfaces = gorca_model::Ifaces::VALUE;
@@ -2403,7 +2431,7 @@ mod tests {
             SnapshotBatch::new(vec![Arc::new(slider)]),
             gorca_mirror::ApplyOrigin::Push,
         );
-        let fx = focus_on(&mut f, 2, Instant::now() + Duration::from_secs(1));
+        let fx = focus_on(&mut f, 2, Instant::now() + Duration::from_secs(2));
         assert!(matches!(
             fx.last(),
             Some(ReaderEffect::Demand {

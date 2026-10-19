@@ -118,6 +118,36 @@ impl Caller {
         m.body().deserialize::<Vec<u32>>().map_err(DbusError::Zbus)
     }
 
+    /// `Accessible.GetAttributes` of `path`: the toolkit's object attributes, `(name, value)`.
+    /// An error reply (an object without attributes) is an answer, empty; only a timeout or a
+    /// dead connection is an error, so that the node is asked again.
+    pub(super) async fn attributes_of(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<Vec<(String, String)>, DbusError> {
+        let m = match self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                ACCESSIBLE,
+                "GetAttributes",
+                &(),
+            )
+            .await
+        {
+            Ok(m) => m,
+            Err(DbusError::Zbus(zbus::Error::MethodError(..))) => return Ok(Vec::new()),
+            Err(e) => return Err(e),
+        };
+        let map = m
+            .body()
+            .deserialize::<std::collections::HashMap<String, String>>()
+            .map_err(DbusError::Zbus)?;
+        Ok(map.into_iter().collect())
+    }
+
     pub(super) async fn prop(
         &self,
         dest: &str,

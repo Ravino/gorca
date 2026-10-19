@@ -7,8 +7,8 @@ use std::time::Instant;
 
 use atspi::State as Raw;
 use gorca_model::{
-    AttrMap, ChildList, Freshness, Ifaces, NodeKey, NodeSnapshot, PropMask, Relations, Role,
-    StateSet, Value,
+    AttrKey, AttrMap, ChildList, Freshness, Ifaces, NodeKey, NodeSnapshot, PropMask, Relations,
+    Role, StateSet, Value,
 };
 use smallvec::SmallVec;
 
@@ -109,8 +109,69 @@ pub struct RawNode {
     /// Child keys when the whole list is known (a dump, a children walk).
     pub children: Option<SmallVec<[NodeKey; 8]>>,
     pub interfaces: Ifaces,
+    /// The object attributes the core understands (`GetAttributes`, see [`attr_key`]), in wire
+    /// order, values clipped to [`MAX_ATTR_VALUE_BYTES`] and at most [`MAX_ATTRS`] of them. Only
+    /// filled when `have` carries `ATTRS`.
+    pub attrs: Vec<(AttrKey, String)>,
     /// Fields this node actually carries.
     pub have: PropMask,
+}
+
+/// Cap on the attributes kept per node: the app's attribute map is untrusted and can be large
+/// (Chromium exports long `class` strings, which are not kept at all).
+pub const MAX_ATTRS: usize = 32;
+/// Cap on one attribute value.
+pub const MAX_ATTR_VALUE_BYTES: usize = 256;
+
+/// The core key of a toolkit object attribute, `None` for the ones nothing reads (`class`, `id`,
+/// styling, ...). Keys are the well-known ones of `web_attrs`, so a web node fetched here carries
+/// the same attributes the document source delivers.
+pub fn attr_key(name: &str) -> Option<AttrKey> {
+    use gorca_doc_source_api::web_attrs as w;
+    Some(match name {
+        "tag" => w::TAG,
+        "xml-roles" => w::XML_ROLES,
+        "level" => w::LEVEL,
+        "live" => w::LIVE,
+        "atomic" => w::ATOMIC,
+        "relevant" => w::RELEVANT,
+        "busy" => w::BUSY,
+        "posinset" => w::POSINSET,
+        "setsize" => w::SETSIZE,
+        "rowindex" => w::ROWINDEX,
+        "colindex" => w::COLINDEX,
+        "rowcount" => w::ROWCOUNT,
+        "colcount" => w::COLCOUNT,
+        "container-live" => w::CONTAINER_LIVE,
+        "display" => w::DISPLAY,
+        "layout-guess" => w::LAYOUT_GUESS,
+        "current" => w::CURRENT,
+        "haspopup" => w::HASPOPUP,
+        "explicit-name" => w::EXPLICIT_NAME,
+        _ => return None,
+    })
+}
+
+/// The kept attributes of one `GetAttributes` reply: unknown names dropped, values clipped,
+/// the first occurrence of a key wins, at most [`MAX_ATTRS`], sorted by key.
+pub fn keep_attrs<'a>(
+    pairs: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> Vec<(AttrKey, String)> {
+    let mut out: Vec<(AttrKey, String)> = Vec::new();
+    for (k, v) in pairs {
+        if out.len() >= MAX_ATTRS {
+            break;
+        }
+        if let Some(key) = attr_key(k)
+            && !out.iter().any(|(o, _)| *o == key)
+        {
+            out.push((key, clip(v, MAX_ATTR_VALUE_BYTES).to_owned()));
+        }
+    }
+    // The wire order of a dictionary is the sender's (hash) order: sort, so that two fetches of
+    // one node compare equal.
+    out.sort_by_key(|(k, _)| *k);
+    out
 }
 
 /// The app's child count is untrusted: negative is zero, and nothing above this is believed.
@@ -161,9 +222,16 @@ pub fn snapshot(key: NodeKey, raw: &RawNode, now: Instant) -> Arc<NodeSnapshot> 
             (None, None) => ChildList::Unknown,
         },
         interfaces: raw.interfaces,
-        attrs: match non_empty(raw.error_text.as_deref()) {
-            Some(t) => AttrMap::from_iter([(gorca_doc_source_api::web_attrs::ERROR_TEXT, t)]),
-            None => AttrMap::default(),
+        attrs: {
+            let mut a: AttrMap = raw
+                .attrs
+                .iter()
+                .map(|(k, v)| (*k, Arc::from(v.as_str())))
+                .collect();
+            if let Some(t) = non_empty(raw.error_text.as_deref()) {
+                a.push((gorca_doc_source_api::web_attrs::ERROR_TEXT, t));
+            }
+            a
         },
         relations: Relations::default(),
         bounds: None,
@@ -283,6 +351,37 @@ mod tests {
         assert!(n.name.is_none());
         assert!(n.value.is_none());
         assert!(matches!(n.fresh, Freshness::Fresh { .. }));
+    }
+
+    #[test]
+    fn attrs_keep_known_keys_clip_values_and_drop_class() {
+        use gorca_doc_source_api::web_attrs as w;
+        let big = "c".repeat(100_000);
+        let kept = keep_attrs([
+            ("class", big.as_str()),
+            ("id", "x"),
+            ("tag", "button"),
+            ("xml-roles", "switch"),
+            ("tag", "div"),
+            ("explicit-name", big.as_str()),
+        ]);
+        assert_eq!(kept.len(), 3);
+        assert_eq!(kept[0], (w::TAG, "button".to_owned()));
+        assert_eq!(kept[2].1.len(), MAX_ATTR_VALUE_BYTES);
+        let many: Vec<(String, String)> = (0..500)
+            .map(|i| (format!("k{i}"), "v".to_owned()))
+            .collect();
+        assert!(keep_attrs(many.iter().map(|(k, v)| (k.as_str(), v.as_str()))).is_empty());
+        let raw = RawNode {
+            role: atspi::Role::Button as u32,
+            attrs: kept,
+            error_text: Some("bad".to_owned()),
+            have: PropMask::ATTRS,
+            ..RawNode::default()
+        };
+        let n = snapshot(key(), &raw, Instant::now());
+        assert_eq!(n.attrs.len(), 4);
+        assert!(n.attrs.iter().any(|(k, _)| *k == w::ERROR_TEXT));
     }
 
     #[test]

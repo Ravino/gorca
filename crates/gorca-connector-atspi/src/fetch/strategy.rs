@@ -82,14 +82,40 @@ async fn fetch_node(
             Ok(None)
         }
     };
-    let (role, state, name, desc, parent, count) = tokio::join!(
-        c.role(path, dl),
-        c.state(path, dl),
-        name_fut,
-        desc_fut,
-        parent_fut,
-        count_fut
-    );
+    // `ATTRS` (M22a C1a) joins the same batch: one more pipelined call, no extra round trip.
+    // It never gates the result (U-1): a browser can compute attributes from layout, or hang on
+    // them, and the first speech must not wait for that. Once the required calls are done the
+    // call gets `ATTRS_GRACE` more; then the node is returned without `ATTRS` (it stays
+    // `Partial`, spoken `may_refine`, and the revalidation asks again).
+    let (required_done, required_rx) = tokio::sync::oneshot::channel::<()>();
+    let attrs_fut = async {
+        if !want.contains(PropMask::ATTRS) {
+            return Ok(None);
+        }
+        let grace = async {
+            let _ = required_rx.await;
+            tokio::time::sleep(ATTRS_GRACE).await;
+        };
+        tokio::select! {
+            r = c.attributes_of(path, dl) => r.map(Some),
+            () = grace => Ok(None),
+        }
+    };
+    let required_fut = async {
+        let r = tokio::join!(
+            c.role(path, dl),
+            c.state(path, dl),
+            name_fut,
+            desc_fut,
+            parent_fut,
+            count_fut
+        );
+        let _ = required_done.send(());
+        r
+    };
+    // Boxed: unboxed, the seven calls and the select make `fetch_node` a 20 KB future.
+    let ((role, state, name, desc, parent, count), attrs) =
+        tokio::join!(Box::pin(required_fut), Box::pin(attrs_fut));
     // Role and state are required; a failed name only costs the name.
     let role = role.map_err(|e| backend_error(&e))?;
     let state_words = state.map_err(|e| backend_error(&e))?;
@@ -109,6 +135,11 @@ async fn fetch_node(
     if let Ok(Some(d)) = desc {
         raw.description = Some(clip(&d, MAX_TEXT_BYTES).to_owned());
         have |= PropMask::DESCRIPTION;
+    }
+    // A failed or timed-out call leaves the node poorer (no `ATTRS` in `have`): it is asked again.
+    if let Ok(Some(pairs)) = attrs {
+        raw.attrs = crate::decode::keep_attrs(pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        have |= PropMask::ATTRS;
     }
     let mut parent_ref = None;
     if let Some(p) = known_parent {
@@ -148,6 +179,9 @@ async fn fetch_node(
     raw.have = have;
     Ok((raw, parent_ref))
 }
+
+/// How long `GetAttributes` may keep a fetch waiting after the required calls are done.
+pub(super) const ATTRS_GRACE: std::time::Duration = std::time::Duration::from_millis(3);
 
 /// Visited-node budget of the descendant label search (breadth first).
 pub(super) const LABEL_SEARCH_NODES: u32 = 8;

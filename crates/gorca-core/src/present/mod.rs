@@ -17,8 +17,8 @@ mod window;
 
 pub use echo::{key_echo, key_echo_is_action, key_echo_spoken, key_echo_text, message};
 pub use flow::{
-    FOCUS_FIELDS, FocusBackoff, NameRetry, Presented, RAPID_FOCUS, REFINE_WINDOW, STORM_HOLD,
-    focus_need,
+    FOCUS_FIELDS, FOCUS_FIELDS_LAZY, FocusBackoff, NameRetry, Presented, RAPID_FOCUS,
+    REFINE_WINDOW, STORM_HOLD, focus_fields_for, focus_need,
 };
 pub(crate) use flow::{name_is_blank, needs_name};
 pub use job::{PresentJob, PresentKind, SpeechIntent};
@@ -380,5 +380,23 @@ mod tests {
             ["OK", "button", "selected"],
             "other roles keep the default"
         );
+    }
+}
+
+#[cfg(test)]
+mod attrs_mask_tests {
+    use super::*;
+    use gorca_model::PropMask;
+
+    /// M22a C1a: the cold focus fetch asks for `ATTRS` (one more pipelined call), and the M-6b
+    /// fallback switch takes it out again.
+    #[test]
+    fn focus_mask_carries_attrs_until_the_lazy_switch_is_set() {
+        assert!(FOCUS_FIELDS.contains(PropMask::ATTRS));
+        assert!(!FOCUS_FIELDS.contains(PropMask::DESCRIPTION));
+        assert!(!FOCUS_FIELDS_LAZY.contains(PropMask::ATTRS));
+        assert_eq!(focus_fields_for(false), FOCUS_FIELDS);
+        assert_eq!(focus_fields_for(true), FOCUS_FIELDS_LAZY);
+        assert!(crate::review::objnav::NAV_MASK.contains(PropMask::ATTRS));
     }
 }

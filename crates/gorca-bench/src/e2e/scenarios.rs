@@ -66,6 +66,8 @@ pub enum Scn {
     W3,
     Fm1,
     Fm2,
+    /// M22a C1a (M-6b): cold focus on fields never fetched.
+    Cf,
     /// M7: page keys after a popup closes.
     Wd,
     C1,
@@ -147,6 +149,7 @@ impl Scn {
             Self::W3 => "W3".into(),
             Self::Fm1 => "FM1".into(),
             Self::Fm2 => "FM2".into(),
+            Self::Cf => "CF".into(),
             Self::Wd => "WD".into(),
             Self::C1 => "C1".into(),
             Self::C1h => "C1h".into(),
@@ -218,6 +221,7 @@ impl Scn {
             "W3" => Self::W3,
             "FM1" => Self::Fm1,
             "FM2" => Self::Fm2,
+            "CF" => Self::Cf,
             "WD" => Self::Wd,
             "C1" => Self::C1,
             "C1h" => Self::C1h,
@@ -274,9 +278,9 @@ impl Scn {
         [
             "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "KM",
             "K3", "K4", "K4r", "K4h", "R1", "R1s", "RS", "B0", "W1", "CL", "BR1", "BR2", "W2",
-            "W2b", "W3", "FM1", "FM2", "WD", "C1", "C1h", "C2", "C3", "E1", "E2", "E2f", "S2",
-            "SA1", "SA2", "SA3", "SA3a", "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP",
-            "VR", "VF", "VB", "VW", "VV", "VS", "VD", "VK", "A1", "N1",
+            "W2b", "W3", "FM1", "FM2", "CF", "WD", "C1", "C1h", "C2", "C3", "E1", "E2", "E2f",
+            "S2", "SA1", "SA2", "SA3", "SA3a", "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3",
+            "VP", "VR", "VF", "VB", "VW", "VV", "VS", "VD", "VK", "A1", "N1",
         ]
         .iter()
         .chain(super::webtext::IDS)
@@ -597,6 +601,7 @@ pub fn run(
         Scn::W3 => super::web::w3(host, reader, flavor, size, &mut out)?,
         Scn::Fm1 => super::web::fm(host, reader, flavor, size, &mut out, false)?,
         Scn::Fm2 => super::web::fm(host, reader, flavor, size, &mut out, true)?,
+        Scn::Cf => super::web::cf(host, reader, flavor, size, &mut out)?,
         Scn::Wd => super::web::wd(host, reader, flavor, size, &mut out)?,
         Scn::C1 => super::m3::c1(host, reader, flavor, size, seed, &mut out)?,
         Scn::C1h => super::m3::c1h(host, reader, flavor, size, seed, &mut out)?,
