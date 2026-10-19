@@ -362,3 +362,66 @@ async fn a_page_load_in_an_app_that_just_lost_its_document_is_adopted() {
     r.shutdown.cancel();
     let _ = r.task.await;
 }
+
+#[tokio::test]
+async fn a_focus_miss_inside_a_mirrored_document_asks_it_to_repair() {
+    let f = FakeDocFactory::new(true, false);
+    f.map_document(nk(100), nk(11));
+    f.map_document(nk(101), nk(11));
+    let mut r = rig(f.clone());
+    let mut gecko = info();
+    gecko.web_engine = gorca_model::WebEngine::Gecko;
+    r.tx.send(HubMsg::Appeared {
+        app: app(),
+        info: Box::new(gecko),
+    })
+    .await
+    .unwrap();
+    r.tx.send(HubMsg::Ready { app: app() }).await.unwrap();
+    notice(&mut r).await;
+    r.tx.send(HubMsg::Ensure { focus: nk(100) }).await.unwrap();
+    let (_, mut script) = created(&r).await;
+    script.batches.send(page()).await.unwrap();
+    notice(&mut r).await;
+    // Node 101 is in the document the hub already mirrors, but the join does not know it.
+    r.tx.send(HubMsg::Ensure { focus: nk(101) }).await.unwrap();
+    let mut repaired = false;
+    for _ in 0..8 {
+        match tokio::time::timeout(Duration::from_secs(2), script.seen.recv()).await {
+            Ok(Some(Seen::Repair)) => {
+                repaired = true;
+                break;
+            }
+            Ok(Some(_)) => {}
+            Ok(None) | Err(_) => break,
+        }
+    }
+    assert!(repaired, "the document was not asked to repair");
+    r.shutdown.cancel();
+    let _ = r.task.await;
+}
+
+#[tokio::test]
+async fn an_application_whose_mode_row_says_no_buffer_is_not_a_web_application() {
+    let f = FakeDocFactory::new(true, false);
+    let mut r = rig(f.clone());
+    let mut code = info();
+    code.app_name = Arc::from("Code");
+    r.tx.send(HubMsg::Appeared {
+        app: app(),
+        info: Box::new(code),
+    })
+    .await
+    .unwrap();
+    r.tx.send(HubMsg::Ready { app: app() }).await.unwrap();
+    let got = tokio::time::timeout(Duration::from_millis(300), r.notices.recv()).await;
+    assert!(got.is_err(), "no WebApp notice expected, got {got:?}");
+    // Its focus is not looked up either: the Reader hears that there is no document.
+    r.tx.send(HubMsg::Ensure { focus: nk(100) }).await.unwrap();
+    assert_eq!(
+        notice(&mut r).await,
+        DocNotice::NoDocument { focus: nk(100) }
+    );
+    r.shutdown.cancel();
+    let _ = r.task.await;
+}

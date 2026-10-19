@@ -37,5 +37,5 @@ pub use gorca_model::{
     DocAction, DocDelta, DocHint, DocId, DocNodeId, SrcNode, SrcNodeId, TextEdit, TextUnit,
 };
 pub use join::{JoinEntry, JoinPort, JoinQuality, JoinReceiver, join_channel};
-pub use request::{Activity, DocRequest, Reply, SourceError};
+pub use request::{Activity, DocRequest, RepairReport, Reply, SourceError};
 pub use web::{Completeness, TreeBlock, is_dynamic, takes_error_text, web_attrs};

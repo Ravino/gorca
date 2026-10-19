@@ -24,6 +24,7 @@ use gorca_model::{AppId, AppInfo, DocId, NodeKey};
 use gorca_rt::{CancellationToken, mpsc};
 use tokio::task::JoinSet;
 
+use crate::doc_actor::repair::{RepairPolicy, RepairReason};
 use crate::doc_actor::{
     DocActorSpec, DocCounters, DocCtl, DocDirectory, DocNotice, WebJoin, prepare,
 };
@@ -399,6 +400,10 @@ impl Hub {
         match res {
             Ok(Some(root)) => {
                 if let Some(h) = self.cfg.docs.by_root(root) {
+                    // The focus is inside a document we already mirror but the mirror does not
+                    // know the node: it is stale. One repair at a time per document, metered by
+                    // the document's gate (CHR-0).
+                    let _ = h.ctl.try_send(DocCtl::Repair(RepairReason::FocusMiss));
                     self.notify(DocNotice::InDocument { focus, doc: h.doc });
                     return;
                 }
@@ -457,6 +462,9 @@ impl Hub {
         let doc = DocId(self.next_doc);
         self.next_doc = self.next_doc.wrapping_add(1);
         let token = self.shutdown.child_token();
+        let repair = self.apps.get(&app).map_or(RepairPolicy::NONE, |a| {
+            RepairPolicy::for_engine(a.info.web_engine)
+        });
         let (handle, fut) = prepare(DocActorSpec {
             doc,
             app,
@@ -467,6 +475,7 @@ impl Hub {
             notices: self.cfg.notices.clone(),
             shutdown: token.clone(),
             counters: Arc::clone(&self.cfg.counters),
+            repair,
         });
         self.cfg.docs.insert(handle);
         self.tokens.insert(doc, (app, token));
@@ -496,7 +505,12 @@ impl Hub {
     fn on_msg(&mut self, msg: HubMsg, now: Instant) {
         match msg {
             HubMsg::Appeared { app, info } => {
-                let web = self.cfg.factory.is_web(&info);
+                // The first-party mode rows (DP-3): an application whose row says no buffer is
+                // not hosted as a web application, so no document is mirrored and browse mode
+                // never starts there. Everything else is browse mode with automatic focus mode.
+                let web = self.cfg.factory.is_web(&info)
+                    && gorca_config::app_modes::browse_default(&info.app_name)
+                        != gorca_config::app_modes::BrowseDefault::Off;
                 let needs = self.cfg.factory.needs_warm(&info);
                 let ready = self.apps.get(&app).is_some_and(|a| a.ready);
                 let mut st = AppWeb::new(*info, web, needs, now);

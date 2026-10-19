@@ -56,6 +56,9 @@ impl DocSource for FakeDocSource {
                             DocRequest::Revalidate { reply, .. } => {
                                 let _ = reply.send(Ok(smallvec::SmallVec::default()));
                             }
+                            DocRequest::Repair { reply } => {
+                                let _ = reply.send(Ok(gorca_doc_source_api::RepairReport::default()));
+                            }
                             DocRequest::SetActivity(_)
                             | DocRequest::Rebuild
                             | DocRequest::Prioritize { .. }

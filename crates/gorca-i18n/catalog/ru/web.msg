@@ -50,3 +50,4 @@ web-not-in-cell = не в ячейке таблицы
 web-table-edge = край таблицы
 web-item-gone = этого элемента больше нет
 web-cant-activate = не удаётся активировать
+web-item-changed = этот элемент изменился

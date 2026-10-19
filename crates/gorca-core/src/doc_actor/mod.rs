@@ -14,6 +14,7 @@
 //! user's focus or the browser says there is one.
 
 pub mod live;
+pub mod repair;
 pub mod translate;
 
 use std::collections::HashMap;
@@ -23,14 +24,18 @@ use std::time::{Duration, Instant};
 use arc_swap::ArcSwap;
 use gorca_doc::web::{DocRead, DocWriter, channel};
 use gorca_doc_source_api::{
-    Activity, DeltaReceiver, DocEvent, DocRequest, DocSource, DocSourceCtx, SourceError,
-    delta_channel, join_channel,
+    Activity, DeltaReceiver, DocEvent, DocRequest, DocSource, DocSourceCtx, RepairReport,
+    SourceError, delta_channel, join_channel,
 };
 use gorca_model::{AppId, DocAction, DocDelta, DocId, DocNodeId, NodeKey};
 use gorca_rt::{CancellationToken, Clock, Deadline, mpsc, oneshot};
 use tokio::task::JoinSet;
 
 use live::{LiveMsg, LiveTracker};
+use repair::{
+    ORPHAN_SETTLE, Orphans, RepairGate, RepairPolicy, RepairReason, Verdict, YOUNG_CHECKS,
+    YOUNG_NODES,
+};
 use translate::Translator;
 
 /// Deltas the sink may hold: a 100k-node first block is ~50 upsert chunks plus one list per
@@ -93,6 +98,9 @@ pub enum DocCtl {
     Activity(Activity),
     /// Rebuild as resync, ids kept (a late warm-up, a rejected batch).
     Rebuild,
+    /// Repair a mirror that may be stale (CHR-0). The actor's gate decides whether and when:
+    /// one repair in flight, a gap that follows the cost of the last one.
+    Repair(RepairReason),
     /// A user-driven pull on a node: focus it, click it, scroll it into view (IR-5).
     Act { node: DocNodeId, act: DocAction },
     /// A page-selection action whose result comes back as [`DocNotice::SelectionDone`] with the
@@ -141,6 +149,9 @@ pub enum DocNotice {
     /// replaced it and no live object continues it) or the page did not take the action. The
     /// key that asked must not stay silent.
     ActionFailed { doc: DocId, gone: bool },
+    /// A click was refused because the object at the node is no longer what was spoken (the
+    /// source re-read its role and name before clicking). Nothing was clicked.
+    ActionDisplaced { doc: DocId },
     /// A live region changed (ADR-0003 13): already classified, deduplicated and rate-limited by
     /// the document, so the Reader only decides whether this document is the one in front.
     Live { doc: DocId, msg: LiveMsg },
@@ -162,6 +173,8 @@ pub struct DocHandle {
     pub read: DocRead,
     pub ctl: mpsc::Sender<DocCtl>,
     pub events: mpsc::Sender<DocEvent>,
+    /// Events the router saw on nodes no join knows (the repair trigger of CHR-0).
+    pub orphans: Arc<Orphans>,
 }
 
 /// Lock-free directory of live documents (DR-2).
@@ -248,6 +261,8 @@ pub struct DocActorSpec {
     pub notices: mpsc::Sender<DocNotice>,
     pub shutdown: CancellationToken,
     pub counters: Arc<DocCounters>,
+    /// Which repair triggers this document's engine uses.
+    pub repair: RepairPolicy,
 }
 
 /// Create the channels, register the document in the directory and return the actor future.
@@ -268,8 +283,16 @@ pub fn prepare(
         read,
         ctl: ctl_tx,
         events: ev_tx,
+        orphans: Arc::default(),
     };
-    let fut = run(spec, writer, handle.read.clone(), ctl_rx, ev_rx);
+    let fut = run(
+        spec,
+        writer,
+        handle.read.clone(),
+        Arc::clone(&handle.orphans),
+        ctl_rx,
+        ev_rx,
+    );
     (handle, fut)
 }
 
@@ -293,7 +316,24 @@ struct Actor {
     live: LiveTracker,
     /// The tab is in front: dormant documents track nothing (DM-I5).
     awake: bool,
+    /// Mirror freshness (CHR-0).
+    gate: RepairGate,
+    orphans: Arc<Orphans>,
+    orphan_due: Option<Instant>,
+    /// A repair that must wait for the gate's gap, with the instant it may go.
+    deferred: Option<(RepairReason, Instant)>,
+    born: Instant,
+    young_done: usize,
+    /// Why the repair in flight was started, and the mirror's fingerprint when it started.
+    repair_reason: Option<RepairReason>,
+    repair_before: (usize, usize),
+    /// Follow-up checks spent after a load-end repair that found the mirror still tiny.
+    load_retries: usize,
 }
+
+type RepairRx = oneshot::Receiver<Result<RepairReport, SourceError>>;
+/// A root-state flip counts as the end of a load only this long after the document appeared.
+const YOUNG_WINDOW: Duration = Duration::from_secs(30);
 
 impl Actor {
     fn key(&self, local: gorca_model::LocalId) -> NodeKey {
@@ -450,6 +490,109 @@ impl Actor {
         }
     }
 
+    /// What a repair is measured against: node count and text length of the published mirror.
+    fn fingerprint(&mut self) -> (usize, usize) {
+        let d = self.writer.doc();
+        (d.len(), d.text_len() as usize)
+    }
+
+    /// A repair request (CHR-0): the gate decides, the actor sends or keeps it.
+    fn repair_request(&mut self, r: RepairReason, now: Instant, rx: &mut Option<RepairRx>) {
+        if r == RepairReason::RootState
+            && (self.gate.loaded_seen() || now.saturating_duration_since(self.born) > YOUNG_WINDOW)
+        {
+            return;
+        }
+        match self.gate.request(r, now) {
+            Verdict::Start => self.repair_start(r, now, rx),
+            Verdict::Wait(at) => {
+                self.deferred = Some(match self.deferred {
+                    Some((d, t)) => (d.max(r), t.min(at)),
+                    None => (r, at),
+                });
+            }
+            Verdict::Queued | Verdict::Refused => {}
+        }
+    }
+
+    fn repair_start(&mut self, r: RepairReason, now: Instant, rx: &mut Option<RepairRx>) {
+        let (reply, rcv) = oneshot::channel();
+        if self.requests.try_send(DocRequest::Repair { reply }).is_ok() {
+            self.gate.started();
+            self.repair_reason = Some(r);
+            self.repair_before = self.fingerprint();
+            *rx = Some(rcv);
+            tracing::info!(
+                target: "gorca_phase",
+                phase = "repair_start",
+                doc = self.spec_doc.0,
+                reason = r.label(),
+                nodes = self.writer.doc().len(),
+            );
+        } else if let Some(next) = self.gate.aborted(now) {
+            self.deferred = Some((next, now));
+        }
+    }
+
+    /// The browser announces the end of a load at the same moment it publishes the content
+    /// (Electron holds the whole tree back until then): a repair started by that announcement
+    /// can still see the old tree. When it found nothing and the mirror is tiny, look again
+    /// shortly, twice at most.
+    fn load_end_follow_up(&mut self, report: RepairReport, changed: bool, now: Instant) {
+        const AFTER: [Duration; 2] = [Duration::from_secs(1), Duration::from_secs(4)];
+        let load_end = matches!(
+            self.repair_reason.take(),
+            Some(RepairReason::LoadComplete | RepairReason::RootState)
+        );
+        if load_end
+            && !changed
+            && !report.failed
+            && report.nodes < YOUNG_NODES
+            && self.load_retries < AFTER.len()
+        {
+            self.deferred = Some((RepairReason::Young, now + AFTER[self.load_retries]));
+            self.load_retries += 1;
+        }
+    }
+
+    /// Timers of the repair triggers: a deferred repair, events on unknown nodes after their
+    /// settle period, the young-document checks.
+    fn repair_tick(&mut self, now: Instant, rx: &mut Option<RepairRx>) {
+        if let Some((r, at)) = self.deferred
+            && now >= at
+            && !self.gate.in_flight()
+        {
+            self.deferred = None;
+            self.repair_request(r, now, rx);
+        }
+        let policy = self.gate.policy();
+        if policy.orphans {
+            match self.orphan_due {
+                Some(due) if now >= due => {
+                    self.orphan_due = None;
+                    let keys = self.orphans.take();
+                    // Still unknown after the settle period: the incremental update did not
+                    // catch up, the mirror is behind.
+                    if keys.iter().any(|k| self.join.get(*k).is_none()) {
+                        self.repair_request(RepairReason::Orphans, now, rx);
+                    }
+                }
+                None if self.orphans.pending() => self.orphan_due = Some(now + ORPHAN_SETTLE),
+                Some(_) | None => {}
+            }
+        }
+        if policy.young
+            && self.announced
+            && self.young_done < YOUNG_CHECKS.len()
+            && now.saturating_duration_since(self.born) >= YOUNG_CHECKS[self.young_done]
+        {
+            self.young_done += 1;
+            if !self.gate.loaded_seen() && self.writer.doc().len() < YOUNG_NODES {
+                self.repair_request(RepairReason::Young, now, rx);
+            }
+        }
+    }
+
     fn retire(&mut self) {
         for k in std::mem::take(&mut self.keys) {
             self.join.remove(k, self.spec_doc);
@@ -473,6 +616,7 @@ async fn run(
     spec: DocActorSpec,
     writer: DocWriter,
     read: DocRead,
+    orphans: Arc<Orphans>,
     mut ctl_rx: mpsc::Receiver<DocCtl>,
     ev_rx: mpsc::Receiver<DocEvent>,
 ) {
@@ -485,6 +629,7 @@ async fn run(
         notices,
         shutdown,
         counters,
+        repair,
         ..
     } = spec;
     let (sink, mut deltas): (_, DeltaReceiver) = delta_channel(SINK_CAPACITY);
@@ -521,7 +666,17 @@ async fn run(
         read,
         live: LiveTracker::new(),
         awake: true,
+        gate: RepairGate::new(repair),
+        orphans,
+        orphan_due: None,
+        deferred: None,
+        born: Instant::now(),
+        young_done: 0,
+        repair_reason: None,
+        repair_before: (0, 0),
+        load_retries: 0,
     };
+    let mut repair_rx: Option<RepairRx> = None;
 
     let mut notice_tick = tokio::time::interval(Duration::from_millis(100));
     notice_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -568,6 +723,7 @@ async fn run(
                         let _ = a.requests.try_send(DocRequest::SetActivity(act));
                     }
                     DocCtl::Rebuild => { let _ = a.requests.try_send(DocRequest::Rebuild); }
+                    DocCtl::Repair(r) => a.repair_request(r, Instant::now(), &mut repair_rx),
                     DocCtl::Act { node, act } => {
                         if actions.len() < MAX_ACTIONS {
                             spawn_action(&mut actions, &a, node, act, None);
@@ -596,7 +752,41 @@ async fn run(
             }
             _ = actions.join_next(), if !actions.is_empty() => {}
             () = live_wait(a.live.next_deadline()) => a.live_tick(),
-            _ = notice_tick.tick() => a.retry_notice(),
+            r = async {
+                match repair_rx.as_mut() {
+                    Some(rx) => rx.await,
+                    None => std::future::pending().await,
+                }
+            }, if repair_rx.is_some() => {
+                repair_rx = None;
+                let _ = flush_all(&mut a, &mut deltas);
+                let report = match r {
+                    Ok(Ok(rep)) => rep,
+                    Ok(Err(_)) | Err(_) => RepairReport { failed: true, ..RepairReport::default() },
+                };
+                let now = Instant::now();
+                let after = a.fingerprint();
+                let changed = after != a.repair_before;
+                tracing::info!(
+                    target: "gorca_phase",
+                    phase = "repair_done",
+                    doc = doc.0,
+                    nodes = report.nodes,
+                    deltas = report.deltas,
+                    took_ms = report.took.as_secs_f64() * 1000.0,
+                    failed = report.failed,
+                    changed,
+                    quiet = a.gate.quiet(),
+                );
+                a.load_end_follow_up(report, changed, now);
+                if let Some(next) = a.gate.finished(report, changed, now) {
+                    a.repair_request(next, now, &mut repair_rx);
+                }
+            }
+            _ = notice_tick.tick() => {
+                a.retry_notice();
+                a.repair_tick(Instant::now(), &mut repair_rx);
+            }
         }
     }
     // Retire: no key may outlive its document.
@@ -752,8 +942,12 @@ fn spawn_action(
             && let Some(Err(e)) = &result
             && !matches!(e, SourceError::Timeout)
         {
-            let gone = matches!(e, SourceError::Gone);
-            let _ = notices.try_send(DocNotice::ActionFailed { doc, gone });
+            if matches!(e, SourceError::Displaced) {
+                let _ = notices.try_send(DocNotice::ActionDisplaced { doc });
+            } else {
+                let gone = matches!(e, SourceError::Gone);
+                let _ = notices.try_send(DocNotice::ActionFailed { doc, gone });
+            }
         }
         if let Some(req) = select_req {
             let outcome = match result {

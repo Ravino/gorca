@@ -24,6 +24,8 @@ pub enum Seen {
     Action(SrcNodeId, DocAction),
     Activity(Activity),
     Rebuild,
+    /// A repair request (answered with an empty report).
+    Repair,
     Other,
 }
 
@@ -109,6 +111,10 @@ impl DocSource for ScriptedDocSource {
                             }
                             DocRequest::SetActivity(a) => Seen::Activity(a),
                             DocRequest::Rebuild => Seen::Rebuild,
+                            DocRequest::Repair { reply } => {
+                                let _ = reply.send(Ok(gorca_doc_source_api::RepairReport::default()));
+                                Seen::Repair
+                            }
                             DocRequest::Text { reply, .. } => {
                                 let _ = reply.send(Ok(String::new()));
                                 Seen::Other

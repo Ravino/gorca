@@ -514,6 +514,7 @@ fn rig() -> Rig {
         read,
         ctl: ctl_tx,
         events: ev_tx,
+        orphans: Arc::default(),
     });
     let keys = ModeKeys {
         web_escape: vec![escape_chord()],
@@ -1076,6 +1077,7 @@ fn navigate_to_a_page_that_builds_progressively(
         read: read2,
         ctl: ctl_tx,
         events: ev_tx,
+        orphans: Arc::default(),
     });
     r.reader.handle(
         ReaderMsg::Doc(DocNotice::FirstUseful {
@@ -2864,6 +2866,7 @@ fn add_second_doc_unjoined(r: &mut Rig, title: &str) -> Vec<(LocalId, DocNodeId)
         read,
         ctl: ctl_tx,
         events: ev_tx,
+        orphans: Arc::default(),
     });
     std::mem::forget(writer);
     r.mirror.apply(
@@ -3263,4 +3266,125 @@ fn a_relabel_to_another_action_without_a_state_flip_is_announced_not_clicked() {
     let fx = r.key(CoreCmd::BrowseActivate);
     assert!(!click_of(&fx), "an unseen action is never clicked blind");
     assert!(!spoken(&fx).is_empty(), "it is announced instead");
+}
+
+// ---- CHR-0: B-2 (re-join the focus after a repair), act only on what was spoken ---------------
+
+fn grace_rig() -> Rig {
+    let mut r = rig();
+    // In the mirror (so its snapshot is known and not a field) but not in the document join.
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![snap(3001, Role::Link, "late", StateSet::FOCUSABLE)],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    r.focus(3001);
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::InDocument {
+            focus: nk(3001),
+            doc: DocId(1),
+        }),
+        r.now,
+    );
+    // The loading grace runs out: browse mode starts at the top of the page.
+    r.now += Duration::from_millis(1300);
+    r.reader.handle(ReaderMsg::Timer, r.now);
+    assert!(matches!(r.mode(), WebMode::Browse { .. }));
+    r
+}
+
+/// The page grows a link whose transport key is 3001 (the focus that waited).
+fn mirror_the_late_link(r: &mut Rig, rev: u64) -> ReaderEffects {
+    let mut link = src(15, Role::Link, Some(3001));
+    link.states |= StateSet::FOCUSABLE;
+    let out =
+        r.tr.apply(
+            &mut r.writer,
+            vec![
+                DocDelta::Upsert(vec![link, run(16, "late")]),
+                kids(1, &[2, 4, 9, 11, 13, 15]),
+                kids(15, &[16]),
+                DocDelta::Settled { batch: rev },
+            ],
+        )
+        .unwrap();
+    r.writer.publish();
+    for (l, id) in out.join_add {
+        r.join.set(
+            NodeKey {
+                app: app(),
+                local: l,
+            },
+            (DocId(1), id),
+        );
+    }
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev }),
+        r.now,
+    )
+}
+
+/// The browse cursor's node.
+fn cursor_node(r: &Rig) -> DocNodeId {
+    let WebMode::Browse { cur, .. } = r.mode() else {
+        panic!("not in browse mode: {:?}", r.mode());
+    };
+    cur.node
+}
+
+#[test]
+fn a_repair_that_mirrors_the_focus_after_the_grace_joins_it() {
+    let mut r = grace_rig();
+    let at_top = cursor_node(&r);
+    let fx = mirror_the_late_link(&mut r, 2);
+    let (_, id) = r.join.get(nk(3001)).expect("joined");
+    let node = cursor_node(&r);
+    assert_ne!(node, at_top, "the cursor left the top of the page");
+    // The cursor is on the link's text (the content start of the focused node).
+    let inside = r
+        .docs
+        .get(DocId(1))
+        .unwrap()
+        .read
+        .with(|d| node == id || d.parent(node) == Some(id));
+    assert!(inside, "the cursor is in the focused link");
+    assert!(
+        spoken(&fx).iter().any(|s| s.contains("late")),
+        "{:?}",
+        spoken(&fx)
+    );
+}
+
+#[test]
+fn a_cursor_the_user_moved_is_not_taken_back_by_a_late_repair() {
+    let mut r = grace_rig();
+    // The user moves on (a browse command): the fallback is spent.
+    r.key(CoreCmd::BrowseCursorNextLine);
+    let before = cursor_node(&r);
+    mirror_the_late_link(&mut r, 2);
+    assert_eq!(cursor_node(&r), before);
+}
+
+#[test]
+fn a_displaced_click_says_the_item_changed_and_clicks_nothing() {
+    let mut r = rig();
+    r.focus(1006);
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::ActionDisplaced { doc: DocId(1) }),
+        r.now,
+    );
+    assert_eq!(spoken(&fx), ["that item changed"]);
+    assert!(
+        effects_web(&fx)
+            .iter()
+            .all(|a| !matches!(a, WebEffect::Act { .. }))
+    );
+    // Another document's refusal is not ours to speak.
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::ActionDisplaced { doc: DocId(9) }),
+        r.now,
+    );
+    assert!(spoken(&fx).is_empty());
 }

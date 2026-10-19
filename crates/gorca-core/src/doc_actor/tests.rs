@@ -92,6 +92,10 @@ struct Rig {
 }
 
 fn rig() -> Rig {
+    rig_with(super::repair::RepairPolicy::ALL)
+}
+
+fn rig_with(policy: super::repair::RepairPolicy) -> Rig {
     let (source, script) = ScriptedDocSource::new();
     let join = Arc::new(WebJoin::new());
     let docs = Arc::new(DocDirectory::new());
@@ -108,6 +112,7 @@ fn rig() -> Rig {
         notices: ntx,
         shutdown: shutdown.clone(),
         counters: Arc::clone(&counters),
+        repair: policy,
     });
     docs.insert(handle.clone());
     Rig {
@@ -362,6 +367,7 @@ async fn a_task_the_source_detached_stops_when_the_document_ends() {
         notices: ntx,
         shutdown: shutdown.clone(),
         counters: Arc::new(DocCounters::default()),
+        repair: super::repair::RepairPolicy::NONE,
     });
     docs.insert(handle.clone());
     let task = tokio::spawn(fut);
@@ -385,4 +391,100 @@ async fn a_task_the_source_detached_stops_when_the_document_ends() {
         "the detached task outlived its document"
     );
     assert!(!shutdown.is_cancelled());
+}
+
+// ---- CHR-0 mirror freshness ------------------------------------------------------------------
+
+async fn no_seen_within(r: &mut Rig, ms: u64) {
+    let got = tokio::time::timeout(Duration::from_millis(ms), r.script.seen.recv()).await;
+    assert!(got.is_err(), "no request expected, got {got:?}");
+}
+
+#[tokio::test]
+async fn a_load_complete_repairs_a_mirrored_document_at_once() {
+    let mut r = rig();
+    r.script.batches.send(first_batch()).await.unwrap();
+    next_notice(&mut r).await;
+    r.handle
+        .ctl
+        .send(DocCtl::Repair(repair::RepairReason::LoadComplete))
+        .await
+        .unwrap();
+    assert_eq!(next_seen(&mut r).await, Seen::Repair);
+    r.shutdown.cancel();
+    let _ = r.task.await;
+}
+
+#[tokio::test]
+async fn a_second_repair_waits_for_the_gap_the_first_one_earned() {
+    let mut r = rig();
+    r.script.batches.send(first_batch()).await.unwrap();
+    next_notice(&mut r).await;
+    r.handle
+        .ctl
+        .send(DocCtl::Repair(repair::RepairReason::FocusMiss))
+        .await
+        .unwrap();
+    assert_eq!(next_seen(&mut r).await, Seen::Repair);
+    // The first repair found nothing to change: a guess right after it is held back (400 ms
+    // doubled), then goes through on its own.
+    r.handle
+        .ctl
+        .send(DocCtl::Repair(repair::RepairReason::FocusMiss))
+        .await
+        .unwrap();
+    no_seen_within(&mut r, 400).await;
+    assert_eq!(next_seen(&mut r).await, Seen::Repair);
+    r.shutdown.cancel();
+    let _ = r.task.await;
+}
+
+#[tokio::test]
+async fn a_gecko_document_ignores_the_load_complete_repair() {
+    let mut r = rig_with(repair::RepairPolicy::for_engine(
+        gorca_model::WebEngine::Gecko,
+    ));
+    r.script.batches.send(first_batch()).await.unwrap();
+    next_notice(&mut r).await;
+    r.handle
+        .ctl
+        .send(DocCtl::Repair(repair::RepairReason::LoadComplete))
+        .await
+        .unwrap();
+    no_seen_within(&mut r, 500).await;
+    r.handle
+        .ctl
+        .send(DocCtl::Repair(repair::RepairReason::FocusMiss))
+        .await
+        .unwrap();
+    assert_eq!(next_seen(&mut r).await, Seen::Repair);
+    r.shutdown.cancel();
+    let _ = r.task.await;
+}
+
+#[tokio::test]
+async fn events_on_unknown_nodes_repair_after_the_settle_period_only_if_still_unknown() {
+    let mut r = rig();
+    r.script.batches.send(first_batch()).await.unwrap();
+    next_notice(&mut r).await;
+    // A node the join already knows is no orphan.
+    r.handle.orphans.note(nk(14));
+    no_seen_within(&mut r, 1500).await;
+    // An unknown one is, but only after the settle period.
+    r.handle.orphans.note(nk(99));
+    no_seen_within(&mut r, 400).await;
+    assert_eq!(next_seen(&mut r).await, Seen::Repair);
+    r.shutdown.cancel();
+    let _ = r.task.await;
+}
+
+#[tokio::test]
+async fn a_tiny_young_mirror_is_checked_at_two_seconds_unless_the_load_was_reported() {
+    let mut r = rig();
+    r.script.batches.send(first_batch()).await.unwrap();
+    next_notice(&mut r).await;
+    no_seen_within(&mut r, 1500).await;
+    assert_eq!(next_seen(&mut r).await, Seen::Repair);
+    r.shutdown.cancel();
+    let _ = r.task.await;
 }

@@ -56,11 +56,29 @@ pub enum DocRequest {
     /// Rebuild as resync: refetch the whole document, re-match it against the ids already issued
     /// (ids kept) and push the difference followed by `Settled` (AM-4, IL-R5).
     Rebuild,
+    /// A repair of a stale mirror (CHR-0): the same refetch and re-match as [`DocRequest::Rebuild`],
+    /// but answered with a report once the difference is in the sink, so the document actor can
+    /// meter repairs by their cost. The source runs it off its request loop: requests that arrive
+    /// meanwhile are served against the old mirror.
+    Repair { reply: Reply<RepairReport> },
     /// Urgent marks for nodes at the cursor (UP-2, M7b): the source bypasses its settle for
     /// events on them.
     Prioritize { nodes: SmallVec<[SrcNodeId; 8]> },
     /// W3 drift check (M7b).
     DriftCheck,
+}
+
+/// What a repair found and what it cost (CHR-0).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct RepairReport {
+    /// Nodes the refetch returned.
+    pub nodes: usize,
+    /// Deltas the difference needed (0: the mirror was already right).
+    pub deltas: usize,
+    /// Wall time of the whole repair, fetch included.
+    pub took: std::time::Duration,
+    /// The refetch failed; nothing was pushed.
+    pub failed: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
@@ -80,6 +98,11 @@ pub enum SourceError {
     /// matched to a live one by identity: nothing was done to any other object.
     #[error("target object is gone")]
     Gone,
+    /// A click was not made: the object at the node is not the one the user heard (the page
+    /// re-used or re-ordered its rows since the mirror last said so). The mirror is refreshed;
+    /// the user hears what is there now and decides (CHR-0, act only on what was spoken).
+    #[error("target object changed since it was spoken")]
+    Displaced,
     /// A page selection was applied, but not exactly as asked (the engine rounded it).
     #[error("applied approximately")]
     Approximate,

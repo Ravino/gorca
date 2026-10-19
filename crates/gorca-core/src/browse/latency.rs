@@ -74,6 +74,7 @@ fn big(nodes: usize) -> Big {
         read: read.clone(),
         ctl,
         events: ev,
+        orphans: Arc::default(),
     });
     let epoch = Arc::new(EpochCell::new());
     let dir = Arc::new(MirrorDirectory::new());

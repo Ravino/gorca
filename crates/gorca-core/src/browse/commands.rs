@@ -984,9 +984,15 @@ impl Reader {
     pub(crate) fn web_on_focus(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
         let Some(b) = self.web.as_mut() else { return };
         b.entry_wait = None;
+        b.grace_fallback = None;
         let prev_focus = b.focus_node;
         let hit = b.join.get(node);
-        tracing::info!(target: "gorca_phase", phase = "web_focus", hit = hit.is_some());
+        tracing::info!(
+            target: "gorca_phase",
+            phase = "web_focus",
+            hit = hit.is_some(),
+            id = ?hit.map(|(_, i)| i),
+        );
         if let Some((doc, id)) = hit
             && let Some(h) = b.docs.get(doc)
             && let Some((role, states)) = h.read.with(|d| {
@@ -1688,9 +1694,22 @@ impl Reader {
                     );
                 }
             }
+            DocNotice::ActionDisplaced { doc } => {
+                // The source did not click: the object is not what was spoken. Say so; the
+                // mirror is being refreshed and the next Enter reads what is there now.
+                if let Some(b) = self.web.as_mut()
+                    && b.mode.doc() == Some(doc)
+                {
+                    b.activated = None;
+                    b.click_target = None;
+                    b.activated_node = None;
+                    self.say(t(M::WebItemChanged), fx);
+                }
+            }
             DocNotice::Gone { doc } => {
                 if let Some(b) = self.web.as_mut() {
                     b.displaced = None;
+                    b.grace_fallback = None;
                     b.saved.remove(&doc);
                     if b.active == Some(doc) {
                         b.active = None;
@@ -1905,8 +1924,57 @@ impl Reader {
         b.cursor_sig = sig.map(|s| (cur.node, s));
     }
 
+    /// CHR-0 B-2: the loading grace put the cursor at the top of the page while the focus was
+    /// not mirrored. The mirror caught up (a repair, an update). If the focus is still the same
+    /// and the user has not moved the cursor, join the focus now, as the first focus would have.
+    fn web_rejoin_after_grace(&mut self, doc: DocId, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_ref() else { return };
+        let Some(g) = b.grace_fallback else { return };
+        if g.doc != doc {
+            return;
+        }
+        let at_root =
+            matches!(b.mode, WebMode::Browse { doc: d, cur, .. } if d == doc && cur.node == g.root);
+        // A focus change clears the fallback (`web_on_focus`), so the focus is still the one that
+        // waited; only the cursor can have moved.
+        if !at_root {
+            if let Some(b) = self.web.as_mut() {
+                b.grace_fallback = None;
+            }
+            return;
+        }
+        let Some((jd, id)) = b.join.get(g.focus) else {
+            return;
+        };
+        let Some(h) = b.docs.get(jd) else { return };
+        let (role, states) = h.read.with(|d| role_states(d, id));
+        let passes = forms::passes_through(role, states, Reason::Focus);
+        let application = forms::is_application(role);
+        if let Some(b) = self.web.as_mut() {
+            b.grace_fallback = None;
+            b.focus_node = Some((jd, id));
+        }
+        tracing::info!(target: "gorca_phase", phase = "web_rejoin_after_grace", passes);
+        self.web_apply(
+            WebEv::FocusIn {
+                doc: jd,
+                node: id,
+                passes,
+                application,
+            },
+            fx,
+            false,
+        );
+        if matches!(self.web_mode(), WebMode::Browse { .. }) {
+            self.web_place(jd, id);
+        }
+        self.web_speak_line_here(fx);
+        self.web_sync_tab_grabs(fx);
+    }
+
     fn web_changed_inner(&mut self, doc: DocId, fx: &mut ReaderEffects) {
         self.web_refresh_popup(fx);
+        self.web_rejoin_after_grace(doc, fx);
         self.web_late_entry(doc, fx);
         let Some(b) = self.web.as_mut() else { return };
         match b.mode {
@@ -2152,6 +2220,7 @@ impl Reader {
             since,
             editable: false,
             known: true,
+            focus: waiting_focus,
             ..
         } = b.mode
             && now.saturating_duration_since(since) >= LOADING_GRACE
@@ -2172,6 +2241,16 @@ impl Reader {
                     true,
                 );
                 self.web_place(doc, root);
+                // The focus is still unmirrored: remember it, a repair may find it (B-2).
+                if let Some(b) = self.web.as_mut()
+                    && let WebMode::Browse { cur, .. } = b.mode
+                {
+                    b.grace_fallback = Some(super::GraceFallback {
+                        focus: waiting_focus,
+                        doc,
+                        root: cur.node,
+                    });
+                }
             }
         }
         if sync_sel {
@@ -2297,6 +2376,9 @@ impl Reader {
         now: Instant,
         fx: &mut ReaderEffects,
     ) {
+        if let Some(b) = self.web.as_mut() {
+            b.grace_fallback = None;
+        }
         self.browse_command_inner(c, rep, now, fx);
         // Any command but Enter is the user moving or reading: a displacement mark is spent.
         if c != CoreCmd::BrowseActivate
@@ -2375,6 +2457,27 @@ impl Reader {
             (f, d.root())
         });
         let Some(root) = root else { return };
+        // The sticky focus mode is for operating the page: the keys go to the widget that has
+        // the focus. When the mirror knows a focusable node at the cursor it gets the focus (as
+        // always). When it knows none but the document itself (a roving `tabindex` row is not
+        // marked focusable until it is read) and the page already has focus on something inside
+        // the document, the focus stays where it is: moving it to the document would take the
+        // arrows away from the list the user is in.
+        let page_focus_inside = b
+            .focus_node
+            .is_some_and(|(d, f)| d == doc && h.read.with(|dd| dd.root() != Some(f)));
+        let focusable = match focusable {
+            Some(f) if f != root => Some(f),
+            Some(_) | None if page_focus_inside => None,
+            other => other,
+        };
+        tracing::info!(
+            target: "gorca_phase",
+            phase = "web_toggle",
+            cur = ?cur_node,
+            focusable = ?focusable,
+            root = ?root,
+        );
         let was_browse = cur_node.is_some();
         self.web_apply(WebEv::Toggle { focusable, root }, fx, false);
         if was_browse {

@@ -10,6 +10,7 @@
 //! - [`ResolvedKeymap`] holds chords and command **names** per context, layered as built-in
 //!   preset, then the user file (KC-1 to KC-6). Mapping names to commands is `gorca-core`'s job.
 
+pub mod app_modes;
 mod diag;
 mod keymap;
 mod load;

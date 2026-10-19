@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 use gorca_dbus::DbusError;
 use gorca_doc_source_api::{
     ActionCaps, Activity, DeltaSink, DocAction, DocEvent, DocRequest, DocSource, DocSourceCtx,
-    JoinKeyCaps, SourceCaps, SourceError, SourceKind, web_attrs,
+    JoinKeyCaps, RepairReport, SourceCaps, SourceError, SourceKind, web_attrs,
 };
 use gorca_model::{
     DocDelta, LocalId, NodeEvent, PropMask, Role, SrcNode, SrcNodeId, TextEdit, TextUnit,
@@ -446,6 +446,27 @@ struct Live {
     /// Empty frames found by the build (`wake_offscreen_frames`) and the nodes the wake takes
     /// its scroll reference from.
     wake: wake::WakePlan,
+    /// The burst was too big to refresh piecemeal: the loop starts a background resync (B-1).
+    resync_wanted: bool,
+    /// Frontier leaves whose `GetTree` was heavy (B-3), handed to the next fetch.
+    heavy: std::collections::HashSet<String>,
+}
+
+/// A background refetch of the whole document (CHR-0 B-1). The fetch interns into a forked path
+/// table and never touches the mirror, so the request loop keeps serving `Action`, `Text` and
+/// `Revalidate` against the old mirror while it runs; the result is applied by the loop.
+struct Flight {
+    task: tokio::task::JoinHandle<Result<(FetchedDoc, PathTable), FetchError>>,
+    started: Instant,
+    waiters: Vec<gorca_doc_source_api::Reply<RepairReport>>,
+    /// A plain rebuild arrived while this one ran: run once more after it.
+    again: bool,
+}
+
+impl Drop for Flight {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
 }
 
 /// The one place deltas leave the source: run synthesis, then the sink, then `Settled` (AM-4).
@@ -552,6 +573,9 @@ fn note(live: &mut Live, e: &AtspiEvent) {
     }
 }
 
+/// How long the pre-click read of the target may take before the click goes ahead unchecked.
+const VERIFY_TIMEOUT: Duration = Duration::from_millis(150);
+
 /// Root list failures before the source gives up the document.
 const ROOT_ERROR_LIMIT: u32 = 3;
 
@@ -577,7 +601,10 @@ impl AtspiDocSource {
             locals: HashMap::new(),
             activity: Activity::Awake,
             wake: wake::WakePlan::default(),
+            resync_wanted: false,
+            heavy: std::collections::HashSet::new(),
         };
+        let mut flight: Option<Flight> = None;
 
         // Build. A failed block fetch is the one hard error: nothing to mirror.
         let t_attach = Instant::now();
@@ -677,7 +704,20 @@ impl AtspiDocSource {
                 () = ctx.shutdown.cancelled() => return Ok(()),
                 req = ctx.requests.recv() => {
                     let Some(req) = req else { return Ok(()) };
-                    self.handle_request(&mut live, &ctx, req).await;
+                    self.handle_request(&mut live, &ctx, &mut flight, req).await;
+                }
+                res = async {
+                    match flight.as_mut() {
+                        Some(f) => (&mut f.task).await,
+                        None => std::future::pending().await,
+                    }
+                }, if flight.is_some() => {
+                    if let Some(f) = flight.take() {
+                        self.finish_flight(&mut live, &ctx, &mut flight, f, res);
+                    }
+                    if live.root_errors >= ROOT_ERROR_LIMIT {
+                        return Err(SourceError::Detached);
+                    }
                 }
                 ev = ctx.events.recv(), if ctx_events_open => {
                     // Events routed by the core (EF-1): an unknown node is not ours.
@@ -712,8 +752,12 @@ impl AtspiDocSource {
                         None => events_open = false,
                     }
                 }
-                () = sleep, if live.activity == Activity::Awake => {
+                () = sleep, if live.activity == Activity::Awake && flight.is_none() => {
                     self.process_dirty(&mut live, &ctx).await;
+                    if live.resync_wanted {
+                        live.resync_wanted = false;
+                        self.start_flight(&mut live, &mut flight, None);
+                    }
                     if live.root_errors >= ROOT_ERROR_LIMIT {
                         return Err(SourceError::Detached);
                     }
@@ -733,6 +777,13 @@ impl AtspiDocSource {
         push: bool,
     ) {
         live.ident.load_parts(docs);
+        for d in docs {
+            for r in &d.timings.heavy_roots {
+                if live.heavy.len() < 64 {
+                    live.heavy.insert(r.clone());
+                }
+            }
+        }
         live.root_key = docs.first().and_then(|d| d.keys.first().copied());
         if self.config.quirks.wake_offscreen_frames {
             Self::note_sleeping_frames(live, docs);
@@ -1016,7 +1067,7 @@ impl AtspiDocSource {
 
         if taken.map.len() > self.config.resync_threshold {
             rec.resync = true;
-            self.full_resync(live, &mut deltas, &mut rec).await;
+            live.resync_wanted = true;
         } else {
             // Resolve to logical ids; unknown paths are inside subtrees we have not seen yet.
             let mut child_targets: Vec<(usize, SrcNodeId)> = Vec::new();
@@ -1242,34 +1293,21 @@ impl AtspiDocSource {
         }
     }
 
-    /// Overload response: refetch the whole document and re-match it against the mirror with the
-    /// identity ladder, so logical ids survive. Only a changed document root (a navigation) resets.
-    async fn full_resync(
+    /// Match a refetched document against the mirror with the identity ladder, so logical ids
+    /// survive. Only a changed document root (a navigation) resets.
+    fn apply_resync(
         &mut self,
         live: &mut Live,
+        doc: &FetchedDoc,
         deltas: &mut Vec<DocDelta>,
         rec: &mut UpdateRecord,
     ) {
-        let mut opts = self.config.fetch.clone();
-        opts.budget = Duration::from_secs(10);
-        let Ok(doc) = fetch_document(
-            &self.app,
-            &self.interner,
-            &mut live.paths,
-            &self.root_path,
-            &opts,
-        )
-        .await
-        else {
-            rec.errors += 1;
-            return;
-        };
         rec.nodes_fetched = doc.block.node_count();
-        register_locals(live, &doc);
+        register_locals(live, doc);
         let root_path = doc.keys.first().copied();
         let root_id = root_path.and_then(|p| live.ident.id_of(p));
         if let Some(root) = root_id {
-            let out = live.ident.resync_subtree(root, &doc);
+            let out = live.ident.resync_subtree(root, doc);
             rec.stats.add(&out.stats);
             if !out.upserts.is_empty() {
                 deltas.push(DocDelta::Upsert(out.upserts));
@@ -1281,16 +1319,128 @@ impl AtspiDocSource {
                 deltas.push(DocDelta::Removed(out.removed));
             }
         } else {
-            live.ident.load(&doc);
+            live.ident.load(doc);
             self.config.nav_id += 1;
             deltas.extend(
                 doc.block
+                    .clone()
                     .into_deltas(Some(self.config.nav_id), self.config.chunk),
             );
         }
     }
 
-    async fn handle_request(&mut self, live: &mut Live, ctx: &DocSourceCtx, req: DocRequest) {
+    /// Start the background refetch of the whole document, or fold the request into the one that
+    /// runs. `waiter` is answered with the report when the difference is in the sink.
+    fn start_flight(
+        &self,
+        live: &mut Live,
+        flight: &mut Option<Flight>,
+        waiter: Option<gorca_doc_source_api::Reply<RepairReport>>,
+    ) {
+        if let Some(f) = flight.as_mut() {
+            match waiter {
+                Some(w) => f.waiters.push(w),
+                None => f.again = true,
+            }
+            return;
+        }
+        // Whatever was marked before is covered by the refetch; what arrives while it runs stays
+        // marked and is processed after it.
+        let _ = live.dirty.take();
+        let app = Arc::clone(&self.app);
+        let interner = Arc::clone(&self.interner);
+        let mut paths = live.paths.fork();
+        let root_path = self.root_path.clone();
+        let mut opts = self.config.fetch.clone();
+        opts.budget = Duration::from_secs(10);
+        opts.heavy = Arc::new(live.heavy.clone());
+        let task = tokio::spawn(async move {
+            let d = fetch_document(&app, &interner, &mut paths, &root_path, &opts).await?;
+            Ok((d, paths))
+        });
+        *flight = Some(Flight {
+            task,
+            started: Instant::now(),
+            waiters: waiter.into_iter().collect(),
+            again: false,
+        });
+    }
+
+    /// The background refetch ended: apply it, push the difference followed by `Settled` (also
+    /// when nothing changed, so the waiter wakes), answer the waiters.
+    fn finish_flight(
+        &mut self,
+        live: &mut Live,
+        ctx: &DocSourceCtx,
+        flight: &mut Option<Flight>,
+        mut fl: Flight,
+        res: Result<Result<(FetchedDoc, PathTable), FetchError>, tokio::task::JoinError>,
+    ) {
+        let mut rec = UpdateRecord {
+            events: 0,
+            dirty_nodes: 0,
+            first_event: None,
+            last_event: None,
+            planned_at: fl.started,
+            pushed_at: Instant::now(),
+            parents_refreshed: 0,
+            props_refreshed: 0,
+            nodes_fetched: 0,
+            deltas: 0,
+            stats: MatchStats::default(),
+            resync: true,
+            rewrite: false,
+            rewrite_note: None,
+            errors: 0,
+        };
+        let mut deltas = Vec::new();
+        let mut report = RepairReport::default();
+        if let Ok(Ok((doc, paths))) = res {
+            live.paths.absorb(paths);
+            for r in &doc.timings.heavy_roots {
+                if live.heavy.len() < 64 {
+                    live.heavy.insert(r.clone());
+                }
+            }
+            tracing::info!(
+                target: "gorca_phase",
+                phase = "repair_fetch",
+                wall_ms = fl.started.elapsed().as_secs_f64() * 1000.0,
+                nodes = doc.block.node_count(),
+                heaviest_get_tree_ms = doc.timings.heaviest_get_tree.as_secs_f64() * 1000.0,
+                heavy_roots = doc.timings.heavy_roots.len(),
+            );
+            report.nodes = doc.block.node_count();
+            self.apply_resync(live, &doc, &mut deltas, &mut rec);
+        } else {
+            rec.errors += 1;
+            report.failed = true;
+        }
+        rec.deltas = deltas.len();
+        report.deltas = deltas.len();
+        live.out.emit(&ctx.sink, deltas);
+        rec.pushed_at = Instant::now();
+        report.took = fl.started.elapsed();
+        self.metrics.push(rec);
+        if live.root_errors >= ROOT_ERROR_LIMIT {
+            // The document object is gone: the doc actor attaches a new source.
+            live.root_errors = ROOT_ERROR_LIMIT;
+        }
+        for w in std::mem::take(&mut fl.waiters) {
+            let _ = w.send(Ok(report));
+        }
+        if fl.again {
+            self.start_flight(live, flight, None);
+        }
+    }
+
+    async fn handle_request(
+        &mut self,
+        live: &mut Live,
+        ctx: &DocSourceCtx,
+        flight: &mut Option<Flight>,
+        req: DocRequest,
+    ) {
         match req {
             DocRequest::Subtree {
                 root,
@@ -1318,6 +1468,10 @@ impl AtspiDocSource {
                 deadline,
                 reply,
             } => {
+                if matches!(act, DocAction::Click) && self.displaced(live, node).await {
+                    let _ = reply.send(Err(SourceError::Displaced));
+                    return;
+                }
                 let mut r = self.action(live, node, &act, deadline).await;
                 if matches!(r, Err(SourceError::Gone))
                     && matches!(act, DocAction::Click | DocAction::Focus)
@@ -1353,46 +1507,13 @@ impl AtspiDocSource {
                 // M7a: waking always rebuilds (AM-13); ids are kept, W0 was served from the
                 // snapshot while the document slept.
                 if was == Activity::Dormant && a == Activity::Awake {
-                    self.rebuild(live, ctx).await;
+                    self.start_flight(live, flight, None);
                 }
             }
-            DocRequest::Rebuild => self.rebuild(live, ctx).await,
+            DocRequest::Rebuild => self.start_flight(live, flight, None),
+            DocRequest::Repair { reply } => self.start_flight(live, flight, Some(reply)),
             // M7b: urgent marks and the W3 drift check.
             DocRequest::Prioritize { .. } | DocRequest::DriftCheck => {}
-        }
-    }
-
-    /// Rebuild as resync (AM-4): refetch the document, re-match it against the issued ids and
-    /// push the difference, then `Settled` even when nothing changed so the waiter wakes.
-    async fn rebuild(&mut self, live: &mut Live, ctx: &DocSourceCtx) {
-        let mut rec = UpdateRecord {
-            events: 0,
-            dirty_nodes: 0,
-            first_event: None,
-            last_event: None,
-            planned_at: Instant::now(),
-            pushed_at: Instant::now(),
-            parents_refreshed: 0,
-            props_refreshed: 0,
-            nodes_fetched: 0,
-            deltas: 0,
-            stats: MatchStats::default(),
-            resync: true,
-            rewrite: false,
-            rewrite_note: None,
-            errors: 0,
-        };
-        // Whatever was marked while dormant is covered by the refetch.
-        let _ = live.dirty.take();
-        let mut deltas = Vec::new();
-        self.full_resync(live, &mut deltas, &mut rec).await;
-        rec.deltas = deltas.len();
-        live.out.emit(&ctx.sink, deltas);
-        rec.pushed_at = Instant::now();
-        self.metrics.push(rec);
-        if live.root_errors >= ROOT_ERROR_LIMIT {
-            // The document object is gone: the doc actor attaches a new source.
-            live.root_errors = ROOT_ERROR_LIMIT;
         }
     }
 
@@ -1637,6 +1758,49 @@ impl AtspiDocSource {
         } else {
             Err(SourceError::Gone)
         }
+    }
+
+    /// Act only on what was spoken (CHR-0): before a click, read the object's role and name again
+    /// and compare them with what the mirror says (which is what the user heard). When the page
+    /// re-used or re-ordered its rows since, nothing is clicked; the node is marked for a refresh
+    /// and the caller says so. A read that fails or is slow lets the click go: this guard must
+    /// never turn a working Enter into a silent one.
+    async fn displaced(&self, live: &mut Live, node: SrcNodeId) -> bool {
+        let Some(path_key) = live.ident.path_of(node) else {
+            return false;
+        };
+        let Some(path) = live.paths.path_of(path_key) else {
+            return false;
+        };
+        let Some(old) = live.ident.info_of(node).map(|i| i.sig.clone()) else {
+            return false;
+        };
+        let read = tokio::time::timeout(VERIFY_TIMEOUT, self.read_nodes(vec![(node, path)])).await;
+        let Some((_, Some(read))) = read.ok().and_then(|mut v| v.pop()) else {
+            return false;
+        };
+        let (_, fresh) = self.node_from_read(node, read, None, false, None);
+        let name_differs = match (&old.name, &fresh.sig.name) {
+            (Some(a), Some(b)) => a.trim() != b.trim(),
+            (Some(_) | None, None) | (None, Some(_)) => false,
+        };
+        let differs = old.role != fresh.sig.role || name_differs;
+        if differs {
+            tracing::info!(
+                target: "gorca_phase",
+                phase = "click_displaced",
+                role_changed = old.role != fresh.sig.role,
+            );
+            live.dirty.note(&AtspiEvent {
+                path: path_key,
+                kind: EventKind::StateChanged {
+                    state: Arc::from("props"),
+                    on: true,
+                },
+                at: Instant::now(),
+            });
+        }
+        differs
     }
 
     fn path_of(live: &Live, node: SrcNodeId) -> Option<String> {

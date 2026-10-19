@@ -51,6 +51,16 @@ pub enum FocusCause {
     Application,
 }
 
+/// See [`Browse::grace_fallback`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct GraceFallback {
+    /// The focus that waited for the mirror.
+    pub focus: NodeKey,
+    pub doc: DocId,
+    /// Where the fallback put the cursor (the document root).
+    pub root: DocNodeId,
+}
+
 /// The browse/focus state machine (ADR-0003 `WebMode`).
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum WebMode {
@@ -579,6 +589,10 @@ pub struct BrowseState {
     /// Where position restore put the cursor after the node the user was on vanished: the
     /// next Enter on exactly this node announces the new item instead of clicking it.
     pub displaced: Option<gorca_model::DocNodeId>,
+    /// The loading grace ran out with the focus still unmirrored and browse mode started at the
+    /// top of the page (7.3). When a repair or an update later mirrors the focused node and
+    /// neither the focus nor the cursor moved, the focus is joined after all (CHR-0 B-2).
+    pub grace_fallback: Option<GraceFallback>,
     /// The node we last clicked: the cursor node it was clicked from, the control itself, its
     /// role, and when. Only a relabel of exactly this control right after the click is the
     /// click's answer and not a swap.
@@ -653,6 +667,7 @@ impl BrowseState {
             last_off: 0,
             restore_until: None,
             displaced: None,
+            grace_fallback: None,
             activated_node: None,
             cursor_sig: None,
             single_letter: true,

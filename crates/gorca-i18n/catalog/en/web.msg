@@ -50,3 +50,4 @@ web-not-in-cell = Not in a table cell
 web-table-edge = Edge of table
 web-item-gone = that item is gone
 web-cant-activate = can't activate that
+web-item-changed = that item changed

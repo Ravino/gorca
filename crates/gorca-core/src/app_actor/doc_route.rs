@@ -14,8 +14,10 @@ use std::time::{Duration, Instant};
 use gorca_doc_source_api::DocEvent;
 use gorca_model::{AppId, AppInfo, AppLifecycle, DocKind, NodeEvent};
 
-use crate::doc_actor::{DocDirectory, WebJoin};
+use crate::doc_actor::repair::RepairReason;
+use crate::doc_actor::{DocCtl, DocDirectory, WebJoin};
 use crate::doc_registry::{HubMsg, HubTx};
+use gorca_model::PropMask;
 
 /// What an app actor needs to route web events.
 #[derive(Clone, Debug)]
@@ -80,14 +82,24 @@ impl DocRouter {
                     node,
                     kind: DocKind::LoadComplete | DocKind::Reload,
                 } => {
+                    // A document that already has a mirror is stale after its load ended
+                    // (Chromium sends no structural event for it): repair it whatever the
+                    // settle window says. The window only keeps a fresh tree's creation from
+                    // being taken for a page load.
+                    self.repair_doc_of(*node, RepairReason::LoadComplete);
                     if self.settle_until.get().is_some_and(|t| now < *t) {
                         continue;
                     }
                     let _ = self.link.hub.try_send(HubMsg::Loaded { node: *node });
                 }
+                NodeEvent::PropertiesChanged { node, mask } => {
+                    if mask.contains(PropMask::STATES) {
+                        self.root_state(*node);
+                    }
+                    self.send(ev, *node, now);
+                }
                 NodeEvent::ChildrenChanged { node }
                 | NodeEvent::NodeRemoved { node }
-                | NodeEvent::PropertiesChanged { node, .. }
                 | NodeEvent::TextChanged { node, .. } => {
                     self.send(ev, *node, now);
                 }
@@ -102,14 +114,38 @@ impl DocRouter {
         }
     }
 
+    /// Ask the document that owns `node` (a node of its mirror) for a repair.
+    fn repair_doc_of(&self, node: gorca_model::NodeKey, why: RepairReason) {
+        if let Some((doc, _)) = self.link.join.get(node)
+            && let Some(h) = self.link.docs.get(doc)
+        {
+            let _ = h.ctl.try_send(DocCtl::Repair(why));
+        }
+    }
+
+    /// The states of a document root changed (busy to idle is one of them): the document may
+    /// have finished loading. The document decides whether it is young enough to care.
+    fn root_state(&self, node: gorca_model::NodeKey) {
+        if let Some((doc, _)) = self.link.join.get(node)
+            && let Some(h) = self.link.docs.get(doc)
+            && h.root == node
+        {
+            let _ = h.ctl.try_send(DocCtl::Repair(RepairReason::RootState));
+        }
+    }
+
     fn send(&mut self, ev: &NodeEvent, node: gorca_model::NodeKey, now: Instant) {
         // The node's document; an unknown node is most often a new child of a known parent, so
         // it goes to the application's document (JN-3).
-        let handle = match self.link.join.get(node) {
-            Some((doc, _)) => self.link.docs.get(doc),
-            None => self.link.docs.of_app(self.app),
+        let (handle, known) = match self.link.join.get(node) {
+            Some((doc, _)) => (self.link.docs.get(doc), true),
+            None => (self.link.docs.of_app(self.app), false),
         };
         let Some(h) = handle else { return };
+        if !known && !matches!(ev, NodeEvent::NodeRemoved { .. }) {
+            // Counted, never acted on here: the document looks again after a settle period.
+            h.orphans.note(node);
+        }
         self.seq += 1;
         let de = DocEvent {
             ev: ev.clone(),
@@ -121,5 +157,139 @@ impl DocRouter {
         } else {
             self.dropped += 1;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::*;
+    use crate::doc_actor::DocHandle;
+    use gorca_doc::web::channel;
+    use gorca_model::{ConnectorId, DocId, DocNodeId, LocalId, NodeKey};
+    use gorca_rt::mpsc;
+
+    fn app() -> AppId {
+        AppId {
+            connector: ConnectorId(1),
+            serial: 1,
+        }
+    }
+
+    fn nk(n: u64) -> NodeKey {
+        NodeKey {
+            app: app(),
+            local: LocalId(n),
+        }
+    }
+
+    struct Rig {
+        router: DocRouter,
+        join: Arc<WebJoin>,
+        ctl: mpsc::Receiver<DocCtl>,
+        handle: Arc<DocHandle>,
+        _hub: mpsc::Receiver<HubMsg>,
+    }
+
+    /// One document (id 1, root key 11) with the nodes 11 and 12 joined.
+    fn rig() -> Rig {
+        let (hub, hub_rx) = crate::doc_registry::hub_channel();
+        let join = Arc::new(WebJoin::new());
+        let docs = Arc::new(DocDirectory::new());
+        let (_writer, read) = channel(1);
+        let (ctl_tx, ctl) = mpsc::channel(16);
+        let (ev_tx, _ev) = mpsc::channel(16);
+        docs.insert(DocHandle {
+            doc: DocId(1),
+            app: app(),
+            root: nk(11),
+            read,
+            ctl: ctl_tx,
+            events: ev_tx,
+            orphans: Arc::default(),
+        });
+        join.set(nk(11), (DocId(1), DocNodeId::from_parts(0, 0)));
+        join.set(nk(12), (DocId(1), DocNodeId::from_parts(1, 0)));
+        let handle = docs.get(DocId(1)).unwrap();
+        let router = DocRouter::new(
+            app(),
+            WebLink {
+                hub,
+                join: Arc::clone(&join),
+                docs,
+            },
+        );
+        Rig {
+            router,
+            join,
+            ctl,
+            handle,
+            _hub: hub_rx,
+        }
+    }
+
+    #[test]
+    fn a_load_complete_in_the_settle_window_still_repairs_a_mirrored_document() {
+        let mut r = rig();
+        let now = Instant::now();
+        // The window that keeps a fresh tree's creation from being taken for a page load.
+        r.router
+            .settle_until
+            .set(now + Duration::from_secs(3))
+            .unwrap();
+        r.router.route(
+            &[NodeEvent::DocumentEvent {
+                node: nk(11),
+                kind: DocKind::LoadComplete,
+            }],
+            now,
+        );
+        assert!(matches!(
+            r.ctl.try_recv(),
+            Ok(DocCtl::Repair(RepairReason::LoadComplete))
+        ));
+    }
+
+    #[test]
+    fn a_state_change_of_the_root_asks_for_a_young_document_check_but_not_a_child() {
+        let mut r = rig();
+        let now = Instant::now();
+        let states = |n| NodeEvent::PropertiesChanged {
+            node: nk(n),
+            mask: PropMask::STATES,
+        };
+        r.router.route(&[states(12)], now);
+        assert!(
+            r.ctl.try_recv().is_err(),
+            "a child's state is no load signal"
+        );
+        r.router.route(&[states(11)], now);
+        assert!(matches!(
+            r.ctl.try_recv(),
+            Ok(DocCtl::Repair(RepairReason::RootState))
+        ));
+    }
+
+    #[test]
+    fn events_on_unknown_nodes_are_counted_as_orphans_but_removals_are_not() {
+        let mut r = rig();
+        let now = Instant::now();
+        r.router
+            .route(&[NodeEvent::NodeRemoved { node: nk(99) }], now);
+        assert!(!r.handle.orphans.pending());
+        r.router.route(
+            &[
+                NodeEvent::ChildrenChanged { node: nk(12) },
+                NodeEvent::TextChanged {
+                    node: nk(98),
+                    delta: gorca_model::TextDelta::Replaced { text: None },
+                },
+            ],
+            now,
+        );
+        assert!(r.handle.orphans.pending());
+        assert_eq!(r.handle.orphans.take(), vec![nk(98)]);
+        assert!(r.join.get(nk(12)).is_some());
     }
 }

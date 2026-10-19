@@ -92,7 +92,20 @@ pub struct FetchOpts {
     pub warm: bool,
     /// Engine rows that normalise what a node says (M8b, ADR-0008).
     pub quirks: crate::extras::WebQuirks,
+    /// Frontier leaves whose `GetTree` was heavy in an earlier fetch (more than [`HEAVY_NODES`]
+    /// nodes): the browser's main thread is blocked for the whole call, so the next fetch
+    /// expands them with `GetChildren` first (CHR-0 B-3). Empty on a first build.
+    pub heavy: Arc<std::collections::HashSet<String>>,
+    /// A `GetTree` reply of more nodes than this makes its root heavy (the product uses
+    /// [`HEAVY_NODES`]).
+    pub heavy_nodes: usize,
 }
+
+/// A `GetTree` reply of more nodes than this is a long slice of the browser's main thread
+/// (about 10 microseconds per node on Chromium): its root is expanded next time.
+pub const HEAVY_NODES: usize = 1500;
+/// Extra frontier levels a heavy leaf may be expanded by.
+const HEAVY_EXTRA_DEPTH: u32 = 6;
 
 impl Default for FetchOpts {
     fn default() -> Self {
@@ -109,6 +122,8 @@ impl Default for FetchOpts {
             offload_bytes: 256 * 1024,
             warm: true,
             quirks: crate::extras::WebQuirks::NONE,
+            heavy: Arc::default(),
+            heavy_nodes: HEAVY_NODES,
         }
     }
 }
@@ -120,6 +135,8 @@ pub struct FetchTimings {
     /// time the browser's main thread was busy for one call (jank, WM-9).
     pub heaviest_get_tree: Duration,
     pub heaviest_get_tree_nodes: u64,
+    /// Roots of the `GetTree` calls that returned more than [`HEAVY_NODES`] nodes.
+    pub heavy_roots: Vec<String>,
     /// Cache-domain warming (first fetch of an app only).
     pub warm: Duration,
     pub frontier: Duration,
@@ -137,7 +154,7 @@ pub struct FetchTimings {
 }
 
 /// Source-side bookkeeping for non-numeric paths.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PathTable {
     other: HashMap<u64, Box<str>>,
     by_str: HashMap<Box<str>, u64>,
@@ -151,6 +168,27 @@ pub struct PathTable {
 const MAX_ERROR_TARGETS: usize = 1024;
 
 impl PathTable {
+    /// A copy a background fetch interns into while the live table keeps serving requests. Its
+    /// side-table keys start far above the live ones so the two never hand out the same key.
+    #[must_use]
+    pub fn fork(&self) -> PathTable {
+        let mut t = self.clone();
+        t.next = self.next + (1 << 24);
+        t
+    }
+
+    /// Take over what a forked table learned (non-numeric paths only; numeric paths need no
+    /// table). A path the live table interned meanwhile under another key keeps that key.
+    pub fn absorb(&mut self, other: PathTable) {
+        for (k, p) in other.other {
+            if let std::collections::hash_map::Entry::Vacant(v) = self.by_str.entry(p.clone()) {
+                v.insert(k);
+                self.other.insert(k, p);
+            }
+        }
+        self.next = self.next.max(other.next);
+    }
+
     pub fn intern(&mut self, path: &str) -> PathKey {
         if let Some(k) = PathKey::parse(path) {
             return k;
@@ -678,16 +716,14 @@ async fn fetch_structure(
             min_subtrees,
             max_depth,
         } => {
-            let plan = plan_frontier(
-                conn,
-                interner,
-                paths,
-                root_path,
-                (min_subtrees, max_depth),
-                (opts.call_timeout, deadline),
-                tm,
-            )
-            .await?;
+            let spec = FrontierSpec {
+                min_subtrees,
+                max_depth,
+                call_timeout: opts.call_timeout,
+                deadline,
+                heavy: &opts.heavy,
+            };
+            let plan = plan_frontier(conn, interner, paths, root_path, &spec, tm).await?;
             let t = Instant::now();
             let mut by_root = trees_of(conn, interner, &plan.leaves, opts, deadline, tm).await?;
             tm.get_tree = t.elapsed();
@@ -740,6 +776,19 @@ pub struct FrontierPlan {
     pub leaves: Vec<String>,
 }
 
+/// How [`plan_frontier`] expands the top of a document.
+#[derive(Copy, Clone, Debug)]
+pub struct FrontierSpec<'a> {
+    /// Expand every frontier node while fewer subtrees than this exist...
+    pub min_subtrees: usize,
+    /// ... and at most this many levels.
+    pub max_depth: u32,
+    pub call_timeout: Duration,
+    pub deadline: Deadline,
+    /// Leaves an earlier fetch found heavy: expanded a few levels further (B-3).
+    pub heavy: &'a Arc<std::collections::HashSet<String>>,
+}
+
 /// Expand the tree from `root_path` until at least `limits.0` subtrees exist or `limits.1` levels
 /// were expanded, and read the properties of the expanded nodes.
 pub async fn plan_frontier(
@@ -747,22 +796,38 @@ pub async fn plan_frontier(
     interner: &Arc<AttrInterner>,
     paths: &mut PathTable,
     root_path: &str,
-    limits: (usize, u32),
-    timing: (Duration, Deadline),
+    spec: &FrontierSpec<'_>,
     tm: &mut FetchTimings,
 ) -> Result<FrontierPlan, FetchError> {
-    let (min_subtrees, max_depth) = limits;
-    let (call_timeout, deadline) = timing;
+    let FrontierSpec {
+        min_subtrees,
+        max_depth,
+        call_timeout,
+        deadline,
+        heavy,
+    } = *spec;
     let call_dl = |now: Instant| Deadline((now + call_timeout).min(deadline.0));
     let t = Instant::now();
     let mut interior: Vec<(String, Vec<String>)> = Vec::new();
     let mut frontier: Vec<String> = vec![root_path.to_owned()];
     let mut depth = 0;
-    while frontier.len() < min_subtrees && depth < max_depth {
+    loop {
+        // Expand every frontier node while the frontier is narrow; afterwards only the leaves
+        // an earlier fetch found heavy (B-3), a few extra levels deep.
+        let widen = frontier.len() < min_subtrees && depth < max_depth;
+        let deepen =
+            depth < max_depth + HEAVY_EXTRA_DEPTH && frontier.iter().any(|p| heavy.contains(p));
+        if !widen && !deepen {
+            break;
+        }
         let mut next: Vec<String> = Vec::new();
         let mut expanded_any = false;
-        let mut replies: Vec<Vec<(String, String)>> = Vec::new();
+        let mut replies: Vec<Option<Vec<(String, String)>>> = Vec::new();
         for (k, p) in frontier.iter().enumerate() {
+            if !(widen || heavy.contains(p)) {
+                replies.push(None);
+                continue;
+            }
             let m = conn
                 .call(
                     k,
@@ -774,16 +839,17 @@ pub async fn plan_frontier(
                 )
                 .await?;
             tm.calls += 1;
-            replies.push(wire::parse_children(m.body().data().bytes())?);
+            replies.push(Some(wire::parse_children(m.body().data().bytes())?));
         }
         for (p, kids) in frontier.iter().zip(replies) {
-            if kids.is_empty() {
-                next.push(p.clone());
-            } else {
-                expanded_any = true;
-                let kp: Vec<String> = kids.into_iter().map(|(_, c)| c).collect();
-                interior.push((p.clone(), kp.clone()));
-                next.extend(kp);
+            match kids {
+                Some(kids) if !kids.is_empty() => {
+                    expanded_any = true;
+                    let kp: Vec<String> = kids.into_iter().map(|(_, c)| c).collect();
+                    interior.push((p.clone(), kp.clone()));
+                    next.extend(kp);
+                }
+                Some(_) | None => next.push(p.clone()),
             }
         }
         frontier = next;
@@ -883,6 +949,9 @@ async fn trees_of(
         {
             tm.tree_bytes += b;
             tm.calls += 1;
+            if r.nodes.len() > opts.heavy_nodes {
+                tm.heavy_roots.push(roots[k].clone());
+            }
             by_root[k] = Some(r);
         }
     }
@@ -919,16 +988,14 @@ pub async fn fetch_first_block(
         } => (min_subtrees, max_depth),
         Split::Whole => (8, 3),
     };
-    let plan = plan_frontier(
-        conn,
-        interner,
-        paths,
-        root_path,
-        (min_subtrees, max_depth),
-        (opts.call_timeout, deadline),
-        &mut tm,
-    )
-    .await?;
+    let spec = FrontierSpec {
+        min_subtrees,
+        max_depth,
+        call_timeout: opts.call_timeout,
+        deadline,
+        heavy: &opts.heavy,
+    };
+    let plan = plan_frontier(conn, interner, paths, root_path, &spec, &mut tm).await?;
     let t = Instant::now();
     let mut by_root: Vec<Option<wire::TreeReply>> = Vec::new();
     let mut have = plan.interior_nodes.len();
