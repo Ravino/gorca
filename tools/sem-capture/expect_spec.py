@@ -90,7 +90,7 @@ PATTERNS = [
       at={"placeholder-text|placeholder": "Hint only"},
       note="placeholder survives as an attribute only when it is not the name; key differs: Gecko "
            "placeholder-text, Blink placeholder (alias row, any key matches)"),
-    p("textbox.password", F, "tx-password", "textbox", note="AT-SPI role is password-text; ARIA has no password role"),
+    p("textbox.password", F, "tx-password", "passwordbox", note="AT-SPI role is password-text; ARIA has no password role, the model does (SemRole::PasswordBox)"),
     p("searchbox.aria", F, "tx-searchbox-aria", "searchbox"),
     p("combobox.aria.collapsed", F, "cbx-aria", "combobox", expand="false", st=["expandable"], nst=["expanded"],
       at={"autocomplete": "list"}),
@@ -255,7 +255,7 @@ PATTERNS += [
     g("gtk4.entry.placeholder", "controls", "entry-ph", "textbox", st=["editable"],
       at={"placeholder-text": "Placeholder text"}),
     g("gtk4.entry.readonly", "controls", "entry-ro", "textbox", st=["read-only"], nst=["editable"]),
-    g("gtk4.entry.password", "controls", "entry-pw", "textbox"),
+    g("gtk4.entry.password", "controls", "entry-pw", "passwordbox"),
     g("gtk4.searchentry", "controls", "entry-search", "searchbox"),
     g("gtk4.spinbutton", "controls", "spin", "spinbutton"),
     g("gtk4.scale.vertical", "controls", "scale-v", "slider", st=["vertical"]),

@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::admit::Scope;
+use crate::admit::{Scope, WideKey};
 use crate::descriptor::{PeerProof, StableIdentity};
 
 /// Window of the strike counter: 3 strikes within this many milliseconds quarantine a scope.
@@ -606,18 +606,20 @@ impl SourceBook {
         let log = self.quarantines.entry(id.peer.clone()).or_default();
         // Count distinct sites (document hosts), not tabs: a hostile site reloading itself
         // is one site (review B-1).
-        let key = scope.site_key();
-        log.retain(|(s, t)| s.site_key() != key && now_ms.saturating_sub(*t) <= WIDE_WINDOW_MS);
+        let key = scope.wide_key();
+        log.retain(|(s, t)| s.wide_key() != key && now_ms.saturating_sub(*t) <= WIDE_WINDOW_MS);
         log.push((scope, now_ms));
         if log.len() > MAX_QUARANTINE_LOG {
             log.remove(0);
         }
-        // Site-less scopes (keyed by app and tab) count only when at least two distinct ones
-        // are quarantined: one tab reloading itself can never trip the source-wide limit.
-        let sited = log.iter().filter(|(s, _)| s.site.is_some()).count();
-        let siteless = log.len() - sited;
-        let siteless = if siteless >= 2 { siteless } else { 0 };
-        sited + siteless >= WIDE_LIMIT
+        // One entry per typed key, so reloads of one tab or site are one entry and ids of
+        // different kinds cannot collide. Site, Tab and App keys count; Doc keys never do: the
+        // per-scope quarantine contains the source there, and a per-navigation id is
+        // page-controlled (see `Scope::wide_key`).
+        log.iter()
+            .filter(|(s, _)| !matches!(s.wide_key(), WideKey::Doc(..)))
+            .count()
+            >= WIDE_LIMIT
     }
 }
 
@@ -902,6 +904,120 @@ mod tests {
             100,
         );
         assert!(b.state(&i, tab(50, 50)).facts_win());
+    }
+
+    fn bare_doc(d: u64) -> Scope {
+        Scope {
+            site: None,
+            tab: None,
+            ..doc(d, 0)
+        }
+    }
+
+    fn quarantined_count_trips(scopes: &[Scope]) -> bool {
+        let mut b = SourceBook::new();
+        let i = named("bus");
+        let probe = doc(9999, 9999);
+        b.apply(&i, probe, SourceEvent::Hello { remembered: None }, 0);
+        for (n, s) in scopes.iter().enumerate() {
+            quarantine(&mut b, &i, *s, 10 * (n as u64 + 1));
+        }
+        b.state(&i, probe) == SourceState::Quarantined
+    }
+
+    #[test]
+    fn key_same_number_different_kind_never_collides() {
+        let s = |site, tab, d| Scope {
+            site,
+            tab,
+            ..doc(d, 0)
+        };
+        let keys = [
+            s(Some(7), None, 7).wide_key(),
+            s(None, Some(7), 7).wide_key(),
+            s(None, None, 7).wide_key(),
+        ];
+        assert_ne!(keys[0], keys[1]);
+        assert_ne!(keys[1], keys[2]);
+        assert_ne!(keys[0], keys[2]);
+        assert_eq!(
+            s(None, None, 7).wide_key(),
+            WideKey::Doc(s(None, None, 7).app, 7)
+        );
+    }
+
+    #[test]
+    fn counting_site_known_any_tab_any_doc_is_one_key() {
+        let s = |tab, d| Scope { tab, ..doc(d, 5) };
+        // Same site across tabs and reloads: one key, however many.
+        let many: Vec<Scope> = (1..=6).map(|d| s(Some(d % 3), d)).collect();
+        assert!(!quarantined_count_trips(&many));
+        // Three sites: trips, with or without tab info.
+        assert!(quarantined_count_trips(&[doc(1, 1), doc(2, 2), doc(3, 3)]));
+    }
+
+    #[test]
+    fn counting_doc_only_keys_never_trip_the_wide_limit() {
+        assert!(!quarantined_count_trips(&[
+            bare_doc(1),
+            bare_doc(2),
+            bare_doc(3)
+        ]));
+        let reloads: Vec<Scope> = (1..=50).map(bare_doc).collect();
+        assert!(!quarantined_count_trips(&reloads));
+    }
+
+    #[test]
+    fn counting_tab_keyed_reload_is_one_key_three_tabs_trip() {
+        assert!(!quarantined_count_trips(
+            &(1..=5).map(|d| tab(d, 1)).collect::<Vec<_>>()
+        ));
+        assert!(!quarantined_count_trips(&[tab(1, 1), tab(2, 2)]));
+        assert!(quarantined_count_trips(&[tab(1, 1), tab(2, 2), tab(3, 3)]));
+    }
+
+    #[test]
+    fn counting_mixed_kinds_do_not_collide() {
+        // Site 7, tab 7 and an app-level scope are three distinct counted keys; Doc 7 is not
+        // counted at all.
+        let app_only = Scope {
+            doc: None,
+            site: None,
+            tab: None,
+            ..doc(0, 0)
+        };
+        assert!(quarantined_count_trips(&[doc(7, 7), tab(70, 7), app_only]));
+        assert!(!quarantined_count_trips(&[
+            doc(7, 7),
+            tab(70, 7),
+            bare_doc(7)
+        ]));
+        assert!(!quarantined_count_trips(&[
+            tab(1, 1),
+            tab(2, 2),
+            bare_doc(3)
+        ]));
+    }
+
+    #[test]
+    fn counting_native_app_scopes_count_per_app() {
+        let app = |n: u32| Scope {
+            doc: None,
+            site: None,
+            tab: None,
+            ..scope(n)
+        };
+        assert!(quarantined_count_trips(&[app(1), app(2), app(3)]));
+        assert!(!quarantined_count_trips(&[app(1), app(1), app(2)]));
+    }
+
+    #[test]
+    fn counting_other_app_same_ids_are_distinct_keys() {
+        let other = |n: u32| Scope {
+            app: scope(n).app,
+            ..doc(1, 1)
+        };
+        assert!(quarantined_count_trips(&[other(1), other(2), other(3)]));
     }
 
     #[test]

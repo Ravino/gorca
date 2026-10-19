@@ -209,6 +209,10 @@ pub struct SemText {
     pub key_shortcuts: Option<Arc<str>>,
     /// `aria-valuetext` / GTK valuetext.
     pub value_text: Option<Arc<str>>,
+    /// `aria-colindextext` (part of the `grid` group).
+    pub col_index_text: Option<Arc<str>>,
+    /// `aria-rowindextext` (part of the `grid` group).
+    pub row_index_text: Option<Arc<str>>,
     /// First `aria-details` target, read on demand.
     pub details_target: Option<NodeKey>,
 }
@@ -222,6 +226,8 @@ impl SemText {
             && self.placeholder.is_none()
             && self.key_shortcuts.is_none()
             && self.value_text.is_none()
+            && self.col_index_text.is_none()
+            && self.row_index_text.is_none()
             && self.details_target.is_none()
     }
 }

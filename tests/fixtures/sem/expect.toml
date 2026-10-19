@@ -1177,8 +1177,8 @@ attrs = {"name-from" = "attribute", "placeholder" = "Hint only", "text-input-typ
 [pattern."textbox.password"]
 page = "forms"
 fixture = "tx-password"
-role = "textbox"
-note = "AT-SPI role is password-text; ARIA has no password role"
+role = "passwordbox"
+note = "AT-SPI role is password-text; ARIA has no password role, the model does (SemRole::PasswordBox)"
 disagree = false
 [pattern."textbox.password".firefox]
 status = ["ok"]
@@ -4526,7 +4526,7 @@ attrs = {"toolkit" = "GTK"}
 [pattern."gtk4.entry.password"]
 page = "controls"
 fixture = "entry-pw"
-role = "textbox"
+role = "passwordbox"
 disagree = false
 [pattern."gtk4.entry.password".gtk4]
 status = ["ok"]

@@ -1,6 +1,6 @@
 [package]
 name = "gorca-sem-atspi"
-description = "The one AT-SPI semantic normaliser: raw role/states/attributes to facts, quirk, trust and inexpressible tables (M22a; empty until B2)."
+description = "The one AT-SPI semantic normaliser: raw role/states/attributes to source records (M22a-B4); quirk, trust and inexpressible tables follow in B5."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,6 +9,10 @@ publish.workspace = true
 
 [dependencies]
 gorca-model = { workspace = true }
+
+[dev-dependencies]
+serde_json = "1"
+toml_edit = { workspace = true }
 
 [lints]
 workspace = true
