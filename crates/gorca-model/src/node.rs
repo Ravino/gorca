@@ -10,6 +10,7 @@ use smallvec::SmallVec;
 use crate::geometry::Rect;
 use crate::ids::NodeKey;
 use crate::role::Role;
+use crate::sem::{SemEntry, SrcRecord};
 
 bitflags! {
     /// Connector-normalised state bits.
@@ -154,6 +155,27 @@ pub enum ChildList {
     Unknown,
 }
 
+/// The semantic carrier of a snapshot (M22a-C1b dual-carry, ADR-0022 section 2.11): beside the
+/// legacy `role`/`states`/`attrs` fields a snapshot carries what the normaliser made of the same
+/// raw data (`rec`, set by the connector) and what `FUSE` made of it (`entry`, set by the app
+/// actor's writer, which drops `rec` once fused). Speech reads `entry` only through the writer's
+/// `Ivm::entry_view`-backed stamping; nothing speaks from it before M22a-C3.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NodeSem {
+    /// The normalised source record of the AT-SPI source (connector output).
+    pub rec: Option<Arc<SrcRecord>>,
+    /// The fused entry (app actor output).
+    pub entry: Option<Arc<SemEntry>>,
+}
+
+impl NodeSem {
+    /// Nothing carried.
+    pub const NONE: NodeSem = NodeSem {
+        rec: None,
+        entry: None,
+    };
+}
+
 /// Immutable node snapshot. Text is deliberately not part of it (see `TextQuery`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct NodeSnapshot {
@@ -176,6 +198,8 @@ pub struct NodeSnapshot {
     /// request whose reply produced it (late-reply and re-dirty rules, B-1 5.4).
     pub confirmed_seq: u64,
     pub fresh: Freshness,
+    /// Dual-carried semantics (see [`NodeSem`]).
+    pub sem: NodeSem,
 }
 
 /// Result of a mirror read with the app-wide stale epoch applied (B-1 5.2).

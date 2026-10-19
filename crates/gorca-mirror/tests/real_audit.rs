@@ -58,6 +58,7 @@ fn snap(n: &ANode) -> Arc<NodeSnapshot> {
         have: PropMask::from_bits_truncate(n.have),
         confirmed_seq: 0,
         fresh: Freshness::Fresh { at: Instant::now() },
+        sem: gorca_model::NodeSem::NONE,
     })
 }
 

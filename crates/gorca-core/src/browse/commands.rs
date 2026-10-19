@@ -1359,6 +1359,7 @@ impl Reader {
                     since: Instant::now(),
                     mask: PropMask::VALUE,
                 },
+                sem: gorca_model::NodeSem::NONE,
             })
         })
     }
@@ -1913,13 +1914,7 @@ impl Reader {
             .map(Arc::<str>::from)
             .chain([Arc::from(title)]);
         for (at, text) in front.enumerate() {
-            u.segments.insert(
-                at,
-                Segment {
-                    text,
-                    kind: SegmentKind::Text,
-                },
-            );
+            u.segments.insert(at, Segment::new(text, SegmentKind::Text));
         }
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
@@ -2220,6 +2215,48 @@ impl Reader {
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
 
+    /// The document of a `Loading` focus is there, the node is not mirrored, and the focus
+    /// snapshot says it is not a field: browse the page from the top (7.3). A focus whose
+    /// snapshot is still unknown stays in `Loading` with the grabs off (H2).
+    fn web_loading_to_browse(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        let WebMode::Loading {
+            doc: Some(doc),
+            editable: false,
+            known: true,
+            focus: waiting_focus,
+            ..
+        } = b.mode
+        else {
+            return;
+        };
+        let root = b.docs.get(doc).and_then(|h| h.read.with(WebDoc::root));
+        if let Some(root) = root {
+            self.web_activate(doc, fx);
+            self.web_apply(
+                WebEv::FirstUseful {
+                    doc,
+                    focus: None,
+                    top: root,
+                },
+                fx,
+                true,
+            );
+            self.web_place(doc, root);
+            // The focus is still unmirrored: remember it, a repair may find it (B-2).
+            if let Some(b) = self.web.as_mut()
+                && let WebMode::Browse { cur, .. } = b.mode
+            {
+                b.grace_fallback = Some(super::GraceFallback {
+                    focus: waiting_focus,
+                    doc,
+                    root: cur.node,
+                    at: now,
+                });
+            }
+        }
+    }
+
     pub(crate) fn web_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
         self.web_frame_focus_timer(now, fx);
         self.web_auto_read_timer(fx);
@@ -2261,44 +2298,10 @@ impl Reader {
             // Not due yet (the timer was armed for something else): keep the grace armed.
             fx.push(ReaderEffect::ArmTimer(since + LOADING_GRACE));
         }
-        if let WebMode::Loading {
-            doc: Some(doc),
-            since,
-            editable: false,
-            known: true,
-            focus: waiting_focus,
-            ..
-        } = b.mode
+        if let WebMode::Loading { since, .. } = b.mode
             && now.saturating_duration_since(since) >= LOADING_GRACE
         {
-            // The document is there, the node is not mirrored yet, and the focus snapshot says it
-            // is not a field: browse the page from the top (7.3). A focus whose snapshot is
-            // still unknown stays in `Loading` with the grabs off (H2).
-            let root = b.docs.get(doc).and_then(|h| h.read.with(WebDoc::root));
-            if let Some(root) = root {
-                self.web_activate(doc, fx);
-                self.web_apply(
-                    WebEv::FirstUseful {
-                        doc,
-                        focus: None,
-                        top: root,
-                    },
-                    fx,
-                    true,
-                );
-                self.web_place(doc, root);
-                // The focus is still unmirrored: remember it, a repair may find it (B-2).
-                if let Some(b) = self.web.as_mut()
-                    && let WebMode::Browse { cur, .. } = b.mode
-                {
-                    b.grace_fallback = Some(super::GraceFallback {
-                        focus: waiting_focus,
-                        doc,
-                        root: cur.node,
-                        at: now,
-                    });
-                }
-            }
+            self.web_loading_to_browse(now, fx);
         }
         if sync_sel {
             self.web_mirror_selection(fx);
@@ -2356,10 +2359,8 @@ impl Reader {
             LIVE_TTL_POLITE
         };
         u.segments.clear();
-        u.segments.push(Segment {
-            text: Arc::clone(&msg.text),
-            kind: SegmentKind::Text,
-        });
+        u.segments
+            .push(Segment::new(Arc::clone(&msg.text), SegmentKind::Text));
         // Through the owner's speech budget like any other notice (2026-10-16 fairness): a page
         // that floods its regions spends its own process's tokens, never another app's.
         match app {
@@ -2382,10 +2383,8 @@ impl Reader {
         u.may_refine = true;
         u.segments.clear();
         if let Some(w) = word {
-            u.segments.push(Segment {
-                text: Arc::from(w),
-                kind: SegmentKind::Text,
-            });
+            u.segments
+                .push(Segment::new(Arc::from(w), SegmentKind::Text));
         }
         u.segments
             .extend(present::segments(items, self.verbalize_opts()));
@@ -2493,6 +2492,22 @@ impl Reader {
     }
 
     fn web_toggle(&mut self, fx: &mut ReaderEffects) {
+        // The focus is on the container that hosts the page (a window activation) and the
+        // document is known: the user is in the page, do not make them wait out the grace.
+        if self.web.as_ref().is_some_and(|b| {
+            matches!(
+                b.mode,
+                WebMode::Loading {
+                    doc: Some(_),
+                    editable: false,
+                    known: true,
+                    ..
+                }
+            )
+        }) {
+            let now = self.now;
+            self.web_loading_to_browse(now, fx);
+        }
         let Some(b) = self.web.as_ref() else { return };
         let (doc, cur_node) = match b.mode {
             WebMode::Browse { doc, cur, .. } => (doc, Some(cur.node)),

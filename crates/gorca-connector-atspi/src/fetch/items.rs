@@ -181,6 +181,7 @@ fn build(items: Vec<Item>, app: AppId, app_bus: &str, max_nodes: usize) -> Decod
             children: None,
             interfaces,
             attrs: Vec::new(),
+            sem_attrs: Vec::new(),
             have: PropMask::CACHE_ITEM,
         };
         index_of.insert(key, out.nodes.len());

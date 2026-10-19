@@ -59,6 +59,53 @@ pub struct ParsedAttrs<'a> {
     pub pressed: Option<&'a str>,
 }
 
+/// Every attribute name [`ParsedAttrs::parse`] reads. A connector keeps only these from a
+/// `GetAttributes` reply (the app's attribute map is untrusted and can be large); a test checks
+/// that the list and the parser agree.
+pub const WANTED_ATTRS: [&str; 36] = [
+    "xml-roles",
+    "tag",
+    "toolkit",
+    "text-input-type",
+    "level",
+    "posinset",
+    "setsize",
+    "live",
+    "atomic",
+    "relevant",
+    "busy",
+    "container-live",
+    "container-atomic",
+    "container-relevant",
+    "current",
+    "haspopup",
+    "invalid",
+    "sort",
+    "orientation",
+    "roledescription",
+    "keyshortcuts",
+    "valuetext",
+    "placeholder-text",
+    "placeholder",
+    "rowindex",
+    "colindex",
+    "rowspan",
+    "colspan",
+    "rowindextext",
+    "colindextext",
+    "details-roles",
+    "details-from",
+    "layout-guess",
+    "name-from",
+    "explicit-name",
+    "pressed",
+];
+
+/// True when the normaliser reads the attribute `name` ([`WANTED_ATTRS`]).
+pub fn wants_attr(name: &str) -> bool {
+    WANTED_ATTRS.contains(&name)
+}
+
 impl<'a> ParsedAttrs<'a> {
     /// One pass; the first occurrence of a key wins.
     pub fn parse(pairs: &[(&'a str, &'a str)]) -> ParsedAttrs<'a> {
@@ -583,6 +630,17 @@ mod tests {
 
     fn pa<'a>(p: &[(&'a str, &'a str)]) -> ParsedAttrs<'a> {
         ParsedAttrs::parse(p)
+    }
+
+    #[test]
+    fn wanted_attrs_are_exactly_the_parsed_ones() {
+        let empty = format!("{:?}", ParsedAttrs::default());
+        for n in WANTED_ATTRS {
+            let got = format!("{:?}", pa(&[(n, "x")]));
+            assert_ne!(got, empty, "{n} is listed but not parsed");
+            assert!(wants_attr(n));
+        }
+        assert!(!wants_attr("class") && !wants_attr("id"));
     }
 
     #[test]

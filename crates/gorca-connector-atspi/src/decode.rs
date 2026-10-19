@@ -6,10 +6,12 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use atspi::State as Raw;
+use gorca_model::sem::SrcRecord;
 use gorca_model::{
-    AttrKey, AttrMap, ChildList, Freshness, Ifaces, NodeKey, NodeSnapshot, PropMask, Relations,
-    Role, StateSet, Value,
+    AttrKey, AttrMap, ChildList, Freshness, Ifaces, NodeKey, NodeSem, NodeSnapshot, PropMask,
+    Relations, Role, StateSet, Value,
 };
+use gorca_sem_atspi::StateBits;
 use smallvec::SmallVec;
 
 use crate::role_map::map_role;
@@ -113,6 +115,10 @@ pub struct RawNode {
     /// order, values clipped to [`MAX_ATTR_VALUE_BYTES`] and at most [`MAX_ATTRS`] of them. Only
     /// filled when `have` carries `ATTRS`.
     pub attrs: Vec<(AttrKey, String)>,
+    /// The attribute pairs the normaliser reads (`gorca-sem-atspi`), raw names, values clipped
+    /// to [`MAX_ATTR_VALUE_BYTES`], at most [`MAX_ATTRS`] (first occurrence of a name wins).
+    /// Filled together with `attrs`; see [`keep_sem_attrs`].
+    pub sem_attrs: Vec<(Box<str>, Box<str>)>,
     /// Fields this node actually carries.
     pub have: PropMask,
 }
@@ -172,6 +178,45 @@ pub fn keep_attrs<'a>(
     // one node compare equal.
     out.sort_by_key(|(k, _)| *k);
     out
+}
+
+/// The pairs of one `GetAttributes` reply that the normaliser reads (`gorca-sem-atspi`
+/// `WANTED_ATTRS`): unknown names dropped (`class`, `id`, styling are not copied at all), values
+/// clipped, the first occurrence of a name wins, at most [`MAX_ATTRS`], in wire order.
+pub fn keep_sem_attrs<'a>(
+    pairs: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> Vec<(Box<str>, Box<str>)> {
+    let mut out: Vec<(Box<str>, Box<str>)> = Vec::new();
+    for (k, v) in pairs {
+        if out.len() >= MAX_ATTRS {
+            break;
+        }
+        if gorca_sem_atspi::attrs::wants_attr(k) && !out.iter().any(|(o, _)| &**o == k) {
+            out.push((Box::from(k), Box::from(clip(v, MAX_ATTR_VALUE_BYTES))));
+        }
+    }
+    out
+}
+
+/// What the normaliser makes of one raw node (the dual-carried source record, M22a-C1b). Pure.
+pub fn source_record(raw: &RawNode) -> SrcRecord {
+    let pairs: SmallVec<[(&str, &str); 16]> =
+        raw.sem_attrs.iter().map(|(k, v)| (&**k, &**v)).collect();
+    let lo = raw.state_words.first().copied().unwrap_or(0);
+    let hi = raw.state_words.get(1).copied().unwrap_or(0);
+    gorca_sem_atspi::normalise(&gorca_sem_atspi::RawNode {
+        fetched: raw.have
+            & (PropMask::ROLE
+                | PropMask::STATES
+                | PropMask::ATTRS
+                | PropMask::NAME
+                | PropMask::DESCRIPTION),
+        role: raw.role,
+        states: StateBits::from_words(lo, hi),
+        attrs: &pairs,
+        name: raw.name.as_deref(),
+        description: raw.description.as_deref(),
+    })
 }
 
 /// The app's child count is untrusted: negative is zero, and nothing above this is believed.
@@ -238,6 +283,10 @@ pub fn snapshot(key: NodeKey, raw: &RawNode, now: Instant) -> Arc<NodeSnapshot> 
         have: raw.have,
         confirmed_seq: 0,
         fresh: Freshness::Fresh { at: now },
+        sem: NodeSem {
+            rec: Some(Arc::new(source_record(raw))),
+            entry: None,
+        },
     })
 }
 

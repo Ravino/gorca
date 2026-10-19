@@ -15,6 +15,7 @@
 #   -h, --help
 #
 # Extra env vars to pass through to <cmd>: GORCA_PASSTHROUGH="FOO BAR".
+# GORCA_HARNESS_KEEP_LOGS=<dir> copies the reader and bus logs to <dir> before the temp dir is removed.
 # GORCA_HARNESS_RTKIT=0 stops the harness from pointing the daemon's rtkit client at the host system bus (default: pointed, so --topology=auto can resolve to lanes-rt).
 #
 # Isolation model (see README.md):
@@ -92,6 +93,11 @@ cleanup() {
   for p in "${PIDS[@]:-}"; do [ -n "$p" ] && kill -KILL -- "-$p" 2>/dev/null; done
   local left; left=$(sweep_pids)
   [ -n "$left" ] && kill -KILL $left 2>/dev/null
+  # GORCA_HARNESS_KEEP_LOGS=<dir>: copy the daemons' logs out first, so an outlier run can be
+  # diagnosed after the private session is gone.
+  if [ -n "${GORCA_HARNESS_KEEP_LOGS:-}" ] && [ -d "$ROOT/log" ]; then
+    mkdir -p "$GORCA_HARNESS_KEEP_LOGS" && cp -r "$ROOT/log/." "$GORCA_HARNESS_KEEP_LOGS/" 2>/dev/null
+  fi
   if [ "$KEEP" = 1 ]; then echo "run-isolated: kept $ROOT" >&2; else rm -rf "$ROOT"; fi
 }
 # Prints pids (not ours) whose cmdline or environment mention $ROOT.

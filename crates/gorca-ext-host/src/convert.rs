@@ -191,15 +191,15 @@ pub fn segments_from_iter(ns: &str, segs: impl IntoIterator<Item = api::Segment>
             continue;
         }
         budget = budget.saturating_sub(text.chars().count());
-        out.push(Segment {
-            text: text.into(),
-            kind: match s.kind {
+        out.push(Segment::new(
+            text.into(),
+            match s.kind {
                 api::SegmentKind::Text => SegmentKind::Text,
                 api::SegmentKind::Role => SegmentKind::Role,
                 api::SegmentKind::State => SegmentKind::State,
                 api::SegmentKind::Value => SegmentKind::Value,
             },
-        });
+        ));
     }
     out
 }

@@ -29,18 +29,20 @@ pub use doc::{
 };
 pub use event::{
     AppInfo, AppLifecycle, CaretOrigin, ConnectorKind, DocKind, LazyText, NodeEvent, Politeness,
-    RawEvent, RawMsg, TextDelta, WebEngine, WindowKind,
+    RawEvent, RawMsg, SemTables, TextDelta, WebEngine, WindowKind,
 };
 pub use fact::{Fact, Subject};
 pub use geometry::{Point, Rect};
 pub use ids::{AppId, ConnectorId, Epoch, LocalId, NodeKey, ReqId, UttId};
 pub use node::{
-    AttrKey, AttrMap, ChildList, Freshness, FreshnessEvent, Ifaces, Lookup, NodeSnapshot, NodeView,
-    PropMask, RelationKind, Relations, SnapshotBatch, StateSet, Value,
+    AttrKey, AttrMap, ChildList, Freshness, FreshnessEvent, Ifaces, Lookup, NodeSem, NodeSnapshot,
+    NodeView, PropMask, RelationKind, Relations, SnapshotBatch, StateSet, Value,
 };
 pub use redact::RedactKey;
 pub use role::Role;
 pub use sem::{SemEntry, SemRole, Semantics};
+#[cfg(feature = "seg-origin")]
+pub use speech::{MsgId, OriginId};
 pub use speech::{Prio, Segment, SegmentKind, Utterance};
 pub use text::{
     EditQuirks, MAX_SELECTION_TEXT, ScriptPosition, TextFormat, TextGranularity, TextLine,

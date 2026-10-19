@@ -1,0 +1,13 @@
+{
+  "meta": {"utc": "2026-10-19T14:37:48Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "20.84 17.21 17.59 7/2249 1220578", "git_rev": "85f5bdde", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "topology_arms": "lanes-rtx1", "topology_expected": "-", "label": "c1b-base-4", "reader": "daemon:/var/tmp/c1b-base-target/release/gorca", "backend": "voicego", "repeats": "1", "samples_per_series": "1200", "l2_trials": "400", "quick": "false", "loadavg_end": "20.84 17.21 17.59 8/2249 1220575", "reader_env": "GORCA_TOPOLOGY_REPORT=bench/results/e2e/c1b-base-4/topology/topology.%p.json", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats", "reader_args": "--impersonate-orca", "ext_dir": "none", "extensions": "none", "note0": "K1: correlated by echoed character and time", "note1": "K2 SKIPPED: set GORCA_M1=1 to run the M1 command-layer gates"},
+  "rows": [
+    {"id": "K1.k1_ms.n", "scenario": "K1", "bus": "daemon/voicego", "value": 1200, "min": 1200, "max": 1200, "runs": 1, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "K1.k1_ms.p50", "scenario": "K1", "bus": "daemon/voicego", "value": 0.414562, "min": 0.414562, "max": 0.414562, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "K1.k1_ms.p95", "scenario": "K1", "bus": "daemon/voicego", "value": 0.652423, "min": 0.652423, "max": 0.652423, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "K1.k1_ms.p99", "scenario": "K1", "bus": "daemon/voicego", "value": 0.781852, "min": 0.781852, "max": 0.781852, "runs": 1, "unit": "ms", "op": "<=", "threshold": 15, "verdict": "PASS", "note": ""},
+    {"id": "K1.k1_ms.p999", "scenario": "K1", "bus": "daemon/voicego", "value": 2.443791, "min": 2.443791, "max": 2.443791, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "K1.k1_ms.max", "scenario": "K1", "bus": "daemon/voicego", "value": 3.259103, "min": 3.259103, "max": 3.259103, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "K1.lost", "scenario": "K1", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "K2.skipped", "scenario": "K2", "bus": "daemon/voicego", "value": 1, "min": 1, "max": 1, "runs": 1, "unit": "flag", "op": "", "threshold": null, "verdict": "info", "note": ""}
+  ]
+}

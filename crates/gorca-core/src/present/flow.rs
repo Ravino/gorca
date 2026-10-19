@@ -174,10 +174,10 @@ fn apply_web_extra(
         .partition(|i| matches!(i, Item::Lead(_)));
     let mut front: Vec<gorca_model::Segment> = Vec::new();
     if let Some(w) = word {
-        front.push(gorca_model::Segment {
-            text: Arc::from(w),
-            kind: gorca_model::SegmentKind::Text,
-        });
+        front.push(gorca_model::Segment::new(
+            Arc::from(w),
+            gorca_model::SegmentKind::Text,
+        ));
     }
     front.extend(crate::browse::present::segments(&lead, o));
     for (at, seg) in front.into_iter().enumerate() {
@@ -432,10 +432,8 @@ impl Reader {
             PolicyVerdict::Default | PolicyVerdict::Notice => false,
             PolicyVerdict::Silence => true,
             PolicyVerdict::Value(text) => {
-                let seg = gorca_model::Segment {
-                    text: Arc::from(text),
-                    kind: gorca_model::SegmentKind::Value,
-                };
+                let seg =
+                    gorca_model::Segment::new(Arc::from(text), gorca_model::SegmentKind::Value);
                 match u
                     .segments
                     .iter_mut()
@@ -590,6 +588,9 @@ impl Reader {
                 .is_some_and(|f| !f.protects(v.snap.key.app));
         if revalidate && (!confirmed_after_trigger || unearned) {
             self.counters.revalidations += 1;
+            if matches!(v.snap.role, Role::ListItem | Role::Row | Role::TreeItem) {
+                self.counters.revalidations_list_row += 1;
+            }
             fx.push(Self::fetch_effect(
                 v.snap.key,
                 focus_need(&v.snap, self.lazy_attrs),

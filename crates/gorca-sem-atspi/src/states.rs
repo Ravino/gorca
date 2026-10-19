@@ -327,7 +327,8 @@ pub fn map_states(
     let press = map_press(role, engine_toggle, s);
     let expand = map_expand(s);
     let select = map_select(role, s);
-    let avail = if is_disableable(role) {
+    // An empty state set means the application reported nothing (a hidden node), not "disabled".
+    let avail = if is_disableable(role) && s.0 != 0 {
         if s.has(bit::ENABLED) || s.has(bit::SENSITIVE) {
             Avail::Enabled
         } else {
@@ -433,6 +434,15 @@ mod tests {
 
     fn bits(list: &[u8]) -> StateBits {
         StateBits(list.iter().fold(0u64, |a, b| a | (1u64 << b)))
+    }
+
+    #[test]
+    fn an_empty_state_set_never_means_disabled() {
+        let g = map_states(SemRole::Button, false, false, StateBits(0));
+        assert_eq!(g.avail, Avail::NotApplicable);
+        // A reported set without ENABLED/SENSITIVE is a real "disabled".
+        let g = map_states(SemRole::Button, false, false, bits(&[bit::FOCUSABLE]));
+        assert_eq!(g.avail, Avail::Disabled);
     }
 
     #[test]
@@ -578,7 +588,7 @@ mod tests {
             Avail::Enabled
         );
         assert_eq!(
-            map_states(SemRole::Button, false, false, StateBits(0)).avail,
+            map_states(SemRole::Button, false, false, bits(&[bit::FOCUSABLE])).avail,
             Avail::Disabled
         );
         assert_eq!(

@@ -176,6 +176,7 @@ fn snap(i: u64) -> Arc<NodeSnapshot> {
             | PropMask::CHILDREN,
         confirmed_seq: 0,
         fresh: Freshness::Fresh { at: Instant::now() },
+        sem: gorca_model::NodeSem::NONE,
     })
 }
 

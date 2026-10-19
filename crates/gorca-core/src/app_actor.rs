@@ -38,7 +38,9 @@ use crate::health::{AppHealth, HealthEffect, HealthMsg, HealthStepCtx};
 use crate::reader::{BackgroundMsg, FocusLaneMsg};
 use crate::text::TextMsg;
 
+pub mod agree;
 mod doc_route;
+pub mod fuse;
 #[cfg(test)]
 mod tests;
 
@@ -60,6 +62,8 @@ const EVENTED: PropMask = PropMask::NAME
     .union(PropMask::BOUNDS);
 /// Known ancestors whose name may derive from content that a NAME change invalidates (P9-3).
 const NAME_ANCESTOR_LEVELS: usize = 8;
+/// Pause before a fusion step that ran out of budget continues.
+const FUSE_RESUME: Duration = Duration::from_millis(1);
 /// On-read TTL of the Shell; every other app uses [`gorca_mirror::DEFAULT_TTL`] (B-1 2.2).
 const SHELL_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 
@@ -208,6 +212,9 @@ pub struct AppActor {
     /// The extension host and the extensions that matched this app (ADR-0001 section 10).
     ext: Option<Arc<dyn crate::ExtSource>>,
     app_ext: Option<Arc<dyn crate::AppExt>>,
+    /// The registers and the fusion engine of this app (M22a-C1b), fed from the source records
+    /// of the snapshots this actor applies to its mirror.
+    fuse: fuse::FuseWriter,
 }
 
 /// `showing` events forwarded per [`SHOWING_WINDOW`]: a banner is one event, an overview maps
@@ -282,6 +289,7 @@ impl AppActor {
             directory: None,
             ext: None,
             app_ext: None,
+            fuse: fuse::FuseWriter::new(None),
         }
     }
 
@@ -457,6 +465,27 @@ impl AppActor {
     }
 
     /// Read handle of this app's mirror.
+    /// The counters of this app's fusion writer and legacy-agreement checks (M22a-C1b).
+    pub fn fuse_stats(&self) -> fuse::FuseStatsView {
+        self.fuse.stats().view()
+    }
+
+    /// Nodes the fusion engine holds.
+    pub fn fuse_nodes(&self) -> usize {
+        self.fuse.node_count()
+    }
+
+    /// Snapshots queued, entries waiting for the mirror and nodes still dirty: zero when the
+    /// writer is idle.
+    pub fn fuse_work_left(&self) -> usize {
+        self.fuse.work_left()
+    }
+
+    /// Tests: a disagreement between the legacy fields and the fused entry panics.
+    pub fn set_strict_agreement(&mut self, strict: bool) {
+        self.fuse.set_strict(strict);
+    }
+
     pub fn mirror(&self) -> &MirrorHandle {
         &self.read
     }
@@ -496,7 +525,11 @@ impl AppActor {
         if matches!(self.health, AppHealth::Gone) {
             None
         } else {
-            self.driver.next_wake()
+            let fuse = self.fuse.has_work().then(|| Instant::now() + FUSE_RESUME);
+            match (self.driver.next_wake(), fuse) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            }
         }
     }
 
@@ -527,6 +560,11 @@ impl AppActor {
             mirror: &self.read,
             focus: self.focus,
         };
+        match &result {
+            Ok(BackendReply::Node(n)) => self.fuse.enqueue(std::slice::from_ref(n), issued_at),
+            Ok(BackendReply::Subtree(b)) => self.fuse.enqueue(&b.nodes, issued_at),
+            Ok(_) | Err(_) => {}
+        }
         let report = self
             .driver
             .on_reply(&cx, &mut self.writer, id, issued_at, fill_reply(result));
@@ -629,6 +667,8 @@ impl AppActor {
             self.poll_timers(now);
         }
         route.issued = self.driver.take_issued();
+        // Last, after the events are routed: the fusion of what this pump applied (bounded).
+        self.fuse.step(&mut self.writer, fuse::STEP_BUDGET);
         route
     }
 
@@ -694,6 +734,7 @@ impl AppActor {
                 if node.app == self.app {
                     self.focus = Some(node);
                     self.writer.set_focus(Some(node));
+                    self.fuse.set_focus(Some(node));
                 }
                 let cx = DriverCx {
                     now,
@@ -717,7 +758,10 @@ impl AppActor {
                     focus: self.focus,
                 };
                 let reply = match result {
-                    Ok(b) => FillReply::Ok(b),
+                    Ok(b) => {
+                        self.fuse.enqueue(&b.nodes, issued_at);
+                        FillReply::Ok(b)
+                    }
                     Err(e) => FillReply::Err(fill_error(&e)),
                 };
                 self.driver
@@ -738,7 +782,10 @@ impl AppActor {
                     focus: self.focus,
                 };
                 let reply = match result {
-                    Ok(n) => FillReply::Ok(SnapshotBatch::new(vec![n])),
+                    Ok(n) => {
+                        self.fuse.enqueue(std::slice::from_ref(&n), issued_at);
+                        FillReply::Ok(SnapshotBatch::new(vec![n]))
+                    }
                     Err(e) => FillReply::Err(fill_error(&e)),
                 };
                 self.driver
@@ -755,6 +802,7 @@ impl AppActor {
             };
             match next {
                 Ok(AppControl::Snapshot(batch)) => {
+                    self.fuse.enqueue(&batch.nodes, self.writer.seq());
                     self.driver.apply_push(&mut self.writer, batch);
                 }
                 Ok(AppControl::Lifecycle(AppLifecycle::Gone)) => {
@@ -777,6 +825,7 @@ impl AppActor {
                         r.lifecycle(&AppLifecycle::Appeared(info.clone()));
                     }
                     self.profile = AppProfile::for_app(&info);
+                    self.fuse.set_tables(info.sem_tables);
                     if let Some(src) = &self.ext {
                         self.app_ext = src.attach(self.app, &info);
                     }
@@ -863,6 +912,7 @@ impl AppActor {
                 NodeEvent::NodeRemoved { node } => {
                     let parent = self.parent_of(*node);
                     self.writer.tombstone(*node, now, RemovalCause::Event);
+                    self.fuse.forget(*node);
                     if let Some(p) = parent {
                         self.writer.invalidate(p, PropMask::CHILDREN, now);
                     }
@@ -878,6 +928,7 @@ impl AppActor {
                     WindowKind::Destroy => {
                         self.writer
                             .tombstone(*node, now, RemovalCause::WindowDestroyed);
+                        self.fuse.forget(*node);
                     }
                     WindowKind::Activate | WindowKind::Deactivate | WindowKind::Create => {
                         self.writer
@@ -919,6 +970,7 @@ impl AppActor {
             NodeEvent::FocusChanged { node } => {
                 self.focus = Some(*node);
                 self.writer.set_focus(Some(*node));
+                self.fuse.set_focus(Some(*node));
                 if self.send_focus(FocusLaneMsg::FocusChanged { node: *node }) {
                     route.forwarded_to_focus_lane += 1;
                 } else {

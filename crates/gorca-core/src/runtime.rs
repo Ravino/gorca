@@ -44,7 +44,7 @@ use tokio::task::JoinSet;
 
 use crate::app_actor::{AppActor, FILL_QUEUE, FillMsg, ReaderLinks, TextLink, WebLink};
 use crate::browse::commands::WebEffect;
-use crate::commands::{ConfigRequest, SpeechCtl};
+use crate::commands::{ConfigRequest, SourceDirectory, SpeechCtl};
 use crate::directory::MirrorDirectory;
 use crate::doc_actor::{DocCounters, DocCtl, DocDirectory, DocNotice, SelOutcome, WebJoin};
 use crate::doc_registry::{HubCfg, HubMsg, HubTx, hub_channel, run_hub};
@@ -263,6 +263,7 @@ struct Shared {
     mirror_budget: Arc<MirrorBudget>,
     global_rate: Arc<GlobalRate>,
     present_log: Option<Arc<PresentLog>>,
+    sources: Arc<SourceDirectory>,
     web: WebShared,
     /// Text events the app actors could not queue for the Reader (ADR-0007 EV-5).
     text_dropped: Arc<AtomicU64>,
@@ -342,6 +343,7 @@ impl Core {
                 mirror_budget: MirrorBudget::global(),
                 global_rate: GlobalRate::new(FILL_RATE_GLOBAL),
                 present_log: None,
+                sources: Arc::new(SourceDirectory::new()),
                 web: WebShared {
                     join: Arc::new(WebJoin::new()),
                     docs: Arc::new(DocDirectory::new()),
@@ -465,6 +467,15 @@ impl Core {
     pub fn with_present_log(mut self, log: Arc<PresentLog>) -> Self {
         if let Some(sh) = Arc::get_mut(&mut self.shared) {
             sh.present_log = Some(log);
+        }
+        self
+    }
+
+    /// Register the fact sources the daemon wired (named by `debug.explain_last`).
+    #[must_use]
+    pub fn with_sources(mut self, sources: SourceDirectory) -> Self {
+        if let Some(sh) = Arc::get_mut(&mut self.shared) {
+            sh.sources = Arc::new(sources);
         }
         self
     }
@@ -1073,6 +1084,7 @@ async fn reader_loop(
     if let Some(log) = &shared.present_log {
         reader = reader.with_present_log(Arc::clone(log));
     }
+    reader = reader.with_sources(Arc::clone(&shared.sources));
     if let Some(src) = &shared.ext {
         reader = reader.with_ext(Arc::clone(src));
     }

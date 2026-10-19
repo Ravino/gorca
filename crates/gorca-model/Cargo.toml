@@ -12,6 +12,11 @@ bitflags = { workspace = true }
 smallvec = { workspace = true }
 gorca-i18n = { workspace = true }
 
+[features]
+# `Segment` carries a message id and an origin id (ADR-0022 2.5, M22a-C1b): for tests and the
+# "why did it say that" trace. Off in release builds.
+seg-origin = []
+
 [dev-dependencies]
 serde_json = "1"
 

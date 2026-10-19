@@ -182,6 +182,7 @@ mod tests {
             have: gorca_model::PropMask::PRESENT,
             confirmed_seq: 0,
             fresh,
+            sem: gorca_model::NodeSem::NONE,
         }
     }
 

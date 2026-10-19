@@ -458,6 +458,7 @@ fn snap(local: u64, role: Role, name: &str, states: StateSet) -> Arc<NodeSnapsho
         have: gorca_model::PropMask::PRESENT,
         confirmed_seq: 0,
         fresh: Freshness::Fresh { at: Instant::now() },
+        sem: gorca_model::NodeSem::NONE,
     })
 }
 
@@ -807,6 +808,39 @@ fn the_toggle_switches_between_the_modes_and_speaks_them() {
     assert!(said[0].starts_with("browse mode"), "{said:?}");
 }
 
+/// A messenger-style page: the page's focus sits on a node the mirror does not mark focusable (a
+/// roving `tabindex` row). gorca+Space makes the focus mode sticky, says so, and neither says
+/// "not in a web page" nor moves the focus to the document (Firefox and Chromium alike).
+#[test]
+fn the_toggle_on_a_page_focus_the_mirror_does_not_know_as_focusable_keeps_the_focus() {
+    let mut r = rig();
+    // Heading 1002: joined to the document, no FOCUSABLE state in the mirror.
+    r.focus(1002);
+    assert!(matches!(r.mode(), WebMode::Browse { .. }), "{:?}", r.mode());
+    let fx = r.key(CoreCmd::BrowseToggle);
+    assert!(matches!(
+        r.mode(),
+        WebMode::Focus {
+            cause: FocusCause::Manual,
+            ..
+        }
+    ));
+    assert_eq!(spoken(&fx), ["focus mode"]);
+    assert!(
+        !effects_web(&fx).iter().any(|a| matches!(
+            a,
+            WebEffect::Act {
+                act: DocAction::Focus,
+                ..
+            }
+        )),
+        "the page focus stays where the page put it"
+    );
+    let fx = r.key(CoreCmd::BrowseToggle);
+    assert!(matches!(r.mode(), WebMode::Browse { .. }));
+    assert!(spoken(&fx)[0].starts_with("browse mode"));
+}
+
 #[test]
 fn focus_in_the_browser_chrome_leaves_browse_mode_and_asks_for_the_document() {
     let mut r = rig();
@@ -831,6 +865,38 @@ fn focus_in_the_browser_chrome_leaves_browse_mode_and_asks_for_the_document() {
         r.now,
     );
     assert_eq!(r.mode(), WebMode::Inactive);
+}
+
+/// Firefox focuses the container that hosts the page when its window is activated. The
+/// registry finds the document below it; gorca+Space then works at once, without waiting out
+/// the loading grace, and does not answer "not in a web page".
+#[test]
+fn the_toggle_on_the_container_that_hosts_the_page_works_before_the_grace_runs_out() {
+    let mut r = rig();
+    r.focus(1006);
+    r.focus(2000); // the host container: no document above it
+    assert!(matches!(r.mode(), WebMode::Loading { .. }));
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::InDocument {
+            focus: nk(2000),
+            doc: DocId(1),
+        }),
+        r.now,
+    );
+    let fx = r.key(CoreCmd::BrowseToggle);
+    assert!(
+        matches!(
+            r.mode(),
+            WebMode::Focus {
+                cause: FocusCause::Manual,
+                ..
+            }
+        ),
+        "{:?} {:?}",
+        r.mode(),
+        spoken(&fx)
+    );
+    assert!(!spoken(&fx).iter().any(|w| w.contains("not in a web page")));
 }
 
 #[test]
