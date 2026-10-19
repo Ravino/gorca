@@ -276,7 +276,7 @@ braille checklist passes with a real display (§9 Q4) or, failing hardware, with
 quality for Russian (`ru-litbrl`, `ru-compbrl`) to be verified; brltty owning the keyboard for some
 drivers.
 
-### M14a — Configuration profiles, core (ADR-0016 r3, Proposed; review r1 integrated; owner Q-P1..Q-P6 applied)
+### M14a — Configuration profiles, core (ADR-0016 r3.1, **Accepted** 2026-10-19)
 
 **User-testable increment.** Changing the rate in Firefox creates a Firefox profile and leaves Signal unchanged
 ("rate 60, for Firefox"); gorca+Ctrl+Shift+C moves the change to the global settings; gorca+Ctrl+P cycles the
@@ -299,7 +299,7 @@ auto_focus_mode/toggle_scope` latched per document; migration of `gorca-config::
 
 | Slice | Content | Days | Depends on | Slot |
 |---|---|---|---|---|
-| P1 | `KeyId`, `SettingDef` scope/vendor/privacy, `SettingType::Map`, `SettingsPatch` | 2 | — | free M22a wave A slot (after ADR-0016 accepted) |
+| P1 | `KeyId`, `SettingDef` scope/vendor/privacy, `SettingType::Map`, `SettingsPatch` | 2 | — | free M22a wave A slot (ADR-0016 accepted) |
 | P2 | shared glob (escapes, ASCII case-insensitive), profile/row parsers, PK-1, matrix, confinement, `ProfileSet::compile` | 2 | P1 | same |
 | P3 | `ProfileSnapshot` (pins, targets, disabled) + three resolvers, origin tracking, per-app edit planning with auto-creation and save-to-global, safe file naming, delta save, property tests vs oracle | 2 | P2 | same |
 | P4 | config task load/watch/last-good/prewarm; Reader `ProfileState`, snapshot publication, switch, explain, suspend; profile commands and preset chords (§2.5a); voice fallback | 2 | P3 | when `commands/state.rs` is free |
@@ -310,8 +310,9 @@ auto_focus_mode/toggle_scope` latched per document; migration of `gorca-config::
 
 **Agents:** rust-engineer (P1–P4, P6), math-researcher (P3 oracle), perf-engineer + test-engineer (P5),
 linux-platform-engineer (P7), web-a11y-engineer (P6 review), reviewer (P8).
-**Acceptance.** ADR-0016 §5 metrics P1, P1b, P2–P9. **Owner:** Q-P1..Q-P6 answered 2026-10-19; PK-1 wording to
-confirm (ADR-0016 §7).
+**Acceptance.** ADR-0016 §5 metrics P1, P1b, P2–P9. **Owner:** Q-P1..Q-P6 answered, PK-1 and chords confirmed
+2026-10-19. Save to global copies only keys touched this session that global can hold (ADR-0016 §2.5b). Per-slice
+tests: ADR-0016 §6.1.
 
 ### M14 — Control API and settings app (ADR-0011)
 
@@ -605,7 +606,7 @@ Wave 2; M13 gains `CueSink`/`gorca-cues` and dictionary import (ADR-0017).
 **Semantics (amendment 2026-10-18, owner decision; ADR-0022 Proposed):** Phase 3 starts with
 P2-ARIA-0 → **M22a**, then **M18a** on the final model (supersedes "Phase 3 starts with M18a" of
 2026-10-17 for that slot). M22b1 runs in parallel with M18a; M22b2 precedes M15 and M10 integration;
-M22b3 precedes M21; M22b4 follows M18a and precedes M18b; M22d follows M14a. **Amendment 2026-10-19 (proposed, owner question D-6 in `docs/reports/m22a-kickoff.md` §5):** per-app/site mode defaults (owner, DP-3) live in profiles (ADR-0024 §2.13). M14a-core (ADR-0016 layer stack, triggers, origin-layer edits, vendor profiles, `browse.*` mode keys, migration of the CHR-0 interim per-app mode table; no GUI) may take the free cargo slot of M22a wave A **only once ADR-0016 is written and accepted** (write it during wave A); otherwise it keeps its Wave 2 slot after M22a wave B. **Update 2026-10-19:** ADR-0016 is written (Proposed r3: review and owner answers applied, `docs/adr/0016-profiles.md`); its slices P1–P3 (pure `gorca-config`) take the free slot once it is accepted, P4–P5 follow, P6 (browse keys + CHR-0 table migration) waits for CHR-0 to merge, P7 (exe/URL/title inputs) for M22a wave C; see the M14a block below. Future sources: M23-0 runtime, then M23–M25 (ADR-0024). M22a/b own
+M22b3 precedes M21; M22b4 follows M18a and precedes M18b; M22d follows M14a. **Amendment 2026-10-19 (proposed, owner question D-6 in `docs/reports/m22a-kickoff.md` §5):** per-app/site mode defaults (owner, DP-3) live in profiles (ADR-0024 §2.13). M14a-core (ADR-0016 layer stack, triggers, origin-layer edits, vendor profiles, `browse.*` mode keys, migration of the CHR-0 interim per-app mode table; no GUI) may take the free cargo slot of M22a wave A **only once ADR-0016 is written and accepted** (write it during wave A); otherwise it keeps its Wave 2 slot after M22a wave B. **Update 2026-10-19:** ADR-0016 is Accepted (r3.1, `docs/adr/0016-profiles.md`); its slices P1–P3 (pure `gorca-config`) may take the free slot now, P4–P5 follow, P6 (browse keys + CHR-0 table migration) waits for CHR-0 to merge, P7 (exe/URL/title inputs) for M22a wave C; see the M14a block below. Future sources: M23-0 runtime, then M23–M25 (ADR-0024). M22a/b own
 `gorca-core/present/`, `browse/present.rs` and `doc_actor/` while they run: schedule them after the M12a
 sweep (or fold M12a's catalog ids into M22b), and serialise with M15 on `browse/`.
 

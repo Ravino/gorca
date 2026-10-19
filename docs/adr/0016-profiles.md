@@ -1,8 +1,9 @@
 # ADR-0016: Configuration profiles (typed layer stack, triggers, per-app edits)
 
-Status: **Proposed** (r3, 2026-10-19: owner answers Q-P1..Q-P6 applied, §9; r2: review
+Status: **Accepted** (2026-10-19, owner: r3 incl. PK-1 wording and all chords; r3.1 adds the save-to-global
+addendum §2.5b). History: r3 owner answers Q-P1..Q-P6 applied, §9; r2: review
 `docs/reports/adr-0016-review.md` r1 ACCEPT-WITH-CHANGES, H-1..H-3, M-1..M-7 and L-1..L-8 integrated, §8).
-Owner: architect. **One rule awaits owner confirmation: PK-1 (§2.5).**
+Owner: architect.
 Relates to: ADR-0005 (settings as data, explicit save, `ArcSwap<Settings>`, keymaps), ADR-0003 §21 and
 `docs/design/browse-mode.md` (browse/focus machine), ADR-0019 (extension platform, data-first add-ons, I-8,
 `request-mode`), ADR-0021 (`browse.selection_model`), ADR-0022 (presentation, `ReportFlags`), ADR-0024 §2.13
@@ -244,7 +245,7 @@ enum ProfileState {
 ### 2.5 Edits: where a change is written
 
 - **PK-1 Profiles override only what the global level knows (owner: "нельзя в общем профиле сменить то, чего
-  нет"; wording to confirm).** *Every key in a profile or row must be a key of the global schema: a core
+  нет"; wording confirmed 2026-10-19).** *Every key in a profile or row must be a key of the global schema: a core
   `SETTINGS` row or a key of an installed extension's schema (`ext.<id>.*`). A profile cannot introduce a key, a
   section or a value type that the global settings do not have; such a key is rejected at load with a
   "did you mean" diagnostic and never applied. Keys of an extension that is not installed are kept in the file
@@ -281,12 +282,12 @@ enum ProfileState {
   profile sets the key), the confirmation names the layer that holds it ("rate 60 globally; Firefox keeps 45").
 - **PE-4 Explain.** `settings.explain_current` speaks the active profiles and rows in precedence order and, for a
   key in review, its origin; UB-1 skips are named. The settings app (M14) shows the origin per value.
-- **PE-4 Save to global** (`profiles.save_global`, gorca+Ctrl+Shift+C): moves the focused app profile's keys
-  changed in this session into L5 and removes them from the app profile, then saves both files; it says "3
-  settings saved globally, removed from Firefox". Pressed twice: the same for every key of the app profile.
-  Pressed three times (`profiles.apply_everywhere`): additionally removes those keys from every other user
-  profile so the global value applies everywhere, after a spoken count ("applies to all apps; 2 profiles
-  changed"). Nothing else writes L5 implicitly except PE-1b.
+- **PE-4 Save to global** (`profiles.save_global`, gorca+Ctrl+Shift+C): copies the **touched set** (§2.5b) of the
+  current target into L5, removes those keys from the app profile, then saves both files; it says "3 settings
+  saved globally, removed from Firefox". Pressed twice (`profiles.apply_everywhere`): additionally removes the
+  same touched keys from every other user profile so the global value applies everywhere, after a spoken count
+  ("applies to all apps; 2 profiles changed"). Nothing else writes L5 implicitly except PE-1b. Copying keys the
+  user did not touch is not offered (§2.5b SG-2).
 - **PE-5 Save** (`settings.save`, gorca+Ctrl+C in all presets today, as NVDA+Ctrl+C) writes every dirty delta to its own file with
   `toml_edit` (comments kept), atomic rename, content hash checked against the loaded text (a file changed on disk
   is not overwritten: "profile <name> changed on disk, reload first"). **Revert** clears all deltas. The daemon's
@@ -303,6 +304,36 @@ enum ProfileState {
   PE-1/PE-2 (app profile by default, site profile when the target is "this site") and applies to the current
   document at once (DL-1). `settings.save` (gorca+Ctrl+C) persists it like any other delta.
 
+### 2.5b Save to global never clobbers the global profile (r3.1, owner addendum)
+
+- **SG-1 Touched set.** The Reader records, per edit target (app profile, site profile), the keys the user changed
+  by command in this session: `touched: HashMap<TargetId, BTreeSet<KeyId>>` in the snapshot's delta record. An
+  entry is added by a successful edit and removed by revert, by a save-to-global of that key, or when a file
+  reload changes that key (HR-4). It is session state; after restart it is empty.
+- **SG-2 Only touched keys are copied.** `profiles.save_global` copies exactly `touched[target]`, with the value
+  the user set. Values in the app profile the user did not touch this session (older edits, hand-written values,
+  values another tool wrote) are **never** copied, even if they differ from global: the global value is not
+  overwritten by an app value the user did not touch. With an empty touched set the command says "nothing changed
+  for Firefox in this session" and writes nothing.
+- **SG-3 Only keys global can hold.** A touched key is copied only if it is "present in global" at that moment:
+  a core `SETTINGS` key, or `ext.<id>.*` of an extension that is **installed and loaded** (its schema defines the
+  key). Keys of an extension that is not installed are skipped and named ("1 setting of ext-foo kept for Firefox
+  only: the extension is not installed"). `Base` keys never reach this path (PE-1b).
+- **SG-4 Never reverse.** Save-to-global writes forward only: it never deletes or resets a global key, never
+  copies a value from global into a profile, and never removes from the app profile a key it did not copy. A
+  copied key whose value already equals the global value is removed from the app profile and reported as
+  "already global". If the global file changed on disk since load, the whole operation refuses (PE-5 hash rule):
+  both files stay untouched.
+- **SG-5 Atomic pair.** The L5 write and the app-profile write are planned as one `SavePlan`; the global file is
+  written first (atomic rename), then the profile. If the second write fails, the key exists in both files with
+  the same value (effective settings unchanged), the user hears "saved globally; Firefox profile not updated",
+  and the touched set is kept so the command can be repeated. No ordering leaves a key in neither file.
+- **SG-6 Extension removed later.** When an extension is uninstalled, its `ext.<id>.*` keys in L5 and in profiles
+  stay in the files untouched and become inactive (PK-1): not applied, one diagnostic per file, not shown as
+  errors to the user, not copied by save-to-global, and re-activated without change if the extension is
+  reinstalled with a schema that still defines them (a key whose type changed is reported and stays inactive).
+  M18 extension migrations, not this rule, rename keys.
+
 ### 2.5a Profile commands (owner Q-P5) and chords
 
 Automatic selection stays the default; these commands act on the focused application. All chords were checked
@@ -312,7 +343,7 @@ free in the four presets (`crates/gorca-config/presets/{nvda,orca}-{desktop,lapt
 | Command | Chord (all presets) | Behaviour |
 |---|---|---|
 | `settings.save` | gorca+Ctrl+C (existing) | save every dirty delta to its file (PE-5) |
-| `profiles.save_global` | gorca+Ctrl+Shift+C (×2, ×3 as PE-4) | move this app's changes to global (PE-4) |
+| `profiles.save_global` | gorca+Ctrl+Shift+C (×2 = apply everywhere, PE-4) | move this app's changes to global (PE-4) |
 | `profiles.cycle` | gorca+Ctrl+P | cycle the **pin** for this app: Automatic → each user profile that matches this app or is `manual = true` → "global only" (no user profiles or rows for this app) → Automatic; speaks the new choice |
 | `profiles.toggle_enabled` | gorca+Ctrl+Shift+P | switch off/on the profile currently in effect for this app (pinned, else the top matching user profile, else the top row); a user profile gets `enabled = false` as a delta, a row an entry in `profiles.rows` (global) |
 | `profiles.edit_target_cycle` | gorca+Ctrl+Alt+P | PE-2 |
@@ -523,7 +554,19 @@ is accepted (one cargo build per agent). Site triggers work end to end only afte
 and `settings.explain_current` reports them as "waiting for the document address". Pins and the profile chords land in
 P4; the M15a chooser later lists the same profiles.
 
-## 7. Owner decisions (answered 2026-10-19) and the one rule to confirm
+### 6.1 Test list per slice
+
+| Slice | Tests (unit/property unless stated) |
+|---|---|
+| P1 | every `SETTINGS` row round-trips through `Value` and `SettingsPatch`; `Overlay` façade equals the old behaviour on the existing tests; `SettingType::Map` parse/print; UB-1 default-equality per type; `drop_changed` per key |
+| P2 | GL-1: escapes, `?`, ASCII case folding, non-ASCII exact, 256-byte cap, no recursion on `*` storms; PK-1: unknown key, wrong type, out of range, key of an uninstalled extension kept inactive and reported; NS-1 matrix exhaustive (trigger kind × scope); NS-3 `ext.*` under `Context{BrowseMode,FocusMode}` rejected; PF-1 privacy/voice keys rejected from rows; PF-4 empty-matcher extension has no rows, non-covered app patterns rejected, `browse.*` only for `app_name` claimants; PF-6 limits; PC-0 last good parse kept; proptest parser round-trip |
+| P3 | fold = Python oracle (≤ 32 profiles and rows, deltas, pins, disabled, suspend, safe mode); INV-P6 App/Doc == Focus for the same facts; UB-1 skip of default-equal L5 entries; L4 first-party beats L3 third-party; PE-1 target table exhaustive (pinned, existing app profile, auto-create, PE-1a site/window supplier, PE-1b `Base` and privacy keys, PE-1c global target, no focused app); PE-6 hostile names (`..`, `/`, NUL, `*`, 4 KiB, RTL) → slug + escaped literal; **SG-1..SG-6**: only touched keys copied, untouched differing values never copied, empty touched set writes nothing, uninstalled-extension key skipped and named, nothing deleted or reset in global, equal value removed from profile as "already global", hash mismatch refuses both writes, second-write failure leaves both files consistent and the touched set kept, reload of a touched key clears it, `apply_everywhere` removes only touched keys from other profiles |
+| P4 | `ProfileState` table exhaustive (every state × event); snapshot `gen` bumps on pins, targets, disabled, deltas, touched; prewarm entries of an older `gen` dropped; SW-3 `SetParams` before the utterance; announce/target/cycle/toggle chords bound once per preset (conflict test over all four presets and the command table); PC-4 unavailable voice falls back once |
+| P5 | gates P1, P1b, P2, P3, P4, P9 (bench); e2e P8: rate in Firefox leaves Signal unchanged; save-to-global with one touched and one untouched differing key copies only the touched one; uninstall `ext-test` and reinstall: its profile keys inactive then active again |
+| P6 | parity with CHR-0 (all cases, shipped row, safe mode, suspend); DL-1 latches (reload, save-mode, refresh); MS-1 lineage across a same-host document swap and not across hosts; `browse.toggle_scope` document vs application; TS-1 additive secret pattern (user pattern cannot remove the default); terminal arm reads App keys from the snapshot |
+| P7 | `/proc` exe timeout → no match, switch not delayed; `DocURL` absent or slow → Site rows inactive and explained; title generation debounce |
+
+## 7. Owner decisions (answered and confirmed 2026-10-19)
 
 | # | Question | Owner answer | Where |
 |---|---|---|---|
@@ -534,7 +577,7 @@ P4; the M15a chooser later lists the same profiles.
 | Q-P5 | Profile hotkeys | cycle, enable/disable, global vs app target, announce; automatic stays default | §2.5a |
 | Q-P6 | User's global choice vs a row | the user's choice wins | UB-1 |
 
-**To confirm with the owner: PK-1** — "A profile can only change settings that exist in the global settings: every
+**PK-1, confirmed by the owner 2026-10-19** — "A profile can only change settings that exist in the global settings: every
 key must be a core setting or a setting of an installed extension, with the same type and range. Unknown keys are
 rejected when the file loads; keys of an uninstalled extension are kept but inactive."
 
@@ -571,3 +614,4 @@ rejected when the file loads; keys of an uninstalled extension are kept but inac
 | Q-P4 | gorca+Ctrl+C save kept; gorca+Ctrl+Shift+Space save mode default; gorca+Ctrl+Shift+C save to global |
 | Q-P5 | manual layer L7 replaced by per-app session pins; §2.5a chords |
 | Q-P6 | UB-1 confirmed |
+| r3.1 addendum | save-to-global copies only touched keys present in global, never reverses or clobbers (§2.5b SG-1..SG-6); `profiles.save_global` ×3 dropped (×2 = apply everywhere); test list §6.1; status Accepted |
