@@ -49,6 +49,11 @@ mod statemodel;
 mod terminal;
 mod text;
 
+pub use app_actor::agree::{
+    DEVIATIONS, Deviation, Mismatch, Report as AgreementReport, agreement_counters,
+    check as check_agreement, legacy_family,
+};
+pub use app_actor::fuse::{FuseStats, FuseStatsView, fuse_snapshots, writes_of};
 pub use app_actor::{
     AppActor, AppRoute, FILL_QUEUE, FillMsg, ReaderLinks, TextLink, WebLink, health_view,
 };

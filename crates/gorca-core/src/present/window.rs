@@ -394,10 +394,9 @@ pub fn dialog_content<S: NavSource>(src: &S, window: NodeKey, skip: Option<NodeK
 
 /// Spoken pieces of a dialog's text.
 pub fn content_segments(texts: &[Arc<str>]) -> impl Iterator<Item = Segment> + '_ {
-    texts.iter().map(|t| Segment {
-        text: Arc::clone(t),
-        kind: SegmentKind::Text,
-    })
+    texts
+        .iter()
+        .map(|t| Segment::new(Arc::clone(t), SegmentKind::Text))
 }
 
 /// A follow-up utterance: it queues behind what is being spoken and dies when the user moves on
@@ -1239,6 +1238,7 @@ pub(crate) mod tests {
             have: PropMask::PRESENT,
             confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
+            sem: gorca_model::NodeSem::NONE,
         })
     }
 
@@ -1801,10 +1801,7 @@ pub(crate) mod tests {
         );
         let mut f = policy_fixture(V::Value("50 percent".into()), true);
         assert_eq!(said(&focus(&mut f, 2, t)), ["Back, button, 50 percent"]);
-        let seg = Segment {
-            text: Arc::from("Custom"),
-            kind: SegmentKind::Text,
-        };
+        let seg = Segment::new(Arc::from("Custom"), SegmentKind::Text);
         let mut f = policy_fixture(V::Say(vec![seg]), true);
         assert_eq!(said(&focus(&mut f, 2, t)), ["Custom"]);
     }

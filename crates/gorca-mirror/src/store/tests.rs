@@ -40,6 +40,7 @@ fn node(n: u64, name: &str) -> Arc<NodeSnapshot> {
         have: PropMask::PRESENT,
         confirmed_seq: 0,
         fresh: Freshness::Fresh { at: Instant::now() },
+        sem: gorca_model::NodeSem::NONE,
     })
 }
 
@@ -732,4 +733,57 @@ fn a_fresh_node_ages_on_read_after_the_ttl_and_a_stale_one_does_not() {
     w.invalidate(key(2), PropMask::NAME, Instant::now());
     std::thread::sleep(Duration::from_millis(40));
     assert!(!r.view(key(2)).hit().unwrap().aged);
+}
+
+fn with_rec(n: u64, name: &str) -> (Arc<NodeSnapshot>, Arc<gorca_model::sem::SrcRecord>) {
+    let rec = Arc::new(gorca_model::sem::SrcRecord::default());
+    let mut s = (*node(n, name)).clone();
+    s.sem = gorca_model::NodeSem {
+        rec: Some(Arc::clone(&rec)),
+        entry: None,
+    };
+    (Arc::new(s), rec)
+}
+
+#[test]
+fn a_fused_entry_replaces_the_record_of_the_snapshot_it_was_made_from() {
+    let (mut w, r) = mirror();
+    let (s, rec) = with_rec(1, "ok");
+    w.apply(batch(vec![s]), ApplyOrigin::Push);
+    let rev = r.revision();
+    let before = w.shared.bytes.load(Ordering::Relaxed);
+    let entry = Arc::new(gorca_model::sem::SemEntry::default());
+    assert!(w.attach_sem(key(1), &rec, Arc::clone(&entry)));
+    let got = r.get(key(1)).hit().unwrap();
+    assert!(got.sem.rec.is_none());
+    assert!(
+        got.sem
+            .entry
+            .as_ref()
+            .is_some_and(|e| Arc::ptr_eq(e, &entry))
+    );
+    assert_eq!(got.name.as_deref(), Some("ok"), "legacy fields untouched");
+    assert_eq!(
+        r.revision(),
+        rev,
+        "no revision bump: the content did not change"
+    );
+    assert_ne!(w.shared.bytes.load(Ordering::Relaxed), before);
+    w.check_invariants().unwrap();
+}
+
+#[test]
+fn an_entry_never_sticks_to_a_replaced_or_missing_snapshot() {
+    let (mut w, r) = mirror();
+    let (s1, rec1) = with_rec(1, "first");
+    w.apply(batch(vec![s1]), ApplyOrigin::Push);
+    let (s2, _rec2) = with_rec(1, "second");
+    w.apply(batch(vec![s2]), reply_at(&w));
+    let entry = Arc::new(gorca_model::sem::SemEntry::default());
+    assert!(!w.attach_sem(key(1), &rec1, Arc::clone(&entry)), "replaced");
+    assert!(r.get(key(1)).hit().unwrap().sem.entry.is_none());
+    assert!(!w.attach_sem(key(9), &rec1, Arc::clone(&entry)), "missing");
+    w.tombstone(key(1), Instant::now(), RemovalCause::Event);
+    assert!(!w.attach_sem(key(1), &rec1, entry), "tombstoned");
+    w.check_invariants().unwrap();
 }

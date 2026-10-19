@@ -6,16 +6,22 @@ mod deps;
 mod envrule;
 mod ext;
 mod strings;
+mod unmasked;
 
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
-        Some("deps") => match (deps::run(), envrule::run(), strings::run(false)) {
-            (Ok(true), Ok(true), Ok(true)) => ExitCode::SUCCESS,
-            (Ok(_), Ok(_), Ok(_)) => ExitCode::FAILURE,
-            (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
+        Some("deps") => match (
+            deps::run(),
+            envrule::run(),
+            strings::run(false),
+            unmasked::run(),
+        ) {
+            (Ok(true), Ok(true), Ok(true), Ok(true)) => ExitCode::SUCCESS,
+            (Ok(_), Ok(_), Ok(_), Ok(_)) => ExitCode::FAILURE,
+            (Err(e), ..) | (_, Err(e), ..) | (_, _, Err(e), _) | (_, _, _, Err(e)) => {
                 eprintln!("xtask deps: {e:#}");
                 ExitCode::from(2)
             }

@@ -20,6 +20,7 @@ pub mod roles;
 pub mod states;
 pub mod tables;
 
-pub use record::{Notes, RawNode, SrcRecord, TagName, normalise};
-pub use roles::{EngineRole, RoleSource, TokenKind};
+pub use gorca_model::sem::{Notes, RoleSource, SrcRecord, TagName};
+pub use record::{RawNode, normalise};
+pub use roles::{EngineRole, TokenKind};
 pub use states::StateBits;

@@ -267,10 +267,7 @@ async fn announce_notices(
         next += 1;
         let u = Utterance {
             id: UttId(next),
-            segments: smallvec![Segment {
-                text: Arc::from(notice_text(n)),
-                kind: SegmentKind::Text,
-            }],
+            segments: smallvec![Segment::new(Arc::from(notice_text(n)), SegmentKind::Text)],
             lang: None,
             epoch: epoch.current(),
             prio: Prio::Message,

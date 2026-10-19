@@ -115,10 +115,7 @@ impl AppPolicy for ShellPolicy {
             Ok(Verdict::Notice) => PolicyVerdict::Notice,
             Ok(Verdict::Say(segs)) => PolicyVerdict::Say(
                 segs.into_iter()
-                    .map(|s| Segment {
-                        text: resolve(&s.text).into(),
-                        kind: kind(s.kind),
-                    })
+                    .map(|s| Segment::new(resolve(&s.text).into(), kind(s.kind)))
                     .collect(),
             ),
             Err(_) => {

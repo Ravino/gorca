@@ -582,18 +582,20 @@ pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
                 && o.caps.marks()
                 && t.chars().count() == 1
                 && t.chars().all(char::is_uppercase);
-            (!text.is_empty()).then(|| Segment {
-                text: Arc::from(text),
-                kind: match i.kind() {
-                    _ if capital => SegmentKind::Capital,
-                    SegmentKind::Text => SegmentKind::Said,
-                    other @ (SegmentKind::Role
-                    | SegmentKind::State
-                    | SegmentKind::Value
-                    | SegmentKind::Description
-                    | SegmentKind::Said
-                    | SegmentKind::Capital) => other,
-                },
+            (!text.is_empty()).then(|| {
+                Segment::new(
+                    Arc::from(text),
+                    match i.kind() {
+                        _ if capital => SegmentKind::Capital,
+                        SegmentKind::Text => SegmentKind::Said,
+                        other @ (SegmentKind::Role
+                        | SegmentKind::State
+                        | SegmentKind::Value
+                        | SegmentKind::Description
+                        | SegmentKind::Said
+                        | SegmentKind::Capital) => other,
+                    },
+                )
             })
         })
         .collect()

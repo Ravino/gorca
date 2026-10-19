@@ -469,6 +469,10 @@ pub struct ReaderCounters {
     pub focus_represented_on_key: u64,
     /// RV-1 fetches issued.
     pub revalidations: u64,
+    /// The RV-1 fetches of that count issued for a list row (`ListItem`, `Row`, `TreeItem`):
+    /// arrowing through a list serves each row from the mirror and must not cost one extra
+    /// application round trip per row unless the snapshot really aged (M22a-C5 reads it).
+    pub revalidations_list_row: u64,
     /// RV-1 replies that agreed with what was presented.
     pub revalidations_agreed: u64,
     /// Web document corrections that were not spoken (browse mode owns that speech).
@@ -811,6 +815,7 @@ mod tests {
             have: gorca_model::PropMask::PRESENT | gorca_model::PropMask::ATTRS,
             confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
+            sem: gorca_model::NodeSem::NONE,
         })
     }
 
@@ -2140,6 +2145,28 @@ mod tests {
             })
         ));
         assert_eq!(f.reader.counters().revalidations, 1);
+    }
+
+    /// M22a-C5 reads this: the revalidation fetches issued for list rows are counted apart, so
+    /// arrowing through a list can be checked for one extra round trip per row.
+    #[test]
+    fn revalidations_of_list_rows_are_counted_apart() {
+        let count = |role: Role| {
+            let mut f = fixture();
+            let mut n = (*with_name(1, "Row", StateSet::empty())).clone();
+            n.role = role;
+            f.writer.apply(
+                SnapshotBatch::new(vec![Arc::new(n)]),
+                gorca_mirror::ApplyOrigin::Push,
+            );
+            focus_on(&mut f, 1, Instant::now());
+            let c = f.reader.counters();
+            (c.revalidations, c.revalidations_list_row)
+        };
+        assert_eq!(count(Role::CheckBox), (1, 0), "a checkbox is no list row");
+        assert_eq!(count(Role::ListItem), (1, 1));
+        assert_eq!(count(Role::Row), (1, 1));
+        assert_eq!(count(Role::TreeItem), (1, 1));
     }
 
     #[test]

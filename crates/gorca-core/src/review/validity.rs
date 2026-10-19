@@ -159,6 +159,7 @@ mod tests {
             have: PropMask::PRESENT | PropMask::BOUNDS,
             confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
+            sem: gorca_model::NodeSem::NONE,
         }
     }
 

@@ -858,10 +858,10 @@ mod tests {
             if f.moment != PolicyMoment::Value {
                 return PolicyVerdict::Default;
             }
-            PolicyVerdict::Say(vec![gorca_model::Segment {
-                text: Arc::from(f.name.unwrap_or("level")),
-                kind: gorca_model::SegmentKind::Text,
-            }])
+            PolicyVerdict::Say(vec![gorca_model::Segment::new(
+                Arc::from(f.name.unwrap_or("level")),
+                gorca_model::SegmentKind::Text,
+            )])
         }
     }
 
