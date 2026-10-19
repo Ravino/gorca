@@ -207,6 +207,9 @@ pub enum QuirkAction {
     /// Remove the first matching prefix from the `name` value, unless nothing would remain.
     /// (Gecko list markers.)
     StripNamePrefix(Box<[Box<str>]>),
+    /// Remove a leading ordinal ("1. ", "12. ": digits, a dot, a space) from the `name` value,
+    /// unless nothing would remain. (Gecko counters of ordered lists.)
+    StripNameOrdinal,
     /// Make a group `Unknown` when the source reported a value: the value is known to be wrong
     /// for the engine, so a lower layer (S3) may fill in. (Gecko per-role menu positions.)
     UnknownGroup(Group),
@@ -307,6 +310,7 @@ fn parse_rule(t: &Table, row: usize) -> Result<QuirkRule> {
     let action_name = string(t, row, "action")?;
     let allowed: &[&str] = match action_name {
         "strip-name-prefix" => &["id", "name", "source", "roles", "action", "prefixes"],
+        "strip-name-ordinal" => &["id", "name", "source", "roles", "action"],
         "unknown-group" => &["id", "name", "source", "roles", "action", "group"],
         "role-remap" => &["id", "name", "source", "roles", "action", "from", "to"],
         other => {
@@ -346,6 +350,7 @@ fn parse_rule(t: &Table, row: usize) -> Result<QuirkRule> {
             }
             QuirkAction::StripNamePrefix(prefixes.into_iter().map(Box::from).collect())
         }
+        "strip-name-ordinal" => QuirkAction::StripNameOrdinal,
         "unknown-group" => {
             let g = group(string(t, row, "group")?, row)?;
             if g == Group::Role {
@@ -394,6 +399,23 @@ impl QuirkRule {
                     .find_map(|p| name.strip_prefix(&**p))
                     .filter(|rest| !rest.is_empty());
                 if let Some(rest) = stripped {
+                    rec.slots[i] = Slot::Val(Val::Name(Arc::from(rest)));
+                    rec.hit[i] = self.id;
+                }
+            }
+            QuirkAction::StripNameOrdinal => {
+                let i = ix(Group::Name);
+                let Slot::Val(Val::Name(name)) = &rec.slots[i] else {
+                    return;
+                };
+                let digits = name.bytes().take_while(u8::is_ascii_digit).count();
+                let rest = name
+                    .get(digits..)
+                    .filter(|_| digits > 0)
+                    .and_then(|t| t.strip_prefix(". "))
+                    .map(str::trim_start)
+                    .filter(|r| !r.is_empty());
+                if let Some(rest) = rest {
                     rec.slots[i] = Slot::Val(Val::Name(Arc::from(rest)));
                     rec.hit[i] = self.id;
                 }
@@ -712,6 +734,44 @@ prefixes = ["• ", "◦ "]
         r.slots[ix(Group::Name)] = Slot::Val(Val::Name(Arc::from("• A")));
         q.apply(PrimarySlot::P0, &mut r);
         assert_eq!(name_of(&r).as_deref(), Some("• A"));
+    }
+
+    #[test]
+    fn strip_ordinal_takes_digits_dot_space_and_never_empties_a_name() {
+        let q = QuirkSet::parse(
+            r#"
+[[rule]]
+id = 3
+name = "t.ordinal"
+roles = ["listitem"]
+action = "strip-name-ordinal"
+"#,
+        )
+        .expect("parses");
+        for (name, want) in [("1. First", "First"), ("12.   Tw", "Tw")] {
+            let mut r = rec_with(SemRole::ListItem, name);
+            q.apply(PrimarySlot::P0, &mut r);
+            assert_eq!(name_of(&r).as_deref(), Some(want));
+            assert_eq!(r.hit[ix(Group::Name)], 3);
+        }
+        // No digits, no dot, no space, a bare ordinal, another role: untouched.
+        for (role, name) in [
+            (SemRole::ListItem, "First"),
+            (SemRole::ListItem, "1.First"),
+            (SemRole::ListItem, ". First"),
+            (SemRole::ListItem, "1. "),
+            (SemRole::Button, "1. First"),
+        ] {
+            let mut r = rec_with(role, name);
+            q.apply(PrimarySlot::P0, &mut r);
+            assert_eq!(name_of(&r).as_deref(), Some(name), "{name:?}");
+            assert_eq!(r.hit[ix(Group::Name)], 0);
+        }
+        // The action takes no parameters.
+        assert!(QuirkSet::parse(
+            "[[rule]]\nid = 1\nname = \"n\"\naction = \"strip-name-ordinal\"\nprefixes = [\"x\"]"
+        )
+        .is_err());
     }
 
     #[test]

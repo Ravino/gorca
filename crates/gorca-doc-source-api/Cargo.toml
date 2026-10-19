@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 gorca-model = { workspace = true }
+gorca-fuse = { workspace = true }
 gorca-rt = { workspace = true }
 bitflags = { workspace = true }
 thiserror = { workspace = true }

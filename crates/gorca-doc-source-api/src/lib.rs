@@ -25,6 +25,7 @@
 mod caps;
 mod ctx;
 mod factory;
+mod fuse;
 mod join;
 pub mod limits;
 mod request;
@@ -33,6 +34,7 @@ mod web;
 pub use caps::{ActionCaps, JoinKeyCaps, SourceCaps, SourceKind};
 pub use ctx::{DeltaReceiver, DeltaSink, DocEvent, DocSource, DocSourceCtx, delta_channel};
 pub use factory::{DocSourceFactory, WarmOutcome, WarmReport};
+pub use fuse::FuseSetup;
 pub use gorca_model::{
     DocAction, DocDelta, DocHint, DocId, DocNodeId, SrcNode, SrcNodeId, TextEdit, TextUnit,
 };

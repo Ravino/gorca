@@ -24,11 +24,13 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use super::fuse::SemLookup;
 use gorca_doc::web::{
     ChildSpec, DocError, DocOp, DocWriter, NodeFlags, NodeMeta, NodeSpec, PropsPatch, SubtreeSpec,
     WebDoc,
 };
 use gorca_doc_source_api::web_attrs;
+use gorca_model::sem::SemEntry;
 use gorca_model::{
     AttrKey, DocDelta, DocNodeId, LocalId, Role, SrcNode, SrcNodeId, StateSet, TextEdit,
 };
@@ -105,9 +107,15 @@ struct Collected {
     list_order: Vec<SrcNodeId>,
     removed: Vec<SrcNodeId>,
     texts: Vec<(SrcNodeId, TextEdit)>,
+    /// Fused entries of the nodes this batch builds or updates (read once from the stage).
+    sems: HashMap<SrcNodeId, Arc<SemEntry>>,
 }
 
 impl Collected {
+    fn sem(&self, id: SrcNodeId) -> Option<Arc<SemEntry>> {
+        self.sems.get(&id).cloned()
+    }
+
     fn take_node(&mut self, id: SrcNodeId) -> Option<SrcNode> {
         let ix = self.upsert_ix.get(&id).copied()?;
         // Leave a hole the later passes skip; indexes stay valid.
@@ -128,6 +136,7 @@ fn placeholder_node(id: SrcNodeId) -> SrcNode {
         text: None,
         attrs: smallvec::SmallVec::default(),
         local: None,
+        rec: None,
     }
 }
 
@@ -262,7 +271,7 @@ pub fn derive_flags(n: &SrcNode, nested_doc: bool) -> (NodeFlags, u8) {
     (f, level)
 }
 
-fn meta_of(n: &SrcNode) -> Arc<NodeMeta> {
+fn meta_of(n: &SrcNode, sem: Option<Arc<SemEntry>>) -> Arc<NodeMeta> {
     Arc::new(NodeMeta {
         src: Some(n.id),
         local: n.local,
@@ -274,12 +283,16 @@ fn meta_of(n: &SrcNode) -> Arc<NodeMeta> {
             .map(|(_, v)| Arc::clone(v)),
         value: None,
         attrs: n.attrs.clone(),
+        sem,
     })
 }
 
 /// A node's mirror spec (without break flags, which depend on the siblings).
-pub fn spec_of(n: &SrcNode, nested_doc: bool) -> NodeSpec {
+pub fn spec_of(n: &SrcNode, nested_doc: bool, sem: Option<Arc<SemEntry>>) -> NodeSpec {
     let (flags, level) = derive_flags(n, nested_doc);
+    if let Some(e) = &sem {
+        super::agree::check(n, flags, level, e);
+    }
     let mut s = NodeSpec::new(n.role).level(level).flags(flags);
     // A page can put a megabyte in aria-label: the translator applies the source's cap again.
     s.name = n.name.as_ref().map(|a| {
@@ -295,7 +308,7 @@ pub fn spec_of(n: &SrcNode, nested_doc: bool) -> NodeSpec {
         }
     });
     s.text = clip_arc(n.text.as_ref());
-    s.meta(meta_of(n))
+    s.meta(meta_of(n, sem))
 }
 
 fn without_breaks(f: NodeFlags) -> NodeFlags {
@@ -423,13 +436,28 @@ impl Translator {
 
     /// Apply one settled batch. On `Err` the maps were rebuilt from the mirror and the caller
     /// should ask the source for a rebuild.
+    #[cfg(test)]
     pub fn apply(
         &mut self,
         w: &mut DocWriter,
         batch: Vec<DocDelta>,
     ) -> Result<BatchOutcome, DocError> {
+        self.apply_fused(w, batch, &super::fuse::NoSem, &[])
+    }
+
+    /// [`Translator::apply`] with the fusion stage's answers: every node the batch builds or
+    /// updates carries its fused entry in its meta (the entry is part of the back copy before
+    /// the publish), and `changed` lists nodes whose entry changed without an upsert (a
+    /// neighbour's content, a fact): their meta is patched in place.
+    pub fn apply_fused(
+        &mut self,
+        w: &mut DocWriter,
+        batch: Vec<DocDelta>,
+        sem: &dyn SemLookup,
+        changed: &[SrcNodeId],
+    ) -> Result<BatchOutcome, DocError> {
         self.stats.batches += 1;
-        let r = self.apply_inner(w, batch);
+        let r = self.apply_inner(w, batch, sem, changed);
         if r.is_err() {
             self.stats.rejected += 1;
             let snapshot = w.doc().clone();
@@ -444,6 +472,8 @@ impl Translator {
         &mut self,
         w: &mut DocWriter,
         batch: Vec<DocDelta>,
+        sem: &dyn SemLookup,
+        changed: &[SrcNodeId],
     ) -> Result<BatchOutcome, DocError> {
         let mut c = Self::collect(batch);
         let mut out = BatchOutcome::default();
@@ -462,6 +492,23 @@ impl Translator {
                 c.list_order.push(p);
                 c.lists.insert(p, list);
             }
+        }
+
+        // The fused entries of every node that may be built or updated now: upserted nodes,
+        // parked orphans (already in `upserts`) and the nodes of the child lists.
+        if !c.upserts.is_empty() || !c.lists.is_empty() {
+            let ids = c
+                .upserts
+                .iter()
+                .map(|n| n.id)
+                .chain(c.lists.values().flatten().copied());
+            let mut sems = HashMap::new();
+            for id in ids {
+                if let Some(e) = sem.sem(id) {
+                    sems.insert(id, e);
+                }
+            }
+            c.sems = sems;
         }
 
         // 1. A new document: the root stays, the rest of the tree goes.
@@ -527,7 +574,8 @@ impl Translator {
             }
             match self.by_src.get(&n.id).copied() {
                 Some(id) => {
-                    Self::update_known(w, id, &n, &mut out, &mut touched, &mut break_parents)?;
+                    let e = c.sems.get(&n.id);
+                    Self::update_known(w, id, &n, e, &mut out, &mut touched, &mut break_parents)?;
                 }
                 None => {
                     if held < MAX_PENDING {
@@ -546,6 +594,19 @@ impl Translator {
                 && let TextEdit::Replace(t) = edit
             {
                 n.text = Some(t);
+            }
+        }
+
+        // 4b. Entries that changed without an upsert (a neighbour's content, a forwarded fact):
+        // the meta is patched in place. Not a content change: nothing is marked touched.
+        for src in changed {
+            if c.upsert_ix.contains_key(src) {
+                continue;
+            }
+            if let Some(id) = self.by_src.get(src).copied()
+                && let Some(e) = sem.sem(*src)
+            {
+                Self::patch_sem(w, id, e)?;
             }
         }
 
@@ -640,7 +701,7 @@ impl Translator {
                 self.orphans.clear();
                 self.deferred.clear();
                 self.by_src.insert(root_src, root_id);
-                let spec = spec_of(&root_node, false);
+                let spec = spec_of(&root_node, false, c.sem(root_src));
                 let patch = PropsPatch {
                     role: Some(spec.role),
                     level: Some(spec.level),
@@ -695,7 +756,7 @@ impl Translator {
             n: &SrcNode,
             (nested, depth, root): (bool, u32, bool),
         ) -> Frame {
-            let mut spec = spec_of(n, nested);
+            let mut spec = spec_of(n, nested, c.sem(n.id));
             if root {
                 spec.flags = without_breaks(spec.flags);
             }
@@ -892,6 +953,7 @@ impl Translator {
         w: &mut DocWriter,
         id: DocNodeId,
         n: &SrcNode,
+        sem: Option<&Arc<SemEntry>>,
         out: &mut BatchOutcome,
         touched: &mut HashSet<DocNodeId>,
         break_parents: &mut HashSet<DocNodeId>,
@@ -902,7 +964,7 @@ impl Translator {
         };
         let nested =
             n.role == Role::DocumentWeb && doc.parent(id).is_some_and(|p| Self::nested_doc(doc, p));
-        let spec = spec_of(n, nested);
+        let spec = spec_of(n, nested, sem.cloned());
         let keep_breaks = cur.flags.0 & (NodeFlags::BREAK_BEFORE.0 | NodeFlags::CELL_SEP.0);
         let new_flags = NodeFlags(without_breaks(spec.flags).0 | keep_breaks);
         let mut patch = PropsPatch::default();
@@ -931,7 +993,11 @@ impl Translator {
         }
         let old_local = cur.meta.and_then(|m| m.local);
         let meta_same = cur.meta.is_some_and(|m| {
-            m.src == Some(n.id) && m.local == n.local && m.states == n.states && m.attrs == n.attrs
+            m.src == Some(n.id)
+                && m.local == n.local
+                && m.states == n.states
+                && m.attrs == n.attrs
+                && m.sem.as_ref() == sem
         });
         if !meta_same {
             patch.meta = Some(spec.meta.clone());
@@ -960,6 +1026,26 @@ impl Translator {
             })?;
             touched.insert(id);
         }
+        Ok(())
+    }
+
+    /// Replace the fused entry in the node's meta (everything else of the meta stays).
+    fn patch_sem(w: &mut DocWriter, id: DocNodeId, e: Arc<SemEntry>) -> Result<(), DocError> {
+        let Some(meta) = w.doc().node(id).and_then(|v| v.meta) else {
+            return Ok(());
+        };
+        if meta.sem.as_ref() == Some(&e) {
+            return Ok(());
+        }
+        let patched = NodeMeta {
+            sem: Some(e),
+            ..meta.clone()
+        };
+        let patch = PropsPatch {
+            meta: Some(Some(Arc::new(patched))),
+            ..PropsPatch::default()
+        };
+        w.apply(DocOp::SetProps { id, patch })?;
         Ok(())
     }
 
@@ -1138,6 +1224,7 @@ mod tests {
             text: None,
             attrs: smallvec::SmallVec::default(),
             local: Some(LocalId(id + 1000)),
+            rec: None,
         }
     }
 

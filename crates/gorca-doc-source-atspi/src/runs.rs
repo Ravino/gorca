@@ -105,6 +105,7 @@ fn run_node(id: SrcNodeId, text: &Arc<str>) -> SrcNode {
         text: Some(Arc::clone(text)),
         attrs: SmallVec::new(),
         local: None,
+        rec: None,
     }
 }
 
@@ -332,6 +333,7 @@ mod tests {
             text: text.map(Arc::from),
             attrs: SmallVec::new(),
             local: None,
+            rec: None,
         }
     }
 

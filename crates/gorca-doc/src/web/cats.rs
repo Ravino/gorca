@@ -5,6 +5,7 @@
 use std::ops::BitOr;
 use std::sync::Arc;
 
+use gorca_model::sem::SemEntry;
 use gorca_model::{AttrMap, LocalId, Role, SrcNodeId, StateSet, Value};
 
 /// Set of navigation categories (bit mask). A node's own `Cat` is a pure function of
@@ -312,6 +313,11 @@ pub struct NodeMeta {
     pub description: Option<Arc<str>>,
     pub value: Option<Value>,
     pub attrs: AttrMap,
+    /// The fused semantics of the node (ADR-0022 SM-8: produced by `FUSE` in the document actor,
+    /// the node's single writer, before the batch is published). `None` until the node was
+    /// fused, for synthetic nodes and for sources that do not normalise. Read it through the
+    /// mirror only; nothing else merges sources.
+    pub sem: Option<Arc<SemEntry>>,
 }
 
 /// Everything a source supplies for one node.

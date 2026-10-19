@@ -76,6 +76,7 @@ fn big(nodes: usize) -> Big {
         events: ev,
         orphans: Arc::default(),
         repair_flag: Arc::default(),
+        timeline: Arc::default(),
     });
     let epoch = Arc::new(EpochCell::new());
     let dir = Arc::new(MirrorDirectory::new());

@@ -241,6 +241,8 @@ pub struct AtspiDocSource {
     config: SourceConfig,
     events: mpsc::Receiver<AtspiEvent>,
     metrics: SourceMetrics,
+    /// The engine's fusion tables for the document actor (`None`: no fused semantics).
+    fuse: Option<gorca_doc_source_api::FuseSetup>,
 }
 
 impl std::fmt::Debug for AtspiDocSource {
@@ -269,9 +271,17 @@ impl AtspiDocSource {
                 config,
                 events,
                 metrics: metrics.clone(),
+                fuse: None,
             },
             metrics,
         )
+    }
+
+    /// Hand the document actor the engine's fusion tables (chosen by `norm::fuse_setup`).
+    #[must_use]
+    pub fn with_fuse_setup(mut self, setup: Option<gorca_doc_source_api::FuseSetup>) -> Self {
+        self.fuse = setup;
+        self
     }
 
     pub fn interner(&self) -> Arc<AttrInterner> {
@@ -310,6 +320,10 @@ impl DocSource for AtspiDocSource {
 
     fn attach(self: Box<Self>, ctx: DocSourceCtx) -> BoxFuture<'static, Result<(), SourceError>> {
         Box::pin(async move { (*self).run(ctx).await })
+    }
+
+    fn fuse_setup(&self) -> Option<gorca_doc_source_api::FuseSetup> {
+        self.fuse.clone()
     }
 }
 
@@ -1038,6 +1052,13 @@ impl AtspiDocSource {
     ) -> (SrcNode, SibInfo) {
         let (raw_role, state, name, attrs, _) = read;
         let role = roles::map_role(raw_role);
+        let rec = {
+            let pairs: SmallVec<[(&str, &str); 16]> = attrs
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+            crate::norm::record(raw_role, Some(state), name.as_deref(), &pairs)
+        };
         let authored = attrs
             .iter()
             .any(|(k, v)| k == "explicit-name" && v == "true");
@@ -1084,6 +1105,7 @@ impl AtspiDocSource {
                 text,
                 attrs: amap,
                 local,
+                rec: Some(rec),
             },
             info,
         )

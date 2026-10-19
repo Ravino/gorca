@@ -14,6 +14,7 @@ use smallvec::SmallVec;
 use crate::ids::LocalId;
 use crate::node::{AttrMap, StateSet};
 use crate::role::Role;
+use crate::sem::SrcRecord;
 
 /// Identifies one web document (one per document actor).
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -76,6 +77,10 @@ pub struct SrcNode {
     /// synthetic text runs). It lets the doc actor build the focus join without a second
     /// channel (ADR-0003 AM-3, EF-3).
     pub local: Option<LocalId>,
+    /// The node as the source's normaliser saw it (H-7: the normaliser runs in the source crate,
+    /// never in the core). `None` for synthetic nodes (text runs, placeholders) and for sources
+    /// that do not normalise. Shared, never mutated: the document actor feeds it to the fusion.
+    pub rec: Option<Arc<SrcRecord>>,
 }
 
 /// Offsets are in the source's declared `TextUnit`; the mirror converts at apply time (IR-6).

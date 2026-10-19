@@ -13,6 +13,10 @@
 //! directory entry goes, the Reader is told (`Gone`). The hub creates a new document when the
 //! user's focus or the browser says there is one.
 
+pub mod agree;
+#[cfg(test)]
+mod agree_tests;
+pub mod fuse;
 pub mod live;
 pub mod repair;
 pub mod translate;
@@ -27,10 +31,12 @@ use gorca_doc_source_api::{
     Activity, DeltaReceiver, DocEvent, DocRequest, DocSource, DocSourceCtx, RepairReport,
     SourceError, delta_channel, join_channel,
 };
-use gorca_model::{AppId, DocAction, DocDelta, DocId, DocNodeId, NodeKey};
+use gorca_model::sem::SrcRecord;
+use gorca_model::{AppId, DocAction, DocDelta, DocId, DocNodeId, LocalId, NodeKey, SrcNodeId};
 use gorca_rt::{CancellationToken, Clock, Deadline, mpsc, oneshot};
 use tokio::task::JoinSet;
 
+use fuse::{FuseStage, NoSem, SemLookup};
 use live::{LiveMsg, LiveTracker};
 use repair::{
     ORPHAN_SETTLE, Orphans, RepairGate, RepairPolicy, RepairReason, Verdict, YOUNG_CHECKS,
@@ -112,6 +118,15 @@ pub enum DocCtl {
         node: DocNodeId,
         act: DocAction,
     },
+    /// An `atspi` fact about a node of this document (SM-8): the app actor fetched it (a focus
+    /// fetch of a web node) and the document, the node's single writer, fuses it. `issued_at` is
+    /// [`DocHandle::timeline`] read when the fetch was issued, so a fact never overwrites what a
+    /// later batch wrote.
+    Fact {
+        local: LocalId,
+        rec: Arc<SrcRecord>,
+        issued_at: u64,
+    },
 }
 
 /// How a page-selection action ended.
@@ -186,6 +201,9 @@ pub struct DocHandle {
     /// storm of load or state events costs one control slot, never the 64 that also carry clicks
     /// (review F-6).
     pub repair_flag: Arc<std::sync::atomic::AtomicU8>,
+    /// Batches the document has applied (the actor timeline): read it when a fetch is issued and
+    /// send the value with the resulting [`DocCtl::Fact`].
+    pub timeline: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl DocHandle {
@@ -309,16 +327,15 @@ pub fn prepare(
         events: ev_tx,
         orphans: Arc::default(),
         repair_flag: Arc::default(),
+        timeline: Arc::default(),
     };
-    let fut = run(
-        spec,
-        writer,
-        handle.read.clone(),
-        Arc::clone(&handle.orphans),
-        Arc::clone(&handle.repair_flag),
-        ctl_rx,
-        ev_rx,
-    );
+    let shared = Shared {
+        read: handle.read.clone(),
+        orphans: Arc::clone(&handle.orphans),
+        repair_flag: Arc::clone(&handle.repair_flag),
+        timeline: Arc::clone(&handle.timeline),
+    };
+    let fut = run(spec, writer, shared, ctl_rx, ev_rx);
     (handle, fut)
 }
 
@@ -359,6 +376,11 @@ struct Actor {
     escalate_orphans: bool,
     /// Follow-up checks spent after a load-end repair that found the mirror still tiny.
     load_retries: usize,
+    /// Fusion of the source's records (`None`: the source does not normalise, SM-8).
+    fuse: Option<FuseStage>,
+    timeline: Arc<std::sync::atomic::AtomicU64>,
+    /// Nodes whose fused entry changed and whose meta is not patched yet (a fact arrived).
+    pending_changed: Vec<SrcNodeId>,
 }
 
 type RepairRx = oneshot::Receiver<Result<RepairReport, SourceError>>;
@@ -376,14 +398,31 @@ impl Actor {
     /// Translate and publish the collected batch.
     fn flush(&mut self) -> bool {
         let batch = std::mem::take(&mut self.batch);
-        if batch.is_empty() {
+        if batch.is_empty() && self.pending_changed.is_empty() {
             return true;
         }
         self.counters
             .batches
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let t_apply = Instant::now();
-        match self.tr.apply(&mut self.writer, batch) {
+        // Fusion first: the translator builds the back copy with the fused entries in place, so
+        // the publish below is the one atomic swap of content and semantics (SM-8).
+        let mut changed = std::mem::take(&mut self.pending_changed);
+        if let Some(f) = self.fuse.as_mut()
+            && !batch.is_empty()
+        {
+            changed.extend(f.apply(&batch));
+            self.timeline
+                .store(f.timeline(), std::sync::atomic::Ordering::Release);
+        }
+        let lookup: &dyn SemLookup = match &self.fuse {
+            Some(f) => f,
+            None => &NoSem,
+        };
+        match self
+            .tr
+            .apply_fused(&mut self.writer, batch, lookup, &changed)
+        {
             Ok(out) => {
                 let published = self.writer.publish();
                 if !self.announced && published {
@@ -443,6 +482,35 @@ impl Actor {
                 // publish it so the Reader never sees a mirror that disagrees with the join.
                 self.writer.publish();
                 false
+            }
+        }
+    }
+
+    /// A fact about one of this document's nodes (a focus fetch the app actor forwarded).
+    fn on_fact(&mut self, local: LocalId, rec: &SrcRecord, issued_at: u64) {
+        if self.fuse.is_none() {
+            return;
+        }
+        let Some((doc, id)) = self.join.get(self.key(local)) else {
+            return;
+        };
+        if doc != self.spec_doc {
+            return;
+        }
+        let Some(src) = self
+            .writer
+            .doc()
+            .node(id)
+            .and_then(|v| v.meta)
+            .and_then(|m| m.src)
+        else {
+            return;
+        };
+        let fused = self.fuse.as_mut().and_then(|f| f.fact(src, rec, issued_at));
+        if let Some(changed) = fused {
+            self.pending_changed.extend(changed);
+            if !self.pending_changed.is_empty() {
+                self.flush();
             }
         }
     }
@@ -664,15 +732,27 @@ async fn live_wait(deadline: Option<Instant>) {
 /// How long retiring waits for room in the Reader's notice queue.
 const GONE_DELIVERY: Duration = Duration::from_secs(2);
 
-async fn run(
-    spec: DocActorSpec,
-    writer: DocWriter,
+/// What the actor shares with its [`DocHandle`].
+struct Shared {
     read: DocRead,
     orphans: Arc<Orphans>,
     repair_flag: Arc<std::sync::atomic::AtomicU8>,
+    timeline: Arc<std::sync::atomic::AtomicU64>,
+}
+
+async fn run(
+    spec: DocActorSpec,
+    writer: DocWriter,
+    shared: Shared,
     mut ctl_rx: mpsc::Receiver<DocCtl>,
     ev_rx: mpsc::Receiver<DocEvent>,
 ) {
+    let Shared {
+        read,
+        orphans,
+        repair_flag,
+        timeline,
+    } = shared;
     let DocActorSpec {
         doc,
         app,
@@ -685,6 +765,8 @@ async fn run(
         repair,
         ..
     } = spec;
+    // The source hands over the fusion tables of its engine before it is attached.
+    let fuse = source.fuse_setup().map(FuseStage::new);
     let (sink, mut deltas): (_, DeltaReceiver) = delta_channel(SINK_CAPACITY);
     let (req_tx, req_rx) = mpsc::channel(REQUEST_CAPACITY);
     let (join_port, _join_rx) = join_channel(1);
@@ -730,6 +812,9 @@ async fn run(
         orphan_keys: Vec::new(),
         escalate_orphans: false,
         load_retries: 0,
+        fuse,
+        timeline,
+        pending_changed: Vec::new(),
     };
     let mut repair_rx: Option<RepairRx> = None;
 
@@ -793,6 +878,7 @@ async fn run(
                             let _ = a.notices.try_send(DocNotice::FocusFailed { doc: a.spec_doc });
                         }
                     }
+                    DocCtl::Fact { local, rec, issued_at } => a.on_fact(local, &rec, issued_at),
                     DocCtl::Select { req, node, act } => {
                         if actions.len() < MAX_ACTIONS {
                             // One selection at a time, in request order (ADR-0021 I-3): this
@@ -865,6 +951,22 @@ async fn run(
         }
     }
     // Retire: no key may outlive its document.
+    if let Some(f) = &a.fuse {
+        // The CI counter of the dual-carry period (process-wide totals, see `agree`).
+        let agree = agree::stats();
+        tracing::info!(
+            target: "gorca_agree",
+            doc = doc.0,
+            profile = f.profile_name(),
+            nodes = f.len(),
+            empty = f.is_empty(),
+            stats = ?f.stats(),
+            checked = agree.checked,
+            disagreements = agree.total(),
+            by_aspect = ?agree.mismatched,
+            "document fusion stage retired"
+        );
+    }
     a.retire();
     directory.remove(doc);
     // A task the source detached (the frame wake) holds a clone of this token: abort_all does

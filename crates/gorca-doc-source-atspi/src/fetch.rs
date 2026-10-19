@@ -292,6 +292,7 @@ pub async fn fetch_document(
     let starts = vec![0usize];
     let mut doc = complete(
         conn,
+        interner,
         paths,
         nodes,
         child_counts,
@@ -333,7 +334,7 @@ pub async fn fetch_forest(
     }
     let counts = nodes.iter().map(|n| n.child_count).collect();
     complete(
-        conn, paths, nodes, counts, starts, opts, deadline, tm, t_start,
+        conn, interner, paths, nodes, counts, starts, opts, deadline, tm, t_start,
     )
     .await
 }
@@ -343,6 +344,7 @@ pub async fn fetch_forest(
 #[allow(clippy::too_many_arguments)]
 async fn complete(
     conn: &Arc<AppConn>,
+    interner: &Arc<AttrInterner>,
     paths: &mut PathTable,
     mut nodes: Vec<RawNode>,
     mut child_counts: Vec<i32>,
@@ -480,10 +482,21 @@ async fn complete(
         let t_asm = Instant::now();
         let mut out_nodes = Vec::with_capacity(n);
         let mut keys = Vec::with_capacity(n);
+        let key_names = crate::norm::KeyNames::of(interner);
         for (i, rn) in nodes.drain(..).enumerate() {
             let rr = raw_roles[i];
             let role = roles::map_role(rr);
             let mut attrs: SmallVec<[(AttrKey, Arc<str>); 4]> = rn.attrs;
+            // The normaliser sees what the engine said: the raw name (before the engine rows of
+            // `WebQuirks`, which the S-1 quirk rows replace) and the attributes as fetched.
+            let rec = crate::norm::record_interned(
+                &key_names,
+                rr,
+                states_raw[i],
+                rn.name.as_deref(),
+                &attrs,
+                &rn.aliased,
+            );
             if role == Role::Unknown {
                 attrs.push((web_attrs::RAW_ROLE, Arc::from(rr.to_string().as_str())));
             }
@@ -507,6 +520,7 @@ async fn complete(
                 text: texts[i].take(),
                 attrs,
                 local: targets.get(i).map(|p| gorca_dbus::drain::local_id(p)),
+                rec: Some(rec),
             });
         }
         let completeness = match (opts.states, opts.text) {
@@ -903,9 +917,14 @@ pub async fn plan_frontier(
             child_count: i32::try_from(kids.len()).unwrap_or(i32::MAX),
             attrs: SmallVec::new(),
             other_path: None,
+            aliased: SmallVec::new(),
         };
         for (ak, av) in attrs {
-            rn.attrs.push((interner.key(&ak), Arc::from(av.as_str())));
+            let val: Arc<str> = Arc::from(av.as_str());
+            if let Some(exact) = wire::alias_name(&ak) {
+                rn.aliased.push((exact, Arc::clone(&val)));
+            }
+            rn.attrs.push((interner.key(&ak), val));
         }
         interior_nodes.push(rn);
     }
@@ -1046,7 +1065,7 @@ pub async fn fetch_first_block(
         return Err(FetchError::BadRoot);
     }
     let mut doc = complete(
-        conn, paths, nodes, counts, starts, opts, deadline, tm, t_start,
+        conn, interner, paths, nodes, counts, starts, opts, deadline, tm, t_start,
     )
     .await?;
     // Complete child lists of the interior nodes (they reference nodes of later blocks too).
@@ -1142,6 +1161,7 @@ mod tests {
             child_count: cc,
             attrs: SmallVec::new(),
             other_path: None,
+            aliased: SmallVec::new(),
         }
     }
 

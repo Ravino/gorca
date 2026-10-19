@@ -1270,6 +1270,7 @@ mod tests {
             text: None,
             attrs,
             local: None,
+            rec: None,
         }
     }
 

@@ -330,6 +330,9 @@ impl DocSourceFactory for AtspiDocSourceFactory {
         let me = Arc::clone(&self.inner);
         let gecko = is_gecko(info);
         let blink = is_blink(info);
+        // The engine's S-1 quirk rows and trust table are data in `gorca-sem-atspi`, selected by
+        // the same facts the connector reported (never by a name test here).
+        let fuse = crate::norm::fuse_setup(info);
         Box::pin(async move {
             let entry = me.entry(app).await?;
             let path = me.root_path(root).ok_or(SourceError::NotSupported)?;
@@ -349,7 +352,9 @@ impl DocSourceFactory for AtspiDocSourceFactory {
             };
             let (source, _metrics) =
                 AtspiDocSource::new(Arc::clone(&entry.conn), path, config, events);
-            let source = source.with_interner(Arc::clone(&entry.interner));
+            let source = source
+                .with_interner(Arc::clone(&entry.interner))
+                .with_fuse_setup(fuse);
             Ok(Box::new(source) as Box<dyn DocSource>)
         })
     }

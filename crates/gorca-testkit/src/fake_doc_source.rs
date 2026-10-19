@@ -47,6 +47,7 @@ pub struct ScriptedDocSource {
     batches: mpsc::Receiver<Vec<DocDelta>>,
     seen: mpsc::Sender<Seen>,
     end: mpsc::Receiver<()>,
+    fuse: Option<gorca_doc_source_api::FuseSetup>,
 }
 
 impl ScriptedDocSource {
@@ -55,7 +56,12 @@ impl ScriptedDocSource {
         let (seen, seen_rx) = mpsc::channel(256);
         let (end_tx, end) = mpsc::channel(1);
         (
-            Self { batches, seen, end },
+            Self {
+                batches,
+                seen,
+                end,
+                fuse: None,
+            },
             ScriptHandle {
                 batches: batches_tx,
                 seen: seen_rx,
@@ -65,9 +71,22 @@ impl ScriptedDocSource {
     }
 }
 
+impl ScriptedDocSource {
+    /// The fusion tables the source hands the document actor (nodes then carry fused entries).
+    #[must_use]
+    pub fn with_fuse(mut self, setup: gorca_doc_source_api::FuseSetup) -> Self {
+        self.fuse = Some(setup);
+        self
+    }
+}
+
 impl DocSource for ScriptedDocSource {
     fn kind(&self) -> SourceKind {
         SourceKind::Atspi
+    }
+
+    fn fuse_setup(&self) -> Option<gorca_doc_source_api::FuseSetup> {
+        self.fuse.clone()
     }
 
     fn caps(&self) -> SourceCaps {
@@ -88,6 +107,7 @@ impl DocSource for ScriptedDocSource {
                 mut batches,
                 seen,
                 mut end,
+                ..
             } = *self;
             let DocSourceCtx {
                 sink,

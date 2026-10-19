@@ -54,6 +54,7 @@ fn page() -> Vec<DocDelta> {
         text: None,
         attrs: smallvec::SmallVec::default(),
         local: local.map(LocalId),
+        rec: None,
     };
     vec![
         DocDelta::Reset {
