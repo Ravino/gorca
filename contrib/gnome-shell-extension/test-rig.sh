@@ -5,7 +5,7 @@
 # Writes WORKDIR/env (BUS, WL, RT, A11Y), WORKDIR/rig.pgid (process group = this script), WORKDIR/shell.pid,
 # WORKDIR/py-a, py-b, py-c (private copies of the python binary used as caller identities: A has capture+pointer,
 # B has capture only, C is not listed) and WORKDIR/shell.log. No systemd, no service manager, nothing outside WORKDIR.
-# Env: GORCA_RIG_NO_X11=  (empty) enables XWayland; GORCA_RIG_KEYFILE_EXTRA="key=value\n..." appended under [org/gnome/mutter].
+# Env: GORCA_RIG_EXTRA_EXE=path (copied to WORKDIR/rs-a and allowed with capture+pointer); GORCA_RIG_NO_X11=  (empty) enables XWayland; GORCA_RIG_KEYFILE_EXTRA="key=value\n..." appended under [org/gnome/mutter].
 set -euo pipefail
 W="$(realpath -m "$1")"; VM="${2:-1280x800}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,10 +29,17 @@ K
 # all in the cgroup this script runs in. A has capture+pointer, B capture only, C is not listed.
 CGP="$(sed -n 's/^0:://p' /proc/self/cgroup)"
 for r in a b c; do cp /usr/bin/python3.13 "$W/py-$r"; done
+EXTRA=""
+if [ -n "${GORCA_RIG_EXTRA_EXE:-}" ]; then
+  # An extra caller binary (for example the Rust pointer client example), allowed with capture+pointer as rs-a.
+  cp "$GORCA_RIG_EXTRA_EXE" "$W/rs-a"
+  EXTRA=",
+ {\"exe\":\"$W/rs-a\",\"cgroup\":\"$CGP\",\"caps\":[\"capture\",\"pointer\"]}"
+fi
 cat > "$W/config/gorca/shell-helper.json" <<J
 {"allowed":[
  {"exe":"$W/py-a","cgroup":"$CGP","caps":["capture","pointer"]},
- {"exe":"$W/py-b","cgroup":"$CGP"}
+ {"exe":"$W/py-b","cgroup":"$CGP"}$EXTRA
 ]}
 J
 chmod 600 "$W/config/gorca/shell-helper.json"

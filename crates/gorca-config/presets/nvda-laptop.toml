@@ -90,6 +90,15 @@
 "gorca+shift+bracketleft" = "object.prev_in_flow"
 "gorca+f9" = "review.copy_mark"
 "gorca+f10" = "review.copy"
+# Mouse emulation (ADR-0025, owner decision QM-1: NVDA's chords in every preset). The item-click
+# commands (mouse.left_click_item, mouse.right_click_item) are unbound by default.
+"gorca+bracketleft" = "mouse.left_click"
+"gorca+bracketright" = "mouse.right_click"
+"gorca+ctrl+bracketleft" = "mouse.left_lock_toggle"
+"gorca+ctrl+bracketright" = "mouse.right_lock_toggle"
+"gorca+shift+m" = "mouse.route_to_review"
+"gorca+shift+n" = "mouse.review_to_pointer"
+"gorca+ctrl+shift+m" = "mouse.say_position"
 
 [keymap.browse]
 "h" = "quicknav.next.heading"

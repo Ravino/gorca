@@ -7,7 +7,7 @@
 
 use gorca_i18n::MsgId as M;
 
-use super::spec::{Availability, CmdSpec, ContextMask, Milestone};
+use super::spec::{Availability, CmdSpec, ContextMask, Milestone, RuntimeGate};
 
 /// Closed set of core commands. Exhaustive `match`, no wildcard (ADR-0001 section 11 rule 6).
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -262,6 +262,16 @@ pub enum CoreCmd {
     ProfilesAnnounce,
     ProfilesSuspend,
     BrowseSaveModeDefault,
+    MouseLeftClick,
+    MouseRightClick,
+    MouseMiddleClick,
+    MouseLeftClickItem,
+    MouseRightClickItem,
+    MouseLeftLockToggle,
+    MouseRightLockToggle,
+    MouseRouteToReview,
+    MouseReviewToPointer,
+    MouseSayPosition,
 }
 
 /// Pattern matching every command that is declared but not implemented yet.
@@ -330,7 +340,7 @@ macro_rules! planned_cmds {
 pub(crate) use planned_cmds;
 
 /// Number of commands.
-pub const COUNT: usize = 249;
+pub const COUNT: usize = 259;
 
 impl CoreCmd {
     /// Every command, in discriminant order.
@@ -584,6 +594,16 @@ impl CoreCmd {
         CoreCmd::ProfilesAnnounce,
         CoreCmd::ProfilesSuspend,
         CoreCmd::BrowseSaveModeDefault,
+        CoreCmd::MouseLeftClick,
+        CoreCmd::MouseRightClick,
+        CoreCmd::MouseMiddleClick,
+        CoreCmd::MouseLeftClickItem,
+        CoreCmd::MouseRightClickItem,
+        CoreCmd::MouseLeftLockToggle,
+        CoreCmd::MouseRightLockToggle,
+        CoreCmd::MouseRouteToReview,
+        CoreCmd::MouseReviewToPointer,
+        CoreCmd::MouseSayPosition,
     ];
 }
 
@@ -597,6 +617,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: true,
         help: M::CmdSpeechStop,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechPauseToggle,
@@ -607,6 +628,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: false,
         input_help_bypass: false,
         help: M::CmdSpeechPauseToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechModeCycle,
@@ -617,6 +639,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechModeCycle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRepeatLast,
@@ -627,6 +650,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechRepeatLast,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingNext,
@@ -637,6 +661,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechRingNext,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingPrev,
@@ -647,6 +672,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechRingPrev,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingInc,
@@ -657,6 +683,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechRingInc,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingDec,
@@ -667,6 +694,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechRingDec,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingIncLarge,
@@ -677,6 +705,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechRingIncLarge,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingDecLarge,
@@ -687,6 +716,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechRingDecLarge,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRateUp,
@@ -697,6 +727,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechRateUp,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRateDown,
@@ -707,6 +738,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechRateDown,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechPitchUp,
@@ -717,6 +749,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechPitchUp,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechPitchDown,
@@ -727,6 +760,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechPitchDown,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechVolumeUp,
@@ -737,6 +771,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechVolumeUp,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechVolumeDown,
@@ -747,6 +782,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechVolumeDown,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechCopyLast,
@@ -757,6 +793,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechCopyLast,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechPunctuationCycle,
@@ -767,6 +804,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechPunctuationCycle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoWhereAmI,
@@ -777,6 +815,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoWhereAmI,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoWindowTitle,
@@ -787,6 +826,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoWindowTitle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoTimeDate,
@@ -797,6 +837,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoTimeDate,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoCurrentLine,
@@ -807,6 +848,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoCurrentLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoSelection,
@@ -817,6 +859,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoSelection,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoFormatting,
@@ -827,6 +870,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoFormatting,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoStatusBar,
@@ -837,6 +881,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoStatusBar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoReadWindow,
@@ -847,6 +892,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoReadWindow,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoBattery,
@@ -857,6 +903,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoBattery,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoFocusShortcut,
@@ -867,6 +914,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoFocusShortcut,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoClipboard,
@@ -877,6 +925,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoClipboard,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoLinkDestination,
@@ -887,6 +936,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoLinkDestination,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InfoDetails,
@@ -897,6 +947,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInfoDetails,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::EchoTypedCharsToggle,
@@ -907,6 +958,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdEchoTypedCharsToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::EchoTypedWordsToggle,
@@ -917,6 +969,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdEchoTypedWordsToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::EchoCommandKeysToggle,
@@ -927,6 +980,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdEchoCommandKeysToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::VerbosityCycle,
@@ -937,6 +991,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdVerbosityCycle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InputLearnModeToggle,
@@ -947,6 +1002,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: true,
         help: M::CmdInputLearnModeToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InputPassNextKey,
@@ -957,6 +1013,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInputPassNextKey,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::InputSleepToggle,
@@ -967,6 +1024,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdInputSleepToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SettingsReload,
@@ -977,6 +1035,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSettingsReload,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SettingsSave,
@@ -987,6 +1046,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSettingsSave,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SettingsReportProblems,
@@ -997,6 +1057,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSettingsReportProblems,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::DebugNodeInfo,
@@ -1007,6 +1068,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdDebugNodeInfo,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::DebugAppInfo,
@@ -1017,6 +1079,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdDebugAppInfo,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::DebugExplainLast,
@@ -1033,6 +1096,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdDebugExplainLast,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::GorcaQuit,
@@ -1043,6 +1107,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdGorcaQuit,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TextSayAll,
@@ -1053,6 +1118,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTextSayAll,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TextSayChar,
@@ -1063,6 +1129,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTextSayChar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TextSayWord,
@@ -1073,6 +1140,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTextSayWord,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TextSayLine,
@@ -1083,6 +1151,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTextSayLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TextSpellChar,
@@ -1093,6 +1162,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTextSpellChar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TextSpellWord,
@@ -1103,6 +1173,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTextSpellWord,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TextSpellLine,
@@ -1113,6 +1184,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTextSpellLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewPrevLine,
@@ -1123,6 +1195,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewPrevLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCurLine,
@@ -1133,6 +1206,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewCurLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewNextLine,
@@ -1143,6 +1217,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewNextLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewPrevWord,
@@ -1153,6 +1228,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewPrevWord,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCurWord,
@@ -1163,6 +1239,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewCurWord,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewNextWord,
@@ -1173,6 +1250,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewNextWord,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewPrevChar,
@@ -1183,6 +1261,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewPrevChar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCurChar,
@@ -1193,6 +1272,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewCurChar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewNextChar,
@@ -1203,6 +1283,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewNextChar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewTop,
@@ -1213,6 +1294,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewTop,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewBottom,
@@ -1223,6 +1305,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewBottom,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewStartOfLine,
@@ -1233,6 +1316,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewStartOfLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewEndOfLine,
@@ -1243,6 +1327,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewEndOfLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewPrevPage,
@@ -1253,6 +1338,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewPrevPage,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewNextPage,
@@ -1263,6 +1349,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewNextPage,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewSayAll,
@@ -1273,6 +1360,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewSayAll,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewModeNext,
@@ -1283,6 +1371,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewModeNext,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewModePrev,
@@ -1293,6 +1382,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewModePrev,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewToFocus,
@@ -1303,6 +1393,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewToFocus,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewMoveFocus,
@@ -1313,6 +1404,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewMoveFocus,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewActivate,
@@ -1323,6 +1415,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewActivate,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewStartOfSelection,
@@ -1333,6 +1426,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewStartOfSelection,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewEndOfSelection,
@@ -1343,6 +1437,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewEndOfSelection,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCopyMark,
@@ -1353,6 +1448,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewCopyMark,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCopy,
@@ -1363,6 +1459,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewCopy,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewToggle,
@@ -1373,6 +1470,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCaretFollowsToggle,
@@ -1383,6 +1481,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewCaretFollowsToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewFocusFollowsToggle,
@@ -1393,6 +1492,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewFocusFollowsToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewSimpleToggle,
@@ -1403,6 +1503,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewSimpleToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewAbove,
@@ -1413,6 +1514,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewAbove,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewBelow,
@@ -1423,6 +1525,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdReviewBelow,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectCurrent,
@@ -1433,6 +1536,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdObjectCurrent,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectParent,
@@ -1443,6 +1547,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdObjectParent,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectFirstChild,
@@ -1453,6 +1558,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdObjectFirstChild,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectNext,
@@ -1463,6 +1569,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdObjectNext,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectPrev,
@@ -1473,6 +1580,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdObjectPrev,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectNextInFlow,
@@ -1483,6 +1591,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdObjectNextInFlow,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectPrevInFlow,
@@ -1493,6 +1602,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdObjectPrevInFlow,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseToggle,
@@ -1503,6 +1613,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSingleLetterToggle,
@@ -1513,6 +1624,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSingleLetterToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseElementsList,
@@ -1523,6 +1635,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseElementsList,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseFind,
@@ -1533,6 +1646,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseFind,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseFindNext,
@@ -1543,6 +1657,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseFindNext,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseFindPrev,
@@ -1553,6 +1668,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseFindPrev,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseRefresh,
@@ -1563,6 +1679,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseRefresh,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseLiveRegionsToggle,
@@ -1573,6 +1690,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseLiveRegionsToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseActivate,
@@ -1583,6 +1701,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseActivate,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseContainerStart,
@@ -1593,6 +1712,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseContainerStart,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseContainerEnd,
@@ -1603,6 +1723,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseContainerEnd,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseEscape,
@@ -1613,6 +1734,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseEscape,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorNextLine,
@@ -1623,6 +1745,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorNextLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPrevLine,
@@ -1633,6 +1756,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorPrevLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorNextChar,
@@ -1643,6 +1767,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorNextChar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPrevChar,
@@ -1653,6 +1778,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorPrevChar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorNextWord,
@@ -1663,6 +1789,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorNextWord,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPrevWord,
@@ -1673,6 +1800,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorPrevWord,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorLineStart,
@@ -1683,6 +1811,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorLineStart,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorLineEnd,
@@ -1693,6 +1822,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorLineEnd,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorTop,
@@ -1703,6 +1833,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorTop,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorBottom,
@@ -1713,6 +1844,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorBottom,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPageUp,
@@ -1723,6 +1855,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorPageUp,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPageDown,
@@ -1733,6 +1866,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorPageDown,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading,
@@ -1743,6 +1877,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextHeading,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading,
@@ -1753,6 +1888,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevHeading,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading1,
@@ -1763,6 +1899,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextHeading1,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading1,
@@ -1773,6 +1910,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevHeading1,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading2,
@@ -1783,6 +1921,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextHeading2,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading2,
@@ -1793,6 +1932,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevHeading2,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading3,
@@ -1803,6 +1943,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextHeading3,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading3,
@@ -1813,6 +1954,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevHeading3,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading4,
@@ -1823,6 +1965,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextHeading4,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading4,
@@ -1833,6 +1976,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevHeading4,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading5,
@@ -1843,6 +1987,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextHeading5,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading5,
@@ -1853,6 +1998,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevHeading5,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading6,
@@ -1863,6 +2009,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextHeading6,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading6,
@@ -1873,6 +2020,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevHeading6,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading7,
@@ -1883,6 +2031,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextHeading7,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading7,
@@ -1893,6 +2042,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevHeading7,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading8,
@@ -1903,6 +2053,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextHeading8,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading8,
@@ -1913,6 +2064,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevHeading8,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading9,
@@ -1923,6 +2075,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextHeading9,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading9,
@@ -1933,6 +2086,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevHeading9,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextLink,
@@ -1943,6 +2097,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextLink,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevLink,
@@ -1953,6 +2108,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevLink,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextVisited,
@@ -1963,6 +2119,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextVisited,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevVisited,
@@ -1973,6 +2130,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevVisited,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextUnvisited,
@@ -1983,6 +2141,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextUnvisited,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevUnvisited,
@@ -1993,6 +2152,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevUnvisited,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextFormField,
@@ -2003,6 +2163,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextFormField,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevFormField,
@@ -2013,6 +2174,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevFormField,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextList,
@@ -2023,6 +2185,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextList,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevList,
@@ -2033,6 +2196,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevList,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextListItem,
@@ -2043,6 +2207,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextListItem,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevListItem,
@@ -2053,6 +2218,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevListItem,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextButton,
@@ -2063,6 +2229,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextButton,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevButton,
@@ -2073,6 +2240,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevButton,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextEdit,
@@ -2083,6 +2251,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextEdit,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevEdit,
@@ -2093,6 +2262,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevEdit,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextFrame,
@@ -2103,6 +2273,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextFrame,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevFrame,
@@ -2113,6 +2284,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevFrame,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextSeparator,
@@ -2123,6 +2295,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextSeparator,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevSeparator,
@@ -2133,6 +2306,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevSeparator,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextRadio,
@@ -2143,6 +2317,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextRadio,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevRadio,
@@ -2153,6 +2328,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevRadio,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextCombobox,
@@ -2163,6 +2339,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextCombobox,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevCombobox,
@@ -2173,6 +2350,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevCombobox,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextCheckbox,
@@ -2183,6 +2361,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextCheckbox,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevCheckbox,
@@ -2193,6 +2372,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevCheckbox,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextGraphic,
@@ -2203,6 +2383,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextGraphic,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevGraphic,
@@ -2213,6 +2394,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevGraphic,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextBlockquote,
@@ -2223,6 +2405,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextBlockquote,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevBlockquote,
@@ -2233,6 +2416,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevBlockquote,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextNotLinkBlock,
@@ -2243,6 +2427,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextNotLinkBlock,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevNotLinkBlock,
@@ -2253,6 +2438,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevNotLinkBlock,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextLandmark,
@@ -2263,6 +2449,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextLandmark,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevLandmark,
@@ -2273,6 +2460,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevLandmark,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextEmbedded,
@@ -2283,6 +2471,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextEmbedded,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevEmbedded,
@@ -2293,6 +2482,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevEmbedded,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextAnnotation,
@@ -2303,6 +2493,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextAnnotation,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevAnnotation,
@@ -2313,6 +2504,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevAnnotation,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextError,
@@ -2323,6 +2515,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextError,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevError,
@@ -2333,6 +2526,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevError,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextParagraph,
@@ -2343,6 +2537,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextParagraph,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevParagraph,
@@ -2353,6 +2548,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevParagraph,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextTable,
@@ -2363,6 +2559,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextTable,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevTable,
@@ -2373,6 +2570,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevTable,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextClickable,
@@ -2383,6 +2581,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextClickable,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevClickable,
@@ -2393,6 +2592,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevClickable,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextSlider,
@@ -2403,6 +2603,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextSlider,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevSlider,
@@ -2413,6 +2614,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevSlider,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextArticle,
@@ -2423,6 +2625,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextArticle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevArticle,
@@ -2433,6 +2636,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevArticle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextGrouping,
@@ -2443,6 +2647,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextGrouping,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevGrouping,
@@ -2453,6 +2658,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevGrouping,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextTab,
@@ -2463,6 +2669,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextTab,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevTab,
@@ -2473,6 +2680,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevTab,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextFigure,
@@ -2483,6 +2691,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextFigure,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevFigure,
@@ -2493,6 +2702,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevFigure,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextMenuItem,
@@ -2503,6 +2713,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextMenuItem,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevMenuItem,
@@ -2513,6 +2724,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevMenuItem,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextToggleButton,
@@ -2523,6 +2735,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextToggleButton,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevToggleButton,
@@ -2533,6 +2746,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevToggleButton,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextProgressBar,
@@ -2543,6 +2757,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextProgressBar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevProgressBar,
@@ -2553,6 +2768,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevProgressBar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextMath,
@@ -2563,6 +2779,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextMath,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevMath,
@@ -2573,6 +2790,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevMath,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextLiveRegion,
@@ -2583,6 +2801,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextLiveRegion,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevLiveRegion,
@@ -2593,6 +2812,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevLiveRegion,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextLastLiveRegion,
@@ -2603,6 +2823,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextLastLiveRegion,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevLastLiveRegion,
@@ -2613,6 +2834,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevLastLiveRegion,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextSameStyle,
@@ -2623,6 +2845,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextSameStyle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevSameStyle,
@@ -2633,6 +2856,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevSameStyle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextDifferentStyle,
@@ -2643,6 +2867,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextDifferentStyle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevDifferentStyle,
@@ -2653,6 +2878,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevDifferentStyle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextReference,
@@ -2663,6 +2889,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavNextReference,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevReference,
@@ -2673,6 +2900,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdQuicknavPrevReference,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TableNextRow,
@@ -2683,6 +2911,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTableNextRow,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TablePrevRow,
@@ -2693,6 +2922,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTablePrevRow,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TableNextColumn,
@@ -2703,6 +2933,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTableNextColumn,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TablePrevColumn,
@@ -2713,6 +2944,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTablePrevColumn,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TableFirstRow,
@@ -2723,6 +2955,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTableFirstRow,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TableLastRow,
@@ -2733,6 +2966,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTableLastRow,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TableFirstColumn,
@@ -2743,6 +2977,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTableFirstColumn,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TableLastColumn,
@@ -2753,6 +2988,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTableLastColumn,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TableSayRow,
@@ -2763,6 +2999,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTableSayRow,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TableSayColumn,
@@ -2773,6 +3010,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTableSayColumn,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TableSayAllRow,
@@ -2783,6 +3021,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTableSayAllRow,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::TableSayAllColumn,
@@ -2793,6 +3032,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdTableSayAllColumn,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectNextChar,
@@ -2803,6 +3043,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectNextChar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectPrevChar,
@@ -2813,6 +3054,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectPrevChar,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectNextWord,
@@ -2823,6 +3065,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectNextWord,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectPrevWord,
@@ -2833,6 +3076,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectPrevWord,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectNextLine,
@@ -2843,6 +3087,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectNextLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectPrevLine,
@@ -2853,6 +3098,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectPrevLine,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectLineStart,
@@ -2863,6 +3109,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectLineStart,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectLineEnd,
@@ -2873,6 +3120,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectLineEnd,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectTop,
@@ -2883,6 +3131,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectTop,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectBottom,
@@ -2893,6 +3142,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectBottom,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectPageUp,
@@ -2903,6 +3153,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectPageUp,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectPageDown,
@@ -2913,6 +3164,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectPageDown,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectAll,
@@ -2923,6 +3175,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSelectAll,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorNextParagraph,
@@ -2933,6 +3186,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorNextParagraph,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPrevParagraph,
@@ -2943,6 +3197,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorPrevParagraph,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorNextSentence,
@@ -2953,6 +3208,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorNextSentence,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPrevSentence,
@@ -2963,6 +3219,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseCursorPrevSentence,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseTabNext,
@@ -2973,6 +3230,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseTabNext,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseTabPrev,
@@ -2983,6 +3241,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseTabPrev,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseNativeSelectionToggle,
@@ -2993,6 +3252,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseNativeSelectionToggle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechHistoryPrev,
@@ -3003,6 +3263,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechHistoryPrev,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechHistoryNext,
@@ -3013,6 +3274,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechHistoryNext,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ProfilesSaveGlobal,
@@ -3023,6 +3285,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdProfilesSaveGlobal,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ProfilesCycle,
@@ -3033,6 +3296,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdProfilesCycle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ProfilesToggleEnabled,
@@ -3043,6 +3307,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdProfilesToggleEnabled,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ProfilesEditTargetCycle,
@@ -3053,6 +3318,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdProfilesEditTargetCycle,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ProfilesAnnounce,
@@ -3063,6 +3329,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdProfilesAnnounce,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::ProfilesSuspend,
@@ -3073,6 +3340,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdProfilesSuspend,
+        gate: None,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSaveModeDefault,
@@ -3083,5 +3351,116 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdBrowseSaveModeDefault,
+        gate: None,
+    },
+    CmdSpec {
+        cmd: CoreCmd::MouseLeftClick,
+        name: "mouse.left_click",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdMouseLeftClick,
+        gate: Some(RuntimeGate::Pointer),
+    },
+    CmdSpec {
+        cmd: CoreCmd::MouseRightClick,
+        name: "mouse.right_click",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdMouseRightClick,
+        gate: Some(RuntimeGate::Pointer),
+    },
+    CmdSpec {
+        cmd: CoreCmd::MouseMiddleClick,
+        name: "mouse.middle_click",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdMouseMiddleClick,
+        gate: Some(RuntimeGate::Pointer),
+    },
+    CmdSpec {
+        cmd: CoreCmd::MouseLeftClickItem,
+        name: "mouse.left_click_item",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdMouseLeftClickItem,
+        gate: Some(RuntimeGate::Pointer),
+    },
+    CmdSpec {
+        cmd: CoreCmd::MouseRightClickItem,
+        name: "mouse.right_click_item",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdMouseRightClickItem,
+        gate: Some(RuntimeGate::Pointer),
+    },
+    CmdSpec {
+        cmd: CoreCmd::MouseLeftLockToggle,
+        name: "mouse.left_lock_toggle",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdMouseLeftLockToggle,
+        gate: Some(RuntimeGate::Pointer),
+    },
+    CmdSpec {
+        cmd: CoreCmd::MouseRightLockToggle,
+        name: "mouse.right_lock_toggle",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdMouseRightLockToggle,
+        gate: Some(RuntimeGate::Pointer),
+    },
+    CmdSpec {
+        cmd: CoreCmd::MouseRouteToReview,
+        name: "mouse.route_to_review",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdMouseRouteToReview,
+        gate: Some(RuntimeGate::Pointer),
+    },
+    CmdSpec {
+        cmd: CoreCmd::MouseReviewToPointer,
+        name: "mouse.review_to_pointer",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdMouseReviewToPointer,
+        gate: Some(RuntimeGate::Pointer),
+    },
+    CmdSpec {
+        cmd: CoreCmd::MouseSayPosition,
+        name: "mouse.say_position",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 2,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdMouseSayPosition,
+        gate: Some(RuntimeGate::Pointer),
     },
 ];

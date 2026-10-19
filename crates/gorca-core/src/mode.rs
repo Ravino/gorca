@@ -12,6 +12,8 @@
 use gorca_input_api::{Chord, GrabSet, InputContext, ModeKind};
 use gorca_model::{DocId, DocNodeId};
 
+use crate::commands::RuntimeGate;
+
 pub use crate::review::{ReviewCursor, ReviewFrom, ReviewOrigin};
 
 /// Virtual-cursor position in a web document: a node and a scalar offset inside the node's own
@@ -84,9 +86,25 @@ impl BaseMode {
     }
 }
 
+/// The non-gorca chords of the commands behind one runtime gate (ADR-0025 RG-1), compiled like the
+/// ordinary ones. They are part of a grab set only while `ModeKeys::open_gates` has the gate's bit.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GatedGrabs {
+    pub gate: RuntimeGate,
+    /// Plain chords (expanded over the lock states on the wire).
+    pub chords: Vec<Chord>,
+    /// Keypad chords, exact (Num Lock off only, RG-3).
+    pub exact: Vec<Chord>,
+}
+
 /// Key material the grab sets are built from. K-1: grab sets are minimal.
 #[derive(Clone, Debug, Default)]
 pub struct ModeKeys {
+    /// Chords of runtime-gated commands (pointer emulation), one entry per gate.
+    pub gated: Vec<GatedGrabs>,
+    /// Bits of the gates that are open now ([`RuntimeGate::bit`]); owned by the Reader, never by
+    /// the settings snapshot.
+    pub open_gates: u8,
     /// gorca's modifier keysym(s), for example Insert or Caps Lock.
     pub modifiers: Vec<u32>,
     /// Explicit command chords, expanded over the lock states on the wire.
@@ -107,6 +125,18 @@ pub struct ModeKeys {
     pub pass_through_exit: Vec<Chord>,
     /// The chord(s) bound to `browse.escape`: grabbed only in auto focus mode (modes.md 2).
     pub web_escape: Vec<Chord>,
+}
+
+impl ModeKeys {
+    /// Add the chords of every open gate to `set` (modes that grab command chords only).
+    fn add_open_gates(&self, set: &mut GrabSet) {
+        for g in &self.gated {
+            if self.open_gates & g.gate.bit() != 0 {
+                set.chords.extend(g.chords.iter().copied());
+                set.exact.extend(g.exact.iter().copied());
+            }
+        }
+    }
 }
 
 impl Mode {
@@ -158,12 +188,14 @@ impl Mode {
                 set.modifiers.extend(keys.modifiers.iter().copied());
                 set.chords.extend(keys.commands.iter().copied());
                 set.exact.extend(keys.exact.iter().copied());
+                keys.add_open_gates(&mut set);
             }
             Mode::Browse { .. } => {
                 set.modifiers.extend(keys.modifiers.iter().copied());
                 set.chords.extend(keys.commands.iter().copied());
                 set.chords.extend(keys.quick_nav.iter().copied());
                 set.exact.extend(keys.exact.iter().copied());
+                keys.add_open_gates(&mut set);
             }
             // Pass-next-key: nothing is grabbed, not even the modifiers, so the next key or
             // chord reaches the application natively (ADR-0005 5.3).
@@ -345,6 +377,7 @@ mod tests {
             letters: Vec::new(),
             tab_next: Vec::new(),
             tab_prev: Vec::new(),
+            ..ModeKeys::default()
         }
     }
 
@@ -363,6 +396,43 @@ mod tests {
             doc: DocId(1),
             sticky: false,
         }
+    }
+
+    #[test]
+    fn gated_chords_join_the_grab_set_only_while_their_gate_is_open() {
+        let chord = Chord {
+            keysym: 0xffaf,
+            modifiers: Modifiers::empty(),
+        };
+        let mut k = keys();
+        k.gated = vec![GatedGrabs {
+            gate: RuntimeGate::Pointer,
+            chords: Vec::new(),
+            exact: vec![chord],
+        }];
+        for mode in [Mode::Focus, browse()] {
+            assert!(
+                !mode.grab_set(&k).exact.contains(&chord),
+                "closed: {mode:?}"
+            );
+        }
+        k.open_gates = RuntimeGate::Pointer.bit();
+        for mode in [Mode::Focus, browse()] {
+            let set = mode.grab_set(&k);
+            assert!(set.exact.contains(&chord), "open: {mode:?}");
+            assert!(!set.grab_all);
+            assert_eq!(
+                set.modifiers.len(),
+                k.modifiers.len(),
+                "modifiers unchanged"
+            );
+        }
+        // Pass-through grabs nothing but its exit; learn mode grabs everything anyway.
+        let pass = Mode::PassThrough {
+            scope: PassScope::OneKey,
+            resume: BaseMode::Focus,
+        };
+        assert!(pass.grab_set(&k).exact.is_empty());
     }
 
     #[test]

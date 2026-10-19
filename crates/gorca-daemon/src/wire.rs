@@ -18,6 +18,7 @@ use gorca_speech::{FailoverClient, FailoverConfig, LaneConfig, SpeechHandle, Spe
 use crate::config_task::{ConfigSource, ConfigTask};
 use crate::input::{forward_notices, pump_keys};
 use crate::{Options, announce_notices, speech_plan, supervise_connector};
+use gorca_core::Core;
 
 /// Speech: the failover client under the speech lane, plus the failover-notice announcer.
 pub(crate) fn wire_speech(
@@ -93,6 +94,58 @@ pub(crate) fn wire_config(
         env_language: opts.env_language.clone(),
     };
     tasks.spawn("config", task.run(shutdown.clone()));
+}
+
+/// Pointer emulation (ADR-0025): a client of the GNOME Shell helper on its own session-bus
+/// connection. Its availability gates the keypad mouse chords; the `mouse.*` commands run on it.
+/// Stays off without keyboard monitoring (the keys are the point), in shadow mode, with
+/// `--no-pointer`, or when the connection cannot be made (the gate then stays closed and the
+/// keypad types). On shutdown the actor releases any held button before the connection goes.
+pub(crate) async fn wire_pointer(
+    core: Core,
+    opts: &Options,
+    tasks: &mut TaskSet,
+    shutdown: &CancellationToken,
+) -> Core {
+    if opts.no_pointer || opts.shadow || opts.no_keyboard {
+        return core;
+    }
+    let Some(address) = opts.session_address.clone() else {
+        return core;
+    };
+    gorca_rt::guard::check(&address);
+    let built = async {
+        zbus::connection::Builder::address(address.as_str())?
+            .max_queued(gorca_dbus::MAX_QUEUED)
+            // Above the client's own call deadlines and its late-answer cap.
+            .method_timeout(std::time::Duration::from_secs(10))
+            .build()
+            .await
+    };
+    let deadline =
+        gorca_rt::Deadline(std::time::Instant::now() + std::time::Duration::from_secs(5));
+    let conn = match gorca_rt::with_deadline(deadline, built).await {
+        Ok(Ok(c)) => c,
+        Ok(Err(e)) => {
+            tracing::warn!(error = %e, "pointer: cannot connect to the session bus; mouse emulation is off");
+            return core;
+        }
+        Err(_) => {
+            tracing::warn!("pointer: the session bus did not answer; mouse emulation is off");
+            return core;
+        }
+    };
+    let (client, actor) = gorca_shell_helper::ShellHelperClient::start(conn);
+    let client = Arc::new(client);
+    let stop = Arc::clone(&client);
+    let token = shutdown.child_token();
+    tasks.spawn("pointer", async move {
+        token.cancelled().await;
+        // Release first, then let the actor finish its best-effort PointerRelease.
+        stop.shutdown();
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(1), actor).await;
+    });
+    core.with_pointer(client)
 }
 
 /// Keyboard monitoring: the Mutter key source, the input lane's pump into the Reader, and the

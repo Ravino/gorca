@@ -1,0 +1,29 @@
+# Сообщения эмуляции мыши (ADR-0025, раздел 4).
+
+mouse-left-click = Левый щелчок
+mouse-right-click = Правый щелчок
+mouse-middle-click = Средний щелчок
+mouse-left-locked = Левая кнопка зажата
+mouse-left-unlocked = Левая кнопка отпущена
+mouse-right-locked = Правая кнопка зажата
+mouse-right-unlocked = Правая кнопка отпущена
+mouse-lock-expired = {button} кнопка отпущена через 2 минуты
+mouse-button-left = Левая
+mouse-button-right = Правая
+mouse-moved = Мышь перемещена
+mouse-no-location = Нет расположения
+mouse-covered = Закрыто окном {window}
+mouse-covered-shell = Закрыто
+mouse-unavailable-helper = Мышь недоступна: помощник gorca не запущен
+mouse-unavailable-old = Мышь недоступна: помощник gorca устарел
+mouse-unavailable-cap = Мышь недоступна: разрешите pointer в {file}
+mouse-unavailable-denied = Мышь недоступна: помощник не разрешает gorca
+mouse-unavailable-off = Эмуляция мыши выключена
+mouse-locked-session = Недоступно при заблокированном экране
+mouse-not-responding = Мышь не отвечает
+mouse-busy = Мышь занята
+mouse-nothing = Под мышью ничего нет
+mouse-window = окно
+mouse-position = {window}, {x}, {y}
+mouse-position-screen = Экран {x}, {y}, монитор {n}
+mouse-not-available-now = сейчас недоступно

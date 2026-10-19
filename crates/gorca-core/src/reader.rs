@@ -211,6 +211,8 @@ pub enum ReaderEffect {
     ArmTimer(Instant),
     /// The grab set Mutter should apply, with the lookup context it goes with.
     SetGrabSet(GrabSet),
+    /// A request to the pointer sink (ADR-0025 EX-1); the answer comes back as `ControlMsg::PointerReply`.
+    Pointer(crate::commands::PointerReq),
     /// Ordered with utterances: applied by the speech lane before the next one.
     SpeechCtl(SpeechCtl),
     /// A request for the daemon's config task.
@@ -768,6 +770,7 @@ impl Reader {
                 }
                 self.apply_focus(FocusMsg::TimerElapsed { now }, &mut fx);
                 self.pass_timer(now, &mut fx);
+                self.pointer_timer(now, &mut fx);
                 self.review_timer(now, &mut fx);
                 self.web_timer(now, &mut fx);
                 self.text_timer(&mut fx);
@@ -874,6 +877,7 @@ mod tests {
                 | ReaderEffect::QueryActiveWindowFocus
                 | ReaderEffect::ArmTimer(_)
                 | ReaderEffect::SetGrabSet(_)
+                | ReaderEffect::Pointer(_)
                 | ReaderEffect::SpeechCtl(_)
                 | ReaderEffect::Config(_)
                 | ReaderEffect::ReviewNav { .. }
@@ -2069,6 +2073,7 @@ mod tests {
                 ReaderEffect::QueryActiveWindowFocus => "query",
                 ReaderEffect::ArmTimer(_) => "timer",
                 ReaderEffect::SetGrabSet(_) => "grab",
+                ReaderEffect::Pointer(_) => "pointer",
                 ReaderEffect::SpeechCtl(_) => "ctl",
                 ReaderEffect::Config(_) => "config",
                 ReaderEffect::ReviewNav { .. } => "review-nav",
@@ -2096,6 +2101,7 @@ mod tests {
                 | ReaderEffect::QueryActiveWindowFocus
                 | ReaderEffect::ArmTimer(_)
                 | ReaderEffect::SetGrabSet(_)
+                | ReaderEffect::Pointer(_)
                 | ReaderEffect::SpeechCtl(_)
                 | ReaderEffect::Config(_)
                 | ReaderEffect::ReviewNav { .. }

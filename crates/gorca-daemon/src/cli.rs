@@ -40,6 +40,8 @@ pub struct Options {
     pub env_language: String,
     /// Do not start keyboard monitoring.
     pub no_keyboard: bool,
+    /// Do not connect to the GNOME Shell helper (no mouse emulation, ADR-0025).
+    pub no_pointer: bool,
     /// Own `org.gnome.Orca.KeyboardMonitor` so that Mutter authorises our key monitor (ID-1). Off
     /// by default: a running Orca is never replaced.
     pub impersonate_orca: bool,
@@ -188,6 +190,7 @@ OPTIONS:
     --ssip-socket=PATH           speech-dispatcher socket (default: from SPEECHD_ADDRESS or
                                  $XDG_RUNTIME_DIR/speech-dispatcher/speechd.sock)
     --no-keyboard                do not start keyboard monitoring
+    --no-pointer                 do not use the GNOME Shell helper (no mouse emulation)
     --impersonate-orca           own org.gnome.Orca.KeyboardMonitor (never replaces a running Orca)
     --a11y-address=ADDRESS       a11y bus address (default: ask org.a11y.Bus)
     --session-address=ADDRESS    session bus address (testing; default: $DBUS_SESSION_BUS_ADDRESS)
@@ -447,7 +450,12 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
         if inline.is_some()
             && matches!(
                 flag.as_str(),
-                "--no-keyboard" | "--impersonate-orca" | "--no-enable" | "--no-probe" | "--help"
+                "--no-keyboard"
+                    | "--no-pointer"
+                    | "--impersonate-orca"
+                    | "--no-enable"
+                    | "--no-probe"
+                    | "--help"
             )
         {
             return Err(CliError::Unknown(arg));
@@ -461,6 +469,7 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
         match flag.as_str() {
             "-h" | "--help" => return Ok(Parsed::Help),
             "--no-keyboard" => opts.no_keyboard = true,
+            "--no-pointer" => opts.no_pointer = true,
             "--impersonate-orca" => opts.impersonate_orca = true,
             "--no-enable" => opts.no_enable = true,
             "--no-probe" => opts.no_probe = true,

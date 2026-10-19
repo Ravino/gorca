@@ -641,3 +641,27 @@ MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its ow
 | S-6 | Pick-based occlusion cost | `get_actor_at_pos(REACTIVE)` plus the owner walk: p50 99 us, p99 351 us, max 3.0 ms (600 calls, 6 app windows). Whole handler (validation, family, pick, injection, audit) with `GORCA_TRACE`: PointerMove p50 0.37-0.49 ms p99 3.3-4.0 ms, PointerClickAt p50 0.44-0.83 ms p99 1.1-4.8 ms, GetPointer p50 0.3 ms p99 2.7-3.2 ms; client round trip p50 2.5-2.7 ms (load 14.5). M-7 (p99 <= 1 ms) is **not met under this load** with tracing on; re-measure on a quiet host. The pick API exists in 48.7 so the stacking fallback is unused. Overview, notification banners, attached `NORMAL`-type windows over a parent and other app windows all pick as non-family (`refused-occluded`). |
 
 **M-7 re-measure (2026-10-19 19:31, after review fixes F-1..F-3).** Host load average 8.8-9.9 (not quiet; CPU PSI some avg10 2%), RT kernel, no governor change, `GORCA_TRACE=1`, 6 app windows, 300 calls each at 60 ms spacing, handler time inside the Shell: PointerMove p50 0.27 ms p99 0.96 ms (max 1.6), PointerClickAt p50 0.32 ms p99 1.04 ms (max 1.3), GetPointer p50 0.22 ms p99 0.70 ms. M-7 (p99 <= 1 ms) is met within noise for move/get and at the limit for click; the first measurement (load 14.5, pick logged inside the handler) gave p99 3-5 ms and is kept above as the loaded number. `bench_pointer.py` reproduces it.
+
+## 15. Implementation status
+
+- MO-0, MO-1a/1b (helper v2), MO-2 (`gorca-shell-helper`, `PointerSink`): merged.
+- **MO-3 (key gating):** `RuntimeGate` in `CmdSpec` (RG-1); `gated_chord_grabs` and `ModeKeys::{gated, open_gates}` (RG-1, RG-3: the
+  gated keypad chords are the exact `(KP_Divide|KP_Multiply, [Shift] [Caps])` set, never a Num Lock variant; laptop presets have none);
+  `PointerGate` (RG-4, RG-5: closes at once, opens after 2 s and at most once per 2 s, `Unresponsive` keeps it open, C-3) in the
+  Reader, fed by `ControlMsg::Pointer(PointerMsg::{Avail, Enabled})`; a gate flip is one `SetGrabSet` effect, i.e. one generation of
+  the existing session's coalesced `SetKeyGrabs` (no `GrabKeyboard`, no reconnect, so the Mutter 48.7 NULL-modifiers rules of
+  `docs/reports/shell-segfault-20261019.md` are untouched); RG-6 relies on the existing `Ambiguous` classification; RG-7 learn-mode note.
+  The ten `mouse.*` commands exist and answer "not available / not responding / off"; the click path is MO-4. The daemon does not feed
+  `PointerMsg` yet, so in a running gorca the gate stays closed and the keypad types.
+- **MO-4 (click at the pointer, locks):** `mouse.enabled` is a Base key (`[mouse] enabled`, default true). The Reader never does
+  pointer I/O: a command is a `ReaderEffect::Pointer(PointerReq)`, the runtime runs it on the `PointerSink` (150 ms per call, at
+  most 16 tasks) and the answer returns as `ControlMsg::PointerReply`. `Holds` (one pure `Hold` per lockable button): press and
+  release are confirmed by the `held` mask of the reply, the lock is released by gorca at 120 s (`Left button released after 2
+  minutes`), a failed or timed-out request leaves the button `Unknown` and the next toggle sends `ReleaseAll`, losing the helper
+  or `mouse.enabled = false` drops the state (the latter first sends a best-effort `ReleaseAll`). `mouse.say_position` says the
+  window-relative position once and the screen position twice (window titles need the MO-5a matcher). The route and item-click
+  commands answer "No location" until MO-5. The daemon wires a `ShellHelperClient` on its own session-bus connection
+  (`--no-pointer` disables) and releases held buttons on shutdown.
+- E2E: `contrib/gnome-shell-extension/test-rust-client.sh` runs the Rust client (examples/pointer_cli) against the real helper in a
+  private shell with a GTK4 oracle: 10/10 (click L/M/R at the pointer, position, drag lock press and release, release on shutdown,
+  another holder refused, double click).
