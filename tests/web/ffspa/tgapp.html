@@ -30,6 +30,7 @@
     <div id="composer-slot"></div>
   </main>
   <div id="status" role="status" aria-live="polite"></div>
+  <p id="blurs">blurs 0</p>
 </div>
 <script>
 // ?v=rerender (default): every state change rebuilds the list and the pane with fresh nodes, as
@@ -49,6 +50,10 @@ function makeComposer() {
   else if (k === "textarea") { e = document.createElement("textarea"); }
   else { e = document.createElement("div"); e.contentEditable = "true"; e.setAttribute("role", "textbox"); e.setAttribute("aria-multiline", "true"); }
   e.id = "composer"; e.setAttribute("aria-label", "Message");
+  // blur and change handlers (validation, autosave): selecting in the page must not fire them
+  let blurs = 0;
+  e.addEventListener("blur", () => { $("blurs").textContent = "blurs " + (++blurs); });
+  e.addEventListener("change", () => { $("blurs").textContent = "change fired"; });
   $("composer-slot").append(e);
 }
 const chats = [
@@ -68,6 +73,7 @@ function chatLink(c) {
   if (a.tagName === "A") a.href = "#" + c.id;
   a.dataset.id = c.id;
   a.textContent = c.name + ", " + c.last;
+  if (Q.get("churn") === "text") a.setAttribute("aria-label", c.name);
   a.onclick = (e) => { e.preventDefault(); openChat(c.id); };
   return a;
 }

@@ -2145,6 +2145,8 @@ fn selections(fx: &ReaderEffects) -> Vec<gorca_model::SelectionSpec<DocNodeId>> 
             DocAction::SetSelection(spec) => Some(spec),
             DocAction::Focus
             | DocAction::Click
+            | DocAction::ClickAnnounced { .. }
+            | DocAction::ReleaseField
             | DocAction::ScrollIntoView
             | DocAction::SetCaret(_)
             | DocAction::SetSourceSelection(_)
@@ -2196,6 +2198,66 @@ fn the_page_selection_follows_the_virtual_one_so_the_browsers_ctrl_c_copies_it()
         .reader
         .handle(selection_done(req, SelOutcome::Done), r.now);
     assert_eq!(spoken(&fx), ["page selection"]);
+}
+
+fn control_down(r: &mut Rig) -> ReaderEffects {
+    let ev = KeyEvent {
+        keycode: 37,
+        keysym: 0xffe3,
+        unichar: 0,
+        modifiers: Modifiers::CONTROL,
+        pressed: true,
+    };
+    r.reader.handle(
+        ReaderMsg::Key(KeyIntent {
+            event: ev,
+            class: KeyClass::PassToApp,
+            kind: PressKind::Press,
+            repeat: 1,
+            chord: None,
+            at: r.now,
+            epoch: Epoch(r.epoch.current().0 + 1),
+        }),
+        r.now,
+    )
+}
+
+fn released(fx: &ReaderEffects) -> bool {
+    acts(fx)
+        .iter()
+        .any(|(a, _)| matches!(a, DocAction::ReleaseField))
+}
+
+#[test]
+fn the_field_is_released_only_when_control_goes_down_with_a_selection_outside_it() {
+    let mut r = tab_rig();
+    // The user was in the name field and left focus mode with Escape: the page focus stays there.
+    r.focus(1014);
+    r.key(CoreCmd::BrowseEscape);
+    r.key(CoreCmd::BrowseCursorTop);
+    // Control with no selection does nothing.
+    assert!(!released(&control_down(&mut r)));
+    // Plain selection moves (the mirror included) never touch the field's focus.
+    let mut fx = Vec::new();
+    for _ in 0..3 {
+        fx.push(r.key(CoreCmd::BrowseSelectNextChar));
+    }
+    fx.push(settle(&mut r));
+    assert!(!fx.iter().any(released), "no blur on selection moves");
+    assert!(!selections(fx.last().expect("settled")).is_empty());
+    // Control down with a selection outside the field: release it, once the browser could copy.
+    let fx = control_down(&mut r);
+    assert!(released(&fx), "{:?}", acts(&fx));
+}
+
+#[test]
+fn control_does_not_release_a_field_that_holds_the_selection_or_a_non_field_focus() {
+    let mut r = tab_rig();
+    r.focus(1006);
+    r.key(CoreCmd::BrowseCursorTop);
+    r.key(CoreCmd::BrowseSelectNextChar);
+    settle(&mut r);
+    assert!(!released(&control_down(&mut r)), "the focus is on a link");
 }
 
 fn last_select_req(fx: &ReaderEffects) -> Option<u32> {
@@ -3314,18 +3376,90 @@ fn a_swap_after_a_focus_placement_is_announced_not_clicked() {
     assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
 }
 
+/// The name a `ClickAnnounced` of these effects carries (empty when it carries none).
+fn click_announced_name(fx: &ReaderEffects) -> Option<Arc<str>> {
+    effects_web(fx).iter().find_map(|a| {
+        if let WebEffect::Act {
+            act: DocAction::ClickAnnounced { name },
+            ..
+        } = a
+        {
+            Some(name.clone().unwrap_or_else(|| Arc::from("")))
+        } else {
+            None
+        }
+    })
+}
+
 #[test]
-fn a_row_rewritten_again_and_again_still_clicks_on_the_second_enter() {
+fn a_row_rewritten_after_it_was_announced_is_announced_again_never_clicked() {
     let mut r = rig();
     r.focus(1006);
     relabel_link(&mut r, "Dave, typing", 3);
     let fx = r.key(CoreCmd::BrowseActivate);
     assert!(!click_of(&fx), "the first Enter announces the change");
-    // The page rewrites the same row again before the user presses Enter a second time.
+    // The page rewrites the same row before the second Enter: that name was never heard.
     relabel_link(&mut r, "Dave, online", 4);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx) && click_announced_name(&fx).is_none());
+    assert!(!spoken(&fx).is_empty(), "the new name is announced");
+    // It stays: the third Enter clicks what was just said, naming it to the source.
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(click_of(&fx), "an unchanged row clicks");
+}
+
+#[test]
+fn the_armed_enter_clicks_only_the_announced_target_and_tells_the_source() {
+    let mut r = rig();
+    r.focus(1006);
+    relabel_link(&mut r, "Dave, typing", 3);
+    assert!(!click_of(&r.key(CoreCmd::BrowseActivate)));
+    // A rewrite that leaves the target's role and name as announced (another part of the line).
+    let mut link = src(6, Role::Link, Some(1006));
+    link.states |= StateSet::FOCUSABLE;
+    link.name = Some(Arc::from("Dave, typing"));
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![link, run(7, "Dave, typing 12:01")]),
+            DocDelta::Settled { batch: 4 },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 4,
+        }),
+        r.now,
+    );
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert_eq!(
+        click_announced_name(&fx),
+        Some(Arc::from("Dave, typing")),
+        "the source is told what was said"
+    );
+}
+
+#[test]
+fn a_role_change_after_the_announcement_is_never_clicked() {
+    let mut r = rig();
+    make_control(&mut r, Role::Button, "Reply", StateSet::empty(), 3);
+    r.focus(1006);
+    make_control(&mut r, Role::Button, "Delete", StateSet::empty(), 4);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx) && !spoken(&fx).is_empty(), "announced");
+    make_control(&mut r, Role::Link, "Buy now", StateSet::empty(), 5);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx) && click_announced_name(&fx).is_none());
+    assert!(!spoken(&fx).is_empty());
     assert!(
-        click_of(&r.key(CoreCmd::BrowseActivate)),
-        "a churning row must not swallow every Enter"
+        r.reader
+            .web
+            .as_ref()
+            .is_some_and(|b| b.armed_click.is_none()),
+        "a role change is announced, not armed"
     );
 }
 

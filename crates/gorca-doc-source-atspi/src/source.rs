@@ -442,15 +442,8 @@ async fn read_node_raw(
     Some((role, state, name, attrs, target))
 }
 
-/// See [`Live::click_ack`].
-const CLICK_ACK_WINDOW: Duration = Duration::from_secs(5);
-
 /// Mutable per-document state of the running source.
 struct Live {
-    /// A click refused because the object changed since it was spoken: the next click on the
-    /// same node within `CLICK_ACK_WINDOW` goes through. The user heard what it is now (the
-    /// refusal is spoken); a row the page keeps rewriting must not refuse every Enter.
-    click_ack: Option<(SrcNodeId, Instant)>,
     ident: IdentityMap,
     paths: PathTable,
     dirty: DirtySet,
@@ -668,7 +661,6 @@ const ROOT_ERROR_LIMIT: u32 = 3;
 impl AtspiDocSource {
     async fn run(mut self, mut ctx: DocSourceCtx) -> Result<(), SourceError> {
         let mut live = Live {
-            click_ack: None,
             ident: IdentityMap::new(self.config.use_dom_id),
             paths: PathTable::default(),
             dirty: DirtySet::default(),
@@ -1619,20 +1611,18 @@ impl AtspiDocSource {
                 deadline,
                 reply,
             } => {
-                if matches!(act, DocAction::Click) {
-                    let acked = live
-                        .click_ack
-                        .take()
-                        .is_some_and(|(n, at)| n == node && at.elapsed() <= CLICK_ACK_WINDOW);
-                    if !acked && let Some(now) = self.displaced(live, node).await {
-                        live.click_ack = Some((node, Instant::now()));
-                        let _ = reply.send(Err(SourceError::Displaced(now)));
-                        return;
-                    }
+                if matches!(act, DocAction::Click | DocAction::ClickAnnounced { .. })
+                    && let Some(now) = self.displaced(live, node, &act).await
+                {
+                    let _ = reply.send(Err(SourceError::Displaced(now)));
+                    return;
                 }
                 let mut r = self.action(live, node, &act, deadline).await;
                 if matches!(r, Err(SourceError::Gone))
-                    && matches!(act, DocAction::Click | DocAction::Focus)
+                    && matches!(
+                        act,
+                        DocAction::Click | DocAction::ClickAnnounced { .. } | DocAction::Focus
+                    )
                 {
                     r = self
                         .reresolve_and_retry(live, ctx, node, &act, deadline)
@@ -1850,7 +1840,8 @@ impl AtspiDocSource {
                     Ok(_) | Err(_) => Ok(()),
                 };
             }
-            DocAction::Click => {
+            DocAction::ReleaseField => return self.release_field(live, &path, deadline).await,
+            DocAction::Click | DocAction::ClickAnnounced { .. } => {
                 self.app
                     .call(lane, deadline, &path, ACTION, "DoAction", &(0i32,))
                     .await
@@ -1941,10 +1932,19 @@ impl AtspiDocSource {
     /// re-used or re-ordered its rows since, nothing is clicked; the node is marked for a refresh
     /// and the caller says so. A read that fails or is slow lets the click go: this guard must
     /// never turn a working Enter into a silent one.
-    async fn displaced(&self, live: &mut Live, node: SrcNodeId) -> Option<Option<Arc<str>>> {
+    async fn displaced(
+        &self,
+        live: &mut Live,
+        node: SrcNodeId,
+        act: &DocAction,
+    ) -> Option<Option<Arc<str>>> {
         let path_key = live.ident.path_of(node)?;
         let path = live.paths.path_of(path_key)?;
-        let old = live.ident.info_of(node).map(|i| i.sig.clone())?;
+        let mut old = live.ident.info_of(node).map(|i| i.sig.clone())?;
+        // What the user heard replaces what the mirror last knew.
+        if let DocAction::ClickAnnounced { name } = act {
+            old.name.clone_from(name);
+        }
         let read = tokio::time::timeout(VERIFY_TIMEOUT, self.read_nodes(vec![(node, path)])).await;
         let (_, Some(read)) = read.ok().and_then(|mut v| v.pop())? else {
             return None;
@@ -2103,8 +2103,6 @@ impl AtspiDocSource {
     ) -> Result<(), SourceError> {
         let blink = self.config.quirks.selection_single_exclusive;
         let root = Self::path_of(live, spec.root);
-        self.release_text_control(live, spec, root.as_deref(), deadline)
-            .await;
         if let Some(root) = root.as_deref() {
             self.drop_extra_ranges(root, deadline).await?;
         }
@@ -2169,56 +2167,58 @@ impl AtspiDocSource {
         }
     }
 
-    /// Ctrl+C copies the selection of the focused `input` or `textarea`, not the document's, so a
-    /// page selection set while such a control has the focus would never reach the clipboard
-    /// (measured on Firefox 153: "No selection owner available"). Move the focus to the document
-    /// first. A contenteditable host copies the document selection and keeps its focus. Best
-    /// effort: a failure only leaves the old behaviour.
-    async fn release_text_control(
+    /// Ctrl+C copies the selection of the focused `input` or `textarea`, not the document's, so
+    /// a page selection set while such a control has the focus would never reach the clipboard
+    /// (measured on Firefox 153: "No selection owner available"). `field` is the node that holds
+    /// the focus; when its `tag` is `input` or `textarea` the focus moves to the document. A
+    /// contenteditable host copies the document selection and keeps its focus. The answer says
+    /// whether the focus moved.
+    async fn release_field(
         &self,
         live: &Live,
-        spec: &gorca_model::SelectionSpec<SrcNodeId>,
-        root: Option<&str>,
+        field_path: &str,
         deadline: Deadline,
-    ) {
-        let (Some(field), Some(root)) = (spec.focus_field, root) else {
-            return;
-        };
-        let Some(fp) = Self::path_of(live, field) else {
-            return;
-        };
+    ) -> Result<(), SourceError> {
         let attrs = self
             .app
             .call(
                 self.app.next_lane(),
                 deadline,
-                &fp,
+                field_path,
                 ACCESSIBLE,
                 "GetAttributes",
                 &(),
             )
             .await
-            .ok()
-            .and_then(|m| wire::parse_string_map(m.body().data().bytes()).ok())
-            .unwrap_or_default();
+            .map_err(|e| map_target_err(&e))
+            .map(|m| wire::parse_string_map(m.body().data().bytes()).unwrap_or_default())?;
         let plain = attrs
             .iter()
             .any(|(k, v)| k == "tag" && matches!(v.as_str(), "input" | "textarea"));
         if !plain {
-            return;
+            return Ok(());
         }
-        tracing::info!(target: "gorca_phase", phase = "sel_release_text_control");
-        let _ = self
+        let root = live
+            .root_key
+            .and_then(|k| live.paths.path_of(k))
+            .ok_or(SourceError::Gone)?;
+        let m = self
             .app
             .call(
                 self.app.next_lane(),
                 deadline,
-                root,
+                &root,
                 COMPONENT,
                 "GrabFocus",
                 &(),
             )
-            .await;
+            .await
+            .map_err(|e| map_target_err(&e))?;
+        tracing::info!(target: "gorca_phase", phase = "release_text_control");
+        match wire::parse_u32(m.body().data().bytes()) {
+            Ok(0) => Err(SourceError::Refused),
+            Ok(_) | Err(_) => Ok(()),
+        }
     }
 
     /// `Document.SetTextSelections` with one range from `start` to `end` (object path and offset

@@ -10,7 +10,7 @@ run() { # label page driver [seq]
 }
 run "bug1: Enter opens a chat after open+Escape+Tab (div rows)"        "tgapp.html?v=keyed&row=div" drive_chat.py A
 run "bug1: same with unkeyed re-render"                                 "tgapp.html"                 drive_chat.py A
-run "bug1: Enter on a row the page rewrites every second (2 presses)"  "tgapp.html?v=keyed&churn=1"  drive_chat.py E
+run "bug1: Enter on a row whose text churns, name stable (2 presses)" "tgapp.html?v=keyed&churn=text"  drive_chat.py E
 run "bug2: Ctrl+C with a contenteditable composer focused"             "tgapp.html"                 drive_copy.py
 run "bug2: Ctrl+C with an input composer focused"                      "tgapp.html?c=input"         drive_copy.py
 run "bug2: Ctrl+C with a textarea composer focused"                    "tgapp.html?c=textarea"      drive_copy.py

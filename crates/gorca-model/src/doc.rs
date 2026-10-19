@@ -126,6 +126,16 @@ pub enum DocDelta {
 pub enum DocAction {
     Focus,
     Click,
+    /// A click the user confirmed by hearing what the target is: the source refuses it when the
+    /// live object's name is no longer `name` (the role is checked against the mirror as for
+    /// `Click`). Never skips the pre-click check.
+    /// `node` is a field that holds the page focus while the user copies a selection outside it.
+    /// A plain text control (`input`, `textarea`) answers Ctrl+C from its own selection, so the
+    /// source moves the focus to the document; any other node is left alone.
+    ReleaseField,
+    ClickAnnounced {
+        name: Option<std::sync::Arc<str>>,
+    },
     ScrollIntoView,
     SetCaret(u32),
     /// Select these hypertext ranges in the page (core side: ids are [`DocNodeId`]; the doc actor
@@ -182,10 +192,6 @@ pub struct SelectionSpec<N> {
     /// into, or several ranges are joined with no separator): the copy may differ from what
     /// was heard. The source reports `Approximate` when it applied such a plan.
     pub gecko_lossy: bool,
-    /// The editable node that holds the page focus, when the selection is not inside it. A plain
-    /// text control (`input`, `textarea`) answers Ctrl+C from its own selection, so the page
-    /// selection set here would never be copied: the source moves the focus to the document first.
-    pub focus_field: Option<N>,
 }
 
 /// Fallback caret bookmark when a node no longer joins (IR-7): `(ordinal, context hash)`,

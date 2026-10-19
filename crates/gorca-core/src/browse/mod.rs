@@ -51,6 +51,16 @@ pub enum FocusCause {
     Application,
 }
 
+/// The click target as it was announced (see [`Browse::armed_click`]).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArmedClick {
+    pub cursor: gorca_model::DocNodeId,
+    pub target: gorca_model::DocNodeId,
+    pub role: gorca_model::Role,
+    pub name: Option<Arc<str>>,
+    pub toggles: gorca_model::StateSet,
+}
+
 /// See [`Browse::grace_fallback`].
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct GraceFallback {
@@ -609,10 +619,10 @@ pub struct BrowseState {
     /// Where position restore put the cursor after the node the user was on vanished: the
     /// next Enter on exactly this node announces the new item instead of clicking it.
     pub displaced: Option<gorca_model::DocNodeId>,
-    /// An Enter spent on announcing a displaced item arms the next Enter on the same node: a row
-    /// the page keeps rewriting (a typing indicator, a ticking time stamp) would otherwise swallow
-    /// every Enter, each one re-announcing the changed line and never clicking.
-    pub displaced_armed: Option<(gorca_model::DocNodeId, Instant)>,
+    /// What the Enter that announced a displaced item said: the next Enter clicks only if the
+    /// target is still exactly that (role, name, toggle states); anything else is announced again.
+    /// No time window: a click is never given to something the user did not hear.
+    pub armed_click: Option<ArmedClick>,
     /// The node of the last focus event of the application, joined or not (`focus_node` only
     /// follows joined ones): the mirror looks it up again when it needs the field that has focus.
     pub focus_key: Option<NodeKey>,
@@ -697,7 +707,7 @@ impl BrowseState {
             last_off: 0,
             restore_until: None,
             displaced: None,
-            displaced_armed: None,
+            armed_click: None,
             focus_key: None,
             grace_fallback: None,
             announced_change: None,

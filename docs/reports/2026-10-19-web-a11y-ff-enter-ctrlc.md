@@ -13,10 +13,13 @@ selection never reaches the clipboard (`No selection owner available`), and gorc
 Not the cause (all copy correctly): contenteditable composer, a page `copy` handler, focusable
 bubbles, `user-select:none` time stamps (left out of the copy, though the virtual selection speaks them).
 
-Fix: `SelectionSpec.focus_field` (the joined node of the last focus event, `focus_key`; `focus_node`
-is stale after a join miss); the source reads its `tag` attribute and, for `input`/`textarea`, does
-`GrabFocus` on the document before setting the ranges (`release_text_control`). The field keeps its
-text; Enter/focus mode returns to it. A contenteditable host keeps its focus.
+Fix (r2, review C-1): not at selection time. When Control goes down (Reader `web_ctrl_down`, from the
+key stream) with a mirrored non-empty selection that does not intersect the field and the focused
+field (joined node of the last focus event, `focus_key`) is editable, the Reader sends
+`DocAction::ReleaseField`; the source reads the field's `tag` and, for `input`/`textarea` only, does
+`GrabFocus` on the document. Plain selection moves never blur (e2e C0: `blurs 0`; one blur at the
+copy, C2). The focus is deliberately NOT put back: restoring it would flip gorca into focus mode in
+the middle of browsing; Enter on the field returns to it. A contenteditable host keeps its focus.
 No gorca clipboard fallback was added: the Shell-extension route needs a login and user extensions are
 disabled on the host; the Mutter RemoteDesktop/portal route lights the screen-sharing indicator
 (ctrl-c-passthrough.md); Mutter 48 has no data-control.
@@ -34,7 +37,12 @@ cursor marks the node displaced; Enter then only re-speaks the changed line, and
 pre-click check (mirror name vs live name) refused the click too, so no Enter ever clicked ("link,
 dave, typing" again and again). Baseline main: FAIL (2 Enters, no click); fixed: the first Enter
 announces, the second clicks.
-Fix: the Enter that announced a displaced item arms the next Enter on that node for 6 s
-(`displaced_armed`), and the source lets the click through after it refused once for the same node
-(`click_ack`, 5 s). Unproven on the live Telegram: if its failure is another mechanism this does not
+Fix (r2, review E-1, no time windows): the Enter that announces a displaced item records the click
+target as said (`ArmedClick`: node, role, name, toggle states). The next Enter clicks only when the live
+target is exactly that, and then sends `DocAction::ClickAnnounced { name }`, so the source compares the
+live name with what was spoken (the pre-click check is never skipped); anything else is announced again
+and re-armed, a role change is announced and not armed. A row whose own name keeps changing keeps
+announcing (accepted; needs the real Telegram tree before any exemption). Rig row: text churns, name
+stable (`churn=text`): announce, then click. Unit tests: rewritten-after-announcement is never clicked,
+role change never armed, source told the announced name. Unproven on the live Telegram: if its failure is another mechanism this does not
 cover it; `gorca_phase` lines `web_activate displaced=..` and `click_displaced` identify this one.

@@ -1074,7 +1074,7 @@ fn spawn_action(
     let src = a.read.with(|d| src_of(d, node));
     let Some(src) = src else {
         fail(a);
-        if matches!(act, DocAction::Click) {
+        if matches!(act, DocAction::Click | DocAction::ClickAnnounced { .. }) {
             // A node the source never issued an id for (a synthetic container) cannot be
             // clicked; it never existed, so it is not "gone".
             let _ = a.notices.try_send(DocNotice::ActionFailed {
@@ -1113,10 +1113,6 @@ fn spawn_action(
                     snap,
                     doc_range,
                     gecko_lossy: spec.gecko_lossy,
-                    focus_field: match spec.focus_field {
-                        Some(f) => src_of(d, f),
-                        None => None,
-                    },
                 })
             });
             let Some(mapped) = mapped else {
@@ -1127,6 +1123,8 @@ fn spawn_action(
         }
         other @ (DocAction::Focus
         | DocAction::Click
+        | DocAction::ClickAnnounced { .. }
+        | DocAction::ReleaseField
         | DocAction::ScrollIntoView
         | DocAction::SetCaret(_)
         | DocAction::SetSourceSelection(_)
@@ -1136,7 +1134,7 @@ fn spawn_action(
     let notices = a.notices.clone();
     let doc = a.spec_doc;
     let is_focus = matches!(act, DocAction::Focus);
-    let is_click = matches!(act, DocAction::Click);
+    let is_click = matches!(act, DocAction::Click | DocAction::ClickAnnounced { .. });
     set.spawn(async move {
         // Wait for the selection request before this one; `done` is dropped at the end, which
         // releases the next one in line (also when this task is aborted).

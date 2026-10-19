@@ -77,8 +77,6 @@ const SEL_DEBOUNCE: Duration = Duration::from_millis(40);
 pub(super) const SCROLL_DEBOUNCE: Duration = Duration::from_millis(150);
 /// Focus in a document the mirror does not know yet waits this long (browse design 7.3).
 const LOADING_GRACE: Duration = Duration::from_secs(1);
-/// How long an Enter that announced a displaced item keeps the next Enter armed.
-const ARM_WINDOW: Duration = Duration::from_secs(6);
 /// The shortest time between two focus resolutions restarted by key presses.
 const KEY_RESYNC_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -2434,7 +2432,7 @@ impl Reader {
             && let Some(b) = self.web.as_mut()
         {
             b.displaced = None;
-            b.displaced_armed = None;
+            b.armed_click = None;
         }
         self.note_cursor_sig();
     }
@@ -2592,22 +2590,25 @@ impl Reader {
                 sig_node = ?b.cursor_sig.map(|(n, _)| n),
             );
         }
-        let now = self.now;
+        let mut armed_name = None;
+        let sig = self.click_sig(doc, cur.node);
         if let Some(b) = self.web.as_mut() {
-            let armed = b.displaced_armed.take().is_some_and(|(n, at)| {
-                n == cur.node && now.saturating_duration_since(at) <= ARM_WINDOW
-            });
-            if armed {
-                // The user heard this item's change and pressed Enter again: the page may have
-                // rewritten the row since, which does not cost another Enter.
-                b.displaced = None;
-                b.announced_change = None;
-            } else if b.displaced.take() == Some(cur.node) {
-                // The item the user was on is gone; the cursor now sits on a neighbour. Say which
-                // one before anything is clicked; a second Enter activates it.
-                b.displaced_armed = Some((cur.node, now));
-                self.web_speak_line_here(fx);
-                return;
+            let armed = b.armed_click.take();
+            if b.displaced.take() == Some(cur.node) {
+                // The item the user was on changed or is gone. The Enter that announced it armed
+                // this one: it clicks only when the target is exactly what was said (role, name,
+                // toggle states). Otherwise say what is there now and arm with that; a role
+                // change is announced but never armed.
+                if let (Some(a), Some(s)) = (&armed, &sig)
+                    && a == s
+                {
+                    b.announced_change = None;
+                    armed_name = Some(s.name.clone());
+                } else {
+                    b.armed_click = sig.filter(|s| armed.as_ref().is_none_or(|a| a.role == s.role));
+                    self.web_speak_line_here(fx);
+                    return;
+                }
             }
         }
         // After a refused click the user heard a name. Act on it only if the mirror shows exactly
@@ -2674,9 +2675,33 @@ impl Reader {
             fx.push(ReaderEffect::Web(WebEffect::Act {
                 doc,
                 node,
-                act: DocAction::Click,
+                act: match armed_name {
+                    Some(name) => DocAction::ClickAnnounced { name },
+                    None => DocAction::Click,
+                },
             }));
         }
+    }
+
+    /// The click target of the cursor as the user would hear it now.
+    fn click_sig(&self, doc: DocId, cursor: DocNodeId) -> Option<super::ArmedClick> {
+        let h = self.web.as_ref()?.docs.get(doc)?;
+        h.read.with(|d| {
+            let target = up_to(
+                d,
+                cursor,
+                Cat::LINK | Cat::FORM_FIELD | Cat::CLICKABLE | Cat::FOCUSABLE,
+                8,
+            )?;
+            let (role, states) = role_states(d, target);
+            Some(super::ArmedClick {
+                cursor,
+                target,
+                role,
+                name: d.node(target).and_then(|v| v.name).map(Arc::from),
+                toggles: states & TOGGLE_STATES,
+            })
+        })
     }
 
     pub(super) fn web_set_cursor(&mut self, doc: DocId, cur: WebCursor, off: u32, now: Instant) {
@@ -2931,34 +2956,12 @@ impl Reader {
             return;
         };
         let Some(root) = root else { return };
-        // The page focus sits in an editable field that does not hold the selection: the source
-        // decides whether that field would answer Ctrl+C itself (a plain text control does).
-        let field = b
-            .focus_key
-            .and_then(|k| b.join.get(k))
-            .filter(|(fd, _)| *fd == doc)
-            .map(|(_, n)| n);
-        let focus_field = field.filter(|f| {
-            h.read.with(|d| {
-                d.node(*f).is_some() && {
-                    let (role, states) = role_states(d, *f);
-                    forms::passes_through(role, states, Reason::Focus)
-                }
-            })
-        });
-        tracing::debug!(
-            target: "gorca_phase",
-            phase = "sel_mirror",
-            focused = ?focused,
-            focus_field = ?focus_field,
-        );
         let spec = gorca_model::SelectionSpec {
             root,
             spans: plan.spans.clone(),
             snap: plan.snap.clone(),
             doc_range: plan.doc_range.clone(),
             gecko_lossy: plan.gecko_lossy,
-            focus_field,
         };
         let Some(first) = plan.spans.first().map(|s| s.node) else {
             return;
@@ -2973,6 +2976,49 @@ impl Reader {
             node: first,
             act: DocAction::SetSelection(spec),
             req,
+        }));
+    }
+
+    /// Control went down (the first half of a possible Ctrl+C) while a page selection we mirrored
+    /// exists and the page focus sits in a text field outside it: ask the source to release the
+    /// focus from that field, because a plain text control would answer Ctrl+C from its own
+    /// selection. Only here, never at selection time, so plain selection moves never blur the
+    /// field (blur/change handlers, autosave, validation). The source acts on `input` and
+    /// `textarea` only. The focus is not put back: the browse cursor owns the keys (ADR-0021).
+    pub(crate) fn web_ctrl_down(&mut self, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_ref() else { return };
+        let WebMode::Browse { doc, .. } = b.mode else {
+            return;
+        };
+        if b.model != SelectionModel::Native || b.native_sel_node.is_none() {
+            return;
+        }
+        let Some((a, e)) = b.sel.filter(|(a, e)| a != e) else {
+            return;
+        };
+        let (lo, hi) = (a.min(e), a.max(e));
+        let Some(h) = b.docs.get(doc) else { return };
+        let field = b
+            .focus_key
+            .and_then(|k| b.join.get(k))
+            .filter(|(fd, _)| *fd == doc)
+            .map(|(_, n)| n);
+        let Some(field) = field.filter(|f| {
+            h.read.with(|d| {
+                d.node(*f).is_some_and(|_| {
+                    let (role, states) = role_states(d, *f);
+                    forms::passes_through(role, states, Reason::Focus)
+                }) && d
+                    .subtree_text_range(*f)
+                    .is_none_or(|(flo, fhi)| fhi <= lo || flo >= hi)
+            })
+        }) else {
+            return;
+        };
+        fx.push(ReaderEffect::Web(WebEffect::Act {
+            doc,
+            node: field,
+            act: DocAction::ReleaseField,
         }));
     }
 

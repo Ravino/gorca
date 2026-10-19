@@ -115,6 +115,17 @@ def copy():
     return paste()
 
 
+def blurs():
+    def p(n):
+        try:
+            t = Atspi.Text.get_text(n, 0, Atspi.Text.get_character_count(n))
+            return n.get_role_name() in ("paragraph", "static", "section") and t.startswith(("blurs", "change"))
+        except Exception:
+            return False
+    n = walk(p)
+    return Atspi.Text.get_text(n, 0, Atspi.Text.get_character_count(n)) if n else None
+
+
 def say(label, n):
     print(f"   {label}: said={spoken_since(n)}", flush=True)
 
@@ -156,6 +167,10 @@ n = spoken_len()
 key(SHIFT, END, wait=1.2)
 say("select line", n)
 print("   focus after select:", focused(), flush=True)
-got = copy()
-check("C1 Ctrl+C copies the selected message line", got, "Hello from Alice")
+check("C0 plain selection moves fire no blur or change", blurs(), "blurs 0")
+key(CTRL, C, wait=0.8)   # ONE press: the field must be released while Control is going down
+got = paste()
+check("C1 Ctrl+C copies the selected message line (single press)", got, "Hello from Alice")
+want_blurs = "blurs 1" if os.environ.get("FFSPA_PAGE", "").find("c=input") >= 0 or os.environ.get("FFSPA_PAGE", "").find("c=textarea") >= 0 else "blurs 0"
+check("C2 the field blurs once, at the copy, and only for a plain text control", blurs(), want_blurs)
 sys.exit(1 if fails else 0)

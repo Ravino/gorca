@@ -37,6 +37,12 @@ impl Reader {
                 "modifier key"
             );
         }
+        if intent.kind == gorca_input_api::PressKind::Press
+            && intent.event.pressed
+            && matches!(intent.event.keysym, 0xffe3 | 0xffe4)
+        {
+            self.web_ctrl_down(fx);
+        }
         match intent.class {
             KeyClass::Command(cmd) | KeyClass::Watched(cmd) => {
                 self.run_command(cmd, &intent, now, fx);

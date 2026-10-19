@@ -64,6 +64,7 @@ def on_stdin(fd, cond):
                 codes = [int(w) for w in words[1:]]
                 for c in codes:
                     call(sess, NAME + ".Session", "NotifyKeyboardKeycode", (c, True), "(ub)")
+                    time.sleep(0.03)
                 # A key goes down for a moment, like a finger: a press and a release in the same
                 # instant made Firefox lose an occasional letter (M3b FE2).
                 time.sleep(0.012)
