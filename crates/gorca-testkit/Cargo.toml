@@ -13,6 +13,7 @@ gorca-rt = { workspace = true }
 gorca-ingress = { workspace = true }
 gorca-connector-api = { workspace = true }
 gorca-doc-source-api = { workspace = true }
+gorca-fact-api = { workspace = true }
 tokio = { workspace = true, features = ["test-util", "net", "io-util"] }
 smallvec = { workspace = true }
 thiserror = { workspace = true }

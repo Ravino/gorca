@@ -22,6 +22,7 @@
 pub mod b1;
 pub mod conformance;
 pub mod cpu;
+pub mod fact_conformance;
 mod fake_connector;
 mod fake_doc_source;
 mod fake_source;
@@ -32,7 +33,7 @@ mod storm;
 
 pub use fake_connector::{Behavior, FakeConnector, FakeScript};
 pub use fake_doc_source::{FakeDocFactory, ScriptHandle, ScriptedDocSource, Seen, WarmScript};
-pub use fake_source::FakeDocSource;
+pub use fake_source::{FakeDocSource, FakeFactSource, SourceOutput};
 pub use gorca_rt::VirtualClock;
 pub use scripted::{ScriptedApp, ScriptedConnector, ScriptedHandle, ScriptedNode};
 pub use speech_server::{MockProto, MockSpeechServer, Spoken};

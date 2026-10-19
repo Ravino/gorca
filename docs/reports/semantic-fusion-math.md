@@ -508,3 +508,383 @@ are not simulated; the static tree is the main modelling gap.
 - Structural events (subtree replacement) and their interaction with derived names and selector
   indices are not simulated.
 - Rust constants (B-FUSE) are unmeasured.
+
+---
+
+## 10. Fact sources (ADR-0024 r2): reference oracle, properties F11–F19, entry size (M22a-A3)
+
+Added 2026-10-19. Reproduce: `. ./env.sh && python tools/research/semantic_fusion.py all2`
+(≈ 26 s) and `... corpus --out tests/fixtures/fuse`. Sections 1–9 are unchanged and `all` still
+prints the §6 numbers byte for byte (checked by diff before/after).
+
+### 10.1 Entry size: 104 vs 128 vs 160 B (owner: ≈ 120 B or more is acceptable)
+
+`SemEntry` lives behind `Arc` (dual-carry in `NodeSnapshot` and `NodeMeta`), one glibc
+allocation each (no global allocator is set in the workspace). `ArcInner` adds 16 B, glibc
+rounds `n + 8` up to 16 (measured with `malloc_usable_size`, `research/semsize/malloc_chunk.c`):
+
+| `SemEntry` | heap chunk | lines touched | 1k | 10k | 50k | 100k |
+|---|---|---|---|---|---|---|
+| 104 B (r2) | 128 B | 2–3 | 0.13 MB | 1.3 MB | 6.4 MB | 12.8 MB |
+| 128 B | 160 B | 3 | 0.16 MB | 1.6 MB | 8.0 MB | 16.0 MB |
+| 144 B | 176 B | 3–4 | 0.18 MB | 1.8 MB | 8.8 MB | 17.6 MB |
+| 160 B | 192 B | 3–4 | 0.19 MB | 1.9 MB | 9.6 MB | 19.2 MB |
+
+Host caches (Core Ultra 9 285H): L1d 48 KiB per P-core (no layout fits 1k entries), L2 3 MiB per
+P-core (10k entries fit at every size), L3 24 MiB shared with the desktop (50k fits at every
+size; 100k at 160 B uses 80 % of it, i.e. spills under load).
+
+Measured scan cost (`research/semsize/scan.c`, pinned core, caches evicted, live desktop, not a
+quiet host; raw rows in `research/semsize/results.txt`):
+
+| Operation | N | 104 B | 128 B | 160 B |
+|---|---|---|---|---|
+| hot-field read (role + mask), cold | 50k | 0.19–0.33 ms | 0.22 ms | 0.17–0.20 ms |
+| full-entry copy (CoW re-fuse), cold, allocation order | 50k | 0.27 ms | 0.33 ms | 0.39 ms |
+| full-entry copy, cold, random order | 50k | 0.35 ms | 0.41 ms | 0.47 ms |
+| full-entry copy, cold, random order | 100k | 0.79 ms | 1.22 ms | 1.34 ms |
+
+Hot-field reads show no consistent size dependence (prefetch and noise dominate, ±50 %
+between runs). Full copies scale ≈ 7 / 8–9 / 9.5–11.5 ns per entry.
+
+What this means for the latency goals:
+
+- **Key → speech** reads the focus chain and its context: ≤ 50 entries, < 0.6 µs at any size;
+  the 160 B penalty is < 0.3 µs against 15 ms (2·10⁻⁵).
+- **Quick nav** does not scan entries: `gorca-doc` answers `next(Cat)` from the treap's subtree
+  category aggregates in O(log n) (`crates/gorca-doc/src/web/doc.rs:983,1024`) and reads one
+  target entry. Elements-list style scans read k ≤ n entries: ≤ 0.2 ms for 50k at any size.
+- **Fusion (M-11, ≤ 2 µs/event)**: ≈ 1.9 FUSE calls per event (§6) × one entry copy; 160 vs
+  104 B adds ≈ 5–9 ns per event, < 0.5 % of the budget.
+- **Synchronous revocation re-fuse** (FS-7, ≤ 200 nodes, ≤ 0.5 ms): copy share 1.4 / 1.7 / 2.3 µs.
+- **Background full re-fuse** (epoch change, 50k doc): copy share 0.35 → 0.47 ms, in chunks.
+- **RSS gate** (100k nodes ≤ 25 MB, all carriers): 12.8 / 16.0 / 19.2 MB for the entries alone;
+  160 B leaves 5.8 MB for `SemText`, names and side tables, 128 B leaves 9 MB.
+
+Headroom value. With 16 groups, `orientation` and `sort` share `flags`' provenance and hedge, and
+the next enrichment (an add-on `layout.css_hidden`-derived flag, landmarks/`roledescription`
+split, ML `state` guesses, per-group taint for WIT `prov-info`) needs a layout change plus an ADR
+amendment (§2.12 "a 17th group requires a layout change"). A 32-group capacity costs 24 B:
+
+| Layout | Semantics | ProvTag | hedge | taint | masks ×3 | size (rustc, x86_64) |
+|---|---|---|---|---|---|---|
+| r2-16 | 64 | u64 | u32 | — | u16 | **104 B** |
+| **x32** | 64 | `[u64; 2]` | u64 | u64 (2 bits: weakest input tier) | u32 | **128 B** |
+| x32, `Semantics` 80 B | 80 | `[u64; 2]` | u64 | u64 | u32 | 144 B |
+| x64 | 80 | `[u64; 4]` | u128 | u128 | u64 | 192 B |
+
+(`research/semsize/layout.rs`; a `u128` ProvTag gives the same 128 B here but forces 16-byte
+alignment on every container, so prefer `[u64; 2]`.) A separate taint field is worth its 8 B: in
+the oracle `ObservedSecondary`, `Inferred` and `DerivedTainted` winners carry tiers 2 or 3 and
+ProvCode alone cannot say which (needed by LB-5, §2.3.3 act-on-what-was-spoken, WIT `prov-info`).
+
+**Recommendation (high confidence on the latency claim, medium on the exact gate):** layout x32
+— `GROUP_CAP = 32`, `GroupMask = u32` for `known`/`stale`/`fallback`, `ProvTag([u64; 2])`,
+`hedge: u64`, `taint: u64`; register 18 groups now (append `orientation` = 16, `sort` = 17 after
+the frozen 16, codes unchanged, append-only); `const` gates `size_of::<Semantics>() <= 80`,
+`size_of::<SemEntry>() <= 160` (expected 128 today), `GROUP_COUNT <= GROUP_CAP`; keep the 100k-node
+RSS ≤ 25 MB gate as the real ceiling. Margin to 15 ms p99 is > 10⁴× on every per-key path. The
+oracle and corpus are parameterised (`--layout` via `LAYOUTS`; both files are emitted), so the
+ADR can pick either without rework.
+
+### 10.2 Oracle model (what was added)
+
+Same discipline as §1: every input is a register with a max-join; `FUSE` is a pure function of
+registers, static tables and explicit inputs.
+
+| Register | Key | Join | Purpose |
+|---|---|---|---|
+| fact | (source, anchor, group) | max (seq, record) | Secondary / Inferred semantic and evidence facts; record = (value \| retract, p_milli, basis vis_rev, bind_gen, admitted_t, ttl, scope) |
+| attr | (primary, x) | max (seq, dom_id) | primary-reported HTML id; drives `DomId` binding |
+| vis | x | max rev | `vis_rev` as an explicit input |
+| clock | — | max t | TTL is a lifecycle input (no timer inside FUSE) |
+| epoch | source | max (n, state) | mask / revoke / detach as timeline inputs (M-10) |
+
+- **Admission** (`admit`) is pure in one fact and static tables: class, scope pinning (FS-11),
+  grant group, anchor kind, value well-formed, `p_milli` range, page strings over the cap
+  truncated and counted, Inferred default TTL. Rejected facts are never stored.
+- **Binding** is recomputed from registers: `Node`/`Exact` → Exact, `Region` → Geometric,
+  `DomId` → Unique iff `dom_count == 1` **and** exactly one live mirror node has the id, else
+  Heuristic, none → Unbound (parked, listed under `parked`).
+- **BindGen definition (proposal):** the primary seq at which the anchor's current target
+  acquired it (life seq for Node/Exact/Region, attr seq for DomId). It changes exactly when the
+  anchor resolves to another node or the node is re-created and is monotone, so a Rust `u32`
+  counter bumped on the same events is equivalent. Facts carry the generation the writer
+  stamped at admission (the differential test feeds stamped facts; admission order otherwise
+  leaks into the result).
+- **Validity of a non-primary register** (trail status in this order): `retracted`, `masked`
+  (Paused/Quarantined/Revoked), `detached`, `unbound` / `weak-binding` (below `min_bind` of the
+  group class), `rebound` (stamped gen ≠ current), `stale` (Inferred or `visual.*` basis <
+  `vis_rev`), `expired` (t + ttl ≤ clock), `low-confidence` (below floor), then `ok` with
+  `ConfClass` from the grant thresholds (High ≥ 970, Probable ≥ 900, Possible ≥ floor).
+- **Strata:** S-1 quirk → S0 primaries by `PI`, secondaries appended only for the profile's
+  static `inexpressible` groups (else trail `not-candidate`) → S1 patch → S2 user → S3 derived
+  (content name; then `hint.title_attr` evidence for button/link/img/checkbox) → S4 inferred
+  (Inferred `name`/`description` facts and the toy rule `visual.ocr_text` → name; rank
+  `(ConfClass, kind order, source id, direct-before-rule, value, anchor, seq)`) → defaults → R.
+  S3 and S4 fill only Unknown, observed-empty or default (A6).
+- **Hedge and taint per group:** primary / patch / user / untainted derived / default → 0/0.
+  Secondary or Inferred winner → its class, capped at Probable when the source is T3; taint = its
+  tier. DerivedTainted → weakest input class (T3 cap), taint = max input tier. A repair-masked
+  group becomes `Default`, plain.
+- **Utterance model (LB-5, H-3):** a state-group change speaks only when the new winner is
+  Observed-primary, Patch or User.
+
+### 10.3 Results
+
+`sources` runs 150 random workloads per configuration (trees of 30 nodes, 500 events, two
+primaries, one Secondary T3, two Inferred T2, two Inferred T3, 4 patches, users, vis bumps,
+ticks, DomId moves, epochs, 3 % out-of-scope facts, 2 % malformed values).
+
+| Property | r2-16 | x32 | x32, content rule "all" |
+|---|---|---|---|
+| F1 order independence (reversed + shuffled with dups), runs / mismatches | 600 / 0 | 600 / 0 | 600 / 0 |
+| Predicate checker (F11 floor, F12 secondary/hedge/taint, F13, F15, F18, FS-5) violations | 0 | 0 | 0 |
+| F11 p moved below floor: runs / non-local changes | 136 / 0 | 132 / 0 | 132 / 0 |
+| F12 protected cells checked / changed | 11,713 / 0 | 12,824 / 0 | 12,824 / **23** (all `name`) |
+| F13 vis bump: runs / inferred survived / utterances | 136 / 0 / 0 | 132 / 0 / 0 | 132 / 0 / 0 |
+| F14 revoke/pause/quarantine/detach ≡ run without source: runs / mismatches | 3000 / 0 | 3000 / 0 | 3000 / 0 |
+| F15 ambiguous DomId registers checked / bound Unique | 5,488 / 0 | 5,504 / 0 | 5,504 / 0 |
+| F16 (pure) flood 1,500 facts, cap 64: drops / other-source registers changed / protected changed | 42,262 / 0 / 0 | 46,645 / 0 / 0 | 46,645 / 0 / **23** |
+| F18 DomId moved: runs / old-gen facts won | 58 / 0 | 52 / 0 | 52 / 0 |
+| F19 out-of-scope facts: runs / result differs from run without them | 150 / 0 | 150 / 0 | 150 / 0 |
+| LB-5 utterances caused by non-primary facts | 0 | 0 | 0 |
+
+Winners over all cells (x32): ObservedPrimary 13,664, Default 23,575, User 713, Derived 320,
+Inferred 312, Patch 127, ObservedSecondary 71, DerivedTainted 62. Admission: 23,027 accepted,
+963 truncated, 734 scope rejections, 417 group, 330 value.
+
+**Mutation check** (`research/semsize/mutants.py`, 30 smaller workloads each): ignoring BindGen,
+epochs, `vis_rev`, the floor, the binding minimum, the T3 hedge cap, the inexpressible rule (H-3)
+or scope pinning is each caught (by F18, F14, F13, F11, F15, F12, F12, F19 respectively). The
+content-rule mutant is not caught at that size (23 hits needed 150 × 30-node runs): F12 needs the
+full run.
+
+### 10.4 Findings that change or sharpen ADR-0024
+
+1. **Name-from-content breaks F12 as written (proven by counterexample, 23 cells).** If S3
+   concatenates all children's final names, an S4 or tainted name on one child changes an
+   untainted Derived parent name ("Close" → "Close Logo", now tainted). Rule adopted in the
+   oracle: **content derivation uses untainted children's names; tainted names are used only if
+   no untainted part exists** (then the result is DerivedTainted). With it F12 holds in all runs.
+   Proof sketch: by induction bottom-up, protected child names are unchanged by adding
+   non-primary facts, so the untainted part list is unchanged whenever it is non-empty.
+2. **F12 scope needs the fill rule.** An Observed-primary *empty* name or description is
+   fillable by S3/S4 (A6), so it cannot be "protected". F12 should read: "never changes a group
+   whose winner is User, Patch, untainted Derived, or Observed-primary with a non-empty value
+   (for fillable groups)".
+3. **S4 ranks by the capped class.** A T3 extension at p = 990 (High) ranks as Probable, below a
+   T2 OCR fact at High (TV10). Otherwise a hedged T3 value could outrank a better-calibrated
+   first-party model. ADR §2.2 should say "ConfClass after the tier cap".
+4. **`ProvCode::Fallback` is never produced:** the oracle encodes fallback as
+   `ObservedPrimary` + the `fallback` mask bit. Either drop the code or define when it is used.
+5. **BindGen must be stamped at admission and carried with the fact** (10.2) for the result to be
+   order-independent; ADR §2.3.2 implies it, the spec should state it for B1b.
+6. **F17 is not checkable in a pure oracle**: speech reads a published snapshot, so "removing
+   in-flight non-primary facts gives the same first utterance" holds by construction. It must be
+   tested in C5 against the real pipeline (refine tails ≤ 1, M-20).
+7. **F16 with a register cap is order-dependent** (which keys get in). The oracle checks only
+   isolation (other sources' registers and protected cells unchanged, cap respected). Corpus
+   traces never hit the cap, so B1's differential test can stay order-free.
+
+### 10.5 Corpus (`tests/fixtures/fuse/`)
+
+`fuse-r2-16.json` (1.33 MB) and `fuse-x32.json` (1.43 MB), byte-identical across runs (sha256
+`5d7df744…`, `21c225d1…`). Each holds a schema header (full text in the file), the static tables
+(group codes incl. evidence bit 15, ProvCode, ConfClass, BindQuality, sources, grants, floors,
+`min_bind`, `inexpressible`, `PI`, thresholds, defaults) and 30 cases: TV7–TV20 (one rule each:
+inexpressible-only secondaries, dynamic Unknown, taint through derivation, S4 ranking, S4 below
+S3, floor, `vis_rev`, BindGen rebinding, ambiguous DomId, TTL, revocation, scope pinning,
+user/patch over S4, truncation) and 16 seeded random workloads. Per case: events in canonical
+order, four deliveries (canonical, reversed, two shuffled with duplicates and batch cuts, given
+as event indices), admission result per event, and per node the expected values, ProvCode,
+hedge, taint, `known`/`stale`/`fallback`, the layout bit encodings (`prov_tag`, `hedge`,
+`taint`, masks) and the full `explain` trail. The generator asserts that every delivery gives the
+expected state before writing.
+
+### 10.6 Porting notes (B1a/B1b/B3)
+
+- Port `admit()` and `World2.status()` as two pure functions; keep the status order of 10.2 so
+  trail statuses match the corpus.
+- The side table key is `(source, anchor, group)`; binding is resolved at `FUSE` time from the
+  anchor index, never cached in the register.
+- Sort keys are total orders (10.2); Rust must use the same tuple order, with source id = the
+  source's name string (the corpus `sources` table also gives slots).
+- Differential test: for each case and each delivery, ingest in order, then compare entries,
+  encodings and trails; `known` is set by any layer before defaults, cleared by nothing.
+
+### 10.7 Unverified
+
+- Toy tables: `inexpressible` rows (`live`, `orientation` for the `firefox` profile), grants,
+  floors and kinds are illustrative, not engine facts (D-4 needs real rows from A2).
+- Only `Node`, `DomId` and a toy `Region` anchor are modelled; `Structural` and `Content` are not.
+- Static trees (as in §6): structural events and synthetic nodes are not simulated.
+- Size numbers come from a C model of `Arc` + glibc on a live desktop host; the Rust A4 bench on
+  the real layout supersedes them.
+
+---
+
+## 11. Memory vs latency of the fusion engine (M22a-B6 follow-up)
+
+Added 2026-10-19. Inputs: B6 (`docs/reports/m22a-b6-fuse-bench.md`, result set `20261019e`), the
+in-progress fix branch (`perfA-run1-fuse.json` in worktree `agent-a5fa450750973b3b7`: S0 projected
+to selector-read groups), and two new probes:
+
+```
+. ./env.sh
+cd research/fuse-mem && CARGO_TARGET_DIR=/var/tmp/fuse-mem-target cargo build --release \
+  && taskset -c 2 /var/tmp/fuse-mem-target/release/fuse-mem      # type sizes, s0/fuse cost
+OMP_NUM_THREADS=1 python research/fuse-mem/model.py all          # memory model + 3 simulations
+```
+
+Engineering decisions and the budget policy derived from this section are in
+`docs/reports/fuse-memory-tradeoff.md`.
+
+### 11.1 What S0 is used for (from `ivm.rs`/`strata.rs`)
+
+The stored `S0Node` has exactly two consumers: (a) neighbours' patch selectors read the parent's
+and children's S0 **values** (`Slot` only, never `info/src/seq`), restricted to the declared
+selector-read set `R = reads.parent ∪ reads.children`; (b) `changed_groups(old, new)` decides
+whether to re-dirty neighbours, again only over `R`. The node's own fusion recomputes its S0 from
+registers every time. Content names read children's **published** entries, not S0.
+
+### 11.2 Measured costs (probe `research/fuse-mem/src/main.rs`, pinned CPU 2, load 12)
+
+Type sizes (main): `Reg` 32 B, `Write`/`Val`/`Slot` 24 B, `S0Slot` 64 B (48 B on the fix branch),
+`NodeRegs` 136 B inline, `SemEntry` 128 B (160 B glibc chunk under `Arc`).
+
+| per node, ns (p50 / p99) | main: `s0_with` | main: `fuse_node_with` | fix branch: `s0_with` | fix branch: `fuse_node_with` |
+|---|---|---|---|---|
+| 4 registers, hot (1 node) | 380 / 400 | 213 / 240 | 74 / 82 | 76 / 99 |
+| 4 registers, 100k nodes, random order | 562-581 / 843-939 | 209 / 367 | 254 / 482 | 88 / 231 |
+| 14 registers (9 `Absent`), hot | 565 / 587 | 150 / 180 | 213 / 227 | 140 / 170 |
+| 14 registers, 100k, random order | 913 / 1173-1330 | 152 / 310 | 537 / 785 | 147 / 303 |
+
+**[M]** The pure FUSE compute is 0.15-0.35 µs hot and 0.34-0.68 µs cold (p50) on the fix branch.
+The B6/perfA per-event p50 of 1.4-3.0 µs is therefore dominated by `Ivm` bookkeeping (dirty
+`BTreeSet`, `dirty_of`/`age` hash maps, anchor lookups, publish), not by FUSE.
+
+### 11.3 S0 = published entry ⊕ sparse delta (exact)
+
+Let `rebuild(e, g)` map a published entry back to an S0 slot: the entry's value of `g` when
+`prov(g) ∈ {ObservedPrimary, ObservedSecondary}`, else `Unknown`. Store per node only
+
+  `Δ[x] = { (g, s0[x][g]) : g ∈ R, rebuild(pub[x], g) ≠ s0[x][g] }`.
+
+**[P] Invariant.** For every alive `x` and `g ∈ R`: `s0[x][g] = Δ[x][g]` if `g ∈ dom Δ[x]`, else
+`rebuild(pub[x], g)`. *Proof.* `process(x)` is the only writer of `s0`, `pub` (values and prov) and
+`Δ`; it sets `Δ` from the new pair by definition, so the invariant holds after it whatever
+`rebuild` loses (lossy encodings, `Absent` vs default, patched or filled groups simply land in `Δ`).
+`defer_stale` changes only the `stale` mask, which `rebuild` does not read; read-time silencing
+does not modify `pub`; `s0 = None ⇔ pub = None` (a dead node fuses to no entry). ∎
+Consequences: neighbour reads and `changed_groups` are exact with zero recomputation; the old S0
+projection is `rebuild(old_pub, ·) ⊕ Δ_old`, taken before the overwrite.
+
+**Caveat (R changes).** `Δ` is complete only for the `R` it was computed with. When a patch reload
+grows `R` to `R'`, reads of `g ∈ R' \ R` must recompute that neighbour's S0 (`s0_with`, 0.25-0.54 µs
+cold) until the epoch sweep has re-fused the node; keep a per-writer `delta_groups` mask and a
+per-node "swept at epoch" stamp. Shrinking `R` needs nothing.
+
+**Expected |Δ| [H/M].** A node has `Δ ≠ ∅` only if a group in `R` is won by Patch/User/Derived/
+Inferred/repair while S0 had a value, or the encoding is lossy for it. With `R = {role}` (the B6
+patch set) that is the role-patched or role-overridden nodes. Bounds: oracle stress mix 3.9 % of
+cells non-observed (§10.3, deliberately dense in patches/users); real browser dumps
+(`research/web-graph/real-trees`) have 0-0.02 % content-nameable nodes with an observed empty name
+on the large pages (10 % on a 30-node form fixture), relevant only if `name ∈ R`. Model value:
+3 % of nodes, ≈ 64 B each → ≈ 2 B/node.
+
+### 11.4 Alternative: an LRU of S0 for neighbour reads [M, simulation]
+
+`model.py s0cache`: real-shape tree (Chrome `static-large10000` tiled to 100k; 40 % internal,
+mean fan-out 2.5, p99 6), storm as B6 (70 % of events on a 2k hot set, 30 % uniform), miss cost =
+one cold `s0_with` (0.25-0.54 µs):
+
+| reads per fusion | C = 1k | 4k | 16k | 64k |
+|---|---|---|---|---|
+| parent only (1.00) | hit 0.29, +0.18-0.38 µs | 0.71, +0.07-0.15 | 0.84, +0.04-0.09 | 0.86, +0.03-0.07 |
+| parent + children (1.96) | 0.15, +0.42-0.90 | 0.48, +0.26-0.55 | 0.76, +0.12-0.25 | 0.84, +0.08-0.16 |
+
+Hit rate saturates at ≈ 0.85 because the 30 % uniform tail is never resident; a miss on a wide
+node (≤ `max_children` = 256 children) costs up to 256 × 0.5 µs = 128 µs, a p99 killer. A 16k cache
+costs ≈ 1.3 MB but still adds misses and a tail; the delta (11.3) has no misses and ≈ 2 B/node.
+**The LRU is dominated by the delta; do not build it.**
+
+### 11.5 Memory model per node [M calibrated, H for the realistic profiles]
+
+`model.py mem` (glibc chunks, `RawVec` growth 4→8→16→32, one primary). Calibration on the bench
+world (4 registers): model 728 B/node vs measured 687 (perfA), 1672 vs 1539 (B6) — the model
+over-predicts by 6-9 %.
+
+| design | bench world (4 regs) | AT-SPI full state read (14 regs, 9 `Absent`) | rich widget (18 regs, 10 `Absent`) |
+|---|---|---|---|
+| A: B6 (full S0 inline 1008 B) | 1672 B → 167 MB/100k | 2056 B → 206 MB | 2568 B → 257 MB |
+| B: fix branch (S0 projected to `R`, Vec) | 728 → 73 | 1112 → 111 | 1624 → 162 |
+| C: S0 delta + node diet (≤ 176 B inline) + exact-capacity registers | 542 → 54 | 862 → 86 | 990 → 99 |
+| D: C + `Absent` runs + 24 B `Reg` (thin name `Arc`) | 478 → 48 | 494 → 49 | 574 → 57 |
+
+At 10k / 500k nodes multiply by 0.1 / 5 (all terms are per node; e.g. D realistic: 4.9 / 247 MB).
+**[M] The bench world under-reports registers**: it writes 3-4 groups per node, a full AT-SPI
+state read writes ≈ 14 (the `Absent` ones are values, not `Unknown`). One-by-one inserts give a
+`Vec<Reg>` capacity of 16 for 14 registers (528 B chunk) and 32 for 17-18 (1040 B): the register
+store, not S0, becomes the largest term once S0 is gone. **[P] 25 MB/100k is unreachable** with
+any design that keeps registers (the source of truth: 14 × 24 B = 336 B/node ≥ 33.6 MB before the
+entry); D is ≈ 2× that.
+
+### 11.6 Reader access patterns: lazily materialised entries [M, simulation]
+
+`model.py reader`: keypress mix 55 % sequential line (90 % forward), 25 % quick nav (heading 40 %,
+link 25 %, form 20 %, landmark 10 %, list 5 %), 15 % Tab with Zipf(2) skip over focusables, 5 %
+uniform jump (find/elements list). Each keypress reads the target and ≤ 12 ancestors (context):
+4.5-5.5 entries. LRU of entries, miss = one cold fusion (3 µs incl. bookkeeping):
+
+| N | cache 1 % | 5 % | 20 % |
+|---|---|---|---|
+| 10k | hit 0.75, 1.13 miss/key, p99 4 → +12 µs | 0.78, 0.98, +12 µs | 0.87, 0.54, +9 µs |
+| 100k | 0.76, 1.30, +12 µs | 0.80, 1.04, +12 µs | 0.84, 0.83, +9 µs |
+| 500k | 0.76, 1.30, +12 µs | 0.79, 1.16, +12 µs | 0.79, 1.16, +12 µs |
+
+**[M]** Compute-on-access is latency-safe for per-key navigation (+≤ 12 µs p99 against 15 ms) at any
+cache size, because each keypress reads ≤ 4 cold entries. It is not safe for bulk reads: an
+elements list of k items costs k × 3 µs (5k links = 15 ms) and must be streamed asynchronously.
+The memory it can save is the entry itself (160 B/node, 16 MB/100k). The ancestors (the context
+chain) are the hot part; the hit rate is bounded by jumps, not by cache size.
+
+### 11.7 Queueing: what the per-event p99 means for speech [M, simulation]
+
+`model.py queue`: one writer, service per event lognormal fitted to measured (p50, p99), Poisson
+arrivals with 1 % priority (focus-chain / visible) events, optionally a burst of 20k non-priority
+events at once (page load). Priority event → published, p99 µs:
+
+| service (p50/p99 µs) | rate | ρ | FIFO, Poisson | prio, Poisson | FIFO, burst | prio + incremental publish, burst | prio + publish at end of 2 ms run, burst |
+|---|---|---|---|---|---|---|---|
+| 1.4 / 5.1 (perfA clean) | 50k/s | 0.08 | 6.4 | 6.3 | 23 005 | 5.8 | 1 365 |
+| 2.65 / 7.8 (perfA + facts) | 50k/s | 0.15 | 8.9 | 8.8 | 50 806 | 9.6 | 1 607 |
+| 3.2 / 13.0 (B6 worst) | 50k/s | 0.19 | 15.5 | 13.0 | 65 148 | 15.8 | 1 567 |
+
+**[M]** At ρ ≤ 0.2 the queue adds < 2× to the per-event p99; what decides user-visible latency is
+(1) priority-first service (FIFO behind a page-load burst: 23-65 ms, over the whole 15 ms budget)
+and (2) publishing priority nodes as soon as they are fused (end-of-run publish: 0.9-1.6 ms). The
+difference between a 2 µs and a 10 µs per-event p99 is ≤ 10 µs of speech latency (< 0.1 % of
+15 ms).
+
+### 11.8 Is M-11 (≤ 2 µs p99 per event) realistic?
+
+**[M/H] No, not as a p99 on a 100k mirror with cold traffic.** Lower bound sketch: 30 % of B6
+events hit nodes outside any cache level (working set 50-170 MB ≫ 24 MB shared L3); a cold
+fusion is ≥ 0.34-0.68 µs of pure compute (11.2) plus a chain of dependent misses (node → register
+heap → entry `Arc` → parent/children → dirty-set and hash-map lines, ≈ 10-20 lines at ≈ 90 ns
+with partial overlap ≈ 1-2 µs), and ≈ 10 % of events fuse 2-3 nodes (name change → content-named
+parent). The p99 event is a multi-fusion cold event: ≥ 3-5 µs with ideal bookkeeping. 2 µs is
+achievable as a **p50** and as a hot-set metric. Restated gates: see
+`docs/reports/fuse-memory-tradeoff.md` §4.
+
+### 11.9 Unverified
+
+- Real register counts per node come from reading the AT-SPI state model, not from a connector
+  wired to `Ivm` (C1b not done); 14 and 18 are modelled profiles.
+- `rebuild` cost (≈ 5-20 ns per group) is estimated, not measured; the fix branch should measure it.
+- Δ fraction for real patch sets is unknown until profiles ship (D-4); 3 % is a modelling value.
+- The reader-access mix and the 3 µs cold fusion cost are assumptions; tiling one 21k-node page
+  to 500k repeats its structure.
+- Queue simulation is single-writer, non-preemptive, lognormal service; heavy tails beyond the
+  fitted p99 (host jitter of 1-7 ms in B6) are not modelled and dominate p99.9.

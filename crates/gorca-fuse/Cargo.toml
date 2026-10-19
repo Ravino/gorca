@@ -1,0 +1,23 @@
+[package]
+name = "gorca-fuse"
+description = "Pure FUSE: registers, strata, taint, hedge, binding generations and explain (M22a)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+thiserror = { workspace = true }
+toml_edit = { workspace = true }
+
+[features]
+# After every drained run, compare the incremental result with a from-scratch FUSE (F7).
+fuse_full_check = []
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

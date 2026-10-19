@@ -1,0 +1,24 @@
+# Gecko (Firefox) quirk rows for the AT-SPI source (stratum S-1, ADR-0024 section 2.2).
+# Data, not code: the loader (gorca-fuse `QuirkSet`) accepts only the closed action set and
+# rejects anything else. Rule ids are unique inside one profile; 0 is "no rule".
+#
+# Verified against the A2 corpus (tests/fixtures/sem/firefox vs chromium, tests/quirks.rs).
+
+# X1: the engine's name of a list, tree, option or menu item carries the CSS list marker
+# ("• Alpha"); Blink and the document mirror do not. The corpus shows bullets only.
+[[rule]]
+id = 1
+name = "gecko.list-marker"
+roles = ["listitem", "treeitem", "option", "menuitem", "menuitemcheckbox", "menuitemradio"]
+action = "strip-name-prefix"
+prefixes = ["• ", "◦ ", "▪ ", "■ ", "● ", "○ ", "‣ ", "⁃ "]
+
+# Gecko numbers menu items per role (1 of 3 for the three plain items, 1 of 6 for the check items)
+# where ARIA counts the whole menu (A2 corpus: menuitem.plain 1/3 vs Blink 1/9). The value is wrong,
+# not just different, so the register is made Unknown and S3 may compute the position.
+[[rule]]
+id = 2
+name = "gecko.menu-setpos"
+roles = ["menuitem", "menuitemcheckbox", "menuitemradio"]
+action = "unknown-group"
+group = "setpos"

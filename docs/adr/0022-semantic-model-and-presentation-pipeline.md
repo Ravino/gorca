@@ -1,6 +1,24 @@
 # ADR-0022: Semantic model (roles, states, properties), one fusion stage and one presentation pipeline
 
-Status: **Proposed** (draft r2, 2026-10-18). Owner: architect.
+Status: **Proposed** (draft r2, 2026-10-18; r3 note 2026-10-19). Owner: architect.
+
+**r3 (2026-10-19, after the ADR-0024 review):** the source contract is opened to future fact
+sources (browser add-on bus, extensions, local inference) by ADR-0024
+(`docs/adr/0024-fact-sources-contract.md`). Amendments to this ADR:
+(1) §2.2: the source-slot list is open (descriptor + core-computed grant, scope pinned by the
+transport); a new stratum **S4 inferred** sits below S3 derived (user > patch > observed > derived >
+inferred > default); a secondary source is an S0 candidate only for groups a static per-source-profile
+row declares inexpressible for the primary, never because a primary value is not fetched yet; values
+derived from untrusted or inferred inputs are tainted and hedged; confidence gates admission, sets a
+spoken hedge and orders candidates only inside S4 by class (alternative G stands for cross-source
+ranking). (2) §2.1, layout x32 (owner 2026-10-19: extensibility beats per-entry memory): 32 group slots, 18
+registered (the 16 of r2 plus `orientation` and `sort`; `existence` and `text` are not fused),
+`description` moves into `Semantics`' `Arc<SemText>`, `u32` masks, `ProvTag` `[u64; 2]`,
+`hedge: u64`, `taint: u64`; `SemEntry` measures 128 B (r2 was 120 B); gates `SemEntry` ≤ 160 B,
+`Semantics` ≤ 80 B, and M-9's 100k-node RSS ≤ 25 MB as the real ceiling (the 112 B entry gate is
+retired). Name from content uses untainted children first. (3) `PI[app profile]` is `PI[source profile]` (engine/toolkit class, not an
+ADR-0016 user profile). (4) The AT-SPI normaliser runs inside the AT-SPI crates; `SrcNode` carries a
+normalised `SrcRecord`. Everything else in r2 is unchanged. M22a plan: `docs/plan/m22a-spec.md`.
 
 - Analysis, prior art, interface sketches: `docs/reports/aria-semantics-architecture.md`.
 - Coverage input: `docs/reports/aria-coverage-audit.md` (web-a11y engineer).

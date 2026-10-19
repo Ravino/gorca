@@ -34,6 +34,7 @@
 //! `cargo build -p my-ext --target wasm32-wasip2 --release`. See `docs/design/extensions.md`.
 
 pub mod api;
+pub mod codes;
 pub mod host;
 
 pub mod grid;

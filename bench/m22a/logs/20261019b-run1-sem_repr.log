@@ -1,0 +1,57 @@
+sem_repr host: load=12.87 14.50 14.72 4/2531 122767 governor=performance cpus=1
+compose/plain/warm         A         p50     7.2 p95     8.5 p99     9.0 ns/node  mean     7.4  rsd 12.1%
+compose/plain/warm         C-sorted  p50    10.3 p95    10.4 p99    10.9 ns/node  mean    10.3  rsd  6.5%
+compose/plain/warm         C-hash    p50    45.0 p95    46.4 p99    46.8 ns/node  mean    45.2  rsd  5.1%
+compose/form/warm          A         p50     8.4 p95     8.4 p99     8.5 ns/node  mean     8.4  rsd 10.4%
+compose/form/warm          C-sorted  p50    21.0 p95    21.2 p99    21.3 ns/node  mean    20.7  rsd 18.5%
+compose/form/warm          C-hash    p50    55.9 p95    56.7 p99    59.2 ns/node  mean    56.2  rsd  6.5%
+compose/heading/warm       A         p50     7.8 p95     7.8 p99     8.1 ns/node  mean     7.8  rsd 11.3%
+compose/heading/warm       C-sorted  p50    14.5 p95    14.7 p99    15.1 ns/node  mean    14.5  rsd  4.4%
+compose/heading/warm       C-hash    p50    51.7 p95    52.1 p99    53.7 ns/node  mean    51.9  rsd  3.5%
+compose/listitem/warm      A         p50     7.7 p95     7.7 p99     7.8 ns/node  mean     7.7  rsd 12.6%
+compose/listitem/warm      C-sorted  p50    15.7 p95    16.2 p99    16.4 ns/node  mean    15.7  rsd  9.9%
+compose/listitem/warm      C-hash    p50    57.3 p95    59.4 p99    59.6 ns/node  mean    57.6  rsd  3.6%
+compose/rich/warm          A         p50    11.5 p95    11.6 p99    13.1 ns/node  mean    11.5  rsd  8.1%
+compose/rich/warm          C-sorted  p50    33.6 p95    33.9 p99    34.5 ns/node  mean    33.7  rsd  8.6%
+compose/rich/warm          C-hash    p50    77.7 p95    79.0 p99    82.9 ns/node  mean    78.0  rsd  2.8%
+compose/mixed/warm         A         p50     8.4 p95     8.5 p99     8.8 ns/node  mean     8.4  rsd  6.8%
+compose/mixed/warm         C-sorted  p50    19.7 p95    20.1 p99    20.7 ns/node  mean    19.8  rsd  5.0%
+compose/mixed/warm         C-hash    p50    57.8 p95    58.4 p99    61.1 ns/node  mean    58.0  rsd  3.9%
+compose/mixed/100k-cold    A         p50    53.6 p95    79.2 p99    84.3 ns/node  mean    58.0  rsd 25.5%
+compose/mixed/100k-cold    C-sorted  p50   185.8 p95   231.6 p99   249.3 ns/node  mean   184.8  rsd 18.6%
+compose/mixed/100k-cold    C-hash    p50   338.6 p95   369.8 p99   386.8 ns/node  mean   325.1  rsd 15.6%
+cow+cutoff/mixed           A         p50    18.6 p95    18.7 p99    19.0 ns/node  mean    18.3  rsd  7.0%
+cow+cutoff/mixed           C-sorted  p50    42.2 p95    43.4 p99    45.5 ns/node  mean    42.4  rsd  3.2%
+cow+cutoff/mixed           C-hash    p50    60.0 p95    62.0 p99    65.9 ns/node  mean    60.4  rsd  2.6%
+build/mixed                A         p50    40.5 p95    40.6 p99    41.8 ns/node  mean    40.4  rsd  4.6%
+build/mixed                C-sorted  p50    64.3 p95    66.0 p99    70.2 ns/node  mean    64.7  rsd  3.1%
+build/mixed                C-hash    p50   126.8 p95   132.0 p99   139.8 ns/node  mean   127.7  rsd  3.5%
+footprint per node (mixed): A 160 B (+35.2 SemText), C-sorted 218 B, C-hash 346 B; sizes: SemEntry 128 B, PropValue 24 B
+wrote <repo>/.claude/worktrees/agent-a359050a6954580d6/crates/gorca-bench/../../bench/m22a/results/20261019b-run1-sem_repr.json
+Benchmarking compose_mixed_warm/A
+Benchmarking compose_mixed_warm/A: Warming up for 3.0000 s
+Benchmarking compose_mixed_warm/A: Collecting 100 samples in estimated 5.0000 s (587M iterations)
+Benchmarking compose_mixed_warm/A: Analyzing
+compose_mixed_warm/A    time:   [8.4761 ns 8.4832 ns 8.4923 ns]
+Found 6 outliers among 100 measurements (6.00%)
+  1 (1.00%) high mild
+  5 (5.00%) high severe
+Benchmarking compose_mixed_warm/C-sorted
+Benchmarking compose_mixed_warm/C-sorted: Warming up for 3.0000 s
+Benchmarking compose_mixed_warm/C-sorted: Collecting 100 samples in estimated 5.0000 s (269M iterations)
+Benchmarking compose_mixed_warm/C-sorted: Analyzing
+compose_mixed_warm/C-sorted
+                        time:   [18.536 ns 18.559 ns 18.585 ns]
+Found 7 outliers among 100 measurements (7.00%)
+  5 (5.00%) high mild
+  2 (2.00%) high severe
+Benchmarking compose_mixed_warm/C-hash
+Benchmarking compose_mixed_warm/C-hash: Warming up for 3.0000 s
+Benchmarking compose_mixed_warm/C-hash: Collecting 100 samples in estimated 5.0002 s (84M iterations)
+Benchmarking compose_mixed_warm/C-hash: Analyzing
+compose_mixed_warm/C-hash
+                        time:   [59.181 ns 59.251 ns 59.325 ns]
+Found 3 outliers among 100 measurements (3.00%)
+  2 (2.00%) high mild
+  1 (1.00%) high severe
+

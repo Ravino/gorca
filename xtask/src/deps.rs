@@ -16,6 +16,10 @@
 //!    `gorca-ext-api` (for the `wasm32` component build) on `wit-bindgen*`, and the host must not
 //!    reach `zbus*` or `atspi*` (an extension sees the core's types, never a connector's).
 //!
+//! 10. Only `gorca-connector-atspi` and `gorca-doc-source-atspi` may depend on
+//!     `gorca-sem-atspi`; `gorca-fuse`, `gorca-fact-api` and `gorca-sem-atspi` are transport-neutral,
+//!     and `gorca-fuse` and `gorca-sem-atspi` are tokio-free (M22a).
+//!
 //! Rules 6 and 7 (lints, release profile) are enforced by `Cargo.toml` and clippy.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -37,6 +41,10 @@ const NEUTRAL: &[&str] = &[
     "gorca-core",
     "gorca-speech",
     "gorca-config",
+    // Semantic fusion (ADR-0022, ADR-0024): pure model-level crates.
+    "gorca-fuse",
+    "gorca-fact-api",
+    "gorca-sem-atspi",
     // The extension API is what a WASM extension links: no transport, no runtime.
     "gorca-ext-api",
 ];
@@ -55,7 +63,16 @@ const MAY_USE_ZBUS: &[&str] = &[
     "b1-fakeapp",
 ];
 const MAY_USE_ATSPI: &[&str] = &["gorca-connector-atspi"];
-const TOKIO_FREE: &[&str] = &["gorca-model", "gorca-doc", "gorca-text", "gorca-config"];
+const TOKIO_FREE: &[&str] = &[
+    "gorca-model",
+    "gorca-doc",
+    "gorca-text",
+    "gorca-config",
+    "gorca-fuse",
+    "gorca-sem-atspi",
+];
+/// The only crates that may depend directly on the AT-SPI semantic normaliser (rule 10, H-7).
+const MAY_USE_SEM_ATSPI: &[&str] = &["gorca-connector-atspi", "gorca-doc-source-atspi"];
 /// Concrete implementations that only `gorca-daemon` wires (rule 3, second sentence).
 const CONCRETE: &[&str] = &[
     "gorca-connector-atspi",
@@ -170,6 +187,10 @@ fn core_forbidden(name: &str) -> bool {
         || (name.starts_with("gorca-input-") && name != "gorca-input-api")
         || name == "gorca-ext-host"
         || (name.starts_with("gorca-doc-source-") && name != "gorca-doc-source-api")
+        // The normaliser runs in the connectors, never in the core (H-7); source crates are
+        // wired by the daemon only (L-2).
+        || name == "gorca-sem-atspi"
+        || name.starts_with("gorca-source-")
 }
 
 /// Evaluate every rule. An empty result means the graph is clean.
@@ -276,6 +297,21 @@ pub fn check(g: &Graph) -> Vec<Violation> {
                 9,
                 format!(
                     "`{}` may not depend on `{d}`; only `gorca-ext-api` generates guest bindings",
+                    p.name
+                ),
+            );
+        }
+    }
+    // Rule 10.
+    for p in g.pkgs.values().filter(|p| p.in_workspace) {
+        if !MAY_USE_SEM_ATSPI.contains(&p.name.as_str())
+            && p.name != "gorca-sem-atspi"
+            && p.deps.contains("gorca-sem-atspi")
+        {
+            report(
+                10,
+                format!(
+                    "`{}` may not depend on `gorca-sem-atspi`; only the AT-SPI connector and doc source run the normaliser",
                     p.name
                 ),
             );
@@ -530,6 +566,46 @@ mod tests {
         let v = check(&g);
         assert_eq!(rules(&v), vec![3]);
         assert!(v[0].message.contains("gorca-testkit"));
+    }
+
+    #[test]
+    fn the_semantic_normaliser_is_confined_to_the_atspi_crates() {
+        let ok = graph(&[
+            ("gorca-connector-atspi", true, &["gorca-sem-atspi"]),
+            ("gorca-doc-source-atspi", true, &["gorca-sem-atspi"]),
+            ("gorca-sem-atspi", true, &["gorca-model"]),
+            ("gorca-fuse", true, &["gorca-model"]),
+            ("gorca-core", true, &["gorca-fuse"]),
+            ("gorca-model", true, &[]),
+        ]);
+        assert_eq!(check(&ok), vec![]);
+        // The core reaching the normaliser breaks rule 3 (and so does anyone else: rule 10).
+        let bad = graph(&[
+            ("gorca-core", true, &["gorca-sem-atspi"]),
+            ("gorca-testkit", true, &["gorca-sem-atspi"]),
+            ("gorca-sem-atspi", true, &[]),
+        ]);
+        assert_eq!(rules(&check(&bad)), vec![3, 10, 10]);
+    }
+
+    #[test]
+    fn fusion_crates_are_neutral_and_the_pure_ones_tokio_free() {
+        let g = graph(&[
+            ("gorca-fuse", true, &["gorca-rt"]),
+            ("gorca-fact-api", true, &["zbus"]),
+            ("gorca-rt", true, &["tokio"]),
+            ("tokio", false, &[]),
+            ("zbus", false, &[]),
+        ]);
+        let v = rules(&check(&g));
+        assert!(
+            v.contains(&1),
+            "fact-api -> zbus must break neutrality: {v:?}"
+        );
+        assert!(
+            v.contains(&4),
+            "fuse -> rt -> tokio must break rule 4: {v:?}"
+        );
     }
 
     /// The real workspace must satisfy every rule. This is the CI gate: a forbidden edge added

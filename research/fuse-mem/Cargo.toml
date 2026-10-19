@@ -1,0 +1,9 @@
+[package]
+name = "fuse-mem"
+version = "0.0.0"
+edition = "2024"
+publish = false
+[workspace]
+[dependencies]
+gorca-fuse = { path = "../../crates/gorca-fuse" }
+gorca-model = { path = "../../crates/gorca-model" }

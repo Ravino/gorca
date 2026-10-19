@@ -58,6 +58,27 @@ pub enum DiagMsg {
     UnknownContext,
     #[error("chord `{chord}` is already used by the system shortcut `{shortcut}`")]
     SystemShortcut { chord: String, shortcut: String },
+    /// ADR-0016 PK-1/NS-1/PF-1: a profile or row key that its trigger or origin may not set.
+    #[error("key not allowed here: {why}")]
+    ProfileKey { why: &'static str },
+    /// ADR-0016 PK-1: keys of an extension that is not installed are kept, inactive.
+    #[error("extension `{ext}` is not installed, its keys are kept but inactive")]
+    InactiveExtension { ext: String },
+    /// ADR-0016 PC-1.
+    #[error("volume {value} is below the floor {floor}, ignored")]
+    VolumeFloor { value: i64, floor: i64 },
+    /// A malformed trigger, row or profile table; the entry is skipped.
+    #[error("invalid {what}: {why}")]
+    ProfileInvalid { what: &'static str, why: String },
+    /// ADR-0016 PF-6/PC-3: a limit was exceeded and the excess dropped.
+    #[error("too many {what}: the limit is {limit}")]
+    ProfileLimit { what: &'static str, limit: usize },
+    /// ADR-0016 PM-1: two profiles of one layer have the same trigger.
+    #[error("profile `{other}` has the same trigger, the first by id wins ties")]
+    SameTrigger { other: String },
+    /// ADR-0016 PC-0: the file does not parse, the last good version is kept.
+    #[error("{0}; the last good version of this profile stays in effect")]
+    KeptLastGood(String),
     #[error("{0}")]
     Other(String),
 }

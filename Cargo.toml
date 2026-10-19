@@ -50,6 +50,9 @@ gorca-ext-host = { path = "crates/gorca-ext-host" }
 ext-vte = { path = "extensions/ext-vte" }
 gorca-testkit = { path = "crates/gorca-testkit" }
 gorca-bench-b2 = { path = "crates/gorca-bench-b2" }
+gorca-fuse = { path = "crates/gorca-fuse" }
+gorca-fact-api = { path = "crates/gorca-fact-api" }
+gorca-sem-atspi = { path = "crates/gorca-sem-atspi" }
 
 # Async runtime and plumbing.
 tokio = { version = "1.53", default-features = false, features = ["rt", "rt-multi-thread", "sync", "time", "macros", "signal"] }
