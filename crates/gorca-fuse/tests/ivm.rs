@@ -538,7 +538,7 @@ fn gen_ops(seed: u64, s: &Setup, count: usize) -> Vec<Op> {
 fn published(e: &Engine, n: usize) -> Vec<Option<SemEntry>> {
     (0..n)
         .map(|i| {
-            e.entry(nid(i)).map(|a| {
+            e.entry_unmasked(nid(i)).map(|a| {
                 let mut x = (**a).clone();
                 x.sem_rev = 0;
                 x
@@ -655,7 +655,7 @@ fn f14_revoked_source_equals_absent_and_the_priority_nodes_are_silenced_synchron
         // Synchronous: the focus chain and the visible window already match from-scratch.
         let full = with.full_check();
         for node in chain.iter().chain(&window) {
-            let have = with.entry(*node).map(|a| {
+            let have = with.entry_unmasked(*node).map(|a| {
                 let mut e = (**a).clone();
                 e.sem_rev = 0;
                 e
@@ -731,13 +731,16 @@ fn duplicate_and_older_inputs_do_no_work() {
     let mut e = chain_engine(5);
     name(&mut e, 4, 10, "Leaf");
     e.run(Budget::UNLIMITED);
-    let before = e.entry(nid(0)).cloned();
+    let before = e.entry_unmasked(nid(0)).cloned();
     name(&mut e, 4, 10, "Leaf");
     name(&mut e, 4, 3, "Older");
     assert_eq!(e.pending(), 0, "no register changed, nothing dirty");
     let rep = e.run(Budget::UNLIMITED);
     assert_eq!(rep.fuse_calls, 0);
-    assert!(Arc::ptr_eq(&before.unwrap(), e.entry(nid(0)).unwrap()));
+    assert!(Arc::ptr_eq(
+        &before.unwrap(),
+        e.entry_unmasked(nid(0)).unwrap()
+    ));
 }
 
 #[test]
@@ -749,7 +752,7 @@ fn content_name_propagates_up_a_chain_and_stops_at_the_first_unchanged_ancestor(
     assert_eq!(rep.fuse_calls, 8);
     for i in 0..8 {
         assert_eq!(
-            e.entry(nid(i)).unwrap().name.as_deref(),
+            e.entry_unmasked(nid(i)).unwrap().name.as_deref(),
             Some("Deep"),
             "{i}"
         );
@@ -762,7 +765,10 @@ fn content_name_propagates_up_a_chain_and_stops_at_the_first_unchanged_ancestor(
     name(&mut e, 7, 12, "Deeper");
     let rep = e.run(Budget::UNLIMITED);
     assert_eq!(rep.fuse_calls, 5, "nodes 7..=3 only: {rep:?}");
-    assert_eq!(e.entry(nid(2)).unwrap().name.as_deref(), Some("Mid"));
+    assert_eq!(
+        e.entry_unmasked(nid(2)).unwrap().name.as_deref(),
+        Some("Mid")
+    );
     assert!(e.verify().is_ok());
 }
 
@@ -861,7 +867,7 @@ fn relation_fan_out_is_capped_and_overflow_is_stale_then_refreshed() {
     e.run(Budget::UNLIMITED);
     assert_eq!(e.pending(), 0);
     for i in 1..=total {
-        assert!(e.entry(nid(i)).unwrap().stale.is_empty(), "{i}");
+        assert!(e.entry_unmasked(nid(i)).unwrap().stale.is_empty(), "{i}");
     }
     assert!(e.verify().is_ok());
 }
@@ -873,12 +879,15 @@ fn removing_a_subtree_publishes_removals_and_refuses_the_parent() {
     let mut e = chain_engine(4);
     name(&mut e, 3, 10, "Leaf");
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(0)).unwrap().name.as_deref(), Some("Leaf"));
+    assert_eq!(
+        e.entry_unmasked(nid(0)).unwrap().name.as_deref(),
+        Some("Leaf")
+    );
     let gone = e.remove_subtree(nid(3)).unwrap();
     assert_eq!(gone.len(), 1);
     e.run(Budget::UNLIMITED);
-    assert!(e.entry(nid(3)).is_none());
-    assert_eq!(e.entry(nid(0)).unwrap().name.as_deref(), None);
+    assert!(e.entry_unmasked(nid(3)).is_none());
+    assert_eq!(e.entry_unmasked(nid(0)).unwrap().name.as_deref(), None);
     assert!(e.verify().is_ok());
     assert_eq!(
         e.add_node(nid(2), None),
@@ -921,16 +930,19 @@ fn ttl_expiry_vis_rev_and_epochs_refuse_exactly_the_affected_node() {
     let f = ocr_name(1, "Save", &e, 10_000);
     e.apply([f]);
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Save"));
     assert_eq!(
-        e.entry(nid(0)).unwrap().name.as_deref(),
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
+        Some("Save")
+    );
+    assert_eq!(
+        e.entry_unmasked(nid(0)).unwrap().name.as_deref(),
         Some("Save"),
         "content name"
     );
     // The clock passes the TTL: the fact retires and the name goes with it.
     e.apply([Input::Tick(20_000)]);
     let rep = e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), None);
+    assert_eq!(e.entry_unmasked(nid(1)).unwrap().name.as_deref(), None);
     assert!(rep.fuse_calls >= 2 && rep.fuse_calls <= 3, "{rep:?}");
     // A fresh fact, then a vis_rev bump retires an Inferred one.
     let f = ocr_name(1, "Open", &e, 300_000);
@@ -938,14 +950,17 @@ fn ttl_expiry_vis_rev_and_epochs_refuse_exactly_the_affected_node() {
     fi.seq = 2;
     e.apply([Input::Fact(fi)]);
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Open"));
+    assert_eq!(
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
+        Some("Open")
+    );
     e.apply([Input::Vis {
         node: nid(1),
         rev: 5,
     }]);
     e.run(Budget::UNLIMITED);
     assert_eq!(
-        e.entry(nid(1)).unwrap().name.as_deref(),
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
         None,
         "stale basis"
     );
@@ -955,19 +970,25 @@ fn ttl_expiry_vis_rev_and_epochs_refuse_exactly_the_affected_node() {
     fi.seq = 3;
     e.apply([Input::Fact(fi)]);
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Close"));
+    assert_eq!(
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
+        Some("Close")
+    );
     e.set_focus_chain(&[nid(1), nid(0)]);
     let pubd = e.set_source_state(id(3), 9, SourceState::Revoked);
     assert!(
         pubd.iter().any(|p| p.node == nid(1)),
         "silenced in the same call"
     );
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), None);
-    assert_eq!(e.entry(nid(0)).unwrap().name.as_deref(), None);
+    assert_eq!(e.entry_unmasked(nid(1)).unwrap().name.as_deref(), None);
+    assert_eq!(e.entry_unmasked(nid(0)).unwrap().name.as_deref(), None);
     // Unrevoke (higher epoch) brings it back.
     e.set_source_state(id(3), 10, SourceState::Active);
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Close"));
+    assert_eq!(
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
+        Some("Close")
+    );
     assert!(e.verify().is_ok());
 }
 
@@ -977,7 +998,10 @@ fn a_reconnecting_source_releases_its_old_slot_before_registering() {
     let f = ocr_name(1, "Save", &e, 300_000);
     e.apply([f]);
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Save"));
+    assert_eq!(
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
+        Some("Save")
+    );
     // The new connection has a new slot but the same stable name: rejected while the old one lives.
     let mut next = source_info(&SOURCES[1]);
     next.id = SourceId {
@@ -995,7 +1019,10 @@ fn a_reconnecting_source_releases_its_old_slot_before_registering() {
         e.reconnect(id(3), clash).err(),
         Some(gorca_fuse::SideError::DuplicateName)
     );
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Save"));
+    assert_eq!(
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
+        Some("Save")
+    );
     // The explicit path: old slot and its registers go first, then the new registration. The
     // focus chain is re-fused before the call returns.
     e.set_focus_chain(&[nid(1)]);
@@ -1004,7 +1031,7 @@ fn a_reconnecting_source_releases_its_old_slot_before_registering() {
         pubd.iter().any(|p| p.node == nid(1)),
         "old facts silenced at once"
     );
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), None);
+    assert_eq!(e.entry_unmasked(nid(1)).unwrap().name.as_deref(), None);
     // Old id is unregistered (its facts are rejected); the new id works.
     let old_fact = ocr_name(1, "Stale", &e, 300_000);
     assert_eq!(
@@ -1024,19 +1051,22 @@ fn a_reconnecting_source_releases_its_old_slot_before_registering() {
     e.apply([Input::Fact(fresh.clone())]);
     e.run(Budget::UNLIMITED);
     assert_eq!(
-        e.entry(nid(1)).unwrap().name.as_deref(),
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
         None,
         "new source starts masked"
     );
     e.set_source_state(fresh.source, 1, SourceState::Active);
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Fresh"));
+    assert_eq!(
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
+        Some("Fresh")
+    );
     // A permanent release drops the registration and registers.
     e.release_source(SourceId {
         slot: 30,
         generation: 1,
     });
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), None);
+    assert_eq!(e.entry_unmasked(nid(1)).unwrap().name.as_deref(), None);
     e.run(Budget::UNLIMITED);
     assert!(e.verify().is_ok());
 }
@@ -1062,7 +1092,15 @@ fn deep_and_wide_trees_stay_bounded() {
     name(&mut e, 2999, 10, &"é".repeat(2000));
     let rep = e.run(Budget::UNLIMITED);
     assert_eq!(rep.fuse_calls, 3000);
-    assert!(e.entry(nid(0)).unwrap().name.as_deref().unwrap().len() <= 1024);
+    assert!(
+        e.entry_unmasked(nid(0))
+            .unwrap()
+            .name
+            .as_deref()
+            .unwrap()
+            .len()
+            <= 1024
+    );
     // 5000 siblings under one parent: a change past the content prefix never re-fuses the parent.
     let mut e = chain_engine(1);
     for i in 1..=5000 {
@@ -1147,11 +1185,11 @@ fn a_parent_s0_change_that_a_selector_reads_refuses_the_children() {
         };
         e.apply([life(0), life(1), obs(0, 2, "text"), obs(1, 2, "generic")]);
         e.run(Budget::UNLIMITED);
-        assert_eq!(e.entry(nid(1)).unwrap().sem.role, SemRole::Generic);
+        assert_eq!(e.entry_unmasked(nid(1)).unwrap().sem.role, SemRole::Generic);
         e.apply([obs(0, 3, "group")]);
         e.run(Budget::UNLIMITED);
         assert_eq!(
-            e.entry(nid(1)).unwrap().sem.role,
+            e.entry_unmasked(nid(1)).unwrap().sem.role,
             SemRole::Button,
             "narrow={narrow}"
         );
@@ -1182,10 +1220,13 @@ fn a_silenced_source_cannot_escape_by_reconnecting_or_re_registering() {
     let f = ocr_name(1, "Save", &e, 300_000);
     e.apply([f]);
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Save"));
+    assert_eq!(
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
+        Some("Save")
+    );
     e.set_focus_chain(&[nid(1), nid(0)]);
     e.set_source_state(id(3), 5, SourceState::Revoked);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), None);
+    assert_eq!(e.entry_unmasked(nid(1)).unwrap().name.as_deref(), None);
     // Reconnect: the new id inherits the revocation by stable name; an Active epoch with a lower
     // number cannot lift it, a later one can.
     let new = SourceId {
@@ -1204,13 +1245,16 @@ fn a_silenced_source_cannot_escape_by_reconnecting_or_re_registering() {
     e.set_source_state(new, 1, SourceState::Active);
     e.run(Budget::UNLIMITED);
     assert_eq!(
-        e.entry(nid(1)).unwrap().name.as_deref(),
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
         None,
         "a revoked source stays revoked across a reconnect"
     );
     e.set_source_state(new, 6, SourceState::Active);
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Again"));
+    assert_eq!(
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
+        Some("Again")
+    );
     // A permanent release keeps the silence for the name too.
     e.set_source_state(new, 7, SourceState::Quarantined);
     e.release_source(new);
@@ -1227,7 +1271,7 @@ fn a_silenced_source_cannot_escape_by_reconnecting_or_re_registering() {
     f.source = back;
     e.apply([Input::Fact(f)]);
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), None);
+    assert_eq!(e.entry_unmasked(nid(1)).unwrap().name.as_deref(), None);
     assert!(e.verify().is_ok());
 }
 
@@ -1238,10 +1282,13 @@ fn a_new_source_is_masked_until_an_explicit_active_epoch() {
     let f = ocr_name(1, "Save", &e, 300_000);
     e.apply([f]);
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), None);
+    assert_eq!(e.entry_unmasked(nid(1)).unwrap().name.as_deref(), None);
     e.set_source_state(id(3), 1, SourceState::Active);
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(1)).unwrap().name.as_deref(), Some("Save"));
+    assert_eq!(
+        e.entry_unmasked(nid(1)).unwrap().name.as_deref(),
+        Some("Save")
+    );
 }
 
 #[test]
@@ -1471,7 +1518,10 @@ fn named_star(n: usize, window: usize) -> Ivm<NoQuirks, NoPatches> {
         e.apply([Input::Fact(f)]);
     }
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.entry(nid(n)).unwrap().name.as_deref(), Some("Save"));
+    assert_eq!(
+        e.entry_unmasked(nid(n)).unwrap().name.as_deref(),
+        Some("Save")
+    );
     let win: Vec<NodeIdx> = (1..=window).map(nid).collect();
     e.set_visible(&win);
     e
@@ -1508,7 +1558,7 @@ fn revoke_scenario(n: usize, window: usize) -> std::time::Duration {
     // The raw published entry of an unreached node still carries it (the proper re-fusion is
     // pending), which is exactly what the mask covers.
     assert!(
-        (window + 1..=n).any(|i| e.entry(nid(i)).unwrap().name.as_deref() == Some("Save")),
+        (window + 1..=n).any(|i| e.entry_unmasked(nid(i)).unwrap().name.as_deref() == Some("Save")),
         "the cap left nodes unfused"
     );
     e.run(Budget::UNLIMITED);
@@ -1532,7 +1582,7 @@ fn the_silence_mask_follows_content_names_and_lifts_with_the_epoch() {
     e.apply([f]);
     e.run(Budget::UNLIMITED);
     assert_eq!(
-        e.entry(nid(0)).unwrap().name.as_deref(),
+        e.entry_unmasked(nid(0)).unwrap().name.as_deref(),
         Some("Save"),
         "derived through content"
     );

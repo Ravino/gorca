@@ -479,8 +479,11 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         &self.patches
     }
 
-    /// The published entry of `node`.
-    pub fn entry(&self, node: NodeIdx) -> Option<&Arc<SemEntry>> {
+    /// The published entry of `node` **without** the silence mask: it may still carry the value
+    /// of a silenced source until the bounded re-fusion reaches the node. Speech and every other
+    /// reader must use [`Ivm::entry_view`]; this exists for the engine's own tests.
+    #[doc(hidden)]
+    pub fn entry_unmasked(&self, node: NodeIdx) -> Option<&Arc<SemEntry>> {
         node_of(&self.nodes, node).and_then(|n| n.published.as_ref())
     }
 
