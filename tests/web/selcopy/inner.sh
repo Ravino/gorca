@@ -23,9 +23,9 @@ RUST_LOG=${RUST_LOG:-warn} "${GORCA_BIN:?set GORCA_BIN}" --impersonate-orca --no
 GP=$!
 sleep 3
 case "${SELCOPY_BROWSER:-firefox}" in
-  firefox) firefox -profile "$PROF" --no-remote --new-instance "file://$F/page.html" >"$OUT/browser.log" 2>&1 & ;;
+  firefox) firefox -profile "$PROF" --no-remote --new-instance "${SELCOPY_URL:-file://$F/page.html}" >"$OUT/browser.log" 2>&1 & ;;
   chromium) chromium --user-data-dir="$PROF" --force-renderer-accessibility --ozone-platform=wayland \
-      --no-first-run --no-default-browser-check "file://$F/page.html" >"$OUT/browser.log" 2>&1 & ;;
+      --no-first-run --no-default-browser-check "${SELCOPY_URL:-file://$F/page.html}" >"$OUT/browser.log" 2>&1 & ;;
 esac
 BP=$!
 sleep 14

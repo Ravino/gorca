@@ -609,6 +609,13 @@ pub struct BrowseState {
     /// Where position restore put the cursor after the node the user was on vanished: the
     /// next Enter on exactly this node announces the new item instead of clicking it.
     pub displaced: Option<gorca_model::DocNodeId>,
+    /// An Enter spent on announcing a displaced item arms the next Enter on the same node: a row
+    /// the page keeps rewriting (a typing indicator, a ticking time stamp) would otherwise swallow
+    /// every Enter, each one re-announcing the changed line and never clicking.
+    pub displaced_armed: Option<(gorca_model::DocNodeId, Instant)>,
+    /// The node of the last focus event of the application, joined or not (`focus_node` only
+    /// follows joined ones): the mirror looks it up again when it needs the field that has focus.
+    pub focus_key: Option<NodeKey>,
     /// The loading grace ran out with the focus still unmirrored and browse mode started at the
     /// top of the page (7.3). When a repair or an update later mirrors the focused node and
     /// neither the focus nor the cursor moved, the focus is joined after all (CHR-0 B-2).
@@ -690,6 +697,8 @@ impl BrowseState {
             last_off: 0,
             restore_until: None,
             displaced: None,
+            displaced_armed: None,
+            focus_key: None,
             grace_fallback: None,
             announced_change: None,
             activated_node: None,

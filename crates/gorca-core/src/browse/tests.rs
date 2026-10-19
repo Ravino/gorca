@@ -3249,6 +3249,21 @@ fn a_swap_after_a_focus_placement_is_announced_not_clicked() {
 }
 
 #[test]
+fn a_row_rewritten_again_and_again_still_clicks_on_the_second_enter() {
+    let mut r = rig();
+    r.focus(1006);
+    relabel_link(&mut r, "Dave, typing", 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx), "the first Enter announces the change");
+    // The page rewrites the same row again before the user presses Enter a second time.
+    relabel_link(&mut r, "Dave, online", 4);
+    assert!(
+        click_of(&r.key(CoreCmd::BrowseActivate)),
+        "a churning row must not swallow every Enter"
+    );
+}
+
+#[test]
 fn a_displacement_is_spent_by_moving_the_cursor() {
     let mut r = rig();
     r.focus(1006);

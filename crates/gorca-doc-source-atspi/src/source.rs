@@ -442,8 +442,15 @@ async fn read_node_raw(
     Some((role, state, name, attrs, target))
 }
 
+/// See [`Live::click_ack`].
+const CLICK_ACK_WINDOW: Duration = Duration::from_secs(5);
+
 /// Mutable per-document state of the running source.
 struct Live {
+    /// A click refused because the object changed since it was spoken: the next click on the
+    /// same node within `CLICK_ACK_WINDOW` goes through. The user heard what it is now (the
+    /// refusal is spoken); a row the page keeps rewriting must not refuse every Enter.
+    click_ack: Option<(SrcNodeId, Instant)>,
     ident: IdentityMap,
     paths: PathTable,
     dirty: DirtySet,
@@ -661,6 +668,7 @@ const ROOT_ERROR_LIMIT: u32 = 3;
 impl AtspiDocSource {
     async fn run(mut self, mut ctx: DocSourceCtx) -> Result<(), SourceError> {
         let mut live = Live {
+            click_ack: None,
             ident: IdentityMap::new(self.config.use_dom_id),
             paths: PathTable::default(),
             dirty: DirtySet::default(),
@@ -1611,11 +1619,16 @@ impl AtspiDocSource {
                 deadline,
                 reply,
             } => {
-                if matches!(act, DocAction::Click)
-                    && let Some(now) = self.displaced(live, node).await
-                {
-                    let _ = reply.send(Err(SourceError::Displaced(now)));
-                    return;
+                if matches!(act, DocAction::Click) {
+                    let acked = live
+                        .click_ack
+                        .take()
+                        .is_some_and(|(n, at)| n == node && at.elapsed() <= CLICK_ACK_WINDOW);
+                    if !acked && let Some(now) = self.displaced(live, node).await {
+                        live.click_ack = Some((node, Instant::now()));
+                        let _ = reply.send(Err(SourceError::Displaced(now)));
+                        return;
+                    }
                 }
                 let mut r = self.action(live, node, &act, deadline).await;
                 if matches!(r, Err(SourceError::Gone))
@@ -2090,6 +2103,8 @@ impl AtspiDocSource {
     ) -> Result<(), SourceError> {
         let blink = self.config.quirks.selection_single_exclusive;
         let root = Self::path_of(live, spec.root);
+        self.release_text_control(live, spec, root.as_deref(), deadline)
+            .await;
         if let Some(root) = root.as_deref() {
             self.drop_extra_ranges(root, deadline).await?;
         }
@@ -2152,6 +2167,58 @@ impl AtspiDocSource {
         } else {
             Err(SourceError::Refused)
         }
+    }
+
+    /// Ctrl+C copies the selection of the focused `input` or `textarea`, not the document's, so a
+    /// page selection set while such a control has the focus would never reach the clipboard
+    /// (measured on Firefox 153: "No selection owner available"). Move the focus to the document
+    /// first. A contenteditable host copies the document selection and keeps its focus. Best
+    /// effort: a failure only leaves the old behaviour.
+    async fn release_text_control(
+        &self,
+        live: &Live,
+        spec: &gorca_model::SelectionSpec<SrcNodeId>,
+        root: Option<&str>,
+        deadline: Deadline,
+    ) {
+        let (Some(field), Some(root)) = (spec.focus_field, root) else {
+            return;
+        };
+        let Some(fp) = Self::path_of(live, field) else {
+            return;
+        };
+        let attrs = self
+            .app
+            .call(
+                self.app.next_lane(),
+                deadline,
+                &fp,
+                ACCESSIBLE,
+                "GetAttributes",
+                &(),
+            )
+            .await
+            .ok()
+            .and_then(|m| wire::parse_string_map(m.body().data().bytes()).ok())
+            .unwrap_or_default();
+        let plain = attrs
+            .iter()
+            .any(|(k, v)| k == "tag" && matches!(v.as_str(), "input" | "textarea"));
+        if !plain {
+            return;
+        }
+        tracing::info!(target: "gorca_phase", phase = "sel_release_text_control");
+        let _ = self
+            .app
+            .call(
+                self.app.next_lane(),
+                deadline,
+                root,
+                COMPONENT,
+                "GrabFocus",
+                &(),
+            )
+            .await;
     }
 
     /// `Document.SetTextSelections` with one range from `start` to `end` (object path and offset

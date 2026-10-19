@@ -77,6 +77,8 @@ const SEL_DEBOUNCE: Duration = Duration::from_millis(40);
 pub(super) const SCROLL_DEBOUNCE: Duration = Duration::from_millis(150);
 /// Focus in a document the mirror does not know yet waits this long (browse design 7.3).
 const LOADING_GRACE: Duration = Duration::from_secs(1);
+/// How long an Enter that announced a displaced item keeps the next Enter armed.
+const ARM_WINDOW: Duration = Duration::from_secs(6);
 /// The shortest time between two focus resolutions restarted by key presses.
 const KEY_RESYNC_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -985,6 +987,7 @@ impl Reader {
         let Some(b) = self.web.as_mut() else { return };
         b.entry_wait = None;
         b.grace_fallback = None;
+        b.focus_key = Some(node);
         let prev_focus = b.focus_node;
         let hit = b.join.get(node);
         tracing::info!(
@@ -2432,6 +2435,7 @@ impl Reader {
             && let Some(b) = self.web.as_mut()
         {
             b.displaced = None;
+            b.displaced_armed = None;
         }
         self.note_cursor_sig();
     }
@@ -2573,13 +2577,23 @@ impl Reader {
                 sig_node = ?b.cursor_sig.map(|(n, _)| n),
             );
         }
-        if let Some(b) = self.web.as_mut()
-            && b.displaced.take() == Some(cur.node)
-        {
-            // The item the user was on is gone; the cursor now sits on a neighbour. Say which
-            // one before anything is clicked; a second Enter activates it.
-            self.web_speak_line_here(fx);
-            return;
+        let now = self.now;
+        if let Some(b) = self.web.as_mut() {
+            let armed = b.displaced_armed.take().is_some_and(|(n, at)| {
+                n == cur.node && now.saturating_duration_since(at) <= ARM_WINDOW
+            });
+            if armed {
+                // The user heard this item's change and pressed Enter again: the page may have
+                // rewritten the row since, which does not cost another Enter.
+                b.displaced = None;
+                b.announced_change = None;
+            } else if b.displaced.take() == Some(cur.node) {
+                // The item the user was on is gone; the cursor now sits on a neighbour. Say which
+                // one before anything is clicked; a second Enter activates it.
+                b.displaced_armed = Some((cur.node, now));
+                self.web_speak_line_here(fx);
+                return;
+            }
         }
         // After a refused click the user heard a name. Act on it only if the mirror shows exactly
         // that name and role on that object and the announcement is fresh; otherwise say what is
@@ -2902,12 +2916,34 @@ impl Reader {
             return;
         };
         let Some(root) = root else { return };
+        // The page focus sits in an editable field that does not hold the selection: the source
+        // decides whether that field would answer Ctrl+C itself (a plain text control does).
+        let field = b
+            .focus_key
+            .and_then(|k| b.join.get(k))
+            .filter(|(fd, _)| *fd == doc)
+            .map(|(_, n)| n);
+        let focus_field = field.filter(|f| {
+            h.read.with(|d| {
+                d.node(*f).is_some() && {
+                    let (role, states) = role_states(d, *f);
+                    forms::passes_through(role, states, Reason::Focus)
+                }
+            })
+        });
+        tracing::debug!(
+            target: "gorca_phase",
+            phase = "sel_mirror",
+            focused = ?focused,
+            focus_field = ?focus_field,
+        );
         let spec = gorca_model::SelectionSpec {
             root,
             spans: plan.spans.clone(),
             snap: plan.snap.clone(),
             doc_range: plan.doc_range.clone(),
             gecko_lossy: plan.gecko_lossy,
+            focus_field,
         };
         let Some(first) = plan.spans.first().map(|s| s.node) else {
             return;

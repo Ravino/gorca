@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Tgapp</title>
+<style>
+  /* Shaped like Telegram Web K: a chat list that is a column of links, a chat pane with
+     selectable messages (the time stamps are not selectable) and a contenteditable composer
+     that takes the focus when a chat opens. */
+  body { margin: 0; font: 16px sans-serif; }
+  #app { display: flex; height: 100vh; }
+  #sidebar { width: 320px; border-right: 1px solid #ccc; user-select: none; }
+  #chat { flex: 1; display: flex; flex-direction: column; }
+  #chat[hidden] { display: none; }
+  #msgs { flex: 1; overflow: auto; }
+  .bubble { margin: 6px; padding: 4px; background: #eef; }
+  .time { color: #888; font-size: 11px; user-select: none; }
+  .chatlist-chat { display: block; padding: 8px; }
+  .chatlist-chat.active { background: #3390ec; color: #fff; }
+  #composer { border-top: 1px solid #ccc; padding: 8px; min-height: 24px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <button type="button" id="menu" aria-label="Menu">Menu</button>
+    <div id="list" role="list"></div>
+  </aside>
+  <main id="chat" hidden>
+    <header><h2 id="title"></h2></header>
+    <div id="msgs" role="log" aria-label="Messages"></div>
+    <div id="composer-slot"></div>
+  </main>
+  <div id="status" role="status" aria-live="polite"></div>
+</div>
+<script>
+// ?v=rerender (default): every state change rebuilds the list and the pane with fresh nodes, as
+// an unkeyed virtual DOM does. ?v=keyed: the nodes stay, only classes and text change.
+const Q = new URLSearchParams(location.search);
+const V = Q.get("v") || "rerender";
+// ?f=moves,tick,late,focuslist: moves = the opened chat moves to the top (insertBefore, as a
+// keyed list does); tick = a timer updates a preview and re-sorts every 800 ms; late = the list
+// repaints 250 ms after the pane closes; focuslist = closing a chat focuses its row again.
+const F = new Set((Q.get("f") || "").split(","));
+// ?c=input|textarea|ce (composer kind, default ce = contenteditable); ?copy=1 installs a copy
+// handler that writes the selection text itself; ?bubbles=focusable makes every bubble focusable.
+function makeComposer() {
+  const k = Q.get("c") || "ce";
+  let e;
+  if (k === "input") { e = document.createElement("input"); e.type = "text"; }
+  else if (k === "textarea") { e = document.createElement("textarea"); }
+  else { e = document.createElement("div"); e.contentEditable = "true"; e.setAttribute("role", "textbox"); e.setAttribute("aria-multiline", "true"); }
+  e.id = "composer"; e.setAttribute("aria-label", "Message");
+  $("composer-slot").append(e);
+}
+const chats = [
+  { id: "alice", name: "Alice", last: "see you soon", msgs: ["Hello from Alice", "See you at noon"] },
+  { id: "bob", name: "Bob", last: "ok", msgs: ["Bob here", "Did you get the file?"] },
+  { id: "carol", name: "Carol", last: "thanks", msgs: ["Thanks a lot", "Carol signing off"] },
+  { id: "dave", name: "Dave", last: "lunch?", msgs: ["Lunch at one?", "Dave"] },
+];
+let current = null, opens = 0;
+function $(id) { return document.getElementById(id); }
+function chatLink(c) {
+  // ?row=div: a div with role=button and tabindex (Telegram Web A) that opens on click only,
+  // so a native Enter does nothing: only an AT activation (browse mode Enter) opens the chat.
+  const a = document.createElement(Q.get("row") === "div" ? "div" : "a");
+  if (Q.get("row") === "div") { a.setAttribute("role", "button"); a.tabIndex = 0; }
+  a.className = "chatlist-chat" + (current === c.id ? " active" : "");
+  if (a.tagName === "A") a.href = "#" + c.id;
+  a.dataset.id = c.id;
+  a.textContent = c.name + ", " + c.last;
+  a.onclick = (e) => { e.preventDefault(); openChat(c.id); };
+  return a;
+}
+function paintList() {
+  if (F.has("moves") && current) {
+    const i = chats.findIndex((c) => c.id === current);
+    chats.unshift(chats.splice(i, 1)[0]);
+  }
+  if ((V === "keyed" || F.has("moves")) && $("list").children.length) {
+    const byId = new Map([...$("list").children].map((a) => [a.dataset.id, a]));
+    for (const c of chats) {
+      const a = byId.get(c.id);
+      a.classList.toggle("active", c.id === current);
+      a.textContent = c.name + ", " + c.last;
+      $("list").appendChild(a);
+    }
+    return;
+  }
+  $("list").replaceChildren(...chats.map(chatLink));
+}
+function paintChat() {
+  const c = chats.find((x) => x.id === current);
+  // ?layout=single: the narrow layout, the chat list is hidden while a chat is open
+  if (Q.get("layout") === "single") $("sidebar").hidden = !!c;
+  $("chat").hidden = !c;
+  if (!c) { $("title").textContent = ""; $("msgs").replaceChildren(); return; }
+  $("title").textContent = c.name;
+  $("msgs").replaceChildren(...c.msgs.map((m, i) => {
+    const d = document.createElement("div");
+    d.className = "bubble";
+    if (Q.get("bubbles") === "focusable") d.tabIndex = -1;
+    const t = document.createElement("span");
+    t.className = "message"; t.textContent = m;
+    const tm = document.createElement("span");
+    tm.className = "time"; tm.textContent = " 1" + i + ":0" + i;
+    d.append(t, tm);
+    return d;
+  }));
+}
+function openChat(id) {
+  current = id;
+  document.title = chats.find((c) => c.id === id).name + " - Tgapp";
+  $("status").textContent = "Opened chat " + id + " (" + (++opens) + ")";
+  paintList();
+  paintChat();
+  $("composer").focus();
+}
+function closeChat() {
+  current = null;
+  document.title = "Tgapp";
+  $("status").textContent = "Closed chat (" + (++opens) + ")";
+  if (F.has("late")) setTimeout(paintList, 250); else paintList();
+  paintChat();
+  if (F.has("focuslist")) { const a = $("list").querySelector(".chatlist-chat"); if (a) a.focus(); }
+  // the focused composer is hidden: the browser parks the focus on the body
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && current) { e.preventDefault(); closeChat(); }
+});
+makeComposer();
+if (Q.get("copy")) document.addEventListener("copy", (e) => {
+  const t = String(getSelection());
+  $("status").textContent = "Copy handler saw " + JSON.stringify(t);
+  e.clipboardData.setData("text/plain", t); e.preventDefault();
+});
+$("menu").onclick = () => { $("status").textContent = "Menu opened"; };
+paintList();
+// ?churn=1: every row's text is rewritten every 1.1 s ("typing" / "online"), as a chat list does
+if (Q.get("churn")) { let n = 0; setInterval(() => { n++; for (const a of $("list").children) a.textContent = a.dataset.id + (n % 2 ? ", typing" : ", online"); }, 1100); }
+if (F.has("tick")) setInterval(() => {
+  const c = chats[Math.floor(Math.random() * chats.length)];
+  c.last = "msg " + Math.floor(Math.random() * 100);
+  if (Math.random() < 0.3) chats.push(chats.shift());
+  if (V === "rerender" && !F.has("moves")) paintList();
+  else { const byId = new Map([...$("list").children].map((a) => [a.dataset.id, a]));
+    for (const x of chats) { const a = byId.get(x.id); a.textContent = x.name + ", " + x.last; $("list").appendChild(a); } }
+}, 800);
+</script>
+</body>
+</html>

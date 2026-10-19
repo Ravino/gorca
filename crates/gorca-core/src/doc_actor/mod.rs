@@ -1113,6 +1113,10 @@ fn spawn_action(
                     snap,
                     doc_range,
                     gecko_lossy: spec.gecko_lossy,
+                    focus_field: match spec.focus_field {
+                        Some(f) => src_of(d, f),
+                        None => None,
+                    },
                 })
             });
             let Some(mapped) = mapped else {
