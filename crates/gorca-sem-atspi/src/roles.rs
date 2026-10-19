@@ -12,7 +12,8 @@
 //!    spec says the native semantics survive (presentational conflict resolution, a secret field,
 //!    `generic` on a semantic element).
 
-use gorca_model::sem::{RoleSource, SemRole};
+pub use gorca_model::sem::RoleSource;
+use gorca_model::sem::SemRole;
 
 /// Raw `AtspiRole` numbers used by name elsewhere in this crate.
 pub mod raw {

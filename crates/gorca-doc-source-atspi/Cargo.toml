@@ -12,6 +12,8 @@ gorca-model = { workspace = true }
 gorca-rt = { workspace = true }
 gorca-dbus = { workspace = true }
 gorca-doc-source-api = { workspace = true }
+gorca-fuse = { workspace = true }
+gorca-sem-atspi = { workspace = true }
 zbus = { workspace = true, features = ["p2p"] }
 tokio = { workspace = true }
 futures-lite = { workspace = true }

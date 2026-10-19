@@ -1,0 +1,46 @@
+# e2e-m8 c2-ab-base-1
+# utc=2026-10-19T14:23:00Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=17.16 23.84 20.22 2/2418 1149048
+# git_rev=d05fe4c9
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=c2-ab-base-1
+# reader=daemon:/var/tmp/gorca-base-target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=21.60 25.25 20.54 5/2420 1148113
+# loadavg_end=17.16 23.84 20.22 5/2418 1149045
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-MSGK SKIPPED: a Chromium-only scenario
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-MSGK.skipped            daemon/voicego            1            1            1  1                  info   [flag]
+M8-LV.key_ms.n             daemon/voicego            1            1            1  1                  info   [samples]
+M8-LV.key_ms.p50           daemon/voicego        0.403        0.403        0.403  1                  info   [ms]
+M8-LV.key_ms.p95           daemon/voicego        0.403        0.403        0.403  1                  info   [ms]
+M8-LV.key_ms.p99           daemon/voicego        0.403        0.403        0.403  1 <=            5  PASS   [ms]
+M8-LV.key_ms.max           daemon/voicego        0.403        0.403        0.403  1                  info   [ms]
+M8-LV.live_ms.n            daemon/voicego            5            5            5  1                  info   [samples]
+M8-LV.live_ms.p50          daemon/voicego         81.5         81.5         81.5  1                  info   [ms]
+M8-LV.live_ms.p95          daemon/voicego         86.6         86.6         86.6  1                  info   [ms]
+M8-LV.live_ms.p99          daemon/voicego         86.6         86.6         86.6  1 <=          100  PASS  65 ms (LV1) + 35 ms rig allowance (DoAction + page handler) [ms]
+M8-LV.live_ms.max          daemon/voicego         86.6         86.6         86.6  1                  info   [ms]
+M8-LV.fail                 daemon/voicego            0            0            0  1 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-LV.gap                  daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-LV.p0_not_pass          daemon/voicego            0            0            0  1                  info   [steps]
+M8-LV.pass                 daemon/voicego           17           17           17  1                  info   [steps]
+M8-LV.steps                daemon/voicego           17           17           17  1                  info   [steps]
+M8-LV.xfail                daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-LV.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

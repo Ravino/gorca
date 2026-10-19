@@ -85,8 +85,8 @@ pub const DEVIATIONS: &[Deviation] = &[
     Deviation {
         id: "gecko-list-marker",
         group: Group::Name,
-        reason: "the engine's name of a list or menu item carries the CSS marker (\"• Alpha\"); the \
-                 S-1 quirk row strips it (X1 does it in an extension today, C3 removes X1)",
+        reason: "the engine's name of a list or menu item carries the CSS marker (\"• Alpha\") or the counter \
+                 of an ordered list (\"1. First\"); the S-1 quirk rows strip them (X1 does it in an extension today, C3 removes X1)",
     },
     Deviation {
         id: "name-from-content",
@@ -126,7 +126,16 @@ pub const DEVIATIONS: &[Deviation] = &[
 ];
 
 /// The CSS list markers the engine puts in front of a list item's name (the Gecko quirk row).
-const MARKERS: [&str; 8] = ["• ", "◦ ", "▪ ", "■ ", "● ", "○ ", "‣ ", "⁃ "];
+const MARKERS: [&str; 10] = ["• ", "◦ ", "▪ ", "■ ", "□ ", "– ", "● ", "○ ", "‣ ", "⁃ "];
+
+/// The counter of an ordered list item (`1. `, `12) `) in front of a name.
+fn strip_ordinal(s: &str) -> Option<&str> {
+    let rest = s.trim_start_matches(|c: char| c.is_ascii_digit());
+    if rest.len() == s.len() {
+        return None;
+    }
+    rest.strip_prefix(". ").or_else(|| rest.strip_prefix(") "))
+}
 
 /// Does deviation `id` explain this difference?
 fn applies(id: &str, c: &Ctx<'_>) -> bool {
@@ -138,6 +147,7 @@ fn applies(id: &str, c: &Ctx<'_>) -> bool {
             MARKERS
                 .iter()
                 .any(|m| l.strip_prefix(m).is_some_and(|rest| clip1k(rest) == f))
+                || strip_ordinal(l).is_some_and(|rest| clip1k(rest) == f)
         }
         "name-from-content" => {
             c.snap.name.as_deref().is_none_or(str::is_empty)

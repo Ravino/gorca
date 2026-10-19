@@ -20,6 +20,9 @@
 //!     `gorca-sem-atspi`; `gorca-fuse`, `gorca-fact-api` and `gorca-sem-atspi` are transport-neutral,
 //!     and `gorca-fuse` and `gorca-sem-atspi` are tokio-free (M22a).
 //!
+//! 11. Fused entries are read through `Ivm::entry_view` only; `entry_unmasked` is for the engine's
+//!     own tests and is banned outside `gorca-fuse` (see `entryrule`).
+//!
 //! Rules 6 and 7 (lints, release profile) are enforced by `Cargo.toml` and clippy.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};

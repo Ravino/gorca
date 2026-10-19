@@ -3,10 +3,10 @@
 //! over `cargo metadata`; see [`deps`].
 
 mod deps;
+mod entryrule;
 mod envrule;
 mod ext;
 mod strings;
-mod unmasked;
 
 use std::process::ExitCode;
 
@@ -16,8 +16,8 @@ fn main() -> ExitCode {
         Some("deps") => match (
             deps::run(),
             envrule::run(),
+            entryrule::run(),
             strings::run(false),
-            unmasked::run(),
         ) {
             (Ok(true), Ok(true), Ok(true), Ok(true)) => ExitCode::SUCCESS,
             (Ok(_), Ok(_), Ok(_), Ok(_)) => ExitCode::FAILURE,

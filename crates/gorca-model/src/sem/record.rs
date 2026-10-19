@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The normalised source record of one node (M22a-B4, moved here by C1b): the value the AT-SPI
-//! normaliser (`gorca-sem-atspi`, which the core must not depend on) hands over and the app actor
-//! writes into the registers of `FUSE`. A model type so that `NodeSnapshot` and the document
-//! source can carry it without the core naming a connector.
+//! The normalised source record of one node ([`SrcRecord`], ADR-0022 section 2.2, ADR-0024
+//! section 2.1, H-7).
+//!
+//! The record type lives in the model so that a document source can attach it to a `SrcNode`
+//! and the document actor can feed it to the fusion without depending on any connector crate;
+//! the one function that builds it from raw AT-SPI values is `gorca_sem_atspi::normalise`.
 
 use std::sync::Arc;
 
@@ -48,7 +50,7 @@ impl Notes {
     /// A tag longer than [`TagName::CAP`] bytes was truncated.
     pub const TAG_TRUNCATED: Notes = Notes(1 << 8);
     /// A page string (name, description, placeholder, shortcuts, value text, index texts) was cut
-    /// to `PAGE_STRING_CAP` (gorca-sem-atspi) bytes.
+    /// to `PAGE_STRING_CAP` bytes.
     pub const TRUNCATED: Notes = Notes(1 << 9);
 
     /// True when every bit of `other` is set.
@@ -61,7 +63,7 @@ impl Notes {
         self.0 == 0
     }
 
-    /// Raise every bit of `other`.
+    /// Add every bit of `other`.
     pub fn add(&mut self, other: Notes) {
         self.0 |= other.0;
     }

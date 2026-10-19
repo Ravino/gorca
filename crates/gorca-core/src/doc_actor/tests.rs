@@ -38,6 +38,7 @@ fn src(id: u64, role: Role, local: Option<u64>) -> SrcNode {
         text: None,
         attrs: smallvec::SmallVec::default(),
         local: local.map(LocalId),
+        rec: None,
     }
 }
 
@@ -96,7 +97,18 @@ fn rig() -> Rig {
 }
 
 fn rig_with(policy: super::repair::RepairPolicy) -> Rig {
+    rig_full(policy, None)
+}
+
+fn rig_full(
+    policy: super::repair::RepairPolicy,
+    fuse: Option<gorca_doc_source_api::FuseSetup>,
+) -> Rig {
     let (source, script) = ScriptedDocSource::new();
+    let source = match fuse {
+        Some(f) => source.with_fuse(f),
+        None => source,
+    };
     let join = Arc::new(WebJoin::new());
     let docs = Arc::new(DocDirectory::new());
     let (ntx, notices) = mpsc::channel(32);
@@ -519,4 +531,234 @@ async fn a_tiny_young_mirror_is_checked_at_two_seconds_unless_the_load_was_repor
     assert_eq!(next_seen(&mut r).await, Seen::Repair);
     r.shutdown.cancel();
     let _ = r.task.await;
+}
+
+// ---- fusion in the writer (M22a-C2) --------------------------------------------------------------
+
+mod fused {
+    use gorca_fuse::{PrimarySlot, Profile, QuirkSet, Rules};
+    use gorca_model::sem::{Group, GroupMask, SemRole, SrcRecord};
+
+    use super::*;
+
+    fn setup() -> gorca_doc_source_api::FuseSetup {
+        let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], Rules::aria());
+        profile.default_role = SemRole::Generic;
+        gorca_doc_source_api::FuseSetup {
+            name: Arc::from("test"),
+            profile,
+            quirks: QuirkSet::default(),
+        }
+    }
+
+    fn rec(role: SemRole, name: Option<&str>) -> Arc<SrcRecord> {
+        let mut r = SrcRecord::default();
+        r.sem.role = role;
+        r.name = name.map(Arc::from);
+        r.known = GroupMask::EMPTY;
+        r.known.set(Group::Role, true);
+        r.known.set(Group::Name, true);
+        Arc::new(r)
+    }
+
+    fn with_rec(mut n: SrcNode, role: SemRole, name: Option<&str>) -> SrcNode {
+        n.rec = Some(rec(role, name));
+        n
+    }
+
+    /// body(1) -> p(2) -> "hello"(3), a(4) -> "docs"(5), with normalised records.
+    fn batch() -> Vec<DocDelta> {
+        vec![
+            DocDelta::Reset {
+                root: SrcNodeId(1),
+                nav_id: 1,
+            },
+            DocDelta::Upsert(vec![
+                with_rec(
+                    block(src(1, Role::DocumentWeb, Some(11))),
+                    SemRole::DocumentWeb,
+                    None,
+                ),
+                with_rec(
+                    block(src(2, Role::Paragraph, Some(12))),
+                    SemRole::Paragraph,
+                    None,
+                ),
+                run_node(3, "hello "),
+                with_rec(src(4, Role::Link, Some(14)), SemRole::Link, None),
+                run_node(5, "docs"),
+            ]),
+            kids(1, &[2]),
+            kids(2, &[3, 4]),
+            kids(4, &[5]),
+            DocDelta::Settled { batch: 1 },
+        ]
+    }
+
+    fn sem_name(r: &Rig, local: u64) -> Option<String> {
+        let (_, id) = r.join.get(nk(local))?;
+        r.handle.read.with(|d| {
+            d.node(id)
+                .and_then(|v| v.meta)
+                .and_then(|m| m.sem.as_ref())
+                .and_then(|e| e.name.as_deref().map(str::to_owned))
+        })
+    }
+
+    fn sem_role(r: &Rig, local: u64) -> Option<SemRole> {
+        let (_, id) = r.join.get(nk(local))?;
+        r.handle.read.with(|d| {
+            d.node(id)
+                .and_then(|v| v.meta)
+                .and_then(|m| m.sem.as_ref())
+                .map(|e| e.sem.role)
+        })
+    }
+
+    #[tokio::test]
+    async fn the_published_mirror_carries_the_fused_entries() {
+        let mut r = rig_full(super::super::repair::RepairPolicy::ALL, Some(setup()));
+        r.script.batches.send(batch()).await.unwrap();
+        next_notice(&mut r).await;
+        // Fused before the publish: the very first snapshot has the entries.
+        assert_eq!(sem_role(&r, 14), Some(SemRole::Link));
+        assert_eq!(sem_role(&r, 11), Some(SemRole::DocumentWeb));
+        // The link has no name of its own: S3 named it from its content (the text run).
+        assert_eq!(sem_name(&r, 14).as_deref(), Some("docs"));
+        r.shutdown.cancel();
+        let _ = r.task.await;
+    }
+
+    #[tokio::test]
+    async fn a_change_in_a_childs_content_patches_the_parents_entry_without_an_upsert() {
+        let mut r = rig_full(super::super::repair::RepairPolicy::ALL, Some(setup()));
+        r.script.batches.send(batch()).await.unwrap();
+        next_notice(&mut r).await;
+        r.script
+            .batches
+            .send(vec![
+                DocDelta::Upsert(vec![run_node(5, "pages")]),
+                DocDelta::Settled { batch: 2 },
+            ])
+            .await
+            .unwrap();
+        assert!(matches!(
+            next_notice(&mut r).await,
+            DocNotice::Changed { .. }
+        ));
+        assert_eq!(sem_name(&r, 14).as_deref(), Some("pages"));
+        r.handle.read.with(|d| assert!(d.validate().is_ok()));
+        r.shutdown.cancel();
+        let _ = r.task.await;
+    }
+
+    #[tokio::test]
+    async fn a_forwarded_fact_fuses_in_the_writer_and_an_older_one_loses() {
+        let mut r = rig_full(super::super::repair::RepairPolicy::ALL, Some(setup()));
+        let mut b = batch();
+        // Give the link a name of its own so the fact has something to beat.
+        b[1] = DocDelta::Upsert(vec![
+            with_rec(
+                block(src(1, Role::DocumentWeb, Some(11))),
+                SemRole::DocumentWeb,
+                None,
+            ),
+            with_rec(
+                block(src(2, Role::Paragraph, Some(12))),
+                SemRole::Paragraph,
+                None,
+            ),
+            run_node(3, "hello "),
+            with_rec(src(4, Role::Link, Some(14)), SemRole::Link, Some("Docs")),
+            run_node(5, "docs"),
+        ]);
+        r.script.batches.send(b).await.unwrap();
+        next_notice(&mut r).await;
+        assert_eq!(sem_name(&r, 14).as_deref(), Some("Docs"));
+        let t = r.handle.timeline.load(Ordering::Acquire);
+        assert_eq!(t, 1, "one batch was applied");
+        // Issued after the batch: it wins. A fused entry is no content change: the Reader is not
+        // told, the mirror just carries the new entry.
+        r.handle
+            .ctl
+            .send(DocCtl::Fact {
+                local: LocalId(14),
+                rec: rec(SemRole::Link, Some("Fresh")),
+                issued_at: t,
+            })
+            .await
+            .unwrap();
+        for _ in 0..100 {
+            if sem_name(&r, 14).as_deref() == Some("Fresh") {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert_eq!(sem_name(&r, 14).as_deref(), Some("Fresh"));
+        assert!(r.notices.try_recv().is_err(), "no content changed");
+        // A later batch rewrites the node; a fact issued before that batch is older than it.
+        r.script
+            .batches
+            .send(vec![
+                DocDelta::Upsert(vec![with_rec(
+                    src(4, Role::Link, Some(14)),
+                    SemRole::Link,
+                    Some("Batch"),
+                )]),
+                DocDelta::Settled { batch: 2 },
+            ])
+            .await
+            .unwrap();
+        next_notice(&mut r).await;
+        assert_eq!(sem_name(&r, 14).as_deref(), Some("Batch"));
+        r.handle
+            .ctl
+            .send(DocCtl::Fact {
+                local: LocalId(14),
+                rec: rec(SemRole::Link, Some("Stale")),
+                issued_at: t,
+            })
+            .await
+            .unwrap();
+        // Facts about keys no join knows are dropped quietly.
+        r.handle
+            .ctl
+            .send(DocCtl::Fact {
+                local: LocalId(777),
+                rec: rec(SemRole::Link, Some("Nobody")),
+                issued_at: 99,
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert_eq!(sem_name(&r, 14).as_deref(), Some("Batch"));
+        assert!(
+            r.notices.try_recv().is_err(),
+            "nothing changed, nothing to tell"
+        );
+        r.shutdown.cancel();
+        let _ = r.task.await;
+    }
+
+    #[tokio::test]
+    async fn a_source_without_fusion_tables_publishes_nodes_without_entries() {
+        let mut r = rig();
+        r.script.batches.send(batch()).await.unwrap();
+        next_notice(&mut r).await;
+        assert_eq!(sem_role(&r, 14), None);
+        // A fact for such a document is ignored.
+        r.handle
+            .ctl
+            .send(DocCtl::Fact {
+                local: LocalId(14),
+                rec: rec(SemRole::Link, Some("X")),
+                issued_at: 1,
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(sem_role(&r, 14), None);
+        r.shutdown.cancel();
+        let _ = r.task.await;
+    }
 }

@@ -1,0 +1,13 @@
+1032901288208370 said "M8 Telegram dynamic buttons - Google Chrome for Testing, M8 Telegram dynamic buttons, document"
+1032901322140168 said "browse mode, Start of chat."
+1032914173306573 said "Start of chat."
+1032914837273494 said "Dyn replaced, button"
+1032914972756468 said "Dyn attach, button"
+bus 2 /org/a11y/atspi/accessible/6 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/10 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/6 StateChanged:focused
+bus 2 /org/a11y/atspi/accessible/10 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/6 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/6 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/204 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/198 StateChanged:focused

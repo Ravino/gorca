@@ -1,22 +1,33 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Rule 11 (ADR-0024 review, M22a wave C): speech and every other reader get a fused entry only
-//! through `Ivm::entry_view`, which applies the silence mask of revoked, paused and quarantined
-//! sources at once. `Ivm::entry_unmasked` returns the published entry as the last re-fusion left
-//! it, which may still carry a silenced source's value; it exists for the engine's own tests.
+//! Rule 11: speech and every other reader of fused semantics reads entries only through
+//! `Ivm::entry_view`; `Ivm::entry_unmasked` exists for the fusion engine's own tests.
 //!
-//! Scope: non-test sources under `crates/*/src` and `extensions/*/src`, outside `gorca-fuse`
-//! (which defines it). Text after the first `#[cfg(test)]` line of a file is test code and is
-//! skipped; `tests/`, `benches/` and `examples/` directories are not scanned.
+//! The unmasked entry may still carry the value of a silenced (revoked, quarantined, paused)
+//! source until the bounded re-fusion reaches the node; `entry_view` hides such values at read
+//! time (M22a-B2 review, decision of 2026-10-19). Calling the unmasked accessor from product code
+//! would reopen the hole the mask closes.
+//!
+//! Scope: non-test sources under `crates/*/src` and `extensions/*/src` outside `gorca-fuse`.
+//! Text after the first `#[cfg(test)]` line of a file is test code and is skipped; `tests/` and
+//! `benches/` directories are not scanned. Exempt: the fusion engine itself and the bench crates
+//! (harnesses that inspect engine state, never linked into the daemon).
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-/// The call that bypasses the silence mask.
-const FORBIDDEN: &str = "entry_unmasked(";
+/// The accessor product code must not call.
+const BANNED: &str = "entry_unmasked";
 
-/// Repo-relative path prefixes that may call it.
-const EXEMPT: &[&str] = &["crates/gorca-fuse/", "xtask/"];
+/// Repo-relative path prefixes that may use it.
+const EXEMPT: &[&str] = &[
+    "crates/gorca-fuse/",
+    "crates/gorca-bench/",
+    "crates/gorca-bench-b1/",
+    "crates/gorca-bench-b2/",
+    "crates/gorca-bench-web/",
+    "xtask/",
+];
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Hit {
@@ -24,7 +35,7 @@ pub struct Hit {
     pub line: usize,
 }
 
-/// Forbidden calls in the non-test part of `source`.
+/// Uses of the banned accessor in the non-test part of `source` (comments are skipped).
 pub fn scan(file: &str, source: &str) -> Vec<Hit> {
     let mut hits = Vec::new();
     for (i, line) in source.lines().enumerate() {
@@ -35,7 +46,7 @@ pub fn scan(file: &str, source: &str) -> Vec<Hit> {
         if t.starts_with("//") {
             continue;
         }
-        if line.contains(FORBIDDEN) {
+        if line.contains(BANNED) {
             hits.push(Hit {
                 file: file.to_owned(),
                 line: i + 1,
@@ -99,16 +110,16 @@ pub fn run() -> Result<bool> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let hits = scan_workspace(&root)?;
     if hits.is_empty() {
-        println!("masked-entry rule: ok (only gorca-fuse calls entry_unmasked)");
+        println!("entry rule: ok (only gorca-fuse uses `entry_unmasked`)");
         return Ok(true);
     }
     for h in &hits {
         eprintln!(
-            "rule 11: {}:{} calls `entry_unmasked`; read fused entries through `Ivm::entry_view`",
+            "rule 11: {}:{} uses `{BANNED}`; read fused entries through `Ivm::entry_view`",
             h.file, h.line
         );
     }
-    eprintln!("{} masked-entry rule violation(s)", hits.len());
+    eprintln!("{} entry rule violation(s)", hits.len());
     Ok(false)
 }
 
@@ -117,26 +128,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_call_outside_tests_and_comments_is_flagged() {
+    fn the_unmasked_accessor_is_flagged_outside_comments_and_tests() {
         let src = "fn a(i: &Ivm) { i.entry_unmasked(n); }\n\
-                   // i.entry_unmasked(n)\n\
-                   /// docs mention entry_unmasked(n)\n\
-                   fn b(i: &Ivm) { i.entry_view(n); }\n";
+                   // entry_unmasked is test-only\n\
+                   fn b(i: &Ivm) { i.entry_view(n); }\n\
+                   #[cfg(test)]\n\
+                   mod tests { fn t(i: &Ivm) { i.entry_unmasked(n); } }\n";
         let hits = scan("crates/x/src/lib.rs", src);
-        assert_eq!(hits.len(), 1, "{hits:?}");
-        assert_eq!(hits[0].line, 1);
+        assert_eq!(
+            hits,
+            vec![Hit {
+                file: "crates/x/src/lib.rs".to_owned(),
+                line: 1
+            }]
+        );
     }
 
     #[test]
-    fn test_modules_are_skipped() {
-        let src = "fn a() {}\n#[cfg(test)]\nmod tests { fn t(i: &Ivm) { i.entry_unmasked(n); } }\n";
-        assert!(scan("crates/x/src/lib.rs", src).is_empty());
-    }
-
-    #[test]
-    fn only_the_engine_is_exempt() {
+    fn only_the_engine_and_the_bench_harnesses_are_exempt() {
         assert!(exempt("crates/gorca-fuse/src/ivm.rs"));
-        assert!(!exempt("crates/gorca-core/src/app_actor/fuse.rs"));
+        assert!(exempt("crates/gorca-bench/src/main.rs"));
+        assert!(!exempt("crates/gorca-core/src/doc_actor/fuse.rs"));
         assert!(!exempt("crates/gorca-fuse-extra/src/lib.rs"));
     }
 

@@ -239,6 +239,7 @@ mod tests {
             text: None,
             attrs: SmallVec::default(),
             local: None,
+            rec: None,
         }
     }
 

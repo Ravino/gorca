@@ -358,6 +358,7 @@ fn src(id: u64, role: Role, local: Option<u64>) -> SrcNode {
         text: None,
         attrs: smallvec::SmallVec::default(),
         local: local.map(LocalId),
+        rec: None,
     }
 }
 
@@ -517,6 +518,7 @@ fn rig() -> Rig {
         events: ev_tx,
         orphans: Arc::default(),
         repair_flag: Arc::default(),
+        timeline: Arc::default(),
     });
     let keys = ModeKeys {
         web_escape: vec![escape_chord()],
@@ -1081,6 +1083,7 @@ fn navigate_to_a_page_that_builds_progressively(
         events: ev_tx,
         orphans: Arc::default(),
         repair_flag: Arc::default(),
+        timeline: Arc::default(),
     });
     r.reader.handle(
         ReaderMsg::Doc(DocNotice::FirstUseful {
@@ -2871,6 +2874,7 @@ fn add_second_doc_unjoined(r: &mut Rig, title: &str) -> Vec<(LocalId, DocNodeId)
         events: ev_tx,
         orphans: Arc::default(),
         repair_flag: Arc::default(),
+        timeline: Arc::default(),
     });
     std::mem::forget(writer);
     r.mirror.apply(

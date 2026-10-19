@@ -26,9 +26,9 @@
 
 use gorca_model::PropMask;
 use gorca_model::sem::{
-    Group, GroupMask, Invalid, NameFrom, Notes, Orientation, Popup, RoleSource, SemFlags, SemRole,
-    Semantics, Sort, SrcRecord, TagName,
+    Group, GroupMask, Invalid, NameFrom, Orientation, Popup, SemFlags, SemRole, Semantics, Sort,
 };
+pub use gorca_model::sem::{Notes, RoleSource, SrcRecord, TagName};
 
 use crate::attrs::{
     self, ParsedAttrs, arc_capped, current_of, grid_of, has_details, invalid_of, level_of, live_of,

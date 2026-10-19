@@ -231,6 +231,25 @@ impl AttrInterner {
         k
     }
 
+    /// Names of the dynamically interned keys, ordered by key (`names[key - FIRST_DYNAMIC]`).
+    /// One snapshot per fetch replaces a locked reverse lookup per attribute.
+    pub fn dynamic_names(&self) -> Vec<Box<str>> {
+        let Ok(m) = self.keys.lock() else {
+            return Vec::new();
+        };
+        let mut out: Vec<Box<str>> = vec![Box::from(""); m.len()];
+        for (name, key) in m.iter() {
+            if let Some(slot) = key
+                .0
+                .checked_sub(web_attrs::FIRST_DYNAMIC)
+                .and_then(|i| out.get_mut(usize::from(i)))
+            {
+                slot.clone_from(name);
+            }
+        }
+        out
+    }
+
     /// Reverse lookup for reports and tests.
     pub fn name_of(&self, key: AttrKey) -> Option<String> {
         let m = self.keys.lock().ok()?;
@@ -287,6 +306,25 @@ pub struct RawNode {
     pub attrs: SmallVec<[(AttrKey, Arc<str>); 4]>,
     /// Set when the path is not numeric; the real string.
     pub other_path: Option<Box<str>>,
+    /// The attributes whose key is an alias: `atomic` and `container-atomic` share one well-known
+    /// key (and so do `relevant` and `busy` with their `container-` forms), which is all the
+    /// legacy readers need. The normaliser needs to tell the own value from the container's, so
+    /// the exact toolkit name travels here as well.
+    pub aliased: SmallVec<[(&'static str, Arc<str>); 2]>,
+}
+
+/// The exact toolkit name of an attribute that shares its key with another one (see
+/// [`RawNode::aliased`]).
+pub fn alias_name(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "atomic" => "atomic",
+        "container-atomic" => "container-atomic",
+        "relevant" => "relevant",
+        "container-relevant" => "container-relevant",
+        "busy" => "busy",
+        "container-busy" => "container-busy",
+        _ => return None,
+    })
 }
 
 #[derive(Clone, Debug, Default)]
@@ -332,6 +370,7 @@ pub fn parse_get_tree(body: &[u8], interner: &AttrInterner) -> WireResult<TreeRe
             child_count: 0,
             attrs: SmallVec::new(),
             other_path,
+            aliased: SmallVec::new(),
         };
         let pend = r.array_end(8)?;
         while r.pos() < pend {
@@ -370,6 +409,9 @@ pub fn parse_get_tree(body: &[u8], interner: &AttrInterner) -> WireResult<TreeRe
                         } else {
                             Arc::from(av)
                         };
+                        if let Some(exact) = alias_name(ak) {
+                            node.aliased.push((exact, Arc::clone(&val)));
+                        }
                         node.attrs.push((key, val));
                     }
                 }

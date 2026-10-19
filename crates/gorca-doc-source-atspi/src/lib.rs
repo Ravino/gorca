@@ -17,6 +17,7 @@ pub mod extras;
 pub mod factory;
 pub mod fetch;
 pub mod identity;
+pub mod norm;
 pub mod p2p;
 pub mod roles;
 pub mod runs;

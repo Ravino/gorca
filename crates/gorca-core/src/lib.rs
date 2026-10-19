@@ -71,6 +71,9 @@ pub use commands::{
     gorca_modifiers, grab_collisions, lane_settings, letter_grabs, tab_grabs,
 };
 pub use directory::{MirrorDirectory, Owner};
+pub use doc_actor::agree::{
+    AgreementStats, Aspect, set_log_names as set_agreement_log_names, stats as agreement_stats,
+};
 pub use doc_actor::{
     DocActorSpec, DocCounters, DocCtl, DocDirectory, DocHandle, DocNotice, SelOutcome, WebJoin,
     prepare as prepare_doc_actor,
