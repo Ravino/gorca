@@ -1,0 +1,34 @@
+# e2e-m8 chr0-r3-base-chrome
+# utc=2026-10-19T08:28:45Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=13.46 11.65 12.54 2/2198 3984452
+# git_rev=d87409fb
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=chr0-r3-base-chrome
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/base/gorca-main-b4310146
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=9.45 10.74 12.43 1/2137 3969193
+# loadavg_end=13.46 11.65 12.54 3/2198 3984449
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-SLOW.fail               daemon/voicego            0            0            0  1 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-SLOW.gap                daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-SLOW.p0_not_pass        daemon/voicego            0            0            0  1                  info   [steps]
+M8-SLOW.pass               daemon/voicego            7            7            7  1                  info   [steps]
+M8-SLOW.steps              daemon/voicego            7            7            7  1                  info   [steps]
+M8-SLOW.xfail              daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-SLOW.xpass              daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

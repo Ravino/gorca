@@ -1,0 +1,44 @@
+# e2e-m8 chr0-dbg-chrome
+# utc=2026-10-19T07:39:26Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=11.37 10.94 10.34 3/2271 3769951
+# git_rev=d87409fb
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=chr0-dbg-chrome
+# reader=daemon:<repo>/.claude/worktrees/agent-a508eca24e2626204/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=10.99 10.83 10.29 2/2261 3769426
+# loadavg_end=11.37 10.94 10.34 1/2271 3769948
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-MSG MS.fm.down1 P0 FAIL: heard "M8 Messenger - Google Chrome, Alice, 10:01, Lunch at noon?" 
+# note1=M8-MSG MS.fm.down2 P0 FAIL: heard "Me, 10:02, Sure, where?" 
+# note2=M8-MSG MS.fm.up1 P0 FAIL: heard "Alice, 10:01, Lunch at noon?" 
+# note3=M8-MSG MS.pn.down P0 FAIL: heard "Me, 10:02, Sure, where?" 
+# note4=M8-MSG MS.pn.down2 P0 FAIL: heard "Alice, 10:03, The new place on Main street" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-MSG.mode_ms.n           daemon/voicego            4            4            4  1                  info   [samples]
+M8-MSG.mode_ms.p50         daemon/voicego        0.747        0.747        0.747  1                  info   [ms]
+M8-MSG.mode_ms.p95         daemon/voicego        0.901        0.901        0.901  1                  info   [ms]
+M8-MSG.mode_ms.p99         daemon/voicego        0.901        0.901        0.901  1 <=           15  PASS   [ms]
+M8-MSG.mode_ms.max         daemon/voicego        0.901        0.901        0.901  1                  info   [ms]
+M8-MSG.fail                daemon/voicego            5            5            5  1 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-MSG.gap                 daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-MSG.p0_not_pass         daemon/voicego            5            5            5  1                  info   [steps]
+M8-MSG.pass                daemon/voicego           14           14           14  1                  info   [steps]
+M8-MSG.steps               daemon/voicego           19           19           19  1                  info   [steps]
+M8-MSG.xfail               daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-MSG.xpass               daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

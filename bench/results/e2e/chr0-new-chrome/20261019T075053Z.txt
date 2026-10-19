@@ -1,0 +1,53 @@
+# e2e-m8 chr0-new-chrome
+# utc=2026-10-19T07:50:51Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.41 13.78 12.45 2/2378 3831282
+# git_rev=d87409fb
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=chr0-new-chrome
+# reader=daemon:<repo>/.claude/worktrees/agent-a508eca24e2626204/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# quick=false
+# loadavg_before=17.60 13.19 11.32 10/2372 3783975
+# loadavg_end=12.41 13.78 12.45 3/2359 3831156
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-SLOW.fail               daemon/voicego            0            0            0  3 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-SLOW.gap                daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-SLOW.p0_not_pass        daemon/voicego            0            0            0  3                  info   [steps]
+M8-SLOW.pass               daemon/voicego            7            7            7  3                  info   [steps]
+M8-SLOW.steps              daemon/voicego            7            7            7  3                  info   [steps]
+M8-SLOW.xfail              daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-SLOW.xpass              daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-SLOW0.fail              daemon/voicego            0            0            0  3 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-SLOW0.gap               daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-SLOW0.p0_not_pass       daemon/voicego            0            0            0  3                  info   [steps]
+M8-SLOW0.pass              daemon/voicego            5            5            5  3                  info   [steps]
+M8-SLOW0.steps             daemon/voicego            5            5            5  3                  info   [steps]
+M8-SLOW0.xfail             daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-SLOW0.xpass             daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-MSG.mode_ms.n           daemon/voicego            4            4            4  3                  info   [samples]
+M8-MSG.mode_ms.p50         daemon/voicego        0.565        0.458        0.621  3                  info   [ms]
+M8-MSG.mode_ms.p95         daemon/voicego        0.648        0.576        0.800  3                  info   [ms]
+M8-MSG.mode_ms.p99         daemon/voicego        0.648        0.576        0.800  3 <=           15  PASS   [ms]
+M8-MSG.mode_ms.max         daemon/voicego        0.648        0.576        0.800  3                  info   [ms]
+M8-MSG.fail                daemon/voicego            0            0            0  3 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-MSG.gap                 daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-MSG.p0_not_pass         daemon/voicego            0            0            0  3                  info   [steps]
+M8-MSG.pass                daemon/voicego           22           22           22  3                  info   [steps]
+M8-MSG.steps               daemon/voicego           22           22           22  3                  info   [steps]
+M8-MSG.xfail               daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-MSG.xpass               daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]

@@ -1,0 +1,38 @@
+1013198912045059 said "M8 Messenger — Mozilla Firefox, M8 Messenger, document"
+1013199053833398 said "browse mode, Chat sidebar, navigation landmark, heading level 2, Chats"
+1013199974803200 said "Chats"
+1013200275546681 said "main landmark, heading level 1, Messenger"
+1013200407135972 said "heading level 2, Conversation with Alice"
+1013200539454128 said "Alice, 10:01: Lunch at noon?"
+1013200672439880 said "Me, 10:02: Sure, where?"
+1013200803110598 said "Alice, 10:03: The new place on Main street"
+1013200934150193 said "Me, 10:02: Sure, where?"
+1013201432598722 said "Alice, 10:01, Lunch at noon?, panel, Alice, 10:01: Lunch at noon?"
+1013201433291466 said "Alice, 10:01, Lunch at noon?, Alice, 10:01: Lunch at noon?"
+1013201797795804 said "M8 Messenger — Mozilla Firefox, panel"
+1013202251426407 said "not in a web page"
+1013203670773928 said "browse mode, Me, 10:02, Sure, where?, Me, 10:02: Sure, where?"
+bus 4 /org/a11y/atspi/accessible/2 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/61 TextChanged:insert
+bus 4 /org/a11y/atspi/accessible/59 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:insert/system
+bus 2 /org/a11y/atspi/accessible/63 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/67 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/71 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/72 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/78 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/79 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/80 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/63 Focus:
+bus 1 /org/a11y/atspi/accessible/63 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/98 Focus:
+bus 1 /org/a11y/atspi/accessible/98 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/114 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/99 Focus:
+bus 1 /org/a11y/atspi/accessible/99 StateChanged:focused

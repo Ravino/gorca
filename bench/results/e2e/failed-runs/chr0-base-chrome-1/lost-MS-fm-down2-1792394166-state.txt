@@ -1,0 +1,19 @@
+1010678799719283 said "M8 Messenger - Google Chrome, M8 Messenger, document"
+1010678835364565 said "browse mode, Chat sidebar, navigation landmark, heading level 2, Chats"
+1010689226103836 said "Chats"
+1010689527577895 said "main landmark, heading level 1, Messenger"
+1010690235223008 said "heading level 2, Conversation with Alice"
+1010690943532631 said "heading level 2, Pinned messages"
+1010691649991141 said "list with 3 items, bullet Pinned: office is closed on Friday"
+1010692357513931 said "bullet Pinned: wifi password is in the wiki"
+1010693064057997 said "bullet Pinned: standup moved to 9:30"
+1010693775063623 said "bullet Pinned: wifi password is in the wiki"
+1010694841127215 said "Alice, 10:01, Lunch at noon?, panel, Alice, 10:01: Lunch at noon?"
+1010694841486195 said "Alice, 10:01, Lunch at noon?, Alice, 10:01: Lunch at noon?"
+1010695317765637 said "focus mode"
+1010695319791784 said "M8 Messenger, document"
+bus 2 /org/a11y/atspi/accessible/13 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/13 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/185 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/13 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/13 StateChanged:focused

@@ -1,0 +1,35 @@
+1013043707259036 said "M8 Messenger — Mozilla Firefox, M8 Messenger, document"
+1013044017709071 said "browse mode, Chat sidebar, navigation landmark, heading level 2, Chats"
+1013044795053484 said "Chats"
+1013045095687555 said "main landmark, heading level 1, Messenger"
+1013045232435092 said "heading level 2, Conversation with Alice"
+1013045356286798 said "Alice, 10:01: Lunch at noon?"
+1013045481022816 said "Me, 10:02: Sure, where?"
+1013045613289279 said "Alice, 10:03: The new place on Main street"
+1013045746232910 said "Me, 10:02: Sure, where?"
+1013046238665686 said "Alice, 10:01, Lunch at noon?, panel, Alice, 10:01: Lunch at noon?"
+1013046239176755 said "Alice, 10:01, Lunch at noon?, Alice, 10:01: Lunch at noon?"
+1013046590933004 said "M8 Messenger — Mozilla Firefox, panel"
+1013047058007365 said "not in a web page"
+bus 4 /org/a11y/atspi/accessible/37 TextChanged:insert/system
+bus 2 /org/a11y/atspi/accessible/59 LoadComplete:
+bus 4 /org/a11y/atspi/accessible/60 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/61 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/60 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/61 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/61 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/65 TextChanged:insert
+bus 4 /org/a11y/atspi/accessible/63 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/60 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/60 TextChanged:insert/system
+bus 2 /org/a11y/atspi/accessible/71 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/76 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/77 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/78 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/79 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/80 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/71 Focus:
+bus 1 /org/a11y/atspi/accessible/71 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/97 Focus:
+bus 1 /org/a11y/atspi/accessible/97 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/113 StateChanged:focused

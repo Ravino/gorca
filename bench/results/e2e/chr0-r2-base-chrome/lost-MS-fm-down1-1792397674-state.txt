@@ -1,0 +1,20 @@
+1014190877549660 said "M8 Messenger - Google Chrome, M8 Messenger, document"
+1014190911112536 said "browse mode, Chat sidebar, navigation landmark, heading level 2, Chats"
+1014201445582743 said "Chats"
+1014201746390662 said "main landmark, heading level 1, Messenger"
+1014201868480013 said "heading level 2, Conversation with Alice"
+1014201999035066 said "Alice, 10:01: Lunch at noon?"
+1014202131814016 said "Me, 10:02: Sure, where?"
+1014202265215614 said "Alice, 10:03: The new place on Main street"
+1014202396033389 said "Me, 10:02: Sure, where?"
+1014202891348456 said "Alice, 10:01, Lunch at noon?, panel, Alice, 10:01: Lunch at noon?"
+1014202891867489 said "Alice, 10:01, Lunch at noon?, Alice, 10:01: Lunch at noon?"
+1014203248244530 said "M8 Messenger - Google Chrome, Alice, 10:01, Lunch at noon?, Alice, 10:01: Lunch at noon?"
+1014203713397018 said "focus mode"
+1014203715946778 said "M8 Messenger, document"
+bus 2 /org/a11y/atspi/accessible/13 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/13 StateChanged:focused
+bus 2 /org/a11y/atspi/accessible/13 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/72 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/72 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/13 StateChanged:focused

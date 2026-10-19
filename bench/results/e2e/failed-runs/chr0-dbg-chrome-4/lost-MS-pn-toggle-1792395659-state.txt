@@ -1,0 +1,34 @@
+1012184027143942 said "M8 Messenger, document"
+1012184064052033 said "browse mode, Chat sidebar, navigation landmark, heading level 2, Chats"
+1012184844290127 said "Chats"
+1012185144844460 said "main landmark, heading level 1, Messenger"
+1012185275738804 said "heading level 2, Conversation with Alice"
+1012185407504451 said "Alice, 10:01: Lunch at noon?"
+1012185538511924 said "Me, 10:02: Sure, where?"
+1012185669782810 said "Alice, 10:03: The new place on Main street"
+1012185801359392 said "Me, 10:02: Sure, where?"
+1012185941719936 said "Me, 10:06, Will do, panel, Me, 10:06: Will do"
+1012185942462733 said "Me, 10:06, Will do, Me, 10:06: Will do"
+1012186306641971 said "Alice, 10:01, Lunch at noon?, panel, Alice, 10:01: Lunch at noon?"
+1012186307200469 said "Alice, 10:01, Lunch at noon?, Alice, 10:01: Lunch at noon?"
+1012186667715450 said "M8 Messenger - Google Chrome, Alice, 10:01, Lunch at noon?, Alice, 10:01: Lunch at noon?"
+1012187128495952 said "focus mode"
+1012187262672749 said "Me, 10:02, Sure, where?"
+1012188766603783 said "Alice, 10:03, The new place on Main street"
+1012188897037664 said "Me, 10:02, Sure, where?"
+1012189029456902 said "Me, 10:06, Will do"
+1012189285413366 said "browse mode, Alice, 10:01: Lunch at noon?"
+1012189426024474 said "focus mode, Pinned: office is closed on Friday, list item"
+1012189895932613 said "browse mode"
+bus 2 /org/a11y/atspi/accessible/47 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/47 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/47 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/199 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/187 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/182 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/182 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/183 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/184 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/183 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/187 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/189 StateChanged:focused

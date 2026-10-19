@@ -1,0 +1,29 @@
+# e2e-m8 chr0-r4-new-electron
+# utc=2026-10-19T08:38:44Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.63 15.39 14.34 3/2325 4058877
+# git_rev=d87409fb
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=chr0-r4-new-electron
+# reader=daemon:<repo>/.claude/worktrees/agent-a508eca24e2626204/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=15.58 16.38 14.57 3/2297 4053923
+# loadavg_end=12.63 15.39 14.34 1/2325 4058874
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-SLOW run failed: find_doc failed: {"ok":false,"error":"document not found","event":"reply","id":1}
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-SLOW.failed_runs        daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]

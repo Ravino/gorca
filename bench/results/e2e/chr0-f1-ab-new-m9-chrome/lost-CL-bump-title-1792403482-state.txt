@@ -1,0 +1,38 @@
+1019986862256700 said "M8 Chats - Google Chrome, M8 Chats, document"
+1019986901235261 said "browse mode, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused, button, Retitle"
+1019989086975511 said "Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused, button, Retitle"
+1019989407686831 said "Alice, see you soon, link"
+1019990313758628 said "Opened chat Alice (1)"
+1019991857675341 said "Alice - M8 Chats - Google Chrome"
+1019993384819889 said "Re-render same, button"
+1019995554620304 said "Bob, ok, link"
+1019995891425424 said "Opened chat Bob (2)"
+1019997443691364 said "Bob - M8 Chats - Google Chrome"
+1019997578849459 said "Bob - M8 Chats, document"
+1019998056407126 said "out of list, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused, button, Retitle"
+1019998367722845 said "Re-render same, button"
+1019998843930174 said "link, Alice, see you soon"
+1020003201388295 said "Alice, see you soon, link"
+1020003279246943 said "Opened chat Alice (3)"
+1020004703682640 said "Alice - M8 Chats, document"
+1020005179855410 said "out of list, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused, button, Retitle"
+1020005496169061 said "Re-render bump, button"
+1020005969211645 said "link, Alice, see you soon"
+1020006319983464 said "link, Bob, ok"
+1020010678406682 said "bullet, link, Alice, see you soon"
+1020012313449396 said "Alice - M8 Chats - Google Chrome"
+bus 2 /org/a11y/atspi/accessible/70 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/70 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/189 StateChanged:focused
+bus 4 /org/a11y/atspi/accessible/167 TextChanged:insert
+bus 1 /org/a11y/atspi/accessible/169 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/215 StateChanged:focused
+bus 4 /org/a11y/atspi/accessible/167 TextChanged:delete
+bus 4 /org/a11y/atspi/accessible/167 TextChanged:insert
+bus 1 /org/a11y/atspi/accessible/70 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/169 StateChanged:focused
+bus 4 /org/a11y/atspi/accessible/167 TextChanged:delete
+bus 4 /org/a11y/atspi/accessible/167 TextChanged:insert
+bus 1 /org/a11y/atspi/accessible/228 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/70 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/170 StateChanged:focused

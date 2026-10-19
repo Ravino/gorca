@@ -1,0 +1,36 @@
+1011516608376519 said "M8 Messenger - Google Chrome, M8 Messenger, document"
+1011516644174802 said "browse mode, Chat sidebar, navigation landmark, heading level 2, Chats"
+1011527087489866 said "Chats"
+1011527387635122 said "main landmark, heading level 1, Messenger"
+1011527519644065 said "heading level 2, Conversation with Alice"
+1011527650808227 said "Alice, 10:01: Lunch at noon?"
+1011527781817090 said "Me, 10:02: Sure, where?"
+1011527915439570 said "Alice, 10:03: The new place on Main street"
+1011528038988620 said "Me, 10:02: Sure, where?"
+1011528536524400 said "Alice, 10:01, Lunch at noon?, panel, Alice, 10:01: Lunch at noon?"
+1011528536835520 said "Alice, 10:01, Lunch at noon?, Alice, 10:01: Lunch at noon?"
+1011529008771480 said "focus mode"
+1011529010641670 said "M8 Messenger, document"
+1011535273644562 said "browse mode, Alice, 10:01: Lunch at noon?"
+1011535407663305 said "focus mode, Dialogs, list box, Alice, lunch at noon, 2 unread, list item"
+1011535542066925 said "Bob, see you tomorrow, list item, not selected"
+1011535542501929 said "Bob, see you tomorrow, list item"
+1011535673004461 said "Carol, thanks a lot, list item, not selected"
+1011535673917001 said "Carol, thanks a lot, list item"
+1011535922116174 said "browse mode, Carol, thanks a lot"
+1011536776895176 said "focus mode"
+1011536913132982 said "Dave, build is green, list item, not selected"
+1011536914367506 said "Dave, build is green, list item"
+1011538417510849 said "Team standup, notes posted, list item, not selected"
+1011538418478259 said "Team standup, notes posted, list item"
+bus 2 /org/a11y/atspi/accessible/13 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/13 StateChanged:focused
+bus 2 /org/a11y/atspi/accessible/13 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/72 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/13 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/13 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/12 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/67 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/68 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/69 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/70 StateChanged:focused

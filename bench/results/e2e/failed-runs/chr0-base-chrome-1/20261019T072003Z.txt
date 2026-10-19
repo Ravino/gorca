@@ -1,0 +1,75 @@
+# e2e-m8 chr0-base-chrome
+# utc=2026-10-19T07:20:03Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=11.11 10.19 9.30 1/2190 3748697
+# git_rev=d87409fb
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=chr0-base-chrome
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/base/gorca-main-b4310146
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# quick=false
+# loadavg_before=11.53 9.49 8.71 9/2282 3742216
+# loadavg_end=11.11 10.19 9.30 2/2190 3748694
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-SLOW SL.during.h2 P0 FAIL: heard "Group 2, region, heading level 2, Section 2" 
+# note1=M8-SLOW SL.during.k P0 FAIL: heard "link, Item 2.1" 
+# note2=M8-SLOW SL.after.h P0 FAIL: heard "out of list, Group 3, region, heading level 2, Section 3" 
+# note3=M8-SLOW SL.after.ph P0 FAIL: heard "Group 2, region, heading level 2, Section 2" 
+# note4=M8-SLOW0 SL.during.h2 P0 FAIL: heard "Group 2, region, heading level 2, Section 2" 
+# note5=M8-SLOW0 SL.during.k P0 FAIL: heard "link, Item 2.1" 
+# note6=M8-SLOW0 SL.after.h P0 FAIL: heard "out of list, Group 3, region, heading level 2, Section 3" 
+# note7=M8-SLOW0 SL.after.ph P0 FAIL: heard "Group 2, region, heading level 2, Section 2" 
+# note8=M8-MSG MS.br.h1 P0 FAIL: heard "main landmark, heading level 1, Messenger" 
+# note9=M8-MSG MS.br.h2 P0 FAIL: heard "heading level 2, Conversation with Alice" 
+# note10=M8-MSG MS.br.h3 P0 FAIL: heard "heading level 2, Pinned messages" 
+# note11=M8-MSG MS.br.m1 P0 FAIL: heard "list with 3 items, bullet Pinned: office is closed on Friday" 
+# note12=M8-MSG MS.br.m2 P0 FAIL: heard "bullet Pinned: wifi password is in the wiki" 
+# note13=M8-MSG MS.br.m3 P0 FAIL: heard "bullet Pinned: standup moved to 9:30" 
+# note14=M8-MSG MS.br.f P1 FAIL: heard "bullet Pinned: wifi password is in the wiki" 
+# note15=M8-MSG MS.fm.down1 P0 FAIL: heard "" 
+# note16=M8-MSG MS.fm.down2 P0 FAIL: heard "" 
+# note17=M8-MSG MS.fm.up1 P0 FAIL: heard "" 
+# note18=M8-MSG MS.fm.end P1 FAIL: heard "" 
+# note19=M8-MSG MS.pn.down P0 FAIL: heard "Dave, build is green, list item, not selected | Dave, build is green, list item" 
+# note20=M8-MSG MS.pn.down2 P0 FAIL: heard "Team standup, notes posted, list item, not selected | selected" 
+# note21=M8-MSG MS.pn.down2 P0 FAIL: heard "Team standup, notes posted, list item, not selected | Team standup, notes posted, list item" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-SLOW.fail               daemon/voicego            4            4            4  3 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-SLOW.gap                daemon/voicego            1            1            1  3                  info  core ok, NVDA extras missing [steps]
+M8-SLOW.p0_not_pass        daemon/voicego            4            4            4  3                  info   [steps]
+M8-SLOW.pass               daemon/voicego            2            2            2  3                  info   [steps]
+M8-SLOW.steps              daemon/voicego            7            7            7  3                  info   [steps]
+M8-SLOW.xfail              daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-SLOW.xpass              daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-SLOW0.fail              daemon/voicego            4            4            4  3 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-SLOW0.gap               daemon/voicego            1            1            1  3                  info  core ok, NVDA extras missing [steps]
+M8-SLOW0.p0_not_pass       daemon/voicego            4            4            4  3                  info   [steps]
+M8-SLOW0.pass              daemon/voicego            0            0            0  3                  info   [steps]
+M8-SLOW0.steps             daemon/voicego            5            5            5  3                  info   [steps]
+M8-SLOW0.xfail             daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-SLOW0.xpass             daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-MSG.mode_ms.n           daemon/voicego            4            4            4  3                  info   [samples]
+M8-MSG.mode_ms.p50         daemon/voicego        0.566        0.504        0.716  3                  info   [ms]
+M8-MSG.mode_ms.p95         daemon/voicego        0.672        0.533        0.720  3                  info   [ms]
+M8-MSG.mode_ms.p99         daemon/voicego        0.672        0.533        0.720  3 <=           15  PASS   [ms]
+M8-MSG.mode_ms.max         daemon/voicego        0.672        0.533        0.720  3                  info   [ms]
+M8-MSG.fail                daemon/voicego           13           13           13  3 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-MSG.gap                 daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-MSG.p0_not_pass         daemon/voicego           11           11           11  3                  info   [steps]
+M8-MSG.pass                daemon/voicego            7            7            7  3                  info   [steps]
+M8-MSG.steps               daemon/voicego           20           20           20  3                  info   [steps]
+M8-MSG.xfail               daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-MSG.xpass               daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]

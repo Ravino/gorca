@@ -1,0 +1,40 @@
+# e2e-m8 chr0-dbg-chrome
+# utc=2026-10-19T07:41:01Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=13.13 11.46 10.57 3/2254 3773026
+# git_rev=d87409fb
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=chr0-dbg-chrome
+# reader=daemon:<repo>/.claude/worktrees/agent-a508eca24e2626204/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=12.72 11.27 10.49 2/2309 3771462
+# loadavg_end=13.13 11.46 10.57 1/2254 3773023
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-MSG MS.pn.toggle P0 FAIL: heard "browse mode" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-MSG.mode_ms.n           daemon/voicego            3            3            3  1                  info   [samples]
+M8-MSG.mode_ms.p50         daemon/voicego        0.519        0.519        0.519  1                  info   [ms]
+M8-MSG.mode_ms.p95         daemon/voicego        0.905        0.905        0.905  1                  info   [ms]
+M8-MSG.mode_ms.p99         daemon/voicego        0.905        0.905        0.905  1 <=           15  PASS   [ms]
+M8-MSG.mode_ms.max         daemon/voicego        0.905        0.905        0.905  1                  info   [ms]
+M8-MSG.fail                daemon/voicego            1            1            1  1 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-MSG.gap                 daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-MSG.p0_not_pass         daemon/voicego            1            1            1  1                  info   [steps]
+M8-MSG.pass                daemon/voicego           18           18           18  1                  info   [steps]
+M8-MSG.steps               daemon/voicego           19           19           19  1                  info   [steps]
+M8-MSG.xfail               daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-MSG.xpass               daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

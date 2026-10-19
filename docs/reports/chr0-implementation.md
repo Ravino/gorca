@@ -125,3 +125,24 @@ The 3 Chrome FAIL steps are pre-existing and identical on main.
 * The click guard compares role and name; a dynamic name (an unread counter) makes the first Enter say "that item changed".
   Watch for complaints; the guard fails open on read errors.
 * Subtree diff, sweep, M2 identity stay with M7b/M22a as decided.
+
+## 7. Review round 1 (docs/reports/chr0-review.md): fixes
+
+| Finding | Fix |
+|---|---|
+| F-1 repair froze incremental updates | The source keeps processing dirty nodes during a refetch; nodes touched meanwhile are re-marked when it lands (older snapshot cannot leave them reverted; more than 4096 touched = one more refetch). Test: update visible < 250 ms during a 450 ms repair and still present afterwards. Gecko policy is NONE (no repair at all, also no focus-miss repair). Guessed repairs (orphans, root state) first compare the child lists of the first 48 mirror nodes with the browser (<= 150 ms) and skip the refetch when they match: 69 of 109 repairs in the Chrome corpus run were answered that way, full refetches 40 against 92 before |
+| F-2 absorb dropped error targets | `absorb` merges `error_targets`; the fork's keys stay resolvable (alias). Unit test |
+| F-3 name-only change clicked unsaid | The refusal carries the object's new name and the Reader speaks it ("that item changed: <name>"); the next Enter acts only if the mirror shows exactly that name and role within 2 s, otherwise it announces again. Tests: second change, empty name, timeout |
+| F-4 background tabs | No repair, no orphan sampling while dormant |
+| F-5 shared back-off | Fruitless count is per reason |
+| F-6 control queue | `DocHandle::request_repair` sets an atomic max-reason flag and sends one `RepairPending` per transition from empty. Test: 64 state events + load-complete take one slot, a click still fits |
+| F-7 unbounded re-join | `GRACE_REJOIN_WINDOW` 30 s. Test |
+| F-8 evidence | `bench/results/e2e/chr0-*` and `failed-runs/` committed; main merged (`decisions.md` rows kept from both) |
+
+Rerun under host load (loadavg 8-15; labels `chr0-f2load-*`, baseline = the f1 main runs): M8 Firefox 535 PASS / 0 FAIL / 1 GAP / 7 XFAIL
+(identical to main; 0 repairs), M8 through the M9 rig on Chrome 526 PASS / 3 FAIL (same 3 steps as main), CHR-0
+scenarios on Chrome 54 PASS. Gates: fmt, clippy `--workspace --all-targets -D warnings`, xtask strings, `cargo test --workspace --no-fail-fast`.
+The pre-click-guard (`click_displaced`) fired 0 times in the corpus runs.
+
+Not done: orphan events are still assigned to the first document of the app (`of_app`); dormancy now makes that harmless
+(a dormant tab ignores them), an awake wrong tab only costs a cheap look.

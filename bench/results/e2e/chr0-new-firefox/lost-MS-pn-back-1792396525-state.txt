@@ -1,0 +1,57 @@
+1013043707259036 said "M8 Messenger — Mozilla Firefox, M8 Messenger, document"
+1013044017709071 said "browse mode, Chat sidebar, navigation landmark, heading level 2, Chats"
+1013044795053484 said "Chats"
+1013045095687555 said "main landmark, heading level 1, Messenger"
+1013045232435092 said "heading level 2, Conversation with Alice"
+1013045356286798 said "Alice, 10:01: Lunch at noon?"
+1013045481022816 said "Me, 10:02: Sure, where?"
+1013045613289279 said "Alice, 10:03: The new place on Main street"
+1013045746232910 said "Me, 10:02: Sure, where?"
+1013046238665686 said "Alice, 10:01, Lunch at noon?, panel, Alice, 10:01: Lunch at noon?"
+1013046239176755 said "Alice, 10:01, Lunch at noon?, Alice, 10:01: Lunch at noon?"
+1013046590933004 said "M8 Messenger — Mozilla Firefox, panel"
+1013047058007365 said "not in a web page"
+1013048501967643 said "browse mode, Me, 10:02, Sure, where?, Me, 10:02: Sure, where?"
+1013049991447036 said "Alice, 10:03, The new place on Main street, Alice, 10:03: The new place on Main street"
+1013050128160439 said "Me, 10:02, Sure, where?, Me, 10:02: Sure, where?"
+1013050264100139 said "Me, 10:06, Will do, Me, 10:06: Will do"
+1013050520746204 said "focus mode"
+1013051256269496 said "Pinned: office is closed on Friday, list item"
+1013052465871768 said "Pinned: wifi password is in the wiki, list item"
+1013053204396932 said "browse mode, Me, 10:06: Will do"
+1013053910734912 said "heading level 2, Pinned messages"
+1013056245850225 said "focus mode"
+bus 4 /org/a11y/atspi/accessible/37 TextChanged:insert/system
+bus 2 /org/a11y/atspi/accessible/59 LoadComplete:
+bus 4 /org/a11y/atspi/accessible/60 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/61 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/60 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/61 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/61 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/65 TextChanged:insert
+bus 4 /org/a11y/atspi/accessible/63 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/60 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/60 TextChanged:insert/system
+bus 2 /org/a11y/atspi/accessible/71 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/76 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/77 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/78 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/79 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/80 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/71 Focus:
+bus 1 /org/a11y/atspi/accessible/71 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/97 Focus:
+bus 1 /org/a11y/atspi/accessible/97 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/113 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/98 Focus:
+bus 1 /org/a11y/atspi/accessible/98 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/99 Focus:
+bus 1 /org/a11y/atspi/accessible/99 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/98 Focus:
+bus 1 /org/a11y/atspi/accessible/98 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/102 Focus:
+bus 1 /org/a11y/atspi/accessible/102 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/103 Focus:
+bus 1 /org/a11y/atspi/accessible/103 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/104 Focus:
+bus 1 /org/a11y/atspi/accessible/104 StateChanged:focused

@@ -1,0 +1,60 @@
+2026-10-19T09:19:00.900952Z  INFO gorca_phase: phase="web_focus" hit=false id=None
+2026-10-19T09:19:00.903800Z  INFO gorca_phase: phase="locate" wall_ms=2.719182
+2026-10-19T09:19:00.903855Z  INFO gorca_phase: phase="create" wall_ms=0.003803
+2026-10-19T09:19:00.954814Z  INFO gorca_phase: phase="first_block" wall_ms=50.912938 nodes=454
+2026-10-19T09:19:00.955300Z  INFO gorca_phase: phase="translate" wall_ms=0.34762600000000005 nodes=484
+2026-10-19T09:19:00.983768Z  INFO gorca_phase: phase="fetch" total_ms=79.864433 warm_ms=28.592743 frontier_ms=0.142268 get_tree_ms=3.6087469999999997 roles_ms=4.423728 states_ms=2.195107 text_ms=11.209241 assemble_ms=0.07983399999999999 heaviest_get_tree_ms=0.945 calls=1126 tree_bytes=122600 nodes=1354
+2026-10-19T09:19:03.467556Z  INFO gorca_phase: phase="web_focus" hit=false id=None
+2026-10-19T09:19:03.471320Z  INFO gorca_phase: phase="locate" wall_ms=3.6755780000000002
+2026-10-19T09:19:03.471359Z  INFO gorca_phase: phase="create" wall_ms=0.003352
+2026-10-19T09:19:03.501484Z  INFO gorca_phase: phase="fetch" total_ms=30.077115000000003 warm_ms=27.409236 frontier_ms=0.08621899999999999 get_tree_ms=0.8142069999999999 roles_ms=0.623403 states_ms=0.368544 text_ms=0.57851 assemble_ms=0.015951999999999997 heaviest_get_tree_ms=0.49700000000000005 calls=150 tree_bytes=14609 nodes=50
+2026-10-19T09:19:03.501683Z  INFO gorca_phase: phase="translate" wall_ms=0.070671 nodes=52
+2026-10-19T09:19:15.084609Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 21, gen_: 0 })
+2026-10-19T09:19:15.084616Z  INFO gorca_phase: phase="repair_start" doc=1 reason="root_state" nodes=52
+2026-10-19T09:19:15.089586Z  INFO gorca_phase: phase="repair_fetch" wall_ms=4.907 nodes=50 heaviest_get_tree_ms=0.45899999999999996 heavy_roots=0
+2026-10-19T09:19:15.089751Z  INFO gorca_phase: phase="repair_done" doc=1 nodes=50 deltas=27 took_ms=5.018991000000001 failed=false changed=false quiet=0
+2026-10-19T09:19:15.559188Z  INFO gorca_phase: phase="web_toggle" cur=Some(DocNodeId { slot: 23, gen_: 0 }) focusable=None root=DocNodeId { slot: 0, gen_: 0 }
+2026-10-19T09:19:17.121977Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 24, gen_: 0 })
+2026-10-19T09:19:18.638238Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 27, gen_: 0 })
+2026-10-19T09:19:18.788796Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 24, gen_: 0 })
+2026-10-19T09:19:18.938494Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 36, gen_: 0 })
+2026-10-19T09:19:19.193067Z  INFO gorca_phase: phase="web_toggle" cur=None focusable=None root=DocNodeId { slot: 0, gen_: 0 }
+2026-10-19T09:19:19.339195Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 42, gen_: 0 })
+2026-10-19T09:19:19.479408Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 44, gen_: 0 })
+2026-10-19T09:19:20.208938Z  INFO gorca_phase: phase="web_toggle" cur=Some(DocNodeId { slot: 45, gen_: 0 }) focusable=Some(DocNodeId { slot: 44, gen_: 0 }) root=DocNodeId { slot: 0, gen_: 0 }
+2026-10-19T09:19:21.072182Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 46, gen_: 0 })
+2026-10-19T09:19:21.330337Z  INFO gorca_phase: phase="web_toggle" cur=None focusable=None root=DocNodeId { slot: 0, gen_: 0 }
+2026-10-19T09:19:21.462206Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 5, gen_: 0 })
+2026-10-19T09:19:21.607509Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 7, gen_: 0 })
+2026-10-19T09:19:21.774448Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 9, gen_: 0 })
+2026-10-19T09:19:22.378544Z  INFO gorca_phase: phase="web_focus" hit=false id=None
+2026-10-19T09:19:22.382696Z  INFO gorca_phase: phase="locate" wall_ms=4.071176
+2026-10-19T09:19:23.302424Z  INFO gorca_phase: phase="web_focus" hit=false id=None
+2026-10-19T09:19:23.304345Z  INFO gorca_phase: phase="locate" wall_ms=1.827636
+2026-10-19T09:19:23.304382Z  INFO gorca_phase: phase="create" wall_ms=0.002852
+2026-10-19T09:19:23.335923Z  INFO gorca_phase: phase="fetch" total_ms=31.495711000000004 warm_ms=28.211188 frontier_ms=0.083649 get_tree_ms=0.470554 roles_ms=0.807688 states_ms=0.942632 text_ms=0.672068 assemble_ms=0.045359 heaviest_get_tree_ms=0.294 calls=150 tree_bytes=14609 nodes=50
+2026-10-19T09:19:23.336169Z  INFO gorca_phase: phase="translate" wall_ms=0.08430800000000001 nodes=52
+2026-10-19T09:19:35.348852Z  INFO gorca_phase: phase="repair_start" doc=1 reason="root_state" nodes=52
+2026-10-19T09:19:35.348867Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 21, gen_: 0 })
+2026-10-19T09:19:35.353533Z  INFO gorca_phase: phase="repair_fetch" wall_ms=4.655177 nodes=50 heaviest_get_tree_ms=0.328 heavy_roots=0
+2026-10-19T09:19:35.353700Z  INFO gorca_phase: phase="repair_done" doc=1 nodes=50 deltas=27 took_ms=4.7738570000000005 failed=false changed=false quiet=0
+2026-10-19T09:19:35.719150Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 21, gen_: 0 })
+2026-10-19T09:19:36.175083Z  INFO gorca_phase: phase="web_toggle" cur=Some(DocNodeId { slot: 23, gen_: 0 }) focusable=None root=DocNodeId { slot: 0, gen_: 0 }
+2026-10-19T09:19:37.012133Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 24, gen_: 0 })
+2026-10-19T09:19:37.405652Z  INFO gorca_phase: phase="repair_start" doc=1 reason="orphans" nodes=52
+2026-10-19T09:19:37.409540Z  INFO gorca_phase: phase="repair_fetch" wall_ms=3.783604 nodes=50 heaviest_get_tree_ms=0.421 heavy_roots=0
+2026-10-19T09:19:37.409699Z  INFO gorca_phase: phase="repair_done" doc=1 nodes=50 deltas=27 took_ms=3.895933 failed=false changed=false quiet=1
+2026-10-19T09:19:38.514949Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 27, gen_: 0 })
+2026-10-19T09:19:38.645909Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 24, gen_: 0 })
+2026-10-19T09:19:38.776787Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 36, gen_: 0 })
+2026-10-19T09:19:39.031993Z  INFO gorca_phase: phase="web_toggle" cur=None focusable=None root=DocNodeId { slot: 0, gen_: 0 }
+2026-10-19T09:19:39.175858Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 42, gen_: 0 })
+2026-10-19T09:19:39.307938Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 44, gen_: 0 })
+2026-10-19T09:19:40.035067Z  INFO gorca_phase: phase="web_toggle" cur=Some(DocNodeId { slot: 45, gen_: 0 }) focusable=Some(DocNodeId { slot: 44, gen_: 0 }) root=DocNodeId { slot: 0, gen_: 0 }
+2026-10-19T09:19:40.865911Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 46, gen_: 0 })
+2026-10-19T09:19:41.120325Z  INFO gorca_phase: phase="web_toggle" cur=None focusable=None root=DocNodeId { slot: 0, gen_: 0 }
+2026-10-19T09:19:41.259196Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 5, gen_: 0 })
+2026-10-19T09:19:41.391882Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 7, gen_: 0 })
+2026-10-19T09:19:41.524096Z  INFO gorca_phase: phase="web_focus" hit=true id=Some(DocNodeId { slot: 9, gen_: 0 })
+2026-10-19T09:19:42.131379Z  INFO gorca_phase: phase="web_focus" hit=false id=None
+2026-10-19T09:19:42.135873Z  INFO gorca_phase: phase="locate" wall_ms=4.382173
