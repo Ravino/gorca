@@ -346,6 +346,9 @@ pub(crate) struct CmdState {
     pub speech_on: bool,
     pub paused: bool,
     pub last_spoken: Option<Utterance>,
+    /// The node in focus when `last_spoken` was remembered: what `debug.explain_last` reads the
+    /// fused entry of.
+    pub last_spoken_node: Option<gorca_model::NodeKey>,
     pub pending: Option<PendingInfo>,
     /// The last window title that was read, with the application it belongs to: the answer
     /// when a later read finds no window at all (a chain with a gap, a fetch that failed).
@@ -386,6 +389,7 @@ impl CmdState {
             speech_on: true,
             paused: false,
             last_spoken: None,
+            last_spoken_node: None,
             pending: None,
             last_title: None,
             pass_deadline: None,

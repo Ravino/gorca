@@ -7,6 +7,7 @@
 //! a [`gorca_input_api::KeyIntent`]; [`handlers`] executes it.
 
 mod compile;
+mod diag;
 mod handlers;
 mod info;
 mod keys;
@@ -19,6 +20,10 @@ mod table;
 pub use compile::{
     Compiled, PlatformFacts, browse_grabs, chord_grabs, command_id, compile, compile_with,
     escape_grabs, gorca_modifiers, grab_collisions, lane_settings, letter_grabs, tab_grabs,
+};
+pub use diag::{
+    ATSPI_SOURCE, ExplainReport, SegLine, SourceDirectory, SourceEntry, explain_utterance,
+    set_explain_text,
 };
 pub use handlers::PASS_TIMEOUT;
 pub use profiles::prewarm;

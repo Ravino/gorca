@@ -3,6 +3,8 @@
 speech-off = speech off
 speech-on = speech on
 nothing-to-repeat = nothing to repeat
+explain-none = nothing to explain
+explain-summary = explained: segments {segments}, catalogue {catalogue}, literal {literal}, groups {groups}, hedged {hedged}, tainted {tainted}; details in the log
 cmd-typed-chars-on = speak typed characters on
 cmd-typed-chars-off = speak typed characters off
 cmd-typed-words-on = speak typed words on

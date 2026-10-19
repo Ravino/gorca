@@ -392,6 +392,48 @@ fn repeat_last_speaks_the_last_focus_speech_again_with_the_key_epoch() {
 }
 
 #[test]
+fn explain_last_says_a_summary_and_never_the_page_text() {
+    let mut f = fixture();
+    assert_eq!(
+        spoken(&f.run(CoreCmd::DebugExplainLast, 1)),
+        ["nothing to explain"]
+    );
+    f.focus(1);
+    f.reader.handle(ReaderMsg::Timer, f.now);
+    let said = spoken(&f.run(CoreCmd::DebugExplainLast, 1));
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(
+        said[0].starts_with("explained: segments ") && said[0].ends_with("details in the log"),
+        "{said:?}"
+    );
+    assert!(
+        !said[0].contains("OK"),
+        "the summary carries no page text: {said:?}"
+    );
+    // Explaining does not change what "last" is.
+    assert_eq!(spoken(&f.run(CoreCmd::SpeechRepeatLast, 1)), ["OK button"]);
+}
+
+#[test]
+fn explain_last_is_a_dev_command_bound_in_every_preset() {
+    let spec = CoreCmd::DebugExplainLast.spec();
+    assert_eq!(spec.name, "debug.explain_last");
+    assert_eq!(
+        spec.available == Availability::Implemented,
+        cfg!(debug_assertions),
+        "implemented in dev builds only"
+    );
+    let presets = Presets::builtin();
+    for preset in [gorca_config::Preset::Orca, gorca_config::Preset::Nvda] {
+        for layout in [gorca_config::Layout::Desktop, gorca_config::Layout::Laptop] {
+            let text = presets.get(preset, layout);
+            let n = text.matches("= \"debug.explain_last\"").count();
+            assert_eq!(n, 1, "{preset:?} {layout:?}");
+        }
+    }
+}
+
+#[test]
 fn time_and_date() {
     let mut f = fixture();
     assert_eq!(spoken(&f.run(CoreCmd::InfoTimeDate, 1)), ["14:05"]);

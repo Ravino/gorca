@@ -3,6 +3,8 @@
 speech-off = речь выключена
 speech-on = речь включена
 nothing-to-repeat = нечего повторять
+explain-none = нечего объяснять
+explain-summary = объяснение: сегментов {segments}, из каталога {catalogue}, текста {literal}, групп {groups}, с оговоркой {hedged}, из ненадёжных данных {tainted}; подробности в журнале
 cmd-typed-chars-on = озвучивание вводимых символов включено
 cmd-typed-chars-off = озвучивание вводимых символов выключено
 cmd-typed-words-on = озвучивание вводимых слов включено

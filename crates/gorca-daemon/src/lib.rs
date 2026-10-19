@@ -37,6 +37,7 @@ mod shell_policy;
 mod terminal_policy;
 mod topology;
 mod wire;
+mod wire_sources;
 
 pub use probe::{DaemonProbe, ProbeRead};
 pub use shell_policy::ShellPolicy as NativeShellPolicy;
@@ -471,6 +472,7 @@ async fn run_inner(
         core
     };
     let atspi_state = AtspiState::default();
+    let core = wire_sources::wire_sources(core);
     let core = wire::wire_present_log(core, &opts, &atspi_state);
     let core = wire::wire_web(core, &opts, &atspi_state);
     if let Some(f) = on_ready {
