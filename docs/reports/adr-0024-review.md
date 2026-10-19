@@ -232,3 +232,31 @@ pages by default.
   the first gate to run.
 - Whether the native-messaging peer pid can be mapped reliably to the browser `AppId` under
   Flatpak or Snap browsers (H-4); M23's first task should check this alongside TBD-S3.
+
+## Delta review r2/r3 (2026-10-19, main `6bbea052`; commits f6ac24fd, 6bbea052)
+
+**Verdict: A1 GO,** once one fixture inconsistency is fixed or the A1 test is told to ignore it (D-1
+below). All of H-1..H-7, M-1..M-12, W-1..W-4 and L-1..L-5 are resolved in the ADR-0024 r3 text or
+the spec (ADR §8 maps them, and I checked each location).
+
+Evidence:
+- `rustc research/semsize/layout.rs` prints `r2-16 104 | x32 128 | x32 with u128 ProvTag 128 |
+  x32 + Semantics 80 144`, so x32 = 128 B fits under the 160 B gate.
+- The `group_codes` in `tests/fixtures/fuse/fuse-x32.json` match the A1 order exactly (role = 0 ...
+  sort = 17; evidence codes 32768..32774).
+- Wave B has 3 builders. C2 now runs the normaliser in `gorca-doc-source-atspi` (H-7).
+- The owner's answers (bdaf63db) match the spec: D-6 (b) leaves the wave A slot empty until
+  ADR-0016 exists.
+
+Remaining items:
+
+| # | Sev | Where | Problem | Fix |
+|---|---|---|---|---|
+| D-1 | Low, blocks A1's test | `tests/fixtures/fuse/fuse-x32.json` `tables.prov_codes` (`tools/research/semantic_fusion.py:929`) | The table still lists `"Fallback": 8`. No case uses it, but the ADR and A1 removed `Fallback`, and A1 must "compare the header tables with the Rust registries", so the test fails or `Fallback` gets re-added | Drop it from the oracle table and regenerate both corpora, or have A1 skip unused codes ≥ 8 explicitly |
+| D-2 | Medium, M18a | ADR-0024 §2.10 `value: prop-value` | `prop-value` is not defined anywhere (ADR-0019 and ADR-0022 only name it). Evidence needs a rect (`layout.box`), and future group slots 18..31 may need new value shapes. Adding a WIT variant case later is a breaking change | In 0.9, define `prop-value` with every shape the 32 slots and the evidence kinds need (bool, tri-state code, u32, string, rect, u32 list), or with a typed escape case |
+| D-3 | Low | spec §3 C1a "runs as soon as CHR-0 merges, even before wave B ends" (R1 + P1) | R1 and P1 already build in wave B, so starting C1a early makes a 4th builder or needs a 5th implementer | Start it only in a free builder slot |
+| D-4 | Low | fixture `max_str: 64` vs ADR 1 KiB truncation | This is an oracle scale parameter; B3 must not copy it as the product value | Label it in the schema header |
+| D-5 | Note | `description` moved into `Arc<SemText>` | Every node with a description now allocates a `SemText`. `Semantics` equality must compare `SemText` by value, otherwise `sem_rev` churns | Make A1's derive `Eq` compare by value; the 100k-node RSS gate covers the memory |
+
+Nothing else in the r3 text forces a later WIT break. `fact-target` has all of its cases now,
+`prov-info` uses `u8` codes, and `GroupCode` uses bit 15 for evidence.
