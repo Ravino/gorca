@@ -1,0 +1,61 @@
+# e2e soak-m6-20261019T000338Z
+# utc=2026-10-19T03:03:59Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=6.94 4.79 4.30 1/1810 3663091
+# git_rev=c91232a9
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx1
+# topology_expected=-
+# label=soak-m6-20261019T000338Z
+# reader=daemon:<repo>/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=6.94 4.79 4.30 2/1810 3663088
+# reader_env=GORCA_M6=1 GORCA_M6_STRICT=1 GORCA_M6_REAL=1 NO_COLOR=1 GORCA_VK_SECS=10800 GORCA_VK_FLOOD_SECS=25 GORCA_TOPOLOGY_REPORT=<repo>/bench/results/acceptance/soak-m6-20261019T000338Z-phase2-3h-b4310146/res/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=VV r63 Up Up: the short command: heard ["echo r63l xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]
+# note1=VV r122 Up Up: the short command: heard ["echo r122l xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]
+# note2=VK: soak of 10800 s, per-round series in <repo>/bench/results/acceptance/soak-m6-20261019T000338Z-phase2-3h-b4310146/soak.tsv
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VK.vk_flood_key_ms.n       daemon/voicego         2581         2581         2581  1                  info   [samples]
+VK.vk_flood_key_ms.p50     daemon/voicego        0.508        0.508        0.508  1                  info   [ms]
+VK.vk_flood_key_ms.p95     daemon/voicego        0.821        0.821        0.821  1                  info   [ms]
+VK.vk_flood_key_ms.p99     daemon/voicego        1.011        1.011        1.011  1                  info   [ms]
+VK.vk_flood_key_ms.p999    daemon/voicego        3.189        3.189        3.189  1                  info   [ms]
+VK.vk_flood_key_ms.max     daemon/voicego        3.910        3.910        3.910  1                  info   [ms]
+VK.vk_stop_ms.n            daemon/voicego           68           68           68  1                  info   [samples]
+VK.vk_stop_ms.p50          daemon/voicego            0            0            0  1                  info   [ms]
+VK.vk_stop_ms.p95          daemon/voicego        0.234        0.234        0.234  1                  info   [ms]
+VK.vk_stop_ms.p99          daemon/voicego        0.253        0.253        0.253  1                  info   [ms]
+VK.vk_stop_ms.p999         daemon/voicego        0.293        0.293        0.293  1                  info   [ms]
+VK.vk_stop_ms.max          daemon/voicego        0.293        0.293        0.293  1                  info   [ms]
+VK.vk_flood_key_max_ms     daemon/voicego        3.910        3.910        3.910  1                  info   [ms]
+VK.vk_flood_prompt_missing daemon/voicego            0            0            0  1                  info   [floods]
+VK.vk_floods               daemon/voicego           68           68           68  1                  info   [floods]
+VK.vk_reader_deaths        daemon/voicego            0            0            0  1                  info   [events]
+VK.vk_reader_rss_first_kb  daemon/voicego        99928        99928        99928  1                  info   [kB]
+VK.vk_reader_rss_last_kb   daemon/voicego        11920        11920        11920  1                  info   [kB]
+VK.vk_reader_rss_max_kb    daemon/voicego       100860       100860       100860  1                  info   [kB]
+VK.vk_rounds               daemon/voicego          204          204          204  1                  info   [rounds]
+VK.vk_server_aborts        daemon/voicego            0            0            0  1                  info   [events]
+VK.vk_server_criticals     daemon/voicego            0            0            0  1                  info   [lines]
+VK.vk_server_rss_first_kb  daemon/voicego        48564        48564        48564  1                  info   [kB]
+VK.vk_server_rss_last_kb   daemon/voicego        13164        13164        13164  1                  info   [kB]
+VK.vk_stopped_low_mem      daemon/voicego            0            0            0  1                  info   [events]
+VK.vk_vd_failures          daemon/voicego            2            2            2  1                  info   [steps]
+VK.vk_wall_s               daemon/voicego        10806        10806        10806  1                  info   [s]
+

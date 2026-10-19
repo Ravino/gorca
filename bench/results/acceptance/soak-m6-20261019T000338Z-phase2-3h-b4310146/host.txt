@@ -1,0 +1,7 @@
+utc=20261019T000338Z secs=10800 flood_secs=25
+git_rev=b4310146 dirty_tracked_files=0
+kernel=7.1.8+deb13-rt-amd64 loadavg=1.56 4.07 5.73 1/1695 3545339
+mem_available_mb=17277
+governor=performance
+exit=0
+loadavg_end=7.02 4.85 4.32 1/1672 3663197
