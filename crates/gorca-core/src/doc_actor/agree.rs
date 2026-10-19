@@ -179,14 +179,16 @@ pub fn set_log_names(on: bool) {
     LOG_NAMES.store(on, Ordering::Relaxed);
 }
 
-/// A short stable digest of a string, enough to tell two names apart in a log without saying
+/// The salt of the log digests: `RandomState` keys are random per process, so a digest in a log
+/// line cannot be guessed offline from a dictionary of short names. Created once; digests are
+/// comparable inside one process (one log), not across processes.
+static SALT: LazyLock<std::hash::RandomState> = LazyLock::new(std::hash::RandomState::new);
+
+/// A short salted digest of a string, enough to tell two names apart in a log without saying
 /// what they were.
 fn short_hash(s: Option<&str>) -> u32 {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    s.hash(&mut h);
-    let v = h.finish();
-    u32::try_from(v & 0xFFFF_FFFF).unwrap_or(0)
+    use std::hash::BuildHasher;
+    u32::try_from(SALT.hash_one(s) & 0xFFFF_FFFF).unwrap_or(0)
 }
 
 /// What a disagreement log line says about the names: lengths and short hashes by default,
@@ -497,8 +499,26 @@ mod tests {
             "{line}"
         );
         assert!(line.contains(&format!("{} bytes", secret.len())), "{line}");
-        // Two different names stay distinguishable.
+        // Two different names stay distinguishable, and the digest is salted: a hasher with
+        // another random key (another process) gives another value, and it is not the digest
+        // of the fixed-key default hasher an attacker could precompute.
         assert_ne!(short_hash(Some("a")), short_hash(Some("b")));
+        {
+            use std::hash::{BuildHasher, Hash, Hasher};
+            let other = std::hash::RandomState::new();
+            let differs = (0..8).any(|i| {
+                let s = format!("probe{i}");
+                other.hash_one(&s) != SALT.hash_one(&s)
+            });
+            assert!(differs, "two random states must not share keys");
+            let mut fixed = std::collections::hash_map::DefaultHasher::new();
+            Some("a").hash(&mut fixed);
+            assert_ne!(
+                u64::from(short_hash(Some("a"))),
+                fixed.finish() & 0xFFFF_FFFF,
+                "not the fixed-key digest"
+            );
+        }
         // The opt-in adds the text (cut), nothing else changes.
         let full = describe(&n, &e, true);
         assert!(
