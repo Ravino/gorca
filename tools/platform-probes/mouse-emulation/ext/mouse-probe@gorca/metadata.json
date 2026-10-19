@@ -1,0 +1,1 @@
+{"uuid":"mouse-probe@gorca","name":"gorca mouse probe","description":"Probe only: virtual pointer device over D-Bus (private shell tests)","shell-version":["48"],"version":1}
