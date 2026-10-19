@@ -195,6 +195,8 @@ pub enum ControlMsg {
     Pointer(super::pointer_gate::PointerMsg),
     /// The answer to a pointer request (ADR-0025 EX-1).
     PointerReply(super::pointer_req::PointerReply),
+    /// What the backend says the user must do to get pointer permission.
+    PointerHint(Arc<str>),
 }
 
 /// Voice parameters, 0 to 100 (ADR-0005 6.2). Backends map them to their own ranges.
@@ -376,6 +378,8 @@ pub(crate) struct CmdState {
     pub pointer: super::pointer_gate::PointerGate,
     /// Drag locks (ADR-0025 2.6).
     pub holds: super::mouse::Holds,
+    /// The backend's permission hint (spoken with the "not granted" message).
+    pub pointer_hint: Option<Arc<str>>,
     pub ptr_next: u64,
     pub ptr_pending: std::collections::HashMap<super::pointer_req::PtrReqId, super::mouse::Pending>,
 }
@@ -386,6 +390,7 @@ impl CmdState {
         Self {
             pointer: super::pointer_gate::PointerGate::new(),
             holds: super::mouse::Holds::default(),
+            pointer_hint: None,
             ptr_next: 0,
             ptr_pending: std::collections::HashMap::new(),
             effective: Arc::new(file.clone()),

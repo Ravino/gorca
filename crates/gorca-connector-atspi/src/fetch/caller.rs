@@ -51,6 +51,10 @@ pub struct Caller {
     /// window-relative text extents are offset from its component extents. Set when the toolkit
     /// is identified; shared by the clones of this caller.
     text_coord: Arc<AtomicU32>,
+    /// The application's process id (0 = unknown) and whether its children report device pixels:
+    /// facts of the pointer resolver, set when the app is identified, shared by the clones.
+    pid: Arc<AtomicU32>,
+    device_px: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Caller {
@@ -60,7 +64,25 @@ impl Caller {
             bus_name,
             shadow: None,
             text_coord: Arc::new(AtomicU32::new(COORD_WINDOW)),
+            pid: Arc::new(AtomicU32::new(0)),
+            device_px: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    pub(crate) fn set_pid(&self, pid: Option<u32>) {
+        self.pid.store(pid.unwrap_or(0), Ordering::Relaxed);
+    }
+
+    pub(crate) fn pid(&self) -> Option<u32> {
+        Some(self.pid.load(Ordering::Relaxed)).filter(|p| *p != 0)
+    }
+
+    pub(crate) fn set_children_in_device_pixels(&self, on: bool) {
+        self.device_px.store(on, Ordering::Relaxed);
+    }
+
+    pub(crate) fn children_in_device_pixels(&self) -> bool {
+        self.device_px.load(Ordering::Relaxed)
     }
 
     /// Quirk row `blink-text-extents-frame`: ask `Text` for screen coordinates (`screen`) or

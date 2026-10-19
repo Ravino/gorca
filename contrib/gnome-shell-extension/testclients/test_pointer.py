@@ -303,6 +303,7 @@ def main():
             assert e.msg.startswith('rate:'), e
             fail += 1
     R.check('T12 80 rapid moves: burst ~40 then rate: errors', 38 <= ok <= 50 and fail >= 30, f'ok={ok} rate-limited={fail}')
+    R.check('T12 R-1 PointerRelease is not charged to the (empty) pointer bucket', err(release)[0] is None)
     time.sleep(1.1)
     ok2 = 0
     for i in range(40):
@@ -383,6 +384,33 @@ def main():
     outs = [r['outcome'] if isinstance(r, dict) else str(r) for r in results]
     R.check('T14 stalled shell: 4 queued clicks all expired, 0 injected after not-after',
             len(outs) == 4 and all(o == 'expired' for o in outs) and len(evs(A)) == n0, f'{outs} events+={len(evs(A)) - n0}')
+
+    # ---- T14b Q-2: removing the pointer cap mid-drag releases the button within about a second
+    import json
+    cfg = os.path.join(W, 'config', 'gorca', 'shell-helper.json')
+    exe = os.path.realpath(sys.executable)
+    cg = open('/proc/self/cgroup').read().strip().split('::', 1)[1]
+
+    def write_rules(rules):
+        tmp = cfg + '.tmp'
+        with open(tmp, 'w') as fh:
+            json.dump({'allowed': rules + [{'exe': exe.replace('py-a', 'py-b'), 'cgroup': cg}]}, fh)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, cfg)
+    wa = rewin('PA')
+    move(wa['id'], 'frame', 220, 220)
+    n0 = len(evs(A))
+    button(1, 'press')
+    time.sleep(1.2)           # the config stamp has microsecond resolution, but give the watch a tick
+    write_rules([{'exe': exe, 'cgroup': cg, 'caps': ['capture']}])
+    t0 = time.time()
+    ok = wait_for(lambda: any(x[0] == 'release' for x in evs(A)[n0:]), 4)
+    R.check('T14b removing the pointer cap mid-drag releases the held button within ~2 s', ok and time.time() - t0 < 2.5, f'{time.time() - t0:.1f} s {evs(A)[n0:]}')
+    e, _ = err(get_pointer)
+    R.check('T14b the caller now has no pointer cap', e and e.name == 'AccessDenied', str(e))
+    R.check('T14b PointerRelease still works without the cap (releasing is always safe)', err(release)[0] is None)
+    write_rules([{'exe': exe, 'cgroup': cg, 'caps': ['capture', 'pointer']}])
+    time.sleep(1.2)
 
     # ---- T15 slow: 125 s backstop
     if SLOW:

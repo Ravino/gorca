@@ -2,7 +2,8 @@
 //! Requests the Reader sends to the pointer sink and the replies that come back as messages
 //! (ADR-0025 EX-1: the Reader never does pointer I/O; ADR-0001 R3: results are messages).
 
-use gorca_output_api::{Button, ButtonAct, PointerError, PointerOutcome, PointerPos};
+use gorca_model::NodeKey;
+use gorca_output_api::{Button, ButtonAct, IfCovered, PointerError, PointerOutcome, PointerPos};
 
 /// Correlates a request with its reply.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -26,6 +27,28 @@ pub enum PointerOp {
 pub struct PointerReq {
     pub id: PtrReqId,
     pub op: PointerOp,
+}
+
+/// What to do at a located node.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum AtAct {
+    /// Move the pointer there (route the mouse to the review position).
+    Move,
+    /// Move and click in one compositor turn.
+    Click(Button),
+}
+
+/// A node (or one character of its text) to put the pointer on. The runtime asks the node's app for
+/// the target (`BackendOp::Locate`) and then the pointer sink; both calls carry deadlines and the
+/// answer is a [`PointerReply`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct PointerAtReq {
+    pub id: PtrReqId,
+    pub node: NodeKey,
+    /// A scalar offset in the node's text, for a character target.
+    pub offset: Option<u32>,
+    pub act: AtAct,
+    pub if_covered: IfCovered,
 }
 
 /// A successful pointer call.

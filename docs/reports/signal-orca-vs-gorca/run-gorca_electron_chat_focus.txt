@@ -1,0 +1,37 @@
+settle  -       consumed=None  passed=None  focus-events=1 (+0 
+prime   Shift   consumed=False passed=True  focus-events=1 +11 table row name='' table row<article<list item<list (+0 child
+        PAUSE self
+        CANCEL self
+        RESUME self
+        SPEAK Signal-like fixture, React to message, row
+        STOP  self
+        SPEAK Signal-like fixture, React to message, row
+toggle  ['Insert', 'Space'] consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK browse mode, Contact 0
+up1     Up      consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK React to message, button
+up2     Up      consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK Message number 398 body text
+up3     Up      consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK Contact 0
+down1   Down    consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK Message number 398 body text
+home    Home    consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK M
+end     End     consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK t
+toggle2 ['Insert', 'Space'] consumed=True  passed=False focus-events=1 +12 table row name='' table row<table row<article<list item (+0 
+        STOP  self
+        SPEAK focus mode
+        STOP  self
+        SPEAK Contact 0 Message number 398 body text, row
+up4     Up      consumed=False passed=True  focus-events=1 (+0 
+        STOP  self
+flush   -       consumed=None  passed=None  focus-events=1 (+0 

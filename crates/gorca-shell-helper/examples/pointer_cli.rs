@@ -4,13 +4,21 @@
 //! the helper to be usable, then reads commands from stdin and prints one reply line per command.
 //!
 //! Commands: `avail`, `click L|R|M`, `dclick L|R|M`, `press L|R`, `release L|R`, `releaseall`, `pos`,
-//! `quit` (graceful shutdown: the actor releases held buttons).
-#![allow(clippy::print_stdout, clippy::print_stderr, clippy::disallowed_methods)]
+//! `clickwin|movewin PID|TITLE|OX|OY|W|H|toplevel/device|X|Y[|L/R/M]` (a point in a toplevel's AT-SPI space, matched
+//! to a window by the helper client), `quit` (graceful shutdown: the actor releases held buttons).
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    clippy::disallowed_methods,
+    clippy::cast_possible_truncation
+)]
 
 use std::io::BufRead;
 use std::time::{Duration, Instant};
 
-use gorca_output_api::{Button, ButtonAct, PointerAvail, PointerSink};
+use gorca_output_api::{
+    Button, ButtonAct, ChildSpace, ClickOpts, PointTarget, PointerAvail, PointerSink, ToplevelHint,
+};
 use gorca_rt::Deadline;
 use gorca_shell_helper::ShellHelperClient;
 
@@ -53,7 +61,17 @@ async fn main() {
     let stdin = std::io::stdin();
     for line in stdin.lock().lines() {
         let Ok(line) = line else { break };
-        let parts: Vec<&str> = line.split_whitespace().collect();
+        // The window specs carry a title that may contain spaces: split them off before the word split.
+        let win = line
+            .strip_prefix("clickwin ")
+            .map(|r| ("clickwin", r))
+            .or_else(|| line.strip_prefix("movewin ").map(|r| ("movewin", r)));
+        let line_words = if win.is_some() {
+            String::new()
+        } else {
+            line.clone()
+        };
+        let parts: Vec<&str> = line_words.split_whitespace().collect();
         let reply = match parts.as_slice() {
             ["avail"] => format!("avail {:?}", *rx.borrow()),
             ["pos"] => format!("{:?}", client.position(d()).await),
@@ -70,6 +88,47 @@ async fn main() {
                 }
                 None => "bad button".to_owned(),
             },
+            _ if win.is_some() => {
+                let (op, spec) = win.unwrap_or_default();
+                let f: Vec<&str> = spec.split('|').collect();
+                let n = |i: usize| f.get(i).and_then(|v| v.parse::<f64>().ok());
+                match (
+                    f.first().and_then(|v| v.parse::<u32>().ok()),
+                    n(2),
+                    n(3),
+                    n(4),
+                    n(5),
+                    n(7),
+                    n(8),
+                ) {
+                    (Some(pid), Some(ox), Some(oy), Some(w), Some(h), Some(x), Some(y)) => {
+                        let top = ToplevelHint {
+                            pid,
+                            title: std::sync::Arc::from(f.get(1).copied().unwrap_or("")),
+                            atspi_origin: (ox as i32, oy as i32),
+                            atspi_size: (w as i32, h as i32),
+                            child_space: if f.get(6) == Some(&"device") {
+                                ChildSpace::DevicePixels
+                            } else {
+                                ChildSpace::Toplevel
+                            },
+                            pid_is_proxy: false,
+                            active: f.get(10) == Some(&"active"),
+                        };
+                        let t = PointTarget::Window { top, x, y };
+                        if op == "movewin" {
+                            format!("{:?}", client.move_to(t, ClickOpts::default(), d()).await)
+                        } else {
+                            let b = f.get(9).and_then(|v| button(v)).unwrap_or(Button::Left);
+                            format!(
+                                "{:?}",
+                                client.click_at(t, b, ClickOpts::default(), d()).await
+                            )
+                        }
+                    }
+                    _ => "bad window spec".to_owned(),
+                }
+            }
             ["quit"] => break,
             _ => "unknown command".to_owned(),
         };

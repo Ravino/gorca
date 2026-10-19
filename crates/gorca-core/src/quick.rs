@@ -365,6 +365,7 @@ impl Reader {
                 | ReaderEffect::ArmTimer(_)
                 | ReaderEffect::SetGrabSet(_)
                 | ReaderEffect::Pointer(_)
+                | ReaderEffect::PointerAt(_)
                 | ReaderEffect::SpeechCtl(_)
                 | ReaderEffect::Config(_)
                 | ReaderEffect::ReviewNav { .. }

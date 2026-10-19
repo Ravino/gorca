@@ -144,6 +144,7 @@ export class ShellHelperService {
         this._device = null;               // H-6: one lazily created POINTER_DEVICE
         this._holds = new Map();           // logical button -> {phys, source}
         this._holder = null;               // unique bus name that holds buttons (H-3)
+        this._capWatch = 0;                // 1 s source while buttons are held: re-checks the holder's pointer cap
         this._timers = new Set();          // H-7 double-click timers {id, sender, resolve}
         this._auditLast = 0;
         this._auditSuppressed = 0;
@@ -197,6 +198,7 @@ export class ShellHelperService {
             this._monitorsId = 0;
         }
         this._releaseEverything('disabled');
+        this._stopCapWatch();
         if (this._device) {
             // H-6: destroy explicitly (Mutter releases anything still pressed when the device goes away)
             try {
@@ -368,6 +370,8 @@ export class ShellHelperService {
             // Re-check after reading: the pidfd must still refer to the same live process.
             if (this._pidfdPid(id.fd) !== pid)
                 throw new Error('process gone');
+            id.exe = exe;
+            id.cgroup = cgroup;
         } catch (e) {
             this._dropSender(sender);
             throw new DeniedError(`identity check failed: ${e.message}`);
@@ -651,12 +655,15 @@ export class ShellHelperService {
         }, {ptr: true});
     }
 
+    // Any allow-listed caller may release what it holds, even after its pointer cap was removed: letting go of a
+    // button is always safe, and a held button must never outlive the permission to hold it.
     async PointerReleaseAsync(_params, invocation) {
-        await this._guard(invocation, 'pointer', ctx => {
-            this._pointerRate(1);
+        // Charged to the general bucket only (never the 20/s pointer bucket): letting go must always work, and a
+        // caller that holds nothing pays no more than any other cheap call.
+        await this._guard(invocation, null, ctx => {
             const n = this._holder === ctx.sender ? this._releaseHolds('PointerRelease') : 0;
             return new GLib.Variant('(u)', [n]);
-        }, {ptr: true});
+        });
     }
 
     // ---- pointer implementation ---------------------------------------------------
@@ -859,6 +866,7 @@ export class ShellHelperService {
         });
         this._holds.set(btn, {phys, source});
         this._holder = ctx.sender;
+        this._startCapWatch();
     }
 
     // Releases `btn` if `sender` is the holder and holds it. Returns 1 if a release was injected.
@@ -875,9 +883,54 @@ export class ShellHelperService {
         } catch (e) {
             console.warn(`gorca-helper: release failed: ${e.message}`);
         }
-        if (this._holds.size === 0)
+        if (this._holds.size === 0) {
             this._holder = null;
+            this._stopCapWatch();
+        }
         return 1;
+    }
+
+    // While buttons are held, look once a second whether the holder is still allowed to hold them: the owner may
+    // remove the `pointer` cap (or the rule) from the allow-list mid-drag, and the button must not stay down until
+    // the 125 s backstop.
+    _startCapWatch() {
+        if (this._capWatch)
+            return;
+        this._capWatch = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+            if (this._holds.size === 0) {
+                this._capWatch = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            this._recheckHolder();
+            if (this._holds.size === 0) {
+                this._capWatch = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopCapWatch() {
+        if (this._capWatch) {
+            GLib.source_remove(this._capWatch);
+            this._capWatch = 0;
+        }
+    }
+
+    _recheckHolder() {
+        const id = this._holder ? this._senders.get(this._holder) : null;
+        let ok = false;
+        if (id) {
+            for (const rule of this._loadConfig().allowed) {
+                if (rule.exe === id.exe && rule.cgroup === id.cgroup &&
+                    (rule.label === undefined || rule.label === id.label)) {
+                    ok = rule.caps.has('pointer');
+                    break;
+                }
+            }
+        }
+        if (!ok)
+            this._releaseHolds('the holder lost its pointer cap (or is no longer allow-listed)');
     }
 
     // Releases every held button (whoever holds it). Returns how many. A no-op without holds.
@@ -894,6 +947,7 @@ export class ShellHelperService {
             n++;
         }
         this._holder = null;
+        this._stopCapWatch();
         if (n)
             console.log(`gorca-helper: released ${n} held button(s): ${why}`);
         return n;

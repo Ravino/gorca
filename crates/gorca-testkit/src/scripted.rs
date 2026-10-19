@@ -191,6 +191,24 @@ async fn serve(
                                 .map(|n| BackendReply::Node(snapshot(NodeKey { app, local: node.local }, n)))
                                 .ok_or(BackendError::Gone),
                             BackendOp::Probe => Ok(BackendReply::ActionDone),
+                            // The resolver's answer is made from the node: the point's x is the node id, so a
+                            // test can tell which node was located.
+                            BackendOp::Locate { node, offset } => {
+                                Ok(BackendReply::Target(gorca_output_api::PointTarget::Window {
+                                    top: gorca_output_api::ToplevelHint {
+                                        pid: 42,
+                                        title: Arc::from("scripted"),
+                                        atspi_origin: (0, 0),
+                                        atspi_size: (100, 100),
+                                        child_space: gorca_output_api::ChildSpace::Toplevel,
+                                        pid_is_proxy: false,
+                                        active: false,
+                                    },
+                                    #[allow(clippy::cast_precision_loss)] // test ids are tiny
+                                    x: node.local.0 as f64,
+                                    y: f64::from(offset.unwrap_or(7)),
+                                }))
+                            }
                             _ => Err(BackendError::NotSupported),
                         };
                         let _ = req.reply.send(r);

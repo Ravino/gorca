@@ -70,8 +70,14 @@ pub enum BackendOp {
         max_nodes: u32,
     },
     Text(TextQuery),
-    /// `DoDefault`, `Focus`, `SetCaret`, `Select`, `ScrollTo`, `SetValue`.
+    /// `DoDefault`, `Focus`, `SetCaret`, `Select`, `ScrollTo`, `SetValue`, `Click`, `ContextMenu`.
     Action(ActionReq),
+    /// Where a pointer must go to hit `node` (or its character `offset`, a scalar offset in the node's
+    /// text): the pointer resolver of ADR-0025. Answered with `BackendReply::Target`.
+    Locate {
+        node: NodeKey,
+        offset: Option<u32>,
+    },
     HitTest {
         point: Point,
     },
@@ -116,6 +122,8 @@ pub enum BackendReply {
     CaretOffset(u32),
     TextAttributes(Vec<TextAttrRun>),
     ActionDone,
+    /// Answer to `BackendOp::Locate`.
+    Target(gorca_output_api::PointTarget),
     Hit(Option<NodeKey>),
     Matches(Vec<NodeKey>),
     /// Answer to `TextQuery::VisibleLines`.
