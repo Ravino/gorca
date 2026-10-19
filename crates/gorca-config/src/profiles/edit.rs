@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use crate::diag::fnv1a;
 use crate::glob::{Glob, escape_literal};
-use crate::patch::{KeyId, Value, get_value, set_value};
+use crate::patch::{KeyId, Value, set_value};
 use crate::save::{SaveError, remove_keys, render_profile, set_keys, set_profile_enabled};
 use crate::settings::{KeyScope, Settings};
 
@@ -165,13 +165,17 @@ impl ProfileSnapshot {
                 .is_some_and(|d| d.holds(key))
     }
 
+    fn id_free(&self, id: &str) -> bool {
+        self.set.id_of(id).is_none() && !self.base.reserved_ids.contains(id)
+    }
+
     fn unused_id(&self, wanted: &str) -> String {
-        if self.set.id_of(wanted).is_none() {
+        if self.id_free(wanted) {
             return wanted.to_owned();
         }
         for n in 2..1000 {
             let c = format!("{wanted}-{n}");
-            if self.set.id_of(&c).is_none() {
+            if self.id_free(&c) {
                 return c;
             }
         }
@@ -400,14 +404,24 @@ impl ProfileSnapshot {
             );
         }
         // The app profile: the most specific user profile with an App trigger for this app.
+        let mut blocked = false;
         let app_profile = user.iter().rev().find_map(|(id, _)| {
             let p = self.set.get(*id)?;
             let has_app = p
                 .triggers
                 .iter()
                 .any(|t| matches!(t, Trigger::App { app: m } if m.matches(app).is_some()));
+            if has_app && !Self::admits(p, &edit.key) {
+                blocked = true;
+            }
             (has_app && Self::admits(p, &edit.key)).then_some(p)
         });
+        if app_profile.is_none() && blocked {
+            // F-5: a second profile for the same application would be a silent twin.
+            return Err(EditRefusal::NotAllowedHere(
+                "the application's profile also has a window or context trigger, so it cannot hold this setting",
+            ));
+        }
         if let Some(p) = app_profile {
             return finish(
                 Target::Profile {
@@ -567,6 +581,9 @@ pub struct SaveGlobalReport {
     pub already_global: Vec<KeyRef>,
     /// SG-3: keys of extensions that are not installed, kept for the profile only.
     pub kept_not_installed: Vec<KeyRef>,
+    /// F-1: keys left in the profile because moving them would change the application's
+    /// effective value (a row sets the key and a default-equal global entry is skipped, UB-1).
+    pub kept_row_sets: Vec<KeyRef>,
     /// Other profiles that lost the keys (`apply_everywhere`).
     pub other_profiles_changed: Vec<String>,
 }
@@ -707,35 +724,54 @@ impl ProfileSnapshot {
             })
     }
 
-    /// The value global settings would have for `key` right now (file, then default).
-    fn global_value(&self, key: &KeyRef) -> Option<Value> {
+    /// The value the global file explicitly sets for `key` (not the default: F-1).
+    fn global_explicit(&self, key: &KeyRef) -> Option<Value> {
         match key {
-            KeyRef::Core(k) => Some(
-                self.base
-                    .user
-                    .file
-                    .get(*k)
-                    .cloned()
-                    .unwrap_or_else(|| get_value(&self.base.defaults, *k)),
-            ),
-            KeyRef::Ext(p) => self
-                .base
-                .user
-                .ext
-                .get(p)
-                .or_else(|| self.base.ext_defaults.get(p))
-                .cloned(),
+            KeyRef::Core(k) => self.base.user.file.get(*k).cloned(),
+            KeyRef::Ext(p) => self.base.user.ext.get(p).cloned(),
         }
     }
 
     /// PE-4 / SG-1..SG-6: copy the touched keys of `profile_id` into the global file and remove
     /// them from the profile; with `apply_everywhere` also from every other user profile.
-    #[allow(clippy::too_many_lines)] // one linear plan; splitting would hide the SG order
+    ///
+    /// `facts` is the focus the command ran in: a key whose move would change the effective
+    /// value there (a row sets it and global's default-equal entry is skipped, UB-1) stays in
+    /// the profile and is reported in `kept_row_sets` (F-1).
     pub fn plan_save_global(
+        &self,
+        facts: &FocusFacts<'_>,
+        profile_id: &str,
+        apply_everywhere: bool,
+        disk: &DiskView,
+    ) -> Result<SavePlan, SaveRefusal> {
+        let plan = self.plan_save_global_excl(profile_id, apply_everywhere, disk, &[])?;
+        let before = self.resolve_for(facts);
+        let after = self.complete(&plan, plan.steps.len()).resolve_for(facts);
+        let offenders: Vec<KeyRef> = plan
+            .report
+            .copied
+            .iter()
+            .chain(plan.report.already_global.iter())
+            .filter(|k| before.value(k) != after.value(k))
+            .cloned()
+            .collect();
+        if offenders.is_empty() {
+            return Ok(plan);
+        }
+        let mut plan =
+            self.plan_save_global_excl(profile_id, apply_everywhere, disk, &offenders)?;
+        plan.report.kept_row_sets = offenders;
+        Ok(plan)
+    }
+
+    #[allow(clippy::too_many_lines)] // one linear plan; splitting would hide the SG order
+    fn plan_save_global_excl(
         &self,
         profile_id: &str,
         apply_everywhere: bool,
         disk: &DiskView,
+        exclude: &[KeyRef],
     ) -> Result<SavePlan, SaveRefusal> {
         let pid = self
             .set
@@ -751,7 +787,7 @@ impl ProfileSnapshot {
             .deltas
             .touched
             .get(profile_id)
-            .map(|t| t.iter().cloned().collect())
+            .map(|t| t.iter().filter(|k| !exclude.contains(k)).cloned().collect())
             .unwrap_or_default();
         if touched.is_empty() {
             return Err(SaveRefusal::NothingChanged(p.name.clone()));
@@ -773,7 +809,9 @@ impl ProfileSnapshot {
                 continue;
             }
             // SG-4: an equal value only leaves the profile.
-            if self.global_value(&k).as_ref() == Some(&v) {
+            // The user's explicit value is copied even when it equals the default (F-1), and
+            // an unsaved global edit of the key is never "already global" (F-2).
+            if self.global_explicit(&k).as_ref() == Some(&v) && !self.deltas.base.holds(&k) {
                 report.already_global.push(k.clone());
             } else {
                 report.copied.push(k.clone());

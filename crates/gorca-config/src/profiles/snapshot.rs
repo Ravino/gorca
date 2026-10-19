@@ -305,6 +305,9 @@ pub struct BaseLayers {
     pub ext_defaults: BTreeMap<String, Value>,
     pub user: UserBase,
     pub ext_schema: ExtSchema,
+    /// File stems in the profiles directory that are not in the set (files that never
+    /// parsed): a new profile must not take one of these names (F-4).
+    pub reserved_ids: BTreeSet<String>,
 }
 
 /// The published snapshot.

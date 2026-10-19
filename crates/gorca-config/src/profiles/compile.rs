@@ -157,6 +157,27 @@ impl ProfileSet {
         self.profiles.len()
     }
 
+    /// PF-2 (F-7): entries of `profiles.rows` that name no row, one warning each.
+    pub fn unknown_row_entries(&self, rows: &BTreeMap<String, bool>) -> Vec<Diag> {
+        rows.keys()
+            .filter(|id| {
+                self.id_of(id)
+                    .and_then(|i| self.get(i))
+                    .is_none_or(|p| !p.source.is_row())
+            })
+            .map(|id| {
+                Diag::warning(
+                    format!("profiles.rows.{id}"),
+                    None,
+                    DiagMsg::ProfileInvalid {
+                        what: "profiles.rows",
+                        why: format!("no row is named `{id}`"),
+                    },
+                )
+            })
+            .collect()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.profiles.is_empty()
     }
@@ -312,6 +333,7 @@ impl ProfileSet {
 #[derive(Debug, Default)]
 pub struct ProfileLoader {
     last: BTreeMap<String, Arc<Profile>>,
+    unparsed: std::collections::BTreeSet<String>,
 }
 
 impl ProfileLoader {
@@ -345,6 +367,7 @@ impl ProfileLoader {
             ));
         }
         let mut next: BTreeMap<String, Arc<Profile>> = BTreeMap::new();
+        let mut unparsed = std::collections::BTreeSet::new();
         for (id, text) in sorted {
             let hash = crate::diag::fnv1a(text.as_bytes());
             // The extension schema may have changed, so unchanged text is reparsed only when
@@ -354,28 +377,33 @@ impl ProfileLoader {
             for d in parsed.diags {
                 diags.push((id.clone(), d));
             }
-            match parsed.profile {
-                Some(mut p) => {
-                    p.hash = hash;
-                    next.insert(id.clone(), Arc::new(p));
-                }
-                None => {
-                    if let Some(prev) = self.last.get(id) {
-                        diags.push((
-                            id.clone(),
-                            Diag::error(
-                                id,
-                                None,
-                                DiagMsg::KeptLastGood("the profile file does not parse".to_owned()),
-                            ),
-                        ));
-                        next.insert(id.clone(), prev.clone());
-                    }
+            if let Some(mut p) = parsed.profile {
+                p.hash = hash;
+                next.insert(id.clone(), Arc::new(p));
+            } else {
+                unparsed.insert(id.clone());
+                if let Some(prev) = self.last.get(id) {
+                    diags.push((
+                        id.clone(),
+                        Diag::error(
+                            id,
+                            None,
+                            DiagMsg::KeptLastGood("the profile file does not parse".to_owned()),
+                        ),
+                    ));
+                    next.insert(id.clone(), prev.clone());
                 }
             }
         }
         self.last = next;
+        self.unparsed = unparsed;
         (self.last.values().cloned().collect(), diags)
+    }
+
+    /// Stems of files that did not parse (and have no last good version): reserve them so a
+    /// new profile never takes their name (`BaseLayers::reserved_ids`).
+    pub fn unparsed_ids(&self) -> &std::collections::BTreeSet<String> {
+        &self.unparsed
     }
 
     pub fn profile(&self, id: &str) -> Option<&Arc<Profile>> {

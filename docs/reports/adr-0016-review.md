@@ -130,3 +130,92 @@ crate is busy.
 - Q-P4: (b) now. If a chord is wanted later: NVDA gorca+Space ×3 with `max_press = 3`; Orca preset keeps
   Orca's ×2 sticky focus / ×3 sticky browse.
 - Q-P5: (b) agree, and drop L6 from P1–P4 (dead code until M15a) or keep it type-only.
+
+## M14a-core P1–P3 code review r1 (2026-10-19, 97a0e3eb + c220f8d6)
+
+**Verdict: MERGE AFTER FIXES** (F-1..F-3 before merge; the rest may follow in P4).
+
+Gates run on the branch: `cargo test -p gorca-config` 128 passed; `cargo clippy -p gorca-config --all-targets
+-- -D warnings` clean; `cargo fmt --check` clean. No `unwrap`/`expect`/`panic!` in non-test code; the crate stays
+pure (no I/O, no tokio); snapshot publication is `ArcSwap` store/load. Probes were temporary tests appended to
+`profiles/tests.rs` (removed afterwards); each finding below names the probe outcome.
+
+### Findings (ranked)
+
+- **F-1 Medium — save-to-global changes the app's effective value when a row sets the key**
+  (`profiles/edit.rs` `plan_save_global`, "already global" branch, with `resolve.rs` UB-1 skip). Product row
+  `firefox*` sets `speech.punctuation = "all"`; the user sets "some" (the default) in Firefox; save-to-global
+  reports `already_global`, removes the key from the profile, and the global "some" is UB-1-skipped as a default.
+  Probe: Firefox punctuation after save-to-global = `all` (expected `some`). The same happens on the copy branch
+  whenever the copied value equals L0. Fix: before removing a key, resolve the profile's app with the key removed;
+  if the value would change, keep the key in the profile and report "kept for Firefox: a row sets it" (or refuse
+  that key with the explain text).
+- **F-2 Medium — "already global" ignores the unsaved global delta** (`edit.rs` `global_value`). Global target
+  rate 70 (unsaved), then Firefox rate 50 (= file value); save-to-global says "already global", removes 50 from
+  the profile, the L5 delta 70 now applies. Probe: Firefox rate after = 70. Fix: compare against
+  `deltas.base` first (or treat any key with a global delta as "copy" and drop that delta as the copy branch does).
+- **F-3 Medium — `classify` fails open for new sections** (`settings.rs` `classify`, final `else`): any future
+  section (`sources.*`, `general.sleep`, `ui.language`, every `Apply::Restart` key) becomes `Focus`, vendor,
+  non-privacy, i.e. settable by add-on rows. Fix: explicit arms for `text`/`verbosity`, unknown section =
+  `Base`/non-vendor (or privacy), plus a test that lists every section of `SETTINGS` against the §2.3 table.
+- **F-4 Low — new profile id can collide with a file that is not in the set** (`edit.rs` `unused_id` checks only
+  `self.set`). A never-parsed file with the slug's stem makes `plan_save` return `ChangedOnDisk` for every save
+  until revert (probe C: `Err(ChangedOnDisk("firefox-ad98eada"))`). Fix: give `DiskView` (or the loader) the
+  directory's stems and pick a free one; make `WriteStep` carry `Expect::Absent` instead of the empty-text hash so
+  the config task's `O_EXCL` create is part of the contract.
+- **F-5 Low — mixed-trigger app profile silently gets a twin.** With the (accepted) strictest-trigger rule, an
+  App-key edit in an app whose profile also has a Context trigger creates `firefox-<hash>` and announces "new
+  profile for firefox" although one exists (probe E). Fix: confirmation should say why ("Firefox profile cannot
+  hold terminal settings because it also has a menu trigger").
+- **F-6 Low — `LruMap<ProfileKey, _>` is not tied to `generation` or `mode`.** `ProfileKey` stays the same across
+  delta edits, pins of other apps and suspend (same interner), so a P4 cache that is not cleared on every publish
+  serves stale settings. Fix: key the LRU by `(generation, ProfileKey)` or clear it on each store; state it in P4.
+- **F-7 Low — PF-2 diagnostic missing:** a `profiles.rows` entry that names no row is not reported.
+- **F-8 Low — oracle shares code with the implementation** (`tests.rs` `oracle` calls `is_enabled`/`rows_map`)
+  and covers no Window/Site triggers, ext keys, first-party extension rows or enabled deltas. Rust instead of
+  Python is acceptable; make the oracle self-contained and widen the generator in P5.
+- **F-9 Low — perf nits off the key path:** `is_enabled` clones `profiles.rows` per row per fold;
+  `Interner::intern_pin` always takes the write lock; `read_triggers` has dead code (`items`).
+
+### Rulings on the implementer's deviations
+
+| Deviation | Ruling |
+|---|---|
+| ext-host glob untouched | accepted per GL-1 ("or keeps a copy"); track: ext-host is still case-sensitive, so a row can match `FIREFOX` where the extension's manifest matcher does not. Re-export before M18a. |
+| oracle in Rust, not Python | accepted with F-8. |
+| SS-1/PC-2/§2.10 say L3, table says L4 | table is right (L3 = third-party since r3); ADR erratum: product rows are L4 in SS-1, PC-2 and §2.10. |
+| multi-trigger profiles held to strictest trigger | accepted (needed for INV-P6); add F-5 wording. |
+| unsaved L5 edits never UB-1-skipped | accepted: a command edit is an explicit user choice (Q-P6). |
+| `disabled` set → `enabled` delta + `profiles.rows` | accepted, equivalent. |
+| row `name` globs must be covered; `exe`/`desktop_id` only narrow | accepted: name is mandatory and lists are ANDed, so stricter than PF-4. |
+| `gen` → `generation` | accepted. |
+
+Verified as specified: PK-1 (unknown keys/sections rejected with did-you-mean, wrong type/range, uninstalled
+`ext.*` kept inactive and preserved on save), Base keys never in a profile, PF-1 (privacy, voice/rate/volume
+rejected from rows), own-namespace `ext.*` for rows, NS-1/NS-3, PF-4 (Window without app, `*` exe, uncovered
+`fir*` all rejected), third-party `enabled = true` in the row file ignored (stays off), first-party on, UB-1 incl.
+privacy keys, PC-1 floor on rows/profiles/deltas, SG-2/SG-3/SG-5 ordering and partial-failure state, PE-6 hostile
+names (slug + FNV suffix, escaped literal, round trip through the file).
+
+## Implementer follow-up (P1-P3 fixes)
+
+Fixed and tested: F-1 (explicit default-equal values are copied; a key whose move would change the focused
+app's effective value stays in the profile and is listed in `SaveGlobalReport.kept_row_sets`; `plan_save_global`
+now takes the focus facts), F-2 (an unsaved global edit is never "already global"), F-3 (`classify` is explicit,
+unknown sections are Base, not row-settable, private; a test lists every section), F-4 (`BaseLayers.reserved_ids`,
+`ProfileLoader::unparsed_ids`), F-5 (refusal `NotAllowedHere` instead of a twin), F-7
+(`ProfileSet::unknown_row_entries`; P4 must call it with the effective `profiles.rows` and report it).
+
+Notes for P4: F-6 (key the LRU by generation or clear it on every store; `ProfileKey` is stable across deltas),
+F-8 (widen the oracle: Window/Site, ext keys, first-party ext rows, enabled deltas; make it self-contained), F-9
+(cache the `profiles.rows` map per fold; read lock in `intern_pin`), `WriteStep` should carry an explicit "must not
+exist" expectation for created files (now the hash of empty text).
+
+ADR erratum list for the architect:
+1. SS-1 says Suspended/Disabled fold "L3" (product rows), but sections 2.1 and 2.9 define product rows as L4 and L3
+   as third-party rows; implemented per the table.
+2. PC-2 repeats "L0, L1, L3, L5" for safe mode; L2 is off in safe mode and product rows (L4) stay.
+3. Section 2.10 and 2.9 call the product row "L3".
+4. `ProfileSnapshot.disabled: HashSet` is replaced by per-profile `enabled` deltas plus the `profiles.rows` delta.
+5. UB-1 says "file + delta" is skipped when default-equal; implemented for file entries only.
+6. Save-to-global needs the focus facts (F-1); PE-4 should say a key that a row would take over stays in the profile.

@@ -69,6 +69,7 @@ fn snapshot_with(
             hash: l.hash,
         },
         ext_schema: ext,
+        reserved_ids: std::collections::BTreeSet::new(),
     };
     ProfileSnapshot::new(Arc::new(set), Arc::new(base))
 }
@@ -1323,7 +1324,9 @@ fn sg_only_touched_keys_are_copied() {
     let s = s.apply_edit(&f, &p).snapshot;
     assert_eq!(s.touched("ff"), [kr("speech.pitch")].into());
     let disk = disk_of(Some(GLOBAL), &[("ff", &text)]);
-    let plan = s.plan_save_global("ff", false, &disk).unwrap();
+    let plan = s
+        .plan_save_global(&app("firefox"), "ff", false, &disk)
+        .unwrap();
     assert_eq!(plan.report.copied, [kr("speech.pitch")]);
     assert_eq!(plan.steps.len(), 2);
     assert_eq!(plan.steps[0].file, FileId::Global, "global first (SG-5)");
@@ -1374,13 +1377,15 @@ fn sg_only_touched_keys_are_copied() {
 fn sg2_empty_touched_set_writes_nothing() {
     let (s, text) = sg_world(Vec::new());
     let disk = disk_of(Some(GLOBAL), &[("ff", &text)]);
-    let e = s.plan_save_global("ff", false, &disk).unwrap_err();
+    let e = s
+        .plan_save_global(&app("firefox"), "ff", false, &disk)
+        .unwrap_err();
     assert!(
         matches!(e, SaveRefusal::NothingChanged(ref n) if n == "Firefox"),
         "{e:?}"
     );
     assert!(matches!(
-        s.plan_save_global("nope", false, &disk),
+        s.plan_save_global(&app("firefox"), "nope", false, &disk),
         Err(SaveRefusal::UnknownProfile(_))
     ));
 }
@@ -1415,7 +1420,9 @@ fn sg3_uninstalled_extension_keys_are_kept_and_named() {
         "the touched set survives a reload that changed nothing"
     );
     let disk = disk_of(Some(GLOBAL), &[("ff", &text)]);
-    let plan = s.plan_save_global("ff", false, &disk).unwrap();
+    let plan = s
+        .plan_save_global(&app("firefox"), "ff", false, &disk)
+        .unwrap();
     assert_eq!(plan.report.copied, [kr("speech.pitch")]);
     assert_eq!(
         plan.report.kept_not_installed,
@@ -1448,7 +1455,7 @@ fn sg3_uninstalled_extension_keys_are_kept_and_named() {
         a.snapshot.reload(a.snapshot.set.clone(), Arc::new(base))
     };
     assert!(matches!(
-        only.plan_save_global("ff", false, &disk),
+        only.plan_save_global(&app("firefox"), "ff", false, &disk),
         Err(SaveRefusal::NothingChanged(_))
     ));
 }
@@ -1464,7 +1471,9 @@ fn sg4_equal_values_leave_the_profile_and_nothing_is_reversed() {
     };
     let s = s.apply_edit(&f, &s.plan_edit(&f, e).unwrap()).snapshot;
     let disk = disk_of(Some(GLOBAL), &[("ff", &text)]);
-    let plan = s.plan_save_global("ff", false, &disk).unwrap();
+    let plan = s
+        .plan_save_global(&app("firefox"), "ff", false, &disk)
+        .unwrap();
     assert_eq!(plan.report.already_global, [kr("speech.punctuation")]);
     assert!(plan.report.copied.is_empty());
     assert_eq!(plan.steps.len(), 1, "global is not rewritten");
@@ -1472,13 +1481,26 @@ fn sg4_equal_values_leave_the_profile_and_nothing_is_reversed() {
     // A file that only has the default value in global: the default counts as global's value.
     let p2 = s.plan_edit(&f, edit("speech.pitch", 50)).unwrap();
     let s2 = s.apply_edit(&f, &p2).snapshot;
-    let plan2 = s2.plan_save_global("ff", false, &disk).unwrap();
-    assert_eq!(plan2.report.already_global.len(), 2);
+    let plan2 = s2
+        .plan_save_global(&app("firefox"), "ff", false, &disk)
+        .unwrap();
+    assert_eq!(
+        plan2.report.already_global.len(),
+        1,
+        "only the explicit global value counts"
+    );
+    assert_eq!(
+        plan2.report.copied,
+        [kr("speech.pitch")],
+        "an explicit default is copied (F-1)"
+    );
     // Nothing is ever deleted or reset in global: every key of the old file is still there.
     let s3 = s
         .apply_edit(&f, &s.plan_edit(&f, edit("speech.pitch", 66)).unwrap())
         .snapshot;
-    let plan3 = s3.plan_save_global("ff", false, &disk).unwrap();
+    let plan3 = s3
+        .plan_save_global(&app("firefox"), "ff", false, &disk)
+        .unwrap();
     let g = &plan3.steps[0].text;
     assert!(
         g.contains("rate = 50") && g.contains("punctuation = \"most\"") && g.contains("pitch = 66"),
@@ -1495,7 +1517,8 @@ fn sg4_a_changed_global_file_refuses_both_writes() {
         .snapshot;
     let changed = disk_of(Some("[speech]\nrate = 99\n"), &[("ff", &text)]);
     assert_eq!(
-        s.plan_save_global("ff", false, &changed).unwrap_err(),
+        s.plan_save_global(&app("firefox"), "ff", false, &changed)
+            .unwrap_err(),
         SaveRefusal::ChangedOnDisk(FileId::Global)
     );
     let changed_profile = disk_of(
@@ -1503,12 +1526,12 @@ fn sg4_a_changed_global_file_refuses_both_writes() {
         &[("ff", &format!("{}# hand edit\n", ff_text()))],
     );
     assert_eq!(
-        s.plan_save_global("ff", false, &changed_profile)
+        s.plan_save_global(&app("firefox"), "ff", false, &changed_profile)
             .unwrap_err(),
         SaveRefusal::ChangedOnDisk(FileId::Profile("ff".into()))
     );
     assert_eq!(
-        s.plan_save_global("ff", false, &disk_of(Some(GLOBAL), &[]))
+        s.plan_save_global(&app("firefox"), "ff", false, &disk_of(Some(GLOBAL), &[]))
             .unwrap_err(),
         SaveRefusal::MissingOnDisk("ff".into())
     );
@@ -1522,7 +1545,9 @@ fn sg5_a_failed_second_write_leaves_both_files_consistent() {
         .apply_edit(&f, &s.plan_edit(&f, edit("speech.pitch", 70)).unwrap())
         .snapshot;
     let disk = disk_of(Some(GLOBAL), &[("ff", &text)]);
-    let plan = s.plan_save_global("ff", false, &disk).unwrap();
+    let plan = s
+        .plan_save_global(&app("firefox"), "ff", false, &disk)
+        .unwrap();
     // The global write succeeded, the profile write failed.
     let part = s.complete(&plan, 1);
     assert_eq!(
@@ -1547,7 +1572,9 @@ fn sg5_a_failed_second_write_leaves_both_files_consistent() {
     // Repeating the command now finds the key already global and only removes it from the profile.
     let mut d2 = disk.clone();
     d2.global = Some(plan.steps[0].text.clone());
-    let again = part.plan_save_global("ff", false, &d2).unwrap();
+    let again = part
+        .plan_save_global(&app("firefox"), "ff", false, &d2)
+        .unwrap();
     assert_eq!(again.report.already_global, [kr("speech.pitch")]);
     assert_eq!(again.steps.len(), 1);
     // Done 0: nothing changed at all.
@@ -1574,13 +1601,17 @@ fn sg_apply_everywhere_removes_only_touched_keys_from_other_profiles() {
     let ot = "[profile]\ntrigger = [{ app = { name = [\"signal\"] } }]\n[speech]\npitch = 10\nrate = 11\n";
     let tt = "[profile]\ntrigger = [{ app = { name = [\"zed\"] } }]\n[speech]\nrate = 12\n";
     let disk = disk_of(Some(GLOBAL), &[("ff", &text), ("other", ot), ("third", tt)]);
-    let one = s.plan_save_global("ff", false, &disk).unwrap();
+    let one = s
+        .plan_save_global(&app("firefox"), "ff", false, &disk)
+        .unwrap();
     assert_eq!(
         one.steps.len(),
         2,
         "without apply-everywhere other profiles are untouched"
     );
-    let plan = s.plan_save_global("ff", true, &disk).unwrap();
+    let plan = s
+        .plan_save_global(&app("firefox"), "ff", true, &disk)
+        .unwrap();
     assert_eq!(plan.report.other_profiles_changed, ["other"]);
     assert_eq!(plan.steps.len(), 3);
     let mut d2 = disk.clone();
@@ -1815,4 +1846,119 @@ fn diagnostics_of_the_fixtures_are_clean() {
         },
         DiagMsg::VolumeFloor { .. }
     ));
+}
+
+#[test]
+fn f1_a_row_cannot_take_over_after_save_to_global() {
+    let row = product_row("r", "firefox*", "speech.punctuation = \"all\"");
+    let text = ff_text();
+    let s0 = snapshot(vec![user("ff", &text)], row, Some("schema = 1\n"));
+    let f = app("firefox");
+    let mut s = s0.clone();
+    for e in [
+        Edit {
+            key: kr("speech.punctuation"),
+            value: Value::Str("some".into()),
+        },
+        edit("speech.pitch", 70),
+    ] {
+        s = s.apply_edit(&f, &s.plan_edit(&f, e).unwrap()).snapshot;
+    }
+    assert_eq!(text_of(&s, "speech.punctuation"), "some");
+    let disk = disk_of(Some("schema = 1\n"), &[("ff", &text)]);
+    let plan = s.plan_save_global(&f, "ff", false, &disk).unwrap();
+    assert_eq!(plan.report.kept_row_sets, [kr("speech.punctuation")]);
+    assert_eq!(plan.report.copied, [kr("speech.pitch")]);
+    let done = s.complete(&plan, plan.steps.len());
+    assert_eq!(
+        text_of(&done, "speech.punctuation"),
+        "some",
+        "the row did not take over"
+    );
+    assert_eq!(done.touched("ff"), [kr("speech.punctuation")].into());
+}
+
+fn text_of(s: &ProfileSnapshot, path: &str) -> String {
+    text(&s.resolve_for(&app("firefox")), path)
+}
+
+#[test]
+fn f2_an_unsaved_global_edit_is_not_already_global() {
+    let (s, text) = sg_world(Vec::new());
+    let f = app("firefox");
+    let g = s.with_target(&AppKey::of("firefox"), EditTargetKind::Global);
+    let g = g
+        .apply_edit(&f, &g.plan_edit(&f, edit("speech.rate", 70)).unwrap())
+        .snapshot;
+    let mut s = g.with_target(&AppKey::of("firefox"), EditTargetKind::App);
+    s = s
+        .apply_edit(&f, &s.plan_edit(&f, edit("speech.rate", 50)).unwrap())
+        .snapshot;
+    assert_eq!(int(&s.resolve_for(&f), "speech.rate"), 50);
+    let disk = disk_of(Some(GLOBAL), &[("ff", &text)]);
+    let plan = s.plan_save_global(&f, "ff", false, &disk).unwrap();
+    assert!(plan.report.already_global.is_empty());
+    assert_eq!(plan.report.copied, [kr("speech.rate")]);
+    let done = s.complete(&plan, plan.steps.len());
+    assert_eq!(
+        int(&done.resolve_for(&f), "speech.rate"),
+        50,
+        "Firefox keeps 50"
+    );
+    assert!(!done.deltas.base.core.contains(k("speech.rate")));
+}
+
+#[test]
+fn f4_a_new_profile_avoids_names_of_unparsable_files() {
+    let s = snapshot(Vec::new(), Vec::new(), None);
+    let taken = crate::profiles::naming::file_id("Firefox");
+    let mut base = (*s.base).clone();
+    base.reserved_ids.insert(taken.clone());
+    let s = s.reload(s.set.clone(), Arc::new(base));
+    let f = app("Firefox");
+    let plan = s.plan_edit(&f, edit("speech.pitch", 3)).unwrap();
+    assert_ne!(target_id(&plan), Some(taken.as_str()));
+    let s = s.apply_edit(&f, &plan).snapshot;
+    let disk = disk_of(None, &[(taken.as_str(), "[broken")]);
+    assert!(s.plan_save(&disk).is_ok());
+    // The loader reports the stems that did not parse.
+    let mut l = ProfileLoader::new();
+    l.reload(&[("bad".into(), "[x".into())], &ExtSchema::new());
+    assert!(l.unparsed_ids().contains("bad"));
+}
+
+#[test]
+fn f5_a_mixed_trigger_app_profile_refuses_instead_of_creating_a_twin() {
+    let u = user(
+        "ff",
+        "[profile]\ntrigger = [{ app = { name = [\"firefox*\"] } }, { context = \"menu\" }]\n[speech]\npitch = 5\n",
+    );
+    let s = snapshot(vec![u], Vec::new(), None);
+    let e = s
+        .plan_edit(&app("firefox"), edit("terminal.settle_ms", 50))
+        .unwrap_err();
+    assert!(matches!(e, EditRefusal::NotAllowedHere(_)));
+    // Focus keys still go to it.
+    assert_eq!(
+        target_id(
+            &s.plan_edit(&app("firefox"), edit("speech.rate", 50))
+                .unwrap()
+        ),
+        Some("ff")
+    );
+}
+
+#[test]
+fn f7_rows_entries_naming_no_row_are_reported() {
+    let row = product_row("vs", "code", "speech.punctuation = \"all\"");
+    let s = snapshot(Vec::new(), row, None);
+    let map: BTreeMap<String, bool> = [
+        ("gorca/vs".to_owned(), false),
+        ("gorca/gone".to_owned(), true),
+        ("ext-x/y".to_owned(), true),
+    ]
+    .into();
+    let d = s.set.unknown_row_entries(&map);
+    assert_eq!(d.len(), 2, "{d:?}");
+    assert!(d.iter().all(|x| x.path.starts_with("profiles.rows.")));
 }

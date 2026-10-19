@@ -843,9 +843,13 @@ const fn classify(section: &str, key: &str) -> (KeyScope, bool, bool) {
         } else {
             (KeyScope::App, true, false)
         }
-    } else {
-        // text.*, verbosity.*: presentation.
+    } else if same(section, "text") || same(section, "verbosity") {
+        // Presentation.
         (KeyScope::Focus, true, false)
+    } else {
+        // Default deny (F-3): a section nobody classified is a Base key that rows cannot set
+        // and that is treated as private, until the ADR table gets a row for it.
+        (KeyScope::Base, false, true)
     }
 }
 
@@ -1383,6 +1387,41 @@ mod tests {
         assert_eq!(o2.typed_words, Some(true));
         assert!(Overlay::default().is_empty());
         assert!(!o2.is_empty());
+    }
+
+    #[test]
+    fn every_section_is_classified_explicitly_and_unknown_ones_are_denied() {
+        // The ADR section 2.3 table, one entry per section of SETTINGS. A new section fails
+        // here until it is classified on purpose.
+        let known = [
+            "keyboard",
+            "keymap",
+            "speech",
+            "echo",
+            "editing",
+            "text",
+            "browse",
+            "terminal",
+            "verbosity",
+            "profiles",
+        ];
+        assert_eq!(sections().collect::<Vec<_>>(), known);
+        for d in SETTINGS {
+            assert!(known.contains(&d.section), "{} is unclassified", d.path());
+        }
+        let (scope, vendor, privacy) = classify("sources", "anything");
+        assert_eq!(scope, KeyScope::Base);
+        assert!(!vendor && privacy, "unknown sections are not row-settable");
+        let (scope, vendor, _) = classify("general", "sleep");
+        assert!(scope == KeyScope::Base && !vendor);
+        assert_eq!(
+            classify("text", "caret_edge_ms"),
+            (KeyScope::Focus, true, false)
+        );
+        assert_eq!(
+            classify("verbosity", "level"),
+            (KeyScope::Focus, true, false)
+        );
     }
 
     #[test]
