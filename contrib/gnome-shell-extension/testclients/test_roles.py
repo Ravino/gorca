@@ -93,7 +93,7 @@ elif role == 'c':
                     nr += 1
     el = time.time() - t0
     log1 = shell_log().count('DENIED')
-    R.check('C 10 connections x 30 calls: global bucket (<= 20 burst + 10/s) bounds answered denials', nd <= 20 + 10 * el + 6 and nr > 150, f'denied={nd} rate={nr} in {el:.2f}s')
+    R.check('C 10 connections x 30 calls: each connection is bounded by its OWN bucket (<= 20 burst + 10/s each)', nd <= 10 * (20 + 10 * el) + 10 and nr > 50, f'denied={nd} rate={nr} in {el:.2f}s')
     R.check('C DENIED log lines are globally limited to ~1/s', log1 - log0 <= int(el) + 2, f'{log1 - log0} lines in {el:.2f}s')
     e, _ = err(get_pointer)
     R.check('C pointer methods AccessDenied or rate:', e is not None, str(e))

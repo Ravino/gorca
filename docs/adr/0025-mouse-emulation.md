@@ -120,10 +120,13 @@ Helper-side rules (all handlers are a few Clutter calls plus validation, never a
 
 - **H-1 Rate limit.** Own token bucket for `pointer` methods: 20 tokens/s, burst 40; a call costs 1, a `count = 2`
   click costs 2. `GetPointer` shares the pointer bucket (reviewer F, 2026-10-19).
-- **H-1a Denied callers (C-6, also fixes v1).** One global bucket shared by all non-allow-listed senders (10 calls/s, burst 20) runs **before**
+- **H-1a Denied callers (C-6, also fixes v1).** A per-sender bucket (10 calls/s, burst 20) is the first gate for non-allow-listed senders and runs **before**
   `_authorize`; over it the call fails `rate:` with no `/proc` or config work. A negative authorization is cached per
-  sender until the sender vanishes or the config stamp changes, and `DENIED` is logged at most once per (sender,
-  stamp). Total sender-cache size stays bounded (v1: 256).
+  sender until the sender vanishes, the config stamp changes or 5 s pass, and `DENIED` is logged at most once per (sender,
+  stamp; lines are also limited globally to 1/s). Only an actual broker or `/proc` lookup (unknown sender, or a denial past its
+  5 s TTL) draws on one global lookup bucket (10/s, burst 20). A sender that is allowed never pays deny-path costs and is
+  never evicted from the identity cache; only denied/unknown entries are (oldest first, bound 512). Test: a flood of 60
+  denied connections does not change an allowed caller's authorization (`test_flood.py`).
 - **H-2 Validation.** Finite numbers only, |x|,|y| ≤ 65535; points outside the monitor union clamp (Clutter does it,
   `clamped` reports it).
 - **H-3 Held buttons, single holder (C-7d).** The device has at most one **holder** (a unique bus name). A `press`
