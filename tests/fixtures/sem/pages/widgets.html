@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SEM widgets</title></head>
+<body>
+<main id="main">
+<h1 id="h-widgets">Simple widgets</h1>
+
+<!-- APG: button -->
+<button id="btn-native">Save</button>
+<div id="btn-aria" role="button" tabindex="0">Aria button</div>
+<button id="btn-disabled" disabled>Disabled button</button>
+<button id="btn-aria-disabled" aria-disabled="true">Aria disabled button</button>
+<button id="btn-pressed-false" aria-pressed="false">Mute</button>
+<button id="btn-pressed-true" aria-pressed="true">Bold</button>
+<button id="btn-pressed-mixed" aria-pressed="mixed">Partial</button>
+<button id="btn-expanded-false" aria-expanded="false" aria-controls="disc-panel">Details</button>
+<div id="disc-panel" hidden>Panel text</div>
+<button id="btn-haspopup-menu" aria-haspopup="menu">Actions</button>
+<button id="btn-haspopup-true" aria-haspopup="true">Actions2</button>
+<button id="btn-haspopup-dialog" aria-haspopup="dialog">Pick</button>
+<input id="btn-input-submit" type="submit" value="Send form">
+<input id="btn-input-reset" type="reset">
+<input id="btn-input-image" type="image" alt="Go" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+
+<!-- APG: link -->
+<a id="link-href" href="#main">Skip to main</a>
+<a id="link-no-href">Anchor without href</a>
+<span id="link-aria" role="link" tabindex="0">Aria link</span>
+<a id="link-current" href="#main" aria-current="page">Current page</a>
+<a id="link-img" href="#main"><img alt="Logo" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="></a>
+
+<!-- APG: checkbox -->
+<input id="cb-native" type="checkbox"> <label for="cb-native">Native unchecked</label>
+<input id="cb-native-checked" type="checkbox" checked> <label for="cb-native-checked">Native checked</label>
+<input id="cb-native-mixed" type="checkbox"> <label for="cb-native-mixed">Native indeterminate</label>
+<script>document.getElementById('cb-native-mixed').indeterminate = true;</script>
+<div id="cb-aria-false" role="checkbox" aria-checked="false" tabindex="0">Aria false</div>
+<div id="cb-aria-true" role="checkbox" aria-checked="true" tabindex="0">Aria true</div>
+<div id="cb-aria-mixed" role="checkbox" aria-checked="mixed" tabindex="0">Aria mixed</div>
+<div id="cb-aria-unset" role="checkbox" tabindex="0">Aria no aria-checked</div>
+<input id="cb-required" type="checkbox" required aria-label="Accept terms">
+<input id="cb-readonly-aria" type="checkbox" aria-readonly="true" aria-label="Readonly check">
+
+<!-- APG: radio group -->
+<div id="rg-group" role="radiogroup" aria-labelledby="rg-label">
+  <span id="rg-label">Crust</span>
+  <div id="rg-1" role="radio" aria-checked="true" tabindex="0">Regular</div>
+  <div id="rg-2" role="radio" aria-checked="false" tabindex="-1">Deep</div>
+  <div id="rg-3" role="radio" aria-checked="false" tabindex="-1">Thin</div>
+</div>
+<fieldset id="rg-native"><legend>Size</legend>
+  <input type="radio" name="size" id="rn-s" checked><label for="rn-s">S</label>
+  <input type="radio" name="size" id="rn-m"><label for="rn-m">M</label>
+</fieldset>
+
+<!-- APG: switch -->
+<div id="sw-off" role="switch" aria-checked="false" tabindex="0">Notifications</div>
+<div id="sw-on" role="switch" aria-checked="true" tabindex="0">Dark mode</div>
+<button id="sw-button" role="switch" aria-checked="true">Wi-Fi</button>
+<input id="sw-input" type="checkbox" role="switch" aria-label="Bluetooth">
+
+<!-- APG: disclosure -->
+<details id="disc-details" open><summary id="disc-summary">More info</summary><p id="disc-body">Hidden text</p></details>
+<details id="disc-details-closed"><summary id="disc-summary-closed">Closed info</summary><p>Not shown</p></details>
+
+<!-- APG: tooltip -->
+<button id="tip-trigger" aria-describedby="tip-1">Help</button>
+<div id="tip-1" role="tooltip">Opens the help</div>
+
+<!-- APG: alert -->
+<div id="alert-1" role="alert">Saved.</div>
+<div id="status-1" role="status">3 results</div>
+
+<!-- APG: breadcrumb -->
+<nav id="bc-nav" aria-label="Breadcrumb"><ol id="bc-list">
+  <li id="bc-1"><a href="#">Home</a></li>
+  <li id="bc-2"><a href="#">Docs</a></li>
+  <li id="bc-3"><a id="bc-current" href="#" aria-current="page">Guide</a></li>
+</ol></nav>
+
+<!-- APG: meter / progress -->
+<div id="meter-aria" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40" aria-valuetext="40 percent" aria-label="Disk"></div>
+<meter id="meter-native" min="0" max="10" value="3" aria-label="Rating"></meter>
+<progress id="prog-native" max="100" value="25" aria-label="Upload"></progress>
+<progress id="prog-indeterminate" aria-label="Loading"></progress>
+<div id="prog-aria" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="60" aria-label="Aria progress"></div>
+
+<!-- APG: slider (single, multi-thumb), spinbutton -->
+<div id="slider-aria" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="10" aria-valuenow="5" aria-valuetext="five" aria-label="Volume"></div>
+<div id="slider-vertical" role="slider" tabindex="0" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="10" aria-valuenow="2" aria-label="Vertical"></div>
+<input id="slider-native" type="range" min="0" max="20" value="7" aria-label="Range input">
+<div id="slider-min" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20" aria-label="Minimum price"></div>
+<div id="slider-max" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="80" aria-label="Maximum price"></div>
+<div id="spin-aria" role="spinbutton" tabindex="0" aria-valuemin="1" aria-valuemax="31" aria-valuenow="14" aria-label="Day"></div>
+<input id="spin-native" type="number" min="0" max="9" value="3" aria-label="Quantity">
+
+<!-- APG: window splitter -->
+<div id="split-1" role="separator" tabindex="0" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100" aria-controls="split-a" aria-label="Splitter"></div>
+<div id="split-a">Primary pane</div>
+<hr id="sep-static">
+</main>
+</body></html>

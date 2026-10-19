@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SEM structure</title></head>
+<body>
+<header id="lm-banner"><p id="lm-banner-p">Site header</p>
+  <nav id="lm-nav" aria-label="Primary"><a id="lm-nav-a" href="#main">Home</a></nav>
+</header>
+<nav id="lm-nav-unnamed"><a href="#main">Unnamed nav link</a></nav>
+<main id="main">
+<h1 id="h1">Heading one</h1><h2 id="h2">Heading two</h2><h3 id="h3">H3</h3><h4 id="h4">H4</h4><h5 id="h5">H5</h5><h6 id="h6">H6</h6>
+<div id="h-aria-3" role="heading" aria-level="3">Aria heading level 3</div>
+<div id="h-aria-nolevel" role="heading">Aria heading, no level</div>
+<div id="h-aria-9" role="heading" aria-level="9">Aria heading level 9</div>
+<h2 id="h-with-link"><a href="#main">Linked heading</a></h2>
+
+<aside id="lm-aside" aria-label="Related"><p>Aside text</p></aside>
+<aside id="lm-aside-unnamed"><p>Unnamed aside</p></aside>
+<section id="lm-section-named" aria-label="Named section"><p>Named section text</p></section>
+<section id="lm-section-unnamed"><p>Unnamed section text</p></section>
+<div id="lm-region-aria" role="region" aria-label="Aria region"><p>Region text</p></div>
+<form id="lm-form" aria-label="Signup"><input type="text" aria-label="Email" id="lm-form-in"></form>
+<div id="lm-search" role="search" aria-label="Find"></div>
+<div id="lm-complementary" role="complementary" aria-label="Aria complementary"></div>
+<div id="lm-banner-aria" role="banner"><p>Aria banner</p></div>
+<div id="lm-contentinfo-aria" role="contentinfo"><p>Aria contentinfo</p></div>
+<div id="lm-main-aria" role="main"><p>Aria main</p></div>
+<article id="art-native" aria-label="Story"><p>Article body</p></article>
+<div id="gen-div"><span id="gen-span">span text</span></div>
+<p id="para-1">A paragraph of text with <em id="tl-em">emphasis</em>, <strong id="tl-strong">strong</strong>, <mark id="tl-mark">marked</mark>, <code id="tl-code">code</code>, <abbr id="tl-abbr" title="World Wide Web">WWW</abbr>, <time id="tl-time" datetime="2026-10-19">today</time>, <sub id="tl-sub">sub</sub><sup id="tl-sup">sup</sup>, <del id="tl-del">deleted</del>, <ins id="tl-ins">inserted</ins>, <q id="tl-q">quote</q>, <kbd id="tl-kbd">Ctrl</kbd>.</p>
+<blockquote id="bq-1"><p>Quoted text</p></blockquote>
+<pre id="pre-1">preformatted
+text</pre>
+<hr id="hr-1">
+<div id="sep-aria" role="separator" aria-label="Aria separator"></div>
+<div id="sep-focusable" role="separator" tabindex="0" aria-valuenow="3" aria-valuemin="0" aria-valuemax="9"></div>
+
+<ul id="ul-1"><li id="li-1">One</li><li id="li-2">Two</li><li id="li-3">Three</li></ul>
+<ol id="ol-1" start="5"><li id="oli-1">Five</li><li id="oli-2">Six</li></ol>
+<ul id="ul-none" style="list-style:none"><li id="uln-1">No marker</li></ul>
+<ul id="ul-role-list" role="list"><li id="ulr-1" role="listitem">Explicit</li></ul>
+<div id="list-aria" role="list"><div id="lia-1" role="listitem" aria-posinset="2" aria-setsize="10">Aria item 2 of 10</div><div id="lia-2" role="listitem" aria-posinset="3" aria-setsize="-1">Aria item 3 of unknown</div></div>
+<ul id="ul-menu"><li id="li-in-menu" role="menuitem">Overridden li</li></ul>
+
+<figure id="fig-1"><img id="fig-img" alt="A red square" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="><figcaption id="fig-cap">Figure caption</figcaption></figure>
+<img id="img-alt" alt="Alt text" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+<img id="img-empty-alt" alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+<img id="img-noalt" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+<img id="img-presentation" role="presentation" alt="decorative" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+<div id="img-aria" role="img" aria-label="Aria image"></div>
+<div id="img-none" role="none"><span id="img-none-child">child of none</span></div>
+<svg id="svg-1" width="20" height="20" role="img" aria-label="SVG chart"><title>SVG title</title><rect width="10" height="10"/></svg>
+<svg id="svg-plain" width="20" height="20"><circle r="5"/></svg>
+<canvas id="canvas-1" width="10" height="10">Canvas fallback</canvas>
+<math id="math-1"><mi>x</mi><mo>=</mo><mn>1</mn></math>
+<div id="math-aria" role="math" aria-label="x squared">x<sup>2</sup></div>
+
+<!-- DPUB / graphics roles -->
+<div id="doc-chapter" role="doc-chapter" aria-label="Chapter 1">Chapter text</div>
+<a id="doc-noteref" role="doc-noteref" href="#doc-footnote">1</a>
+<aside id="doc-footnote" role="doc-footnote">Footnote text</aside>
+<div id="doc-toc" role="doc-toc" aria-label="Contents"></div>
+<div id="doc-pagebreak" role="doc-pagebreak" aria-label="Page 12"></div>
+<div id="doc-abstract" role="doc-abstract">Abstract</div>
+<div id="gfx-doc" role="graphics-document" aria-label="Graphics doc"></div>
+<div id="gfx-symbol" role="graphics-symbol" aria-label="Graphics symbol"></div>
+<div id="note-1" role="note">Note text</div>
+<div id="comment-1" role="comment">A comment</div>
+<div id="term-1" role="term">Term role</div>
+<div id="def-1" role="definition">Definition role</div>
+<div id="doc-aria" role="document" aria-label="Embedded document">Document role</div>
+<div id="insertion-1" role="insertion">Insertion role</div>
+<div id="deletion-1" role="deletion">Deletion role</div>
+<div id="subscript-1" role="subscript">sub</div>
+<div id="strong-aria" role="strong">strong role</div>
+<div id="emph-aria" role="emphasis">emphasis role</div>
+<div id="code-aria" role="code">code role</div>
+<div id="para-aria" role="paragraph">paragraph role</div>
+<div id="blockq-aria" role="blockquote">blockquote role</div>
+<div id="caption-aria" role="caption">caption role</div>
+<div id="time-aria" role="time">time role</div>
+<div id="generic-aria" role="generic">generic role</div>
+<div id="unknown-role" role="notarole">Unknown token</div>
+<div id="fallback-role" role="notarole button" tabindex="0">Fallback token list</div>
+<div id="presentational-focusable" role="presentation" tabindex="0">Presentation but focusable</div>
+<div id="scrollbar-aria" role="scrollbar" aria-controls="main" aria-valuenow="30" aria-valuemin="0" aria-valuemax="100" aria-orientation="vertical" tabindex="0"></div>
+</main>
+<footer id="lm-contentinfo"><p>Site footer</p></footer>
+</body></html>

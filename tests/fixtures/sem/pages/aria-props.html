@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SEM aria-props</title></head>
+<body>
+<main id="main">
+<h1>ARIA properties and states</h1>
+
+<!-- aria-current -->
+<a id="cur-page" href="#main" aria-current="page">Page</a>
+<a id="cur-step" href="#main" aria-current="step">Step</a>
+<a id="cur-location" href="#main" aria-current="location">Location</a>
+<a id="cur-date" href="#main" aria-current="date">Date</a>
+<a id="cur-time" href="#main" aria-current="time">Time</a>
+<a id="cur-true" href="#main" aria-current="true">True</a>
+<a id="cur-false" href="#main" aria-current="false">False</a>
+<a id="cur-bogus" href="#main" aria-current="bogus">Bogus token</a>
+
+<!-- aria-haspopup variants -->
+<button id="pop-false" aria-haspopup="false">no popup</button>
+<button id="pop-true" aria-haspopup="true">popup true</button>
+<button id="pop-menu" aria-haspopup="menu">popup menu</button>
+<button id="pop-listbox" aria-haspopup="listbox">popup listbox</button>
+<button id="pop-tree" aria-haspopup="tree">popup tree</button>
+<button id="pop-grid" aria-haspopup="grid">popup grid</button>
+<button id="pop-dialog" aria-haspopup="dialog">popup dialog</button>
+
+<!-- live regions -->
+<div id="live-off" aria-live="off">off</div>
+<div id="live-polite" aria-live="polite">polite</div>
+<div id="live-assertive" aria-live="assertive" aria-atomic="true" aria-relevant="additions text">assertive atomic</div>
+<div id="live-relevant-all" aria-live="polite" aria-relevant="all">relevant all</div>
+<div id="live-relevant-removals" aria-live="polite" aria-relevant="removals">relevant removals</div>
+<div id="live-busy" aria-live="polite" aria-busy="true">busy</div>
+<div id="live-alert" role="alert">alert (implicit assertive atomic)</div>
+<div id="live-status" role="status">status (implicit polite atomic)</div>
+<div id="live-log" role="log">log (implicit polite)</div>
+<div id="live-alert-polite" role="alert" aria-live="polite">alert overridden polite</div>
+<div id="live-nested" aria-live="polite"><span id="live-nested-child">nested child</span></div>
+<output id="live-output">output element</output>
+
+<!-- misc properties -->
+<div id="p-roledesc" role="button" tabindex="0" aria-roledescription="slide toggle">Custom role description</div>
+<button id="p-keyshortcuts" aria-keyshortcuts="Alt+Shift+K">Shortcut button</button>
+<div id="p-valuetext" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="6" aria-valuenow="2" aria-valuetext="Tuesday" aria-label="Day"></div>
+<div id="p-orient-h" role="toolbar" aria-orientation="horizontal" aria-label="H"></div>
+<div id="p-orient-v" role="toolbar" aria-orientation="vertical" aria-label="V"></div>
+<table id="p-sort-table"><tr><th id="p-sort-asc" aria-sort="ascending">A</th><th id="p-sort-desc" aria-sort="descending">B</th><th id="p-sort-other" aria-sort="other">C</th><th id="p-sort-none" aria-sort="none">D</th></tr></table>
+<button id="p-hidden-true" aria-hidden="true">aria-hidden button</button>
+<button id="p-hidden-attr" hidden>hidden attr button</button>
+<button id="p-display-none" style="display:none">display none button</button>
+<button id="p-visibility-hidden" style="visibility:hidden">visibility hidden button</button>
+<div id="p-hidden-parent" aria-hidden="true"><button id="p-hidden-child">child of aria-hidden</button></div>
+<div id="p-hidden-focusable" aria-hidden="true"><button id="p-hidden-focusable-btn" tabindex="0">focusable inside aria-hidden</button></div>
+<button id="p-inert" inert>inert button</button>
+<input id="p-modal-in" aria-label="in modal">
+<div id="p-modal" role="dialog" aria-modal="true" aria-label="Modal"></div>
+<div id="p-multiline" role="textbox" aria-multiline="true" contenteditable aria-label="ML"></div>
+<div id="p-singleline" role="textbox" contenteditable aria-label="SL"></div>
+<input id="p-autocomplete-list" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-label="ac list">
+<input id="p-autocomplete-inline" role="combobox" aria-autocomplete="inline" aria-expanded="false" aria-label="ac inline">
+<input id="p-autocomplete-both" role="combobox" aria-autocomplete="both" aria-expanded="false" aria-label="ac both">
+<div id="p-busy" aria-busy="true">busy region</div>
+<div id="p-details" aria-details="p-details-target">has details</div>
+<div id="p-details-target">the details</div>
+<div id="p-selected-true" role="option" aria-selected="true">selected option</div>
+<div id="p-selected-false" role="option" aria-selected="false">unselected option</div>
+<div id="p-selected-absent" role="option">option no selected attr</div>
+<div id="p-expanded-true" role="button" tabindex="0" aria-expanded="true">expanded</div>
+<div id="p-expanded-false" role="button" tabindex="0" aria-expanded="false">collapsed</div>
+<div id="p-expanded-absent" role="button" tabindex="0">expanded absent</div>
+<div id="p-checked-on-button" role="button" tabindex="0" aria-checked="true">checked on button (invalid)</div>
+<div id="p-pressed-on-link" role="link" tabindex="0" aria-pressed="true">pressed on link (invalid)</div>
+<div id="p-disabled-group" aria-disabled="true"><button id="p-disabled-child">child of aria-disabled group</button></div>
+<div id="p-readonly-grid" role="grid" aria-readonly="true" aria-label="ro grid"><div role="row"><span id="p-ro-cell" role="gridcell">cell</span></div></div>
+<div id="p-required-group" role="radiogroup" aria-required="true" aria-label="req group"></div>
+<div id="p-live-sr-only" style="position:absolute;left:-9999px" aria-live="polite">offscreen live</div>
+
+<!-- relations -->
+<span id="rel-label">Labelled text</span>
+<input id="rel-labelledby" aria-labelledby="rel-label" type="text">
+<div id="rel-controls-src" role="button" tabindex="0" aria-controls="rel-controls-dst">Controls</div>
+<div id="rel-controls-dst">controlled</div>
+<div id="rel-flowto-src" tabindex="0" aria-flowto="rel-flowto-dst">flows</div>
+<div id="rel-flowto-dst">flow target</div>
+<div id="rel-owns-src" role="list" aria-owns="rel-owns-a rel-owns-b" aria-label="Owner"></div>
+<div id="rel-owns-a" role="listitem">owned A</div>
+<div id="rel-owns-b" role="listitem">owned B</div>
+<span id="rel-desc-text">Describes</span>
+<button id="rel-describedby" aria-describedby="rel-desc-text">Described</button>
+<div id="rel-details-src" aria-details="rel-details-dst" tabindex="0">details src</div>
+<div id="rel-details-dst" role="note">details target</div>
+<input id="rel-err-src" aria-invalid="true" aria-errormessage="rel-err-dst" aria-label="err src">
+<div id="rel-err-dst" role="alert">error text</div>
+<label id="rel-for-label" for="rel-for-in">Label for</label><input id="rel-for-in" type="text">
+<fieldset id="rel-fs"><legend id="rel-legend">Legend</legend><input id="rel-fs-in" aria-label="in fs"></fieldset>
+<figure id="rel-fig"><img alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="><figcaption id="rel-figcap">Fig caption</figcaption></figure>
+<div id="rel-activedesc" role="listbox" tabindex="0" aria-activedescendant="rel-ad-2" aria-label="ad"><div id="rel-ad-1" role="option">1</div><div id="rel-ad-2" role="option">2</div></div>
+<div id="rel-dangling" role="button" tabindex="0" aria-controls="no-such-id" aria-labelledby="no-such-id2">Dangling refs</div>
+</main>
+</body></html>

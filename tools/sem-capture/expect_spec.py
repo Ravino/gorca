@@ -1,0 +1,267 @@
+"""Hand-authored expectations for tests/fixtures/sem/expect.toml (input of gen_expect.py).
+
+Each pattern states what a CORRECT normaliser must end up with, per ARIA 1.2 / HTML-AAM / the APG,
+plus the raw AT-SPI evidence it may rely on:
+
+  role      normalised role (ARIA role token; native-only roles use the HTML-AAM name)
+  check/press/expand/select
+            tri-state: "true" | "false" | "mixed" | "absent" (the state does not apply / not set)
+  level, pos=(posinset,setsize)
+  name      expected accessible name (None = not asserted), name_from = author|content|native|
+            tooltip|placeholder|none  (the ADR-0022 NameFrom classes)
+  st / nst  AT-SPI state nicks that MUST / MUST NOT be present on a faithful export
+  at        attribute keys (value, or "*" for any) a faithful export carries in GetAttributes
+  engines   which engines the pattern is checked on (default firefox+chromium; gtk4 rows use the
+            gallery fixture ids from gtk4_gallery.py)
+  note      why the row exists / what to watch
+
+The generator observes each engine's real answer and writes status per engine:
+  ok           every st/at expectation holds
+  missing-state / missing-attr   the engine did not export that evidence (candidate "inexpressible" row)
+  The row-level `disagree` flag is set when the engines' raw roles or evidence differ.
+"""
+
+W, F, C, N, S, T, A = "widgets", "forms", "composite", "names", "structure", "tables", "aria-props"
+
+
+def p(key, page, fid, role, **kw):
+    d = dict(key=key, page=page, id=fid, role=role)
+    d.update(kw)
+    return d
+
+
+PATTERNS = [
+    # --- widgets (APG button, checkbox, radio, switch, link, ...) ------------------------------------
+    p("button.native", W, "btn-native", "button", name="Save", name_from="content"),
+    p("button.toggle.false", W, "btn-pressed-false", "button", press="false", st=["focusable"], at={},
+      note="APG toggle button; tri-state press"),
+    p("button.toggle.true", W, "btn-pressed-true", "button", press="true", st=["pressed"]),
+    p("button.toggle.mixed", W, "btn-pressed-mixed", "button", press="mixed", st=["indeterminate"],
+      note="mixed pressed is exported as INDETERMINATE on a toggle"),
+    p("button.disclosure.collapsed", W, "btn-expanded-false", "button", expand="false", st=["expandable"], nst=["expanded"]),
+    p("button.haspopup.menu", W, "btn-haspopup-menu", "button", st=["has-popup"], at={"haspopup": "menu"}),
+    p("button.haspopup.dialog", W, "btn-haspopup-dialog", "button", at={"haspopup": "dialog"},
+      note="popup kind survives only via the haspopup attribute"),
+    p("button.disabled", W, "btn-disabled", "button", nst=["enabled"], note="native disabled drops ENABLED/SENSITIVE"),
+    p("button.aria-disabled", W, "btn-aria-disabled", "button", nst=["enabled"]),
+    p("link.href", W, "link-href", "link", st=["focusable"]),
+    p("link.current.page", W, "link-current", "link", at={"current": "page"}),
+    p("checkbox.native.unchecked", W, "cb-native", "checkbox", check="false", nst=["checked"]),
+    p("checkbox.native.checked", W, "cb-native-checked", "checkbox", check="true", st=["checked"]),
+    p("checkbox.aria.true", W, "cb-aria-true", "checkbox", check="true", st=["checked"]),
+    p("checkbox.aria.mixed", W, "cb-aria-mixed", "checkbox", check="mixed", st=["indeterminate"], nst=["checked"],
+      note="ADR-0024 B4: INDETERMINATE on a checkable maps to Check::Mixed"),
+    p("checkbox.aria.unset", W, "cb-aria-unset", "checkbox", check="false", nst=["checked"],
+      note="role=checkbox without aria-checked: ARIA says false; AT-SPI cannot tell unset from false"),
+    p("checkbox.required", W, "cb-required", "checkbox", check="false", st=["required"]),
+    p("radio.aria.checked", W, "rg-1", "radio", check="true", st=["checked"]),
+    p("radiogroup.aria", W, "rg-group", "radiogroup", name_from="author"),
+    p("switch.on", W, "sw-on", "switch", check="true", st=["checked"], note="Gecko exports switch as toggle-button"),
+    p("switch.off", W, "sw-off", "switch", check="false", nst=["checked"]),
+    p("switch.native-input", W, "sw-input", "switch", name="Bluetooth", name_from="author"),
+    p("disclosure.details.open", W, "disc-summary", "button", expand="true", note="summary = disclosure trigger"),
+    p("progress.determinate", W, "prog-native", "progressbar", name="Upload", name_from="author"),
+    p("slider.aria", W, "slider-aria", "slider", name="Volume", name_from="author", at={"valuetext": "five"},
+      note="aria-valuetext must come through the Value interface text or an attribute"),
+    p("slider.vertical", W, "slider-vertical", "slider", st=["vertical"], nst=["horizontal"]),
+    p("spinbutton.aria", W, "spin-aria", "spinbutton", name="Day", name_from="author"),
+    p("meter.aria", W, "meter-aria", "meter", name="Disk", name_from="author"),
+    p("separator.focusable", W, "split-1", "separator", name="Splitter", name_from="author",
+      note="focusable separator = window splitter (has a value)"),
+    p("tooltip.role", W, "tip-1", "tooltip"),
+    p("alert.role", W, "alert-1", "alert"),
+    p("status.role", W, "status-1", "status"),
+    # --- forms ---------------------------------------------------------------------------------------
+    p("textbox.native.labelled", F, "tx-label", "textbox", st=["editable", "single-line"], name_from="native"),
+    p("textbox.aria-label", F, "tx-arialabel", "textbox", name="Last name", name_from="author"),
+    p("textbox.required", F, "tx-required", "textbox", st=["required"]),
+    p("textbox.readonly", F, "tx-readonly", "textbox", nst=["editable"], note="readonly drops EDITABLE"),
+    p("textbox.invalid.true", F, "tx-invalid", "textbox", st=["invalid-entry"], at={"invalid": "true"}),
+    p("textbox.invalid.spelling", F, "tx-invalid-spelling", "textbox", at={"invalid": "spelling"},
+      note="invalid kind only via attribute"),
+    p("textbox.multiline", F, "tx-textarea", "textbox", st=["multi-line"], nst=["single-line"]),
+    p("textbox.placeholder-only", F, "tx-placeholder", "textbox", at={"placeholder-text": "Search terms"},
+      note="name from placeholder: engines differ on whether it is the name or description"),
+    p("textbox.password", F, "tx-password", "textbox", note="AT-SPI role is password-text; ARIA has no password role"),
+    p("searchbox.aria", F, "tx-searchbox-aria", "searchbox"),
+    p("combobox.aria.collapsed", F, "cbx-aria", "combobox", expand="false", st=["expandable"], nst=["expanded"],
+      at={"autocomplete": "list"}),
+    p("listbox.single", F, "lb-single", "listbox", name="Single listbox", name_from="author"),
+    p("option.selected", F, "lb-1", "option", select="true", st=["selected"]),
+    p("option.unselected", F, "lb-2", "option", select="false", nst=["selected"], st=["selectable"]),
+    p("option.checked", F, "lbc-1", "option", check="true", st=["checked"], note="option with aria-checked"),
+    p("listbox.multiselectable", F, "lb-multi", "listbox", st=["multiselectable"]),
+    p("select.native", F, "sel-native", "combobox", note="HTML select = combobox (AT-SPI combo-box)"),
+    p("group.fieldset", F, "fs-1", "group", note="fieldset+legend name"),
+    p("search.landmark", F, "search-region", "search", name="Site search", name_from="author"),
+    # --- composite widgets ---------------------------------------------------------------------------
+    p("tablist.horizontal", C, "tablist-1", "tablist", name="Entertainment", name_from="author", st=["horizontal"]),
+    p("tab.selected", C, "tab-1", "tab", select="true", st=["selected"]),
+    p("tab.unselected", C, "tab-2", "tab", select="false", nst=["selected"]),
+    p("tabpanel", C, "panel-1", "tabpanel", name_from="author", note="named by aria-labelledby"),
+    p("menu.popup", C, "mb-menu", "menu", name="Actions menu", name_from="author"),
+    p("menuitem.plain", C, "mi-1", "menuitem"),
+    p("menuitem.checkbox.true", C, "mic-1", "menuitemcheckbox", check="true", st=["checked"]),
+    p("menuitem.checkbox.mixed", C, "mic-3", "menuitemcheckbox", check="mixed", st=["indeterminate"]),
+    p("menuitem.radio.true", C, "mir-1", "menuitemradio", check="true", st=["checked"]),
+    p("menuitem.submenu", C, "mi-sub", "menuitem", at={}, note="Gecko exports a submenu trigger as role menu"),
+    p("menubar", C, "menubar-1", "menubar", name="Main menu", name_from="author"),
+    p("toolbar", C, "toolbar-1", "toolbar", name="Formatting", name_from="author", st=["horizontal"]),
+    p("tree.root", C, "tree-1", "tree", name="Files", name_from="author"),
+    p("treeitem.level1.expanded", C, "ti-1", "treeitem", expand="true", level=1, pos=(1, 2),
+      st=["expanded"], at={"level": "1", "posinset": "1", "setsize": "2"}),
+    p("treeitem.level2.leaf", C, "ti-1-2", "treeitem", expand="absent", level=2, pos=(2, 2),
+      at={"level": "2", "posinset": "2", "setsize": "2"}),
+    p("treeitem.collapsed", C, "ti-2", "treeitem", expand="false", level=1, pos=(2, 2), st=["expandable"], nst=["expanded"]),
+    p("treeitem.implicit-level", C, "tim-3", "treeitem", note="levels computed by the engine, not authored"),
+    p("accordion.header", C, "acc-b1", "button", expand="true", st=["expanded"], name="Personal", name_from="content"),
+    p("accordion.disabled-collapsed", C, "acc-b2", "button", expand="false", nst=["enabled"]),
+    p("dialog.modal", C, "dlg-1", "dialog", name="Add Delivery Address", name_from="author", st=["modal"]),
+    p("alertdialog", C, "adlg-1", "alertdialog", name="Confirm delete", name_from="author"),
+    p("feed", C, "feed-1", "feed", name="News", name_from="author"),
+    p("article.in-feed", C, "art-1", "article", pos=(1, 3), at={"posinset": "1", "setsize": "3"}),
+    p("log", C, "log-1", "log", name="Chat log", name_from="author"),
+    p("marquee", C, "marquee-1", "marquee"),
+    p("timer", C, "timer-1", "timer"),
+    p("application", C, "app-1", "application", name="Game board", name_from="author"),
+    p("roledescription.carousel", C, "car-1", "region", at={"roledescription": "carousel"}),
+    # --- structure -----------------------------------------------------------------------------------
+    p("heading.h1", S, "h1", "heading", level=1, at={"level": "1"}),
+    p("heading.h4", S, "h4", "heading", level=4, at={"level": "4"}),
+    p("heading.aria.level3", S, "h-aria-3", "heading", level=3, at={"level": "3"}),
+    p("heading.aria.nolevel", S, "h-aria-nolevel", "heading", level=2,
+      note="role=heading without aria-level: ARIA default is 2; engines may export nothing"),
+    p("landmark.banner", S, "lm-banner", "banner"),
+    p("landmark.nav.named", S, "lm-nav", "navigation", name="Primary", name_from="author"),
+    p("landmark.complementary", S, "lm-aside", "complementary", name="Related", name_from="author"),
+    p("landmark.region.named", S, "lm-section-named", "region", name="Named section", name_from="author"),
+    p("landmark.region.unnamed", S, "lm-section-unnamed", "generic", note="unnamed section is not a landmark"),
+    p("landmark.form.named", S, "lm-form", "form", name="Signup", name_from="author"),
+    p("landmark.main.aria", S, "lm-main-aria", "main"),
+    p("article", S, "art-native", "article", name="Story", name_from="author"),
+    p("generic.div", S, "gen-div", "generic"),
+    p("list.ul", S, "ul-1", "list"),
+    p("listitem.pos", S, "lia-1", "listitem", pos=(2, 10), at={"posinset": "2", "setsize": "10"}),
+    p("img.alt", S, "img-alt", "img", name="Alt text", name_from="native"),
+    p("img.empty-alt", S, "img-empty-alt", "presentation", note="alt='' = presentational; engines may drop the node"),
+    p("img.aria", S, "img-aria", "img", name="Aria image", name_from="author"),
+    p("figure", S, "fig-1", "figure"),
+    p("blockquote", S, "bq-1", "blockquote"),
+    p("separator.hr", S, "hr-1", "separator"),
+    p("code", S, "tl-code", "code"),
+    p("mark", S, "tl-mark", "mark"),
+    p("time", S, "tl-time", "time"),
+    p("doc.footnote", S, "doc-footnote", "doc-footnote"),
+    p("math", S, "math-aria", "math", name="x squared", name_from="author"),
+    p("comment", S, "comment-1", "comment"),
+    # --- tables --------------------------------------------------------------------------------------
+    p("table.native", T, "tbl-native", "table", name_from="native"),
+    p("table.columnheader.sort", T, "tbl-th-q1", "columnheader", at={"sort": "ascending"}),
+    p("table.rowheader", T, "tbl-rh1", "rowheader"),
+    p("table.cell.colspan", T, "tbl-c21", "cell"),
+    p("table.layout", T, "tbl-layout", "presentation", note="layout table must not be a table"),
+    p("table.aria.rowcount", T, "atbl", "table", name="Aria table", name_from="author",
+      at={"rowcount": "100", "colcount": "5"}),
+    p("table.aria.cell.colindex", T, "atbl-cell", "cell", at={"colindex": "3", "colspan": "2"}),
+    p("grid", T, "grid-1", "grid", name="Grid", name_from="author", st=["multiselectable"]),
+    p("gridcell.selected", T, "grid-c21", "gridcell", select="true", st=["selected"]),
+    p("gridcell.colindextext", T, "grid-c33", "gridcell", at={"colindextext": "Column C", "rowindextext": "Row three"}),
+    p("treegrid.row.level", T, "tg-r1", "row", level=1, expand="true", pos=(1, 2),
+      at={"level": "1", "posinset": "1", "setsize": "2"}),
+    p("definition.dl", T, "dl-1", "list", note="dl: Blink exports description-list, Gecko list"),
+    # --- aria-props ----------------------------------------------------------------------------------
+    p("current.step", A, "cur-step", "link", at={"current": "step"}),
+    p("current.true", A, "cur-true", "link", at={"current": "true"}),
+    p("current.bogus", A, "cur-bogus", "link", note="invalid token must normalise to false/absent"),
+    p("haspopup.grid", A, "pop-grid", "button", at={"haspopup": "grid"}),
+    p("live.assertive.atomic", A, "live-assertive", "generic",
+      at={"live": "assertive", "atomic": "true", "relevant": "additions text"}),
+    p("live.busy", A, "live-busy", "generic", st=["busy"]),
+    p("live.log", A, "live-log", "log"),
+    p("roledescription", A, "p-roledesc", "button", at={"roledescription": "slide toggle"}),
+    p("keyshortcuts", A, "p-keyshortcuts", "button", at={"keyshortcuts": "Alt+Shift+K"}),
+    p("valuetext", A, "p-valuetext", "slider", at={"valuetext": "Tuesday"}),
+    p("orientation.vertical", A, "p-orient-v", "toolbar", st=["vertical"]),
+    p("hidden.aria-hidden", A, "p-hidden-true", "button", note="aria-hidden subtree: Gecko/Blink prune it; the node should be absent"),
+    p("modal", A, "p-modal", "dialog", st=["modal"]),
+    p("multiline.textbox", A, "p-multiline", "textbox", st=["multi-line"]),
+    p("selected.absent", A, "p-selected-absent", "option", select="false", note="absent aria-selected on option"),
+    p("checked.on-button", A, "p-checked-on-button", "button", check="absent",
+      note="aria-checked is not supported on button: must not become Check"),
+    p("expanded.absent", A, "p-expanded-absent", "button", expand="absent", nst=["expandable"]),
+    p("readonly.grid", A, "p-readonly-grid", "grid"),
+    p("rel.labelledby", A, "rel-labelledby", "textbox", name="Labelled text", name_from="author"),
+    p("rel.controls", A, "rel-controls-src", "button", note="controller-for relation"),
+    p("rel.flowto", A, "rel-flowto-src", "generic", note="flows-to relation"),
+    p("rel.details", A, "rel-details-src", "generic", note="details-for/details relation"),
+    p("rel.errormessage", A, "rel-err-src", "textbox", st=["invalid-entry"], note="error-message relation"),
+    p("rel.activedescendant", A, "rel-activedesc", "listbox", note="activedescendant via ACTIVE state/event only"),
+    p("rel.owns", A, "rel-owns-src", "list", name="Owner", name_from="author", note="owns reparents children"),
+    # --- name computation ----------------------------------------------------------------------------
+    p("name.aria-label-wins", N, "nm-aria-label", "button", name="Aria label wins", name_from="author"),
+    p("name.labelledby", N, "nm-labelledby", "button", name_from="author"),
+    p("name.title-only", N, "nm-title", "button", name="Title only", name_from="tooltip"),
+    p("name.empty", N, "nm-empty", "button", name="", name_from="none"),
+    p("name.input-value", N, "nm-input-button", "button", name="Input value", name_from="native"),
+    p("name.img-alt", N, "nm-img-alt", "img", name="Alt name", name_from="native"),
+    p("name.table-caption", N, "nm-table", "table", name_from="native"),
+    p("name.cycle", N, "nm-cycle-a", "button", note="aria-labelledby cycle must not hang"),
+    p("name.input-placeholder", N, "nm-in-ph", "textbox", note="placeholder as name fallback"),
+    p("name.input-title-and-ph", N, "nm-in-title-ph", "textbox", name="Title name", name_from="tooltip"),
+    p("desc.title-as-description", N, "nm-desc-title", "button", name="Has aria label", name_from="author"),
+    p("desc.aria-description", N, "nm-desc-ariadesc", "button", note="aria-description"),
+]
+
+
+G = ["gtk4"]
+
+
+def g(key, page, fid, role, **kw):
+    return p(key, page, fid, role, engines=G, **kw)
+
+
+# GTK4 gallery rows (fixture id = "fx:<id>" in the accessible description; see gtk4_gallery.py)
+PATTERNS += [
+    g("gtk4.button", "controls", "btn-push", "button", name="Push button", name_from="content"),
+    g("gtk4.button.icon-noname", "controls", "btn-icon-noname", "button", name="", name_from="none"),
+    g("gtk4.togglebutton.pressed", "controls", "tog-on", "button", press="true", st=["pressed"]),
+    g("gtk4.togglebutton.off", "controls", "tog-off", "button", press="false", nst=["pressed"]),
+    g("gtk4.checkbutton.checked", "controls", "cb-on", "checkbox", check="true", st=["checked", "checkable"]),
+    g("gtk4.checkbutton.mixed", "controls", "cb-mixed", "checkbox", check="mixed", st=["indeterminate", "checkable"]),
+    g("gtk4.radiobutton", "controls", "radio-a", "radio", check="true", st=["checked"]),
+    g("gtk4.switch", "controls", "sw-on", "switch", check="true", st=["checked"],
+      note="GtkSwitch is exported as check-box: the switch role is lost on the wire"),
+    g("gtk4.entry.placeholder", "controls", "entry-ph", "textbox", st=["editable"],
+      at={"placeholder-text": "Placeholder text"}),
+    g("gtk4.entry.readonly", "controls", "entry-ro", "textbox", st=["read-only"], nst=["editable"]),
+    g("gtk4.entry.password", "controls", "entry-pw", "textbox"),
+    g("gtk4.searchentry", "controls", "entry-search", "searchbox"),
+    g("gtk4.spinbutton", "controls", "spin", "spinbutton"),
+    g("gtk4.scale.vertical", "controls", "scale-v", "slider", st=["vertical"]),
+    g("gtk4.progress.pulse", "controls", "prog-pulse", "progressbar", st=["busy"]),
+    g("gtk4.levelbar", "controls", "level", "meter"),
+    g("gtk4.dropdown", "controls", "dropdown", "combobox", expand="false", st=["expandable", "has-popup"]),
+    g("gtk4.textview", "controls", "textview", "textbox", st=["multi-line", "editable"]),
+    g("gtk4.expander.open", "containers", "expander-open", "button", expand="true", st=["expandable", "expanded"]),
+    g("gtk4.expander.closed", "containers", "expander-closed", "button", expand="false", st=["expandable"], nst=["expanded"]),
+    g("gtk4.listbox.row.selected", "containers", "lb-row-2", "option", select="true", st=["selectable", "selected"]),
+    g("gtk4.stackswitcher", "containers", "stackswitcher", "tablist"),
+    g("gtk4.columnview", "containers", "columnview", "grid"),
+    g("gtk4.accprop.required", "accprops", "ap-required", "textbox", st=["required"]),
+    g("gtk4.accprop.invalid", "accprops", "ap-invalid", "textbox", st=["invalid-entry"]),
+    g("gtk4.accprop.haspopup", "accprops", "ap-haspopup", "button", st=["has-popup"]),
+    g("gtk4.accprop.keyshortcuts", "accprops", "ap-keyshortcuts", "button", at={"keyshortcuts": "Control+K"}),
+    g("gtk4.accprop.level", "accprops", "ap-level", "heading", level=2, at={"level": "2"},
+      note="level attribute on a label whose role stays label"),
+    g("gtk4.accprop.valuetext", "accprops", "ap-valuetext", "slider", at={"valuetext": "*"}),
+    g("gtk4.accprop.checked-mixed", "accprops", "ap-checked-mixed", "checkbox", check="mixed", st=["indeterminate"]),
+    g("gtk4.accprop.expanded", "accprops", "ap-expanded-true", "button", expand="true", st=["expanded"]),
+    g("gtk4.accprop.roledescription", "accprops", "ap-roledesc", "button", at={"roledescription": "*"}),
+    g("gtk4.role.navigation", "accprops", "role-navigation", "navigation", note="engine role is filler"),
+    g("gtk4.role.main", "accprops", "role-main", "main", note="engine role is filler"),
+    g("gtk4.role.feed", "accprops", "role-feed", "feed", note="engine role is filler"),
+    g("gtk4.role.search", "accprops", "role-search", "search", note="engine role is form"),
+    g("gtk4.role.meter", "accprops", "role-meter", "meter"),
+    g("gtk4.role.scrollbar", "accprops", "role-scrollbar", "scrollbar"),
+    g("gtk4.role.treegrid", "accprops", "role-treegrid", "treegrid"),
+]
