@@ -180,6 +180,7 @@ fn build(items: Vec<Item>, app: AppId, app_bus: &str, max_nodes: usize) -> Decod
             child_count: Some(clip_child_count(i64::from(it.children))),
             children: None,
             interfaces,
+            attrs: Vec::new(),
             have: PropMask::CACHE_ITEM,
         };
         index_of.insert(key, out.nodes.len());

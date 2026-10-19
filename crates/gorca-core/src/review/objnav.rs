@@ -16,6 +16,7 @@ use super::model::ReviewLimits;
 
 /// What object navigation needs to classify and speak a node (ADR-0006 3).
 pub const NAV_MASK: PropMask = PropMask::PRESENT
+    .union(PropMask::ATTRS)
     .union(PropMask::CHILDREN)
     .union(PropMask::PARENT);
 

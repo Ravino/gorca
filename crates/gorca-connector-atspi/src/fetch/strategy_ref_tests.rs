@@ -127,6 +127,25 @@ fn fetch_reports_what_was_asked_in_have() {
     });
 }
 
+/// M22a C1a: `ATTRS` is one more pipelined call of the same batch, marked in `have` only when
+/// asked for; attributes nothing reads (the fake app answers `id` only) are not kept.
+#[test]
+fn fetch_asks_for_attributes_only_when_wanted() {
+    run(async {
+        let Some(r) = rig(TREE).await else { return };
+        let n = resolved(&r.cx, 5);
+        let raw = strategy::fetch(&r.cx, &n, PropMask::PRESENT | PropMask::ATTRS, dl())
+            .await
+            .unwrap();
+        assert!(raw.have.contains(PropMask::ATTRS));
+        assert!(raw.attrs.is_empty(), "`id` is dropped: {:?}", raw.attrs);
+        let raw = strategy::fetch(&r.cx, &n, PropMask::PRESENT, dl())
+            .await
+            .unwrap();
+        assert!(!raw.have.contains(PropMask::ATTRS));
+    });
+}
+
 #[test]
 fn child_snapshots_returns_the_range_with_parent_links_and_records_paths() {
     run(async {

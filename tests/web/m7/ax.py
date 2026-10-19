@@ -97,7 +97,9 @@ def name_of(bus, path):
 
 
 # App names on the a11y bus: "Firefox"; "Chromium" or "Chrome for Testing" (M9: GORCA_M7_BROWSER=chromium).
-BROWSER_WORDS = ("chrom",) if os.environ.get("GORCA_M7_BROWSER", "firefox") == "chromium" else ("firefox",)
+# C1a: `GORCA_M7_BROWSER=gtk4` points the driver at tests/harness/c1a_gtk4.py (a real GTK4 window).
+_ENGINE = os.environ.get("GORCA_M7_BROWSER", "firefox")
+BROWSER_WORDS = {"chromium": ("chrom",), "gtk4": ("c1a-gtk4",)}.get(_ENGINE, ("firefox",))
 
 
 POKE = os.environ.get("GORCA_M9_AT", "") in ("poke", "orca")
@@ -145,6 +147,9 @@ def find_doc(title, timeout_ms):
     end = time.monotonic() + timeout_ms / 1000.0
     while time.monotonic() < end:
         for b in firefox_buses():
+            if _ENGINE == "gtk4":
+                # No document: the application root stands in for it (C1a cold-focus scenario).
+                return {"ok": True, "bus": b, "path": "/org/a11y/atspi/accessible/root", "name": title}
             hit = bfs(b, "/org/a11y/atspi/accessible/root",
                       lambda r, n, p: r == DOC_WEB and (not title or title in n), 4000)
             if hit:
@@ -176,6 +181,21 @@ def handle(req):
     if cmd == "find":
         return find(req["bus"], req["root"], req.get("role", ""), req.get("name", ""),
                     int(req.get("timeout_ms", 5000)), bool(req.get("partial", False)))
+    if cmd == "list":
+        # Every node of a role under root, breadth first (C1a: the fields of the cold-focus page).
+        want = ROLES.get(req.get("role", ""), -2)
+        out, queue, seen = [], [req["root"]], 0
+        while queue and seen < 60000:
+            p = queue.pop(0)
+            seen += 1
+            if role_of(req["bus"], p) == want or (
+                req.get("prefix") and name_of(req["bus"], p).startswith(req["prefix"])
+            ):
+                out.append(p)
+            for (b, c) in children(req["bus"], p):
+                if b == req["bus"]:
+                    queue.append(c)
+        return {"ok": True, "nodes": out}
     if cmd == "focus":
         t = time.monotonic_ns()
         r = call(req["bus"], req["path"], COMP, "GrabFocus")

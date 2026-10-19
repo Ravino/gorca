@@ -82,13 +82,22 @@ async fn fetch_node(
             Ok(None)
         }
     };
-    let (role, state, name, desc, parent, count) = tokio::join!(
+    // `ATTRS` (M22a C1a) joins the same batch: one more pipelined call, no extra round trip.
+    let attrs_fut = async {
+        if want.contains(PropMask::ATTRS) {
+            c.attributes_of(path, dl).await.map(Some)
+        } else {
+            Ok(None)
+        }
+    };
+    let (role, state, name, desc, parent, count, attrs) = tokio::join!(
         c.role(path, dl),
         c.state(path, dl),
         name_fut,
         desc_fut,
         parent_fut,
-        count_fut
+        count_fut,
+        attrs_fut
     );
     // Role and state are required; a failed name only costs the name.
     let role = role.map_err(|e| backend_error(&e))?;
@@ -109,6 +118,11 @@ async fn fetch_node(
     if let Ok(Some(d)) = desc {
         raw.description = Some(clip(&d, MAX_TEXT_BYTES).to_owned());
         have |= PropMask::DESCRIPTION;
+    }
+    // A failed or timed-out call leaves the node poorer (no `ATTRS` in `have`): it is asked again.
+    if let Ok(Some(pairs)) = attrs {
+        raw.attrs = crate::decode::keep_attrs(pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        have |= PropMask::ATTRS;
     }
     let mut parent_ref = None;
     if let Some(p) = known_parent {

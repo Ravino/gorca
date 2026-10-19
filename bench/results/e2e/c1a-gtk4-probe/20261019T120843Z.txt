@@ -1,0 +1,37 @@
+# e2e c1a-gtk4-probe
+# utc=2026-10-19T12:08:43Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=7.00 8.94 8.48 1/2285 675715
+# git_rev=b87193ec
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx12
+# topology_expected=-
+# label=c1a-gtk4-probe
+# reader=daemon:<repo>/.claude/worktrees/agent-ae1e5a6f5402c52c9/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=7.00 8.94 8.48 2/2285 675712
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info GORCA_TOPOLOGY_REPORT=bench/results/e2e/c1a-gtk4-probe/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+
+metric                     bus                median          min          max  n op    threshold  res   note
+CF.cf_ms.n                 daemon/voicego          147          147          147  3                  info   [samples]
+CF.cf_ms.p50               daemon/voicego        0.564        0.528        0.569  3                  info   [ms]
+CF.cf_ms.p95               daemon/voicego        0.788        0.779        0.822  3                  info   [ms]
+CF.cf_ms.p99               daemon/voicego        0.877        0.872        0.892  3                  info   [ms]
+CF.cf_ms.p999              daemon/voicego        0.918        0.887        0.921  3                  info   [ms]
+CF.cf_ms.max               daemon/voicego        0.918        0.887        0.921  3                  info   [ms]
+CF.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [trials]

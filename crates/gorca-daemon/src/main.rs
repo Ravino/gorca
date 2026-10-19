@@ -46,6 +46,10 @@ fn main() -> Result<ExitCode> {
     let rtkit_bus = ["GORCA_RTKIT_BUS_ADDRESS", "DBUS_SYSTEM_BUS_ADDRESS"]
         .iter()
         .find_map(|k| std::env::var(k).ok().filter(|s| !s.is_empty()));
+    // M-6b fallback switch: GORCA_LAZY_ATTRS=1 leaves ATTRS out of the cold focus fetch.
+    if std::env::var("GORCA_LAZY_ATTRS").is_ok_and(|v| v == "1") {
+        gorca_core::set_lazy_attrs(true);
+    }
     let mut opts = opts;
     opts.topology = opts.topology.resolve(rtkit_bus.as_deref());
     let runtime = gorca_daemon::build_runtime_for(

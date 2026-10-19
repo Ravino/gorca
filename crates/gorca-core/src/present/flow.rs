@@ -116,15 +116,41 @@ pub struct Presented {
 }
 
 /// The fields a focus presentation reads and a Reader fetch asks for: `PRESENT` without
-/// `DESCRIPTION`, which no presenter speaks yet. Asking for it would add a call to the cold
-/// path for nothing (B-1: the cold path stays what Phase 1 measured).
-pub const FOCUS_FIELDS: PropMask = PropMask::PRESENT.difference(PropMask::DESCRIPTION);
+/// `DESCRIPTION`, which no presenter speaks yet, plus `ATTRS` (M22a C1a: the semantic model's
+/// attribute facts, one more call pipelined in the same batch, guarded by M-6b). Asking for
+/// `DESCRIPTION` would add a call to the cold path for nothing.
+///
+/// The M-6b fallback switch is [`focus_fields`].
+pub const FOCUS_FIELDS: PropMask = PropMask::PRESENT
+    .difference(PropMask::DESCRIPTION)
+    .union(PropMask::ATTRS);
+
+/// [`FOCUS_FIELDS`] without `ATTRS`: what the cold focus fetch asked for before M22a.
+pub const FOCUS_FIELDS_LAZY: PropMask = PropMask::PRESENT.difference(PropMask::DESCRIPTION);
+
+static LAZY_ATTRS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// M-6b fallback switch: when set, the focus fetch leaves `ATTRS` out (they are read after the
+/// first speech by the paths that need them). Set from `GORCA_LAZY_ATTRS=1` by the daemon, or
+/// by a test.
+pub fn set_lazy_attrs(lazy: bool) {
+    LAZY_ATTRS.store(lazy, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The focus fetch mask in force: [`FOCUS_FIELDS`], or [`FOCUS_FIELDS_LAZY`] under the switch.
+pub fn focus_fields() -> PropMask {
+    if LAZY_ATTRS.load(std::sync::atomic::Ordering::Relaxed) {
+        FOCUS_FIELDS_LAZY
+    } else {
+        FOCUS_FIELDS
+    }
+}
 
 /// What a focus presentation needs from a snapshot (B-1 5.2): `FOCUS_FIELDS`, minus `VALUE` when the
 /// node is known to have neither a Value nor a Text interface, plus `RELATIONS` when it has no
 /// name (a label may name it).
 pub fn focus_need(n: &NodeSnapshot) -> PropMask {
-    let mut need = FOCUS_FIELDS;
+    let mut need = focus_fields();
     if !n.interfaces.is_empty() && !n.interfaces.intersects(Ifaces::VALUE | Ifaces::TEXT) {
         need.remove(PropMask::VALUE);
     }
@@ -481,7 +507,7 @@ impl Reader {
                 if (missing | stale).intersects(PropMask::NAME | PropMask::ROLE) {
                     fx.push(Self::fetch_effect(
                         node,
-                        FOCUS_FIELDS,
+                        focus_fields(),
                         epoch,
                         FetchKind::Focus,
                     ));
@@ -521,7 +547,7 @@ impl Reader {
                 }
                 fx.push(Self::fetch_effect(
                     node,
-                    FOCUS_FIELDS,
+                    focus_fields(),
                     epoch,
                     FetchKind::Focus,
                 ));
@@ -535,7 +561,7 @@ impl Reader {
                 // The key may come back (a reorder re-adds the same path): ask once (5.5).
                 fx.push(Self::fetch_effect(
                     node,
-                    FOCUS_FIELDS,
+                    focus_fields(),
                     epoch,
                     FetchKind::Focus,
                 ));
@@ -790,7 +816,7 @@ impl Reader {
                     self.focus_retried = Some(r.node);
                     fx.push(Self::fetch_effect(
                         r.node,
-                        FOCUS_FIELDS,
+                        focus_fields(),
                         r.epoch,
                         FetchKind::Focus,
                     ));
@@ -942,7 +968,7 @@ impl Reader {
             self.focus_backoff = Some(FocusBackoff { due: None, ..b });
             fx.push(Self::fetch_effect(
                 b.node,
-                FOCUS_FIELDS,
+                focus_fields(),
                 b.epoch,
                 FetchKind::Focus,
             ));
@@ -1057,7 +1083,7 @@ impl Reader {
                     self.revalidate_retried = Some(r.node);
                     fx.push(Self::fetch_effect(
                         r.node,
-                        FOCUS_FIELDS,
+                        focus_fields(),
                         r.epoch,
                         FetchKind::Revalidate,
                     ));

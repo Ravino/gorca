@@ -1,0 +1,12 @@
+{
+  "meta": {"utc": "2026-10-19T12:38:37Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "11.30 10.13 9.56 1/2856 742384", "git_rev": "b87193ec", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "topology_arms": "lanes-rtx1", "topology_expected": "-", "label": "c1a-gtk4-on-r2", "reader": "daemon:<repo>/.claude/worktrees/agent-ae1e5a6f5402c52c9/target/release/gorca", "backend": "voicego", "repeats": "1", "samples_per_series": "1200", "l2_trials": "400", "quick": "false", "loadavg_end": "11.30 10.13 9.56 1/2856 742381", "reader_env": "GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info GORCA_TOPOLOGY_REPORT=bench/results/e2e/c1a-gtk4-on-r2/topology/topology.%p.json", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats", "reader_args": "--impersonate-orca", "ext_dir": "none", "extensions": "none"},
+  "rows": [
+    {"id": "CF.cf_ms.n", "scenario": "CF", "bus": "daemon/voicego", "value": 147, "min": 147, "max": 147, "runs": 1, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CF.cf_ms.p50", "scenario": "CF", "bus": "daemon/voicego", "value": 0.501651, "min": 0.501651, "max": 0.501651, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CF.cf_ms.p95", "scenario": "CF", "bus": "daemon/voicego", "value": 0.752399, "min": 0.752399, "max": 0.752399, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CF.cf_ms.p99", "scenario": "CF", "bus": "daemon/voicego", "value": 0.882736, "min": 0.882736, "max": 0.882736, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CF.cf_ms.p999", "scenario": "CF", "bus": "daemon/voicego", "value": 0.971449, "min": 0.971449, "max": 0.971449, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CF.cf_ms.max", "scenario": "CF", "bus": "daemon/voicego", "value": 0.971449, "min": 0.971449, "max": 0.971449, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CF.lost", "scenario": "CF", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "trials", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"}
+  ]
+}
