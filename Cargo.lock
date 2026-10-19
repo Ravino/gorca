@@ -1455,6 +1455,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gorca-shell-helper"
+version = "0.0.0"
+dependencies = [
+ "futures-lite",
+ "gorca-dbus",
+ "gorca-output-api",
+ "gorca-rt",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
 name = "gorca-speech"
 version = "0.0.0"
 dependencies = [

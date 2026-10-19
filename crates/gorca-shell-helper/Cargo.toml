@@ -1,0 +1,25 @@
+[package]
+name = "gorca-shell-helper"
+description = "Client of the GNOME Shell helper org.gorca.ShellHelper v2: pointer sink, capability probe, availability watch (ADR-0025)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-rt = { workspace = true }
+gorca-output-api = { workspace = true }
+gorca-dbus = { workspace = true }
+zbus = { workspace = true }
+futures-lite = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+zbus = { workspace = true }
+
+[lints]
+workspace = true
