@@ -1326,7 +1326,7 @@ fn lbl_steps(table: &'static [LblRow]) -> Vec<Step> {
     let mut v = Vec::new();
     for (id, nth, say) in table {
         v.push(s(id, P0, "Tab onto the control: its label words are spoken", Act::FocusNth(*nth), say));
-        v.push(esc("LB.esc"));
+        v.push(esc(Box::leak(format!("{id}.esc").into_boxed_str())));
     }
     v
 }
@@ -1367,6 +1367,7 @@ fn lt() -> Vec<Step> {
     // The first typed key only focuses the window (RIG_KEYS): a Shift press primes it.
     let mut v = vec![pos("LT.start", Act::FocusNth(0)), pos("LT.prime", Act::AppKeys(&[42])), pos("LT.wait", Act::Wait(600))];
     for (id, _, say) in LBR.iter().skip(1) {
+        let id: &'static str = Box::leak(id.replacen("LR.", "LT.", 1).into_boxed_str());
         v.push(s(id, P0, "Real Tab onto the control: its label words are spoken", Act::AppKeys(&[15]), say).win(1500));
     }
     v
