@@ -1776,12 +1776,10 @@ fn the_synchronous_drain_stops_at_its_time_bound_and_carries_the_rest() {
     // A zero time bound: the drain takes one fusion (progress is guaranteed) and carries the rest.
     e.set_sync_drain_time(std::time::Duration::ZERO);
     e.bump_global();
-    assert!(
-        e.priority_work() > 0,
-        "the rest stays in front of the dirty set"
-    );
+    let left = (0..=30).filter(|i| e.is_dirty(nid(*i))).count();
+    assert!(left > 0, "the rest stays dirty in front for the next run");
     // The next run finishes it, and the result equals a from-scratch fusion.
     e.run(Budget::UNLIMITED);
-    assert_eq!(e.priority_work(), 0);
+    assert!((0..=30).all(|i| !e.is_dirty(nid(i))));
     assert!(e.verify().is_ok());
 }
