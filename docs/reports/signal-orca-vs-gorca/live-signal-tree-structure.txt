@@ -1,0 +1,93 @@
+apps: [('signal-desktop', 'Chromium')]
+application|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=14|ch=1|explicit-name(4)
+  frame|AACCDHHT|show,vis,en,sens|embeds:1|name=10|ch=1|explicit-name(4)
+    panel|AACCDHHT|show,vis,en,sens||name=0|ch=1|
+      panel|AACCDHHT|show,vis,en,sens||name=0|ch=5|
+        button|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=5|ch=0|explicit-name(4)
+        button|AACCDHHT|en,sens||name=8|ch=0|explicit-name(4) hidden=true
+        panel|AACCDHHT|show,vis,en,sens||name=0|ch=1|
+          panel|AACCDHHT|show,vis,en,sens||name=0|ch=2|
+            menu bar|AACCDHHST|fcsbl,show,vis,en,sens,fcsbl||name=0|ch=5|explicit-name(4)
+              button|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=4|ch=0|explicit-name(4) haspopup=menu
+              button|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=4|ch=0|explicit-name(4) haspopup=menu id(6)
+              ... +3 same-role siblings elided
+            panel|AACCDHHT|show,vis,en,sens||name=0|ch=2|
+              panel|AACCDHHT|show,vis,en,sens||name=0|ch=2|
+                panel|AACCDHHT|en,sens||name=0|ch=1|explicit-name(4) hidden=true
+                  panel|AACCDHHT|en,sens||name=0|ch=0|hidden=true
+                document web|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl|embedded-by:1|name=10|ch=1|explicit-name(4) tag=#document
+                  section|AACCDHHT|show,vis,en,sens||name=0|ch=4|tag=body
+                    section|AACCDHHT|show,vis,en,sens||name=0|ch=1|id(13) tag=div
+                      section|AACCDHHT|show,vis,en,sens||name=0|ch=2|tag=div
+                        section|AACCDHHT|show,vis,en,sens||name=0|ch=2|tag=div
+                          landmark|AACCDHHT|show,vis,en,sens||name=0|ch=2|tag=nav xml-roles=navigation
+                            button|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=9|ch=0|tag=button
+                            page tab list|AACCDHHST|show,vis,en,sens,VER||name=0|ch=4|id(26) setsize=4 tag=div xml-roles=tablist
+                              page tab|AACCDHHT|fcsbl,show,vis,selbl,SELECTED,en,sens,fcsbl|controller-for:1,label-for:1|name=14|ch=0|id(36) posinset=1 setsize=4 tag=div xml-roles=tab
+                              page tab|AACCDHHT|fcsbl,show,vis,selbl,en,sens,fcsbl||name=14|ch=0|id(36) posinset=2 setsize=4 tag=div xml-roles=tab
+                              ... +2 same-role siblings elided
+                          scroll pane|AACCDHHT|show,vis,en,sens|controlled-by:1,labelled-by:1|name=14|ch=2|explicit-name(4) id(41) tag=div xml-roles=tabpanel
+                            section|AACCDHHT|show,vis,en,sens||name=0|ch=1|id(8) tag=div
+                              landmark|AACCDHHT|show,vis,en,sens||name=0|ch=6|tag=div xml-roles=navigation
+                                heading|AACCDHHT|show,vis,en,sens||name=5|ch=1|level=1 live=assertive relevant=additions text tag=h1
+                                  static|AACCDHT|show,vis,en,sens||name=5|ch=0|relevant=additions text
+                                button|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=8|ch=0|tag=button
+                                button|AACCDHHT|fcsbl,show,vis,expbl,en,sens,fcsbl||name=12|ch=0|haspopup=menu id(11) tag=button
+                                landmark|AACCDHHT|show,vis,en,sens||name=0|ch=3|tag=nav xml-roles=navigation
+                                  section|AACCDHHT|show,vis,en,sens||name=0|ch=2|tag=div
+                                    section|AACCDHHT|show,vis,en,sens||name=0|ch=0|tag=i
+                                    entry|AACCDHT|EDI,fcsbl,show,vis,SIN,en,sens,fcsbl||name=6|ch=0|explicit-name(4) placeholder(6) tag=input text-input-type(4) text-model(2)
+                                  toggle button|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=16|ch=2|tag=button
+                                    section|AACCDHHT|show,vis,en,sens||name=0|ch=0|tag=::before
+                                    static|AACCDHT|show,vis,en,sens||name=16|ch=0|
+                                  section|AACCDHHT|show,vis,en,sens||name=0|ch=1|tag=div
+                                    section|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=0|ch=1|live=polite relevant=additions text tag=div xml-roles=presentation
+                                      table|AACCDHHSTT|fcsbl,show,vis,fcsbl,REA||name=4|ch=1|explicit-name(4) relevant=additions text tag=div xml-roles=grid
+                                        table row|AACCDHHT|show,vis,en,sens||name=0|ch=22|relevant=additions text tag=div xml-roles=row
+                                          table row|AACCDHHT|show,vis,en,sens||name=0|ch=1|relevant=additions text tag=span xml-roles=row
+                                            table cell|AACCDHHTT|show,vis,en,sens||name=75|ch=1|relevant=additions text tag=span xml-roles=gridcell
+                                              button|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=75|ch=3|explicit-name(4) relevant=additions text tag=button
+                                                section|AACCDHHT|show,vis,en,sens||name=0|ch=1|relevant=additions text tag=div
+                                                  section|AACCDHHT|show,vis,en,sens||name=36|ch=1|explicit-name(4) relevant=additions text tag=div
+                                                    section|AACCDHHT|show,vis,en,sens||name=0|ch=0|relevant=additions text tag=div
+                                                section|AACCDHHT|show,vis,en,sens||name=0|ch=2|live=off relevant=additions text tag=div
+                                                  section|AACCDHHT|show,vis,en,sens||name=0|ch=1|relevant=additions text tag=span
+                                                    static|AACCDHT|show,vis,en,sens||name=17|ch=0|relevant=additions text
+                                                  static|AACCDHHT|show,vis,en,sens||name=0|ch=1|datetime(24) relevant=additions text tag=time
+                                                    static|AACCDHT|show,vis,en,sens||name=2|ch=0|relevant=additions text
+                                                ... +1 same-role siblings elided
+                                          table row|AACCDHHT|show,vis,en,sens||name=0|ch=1|relevant=additions text tag=span xml-roles=row
+                                            table cell|AACCDHHTT|show,vis,en,sens||name=83|ch=1|relevant=additions text tag=span xml-roles=gridcell
+                                              button|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=83|ch=3|explicit-name(4) relevant=additions text tag=button
+                                                section|AACCDHHT|show,vis,en,sens||name=0|ch=1|relevant=additions text tag=div
+                                                  section|AACCDHHT|show,vis,en,sens||name=38|ch=1|explicit-name(4) relevant=additions text tag=div
+                                                    section|AACCDHHT|show,vis,en,sens||name=0|ch=0|relevant=additions text tag=div
+                                                section|AACCDHHT|show,vis,en,sens||name=0|ch=2|live=off relevant=additions text tag=div
+                                                  section|AACCDHHT|show,vis,en,sens||name=0|ch=1|relevant=additions text tag=span
+                                                    static|AACCDHT|show,vis,en,sens||name=19|ch=0|relevant=additions text
+                                                  static|AACCDHHT|show,vis,en,sens||name=0|ch=1|datetime(24) relevant=additions text tag=time
+                                                    static|AACCDHT|show,vis,en,sens||name=7|ch=0|relevant=additions text
+                                                ... +1 same-role siblings elided
+                                          ... +20 same-role siblings elided
+                                separator|AACCDHHTV|fcsbl,show,vis,en,sens,fcsbl,VER||name=0|ch=0|tag=div valuetext(3) xml-roles=separator
+                                section|AACCDHHT|show,vis,en,sens||name=0|ch=0|tag=div
+                            section|AACCDHHT|show,vis,en,sens||name=0|ch=2|tag=div
+                              section|AACCDHHT|vis,en,sens||name=0|ch=0|id(5) tag=div
+                              section|AACCDHHT|show,vis,en,sens||name=0|ch=1|id(49) tag=div
+                                section|AACCDHHT|show,vis,en,sens||name=0|ch=1|tag=div
+                                  section|AACCDHHT|show,vis,en,sens||name=0|ch=7|tag=div
+                                    section|AACCDHHT|show,vis,en,sens||name=36|ch=1|explicit-name(4) tag=div
+                                      button|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=0|ch=0|tag=button
+                                    section|AACCDHHT|show,vis,en,sens||name=0|ch=1|tag=div
+                                      button|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=50|ch=2|tag=button
+                                        static|AACCDHT|show,vis,en,sens||name=17|ch=0|
+                                        image|AACCDHI|fcsbl,show,vis,en,sens,fcsbl||name=32|ch=0|explicit-name(4) tag=span xml-roles=img
+                                    button|AACCDHHT|fcsbl,show,vis,en,sens,fcsbl||name=6|ch=0|explicit-name(4) tag=button
+                                    button|AACCDHHT|fcsbl,show,vis,expbl,en,sens,fcsbl||name=9|ch=0|explicit-name(4) haspopup=menu id(11) tag=button
+                                    ... +3 same-role siblings elided
+                        section|AACCDHHT|vis,en,sens||name=0|ch=0|tag=div
+                    section|AACCDHHT|vis,en,sens||name=0|ch=0|tag=div
+                    ... +2 same-role siblings elided
+              panel|AACCDHHT|show,vis,en,sens||name=0|ch=0|
+        ... +2 same-role siblings elided
+nodes printed 83

@@ -1,0 +1,26 @@
+settle  -       consumed=None  passed=None  focus-events=1 (+0 
+prime   Shift   consumed=False passed=True  focus-events=1 +11 table row name='' table row<article<list item<list (+0 child
+        ORCA  'Signal-like fixture - Chromium frame'
+        ORCA  'left shift'
+toggle  ['Insert', 'Space'] consumed=True  passed=False focus-events=1 (+0 
+        ORCA  'insert'
+        ORCA  'Focus mode'
+up1     Up      consumed=False passed=True  focus-events=1 +11 table row name='' table row<article<list item<list (+0 child
+        ORCA  'Contact 0 Message number 398 body text 10:38 Message'
+        ORCA  'Browse mode'
+up2     Up      consumed=True  passed=False focus-events=1 +132 button name='React to message' button<table row<article<list
+        ORCA  'Me Message number 397 body text 10:37 Message'
+        ORCA  'React to message button.'
+up3     Up      consumed=True  passed=False focus-events=1 +62 table row name='' table row<table row<article<list item (+0 
+        ORCA  '10:37'
+down1   Down    consumed=True  passed=False focus-events=1 +62 button name='React to message' button<table row<article<list
+        ORCA  'React to message button.'
+home    Home    consumed=True  passed=False focus-events=1 (+0 
+        ORCA  'React to message button.'
+end     End     consumed=True  passed=False focus-events=1 (+0 
+        ORCA  'React to message button.'
+toggle2 ['Insert', 'Space'] consumed=True  passed=False focus-events=1 (+0 
+        ORCA  'insert'
+        ORCA  'Focus mode'
+up4     Up      consumed=False passed=True  focus-events=1 (+0 
+flush   -       consumed=None  passed=None  focus-events=1 (+0 

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Signal-like fixture</title>
+<style>
+  html, body { margin: 0; height: 100%; font-family: sans-serif; }
+  #app { display: flex; height: 100vh; }
+  #left { width: 340px; border-right: 1px solid #888; display: flex; flex-direction: column; }
+  #right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #convlist { overflow: auto; flex: 1; }
+  .conv { display: block; width: 100%; text-align: left; padding: 8px; border: 0; border-bottom: 1px solid #ddd; background: none; font: inherit; }
+  .conv:focus { outline: 2px solid #36c; }
+  #timeline-container { flex: 1; overflow: auto; }
+  .msg-row { padding: 6px 10px; border-bottom: 1px solid #eee; }
+  .msg-row:focus { outline: 2px solid #36c; }
+  #composer { border: 1px solid #888; margin: 8px; padding: 6px; min-height: 2em; }
+</style></head>
+<body>
+<!--
+  Signal Desktop 8.31 shaped. Structure comes from the live AT-SPI tree (roles, states, counts)
+  and from the renderer bundle (Timeline, Message); every name and text here is synthetic.
+
+  Left pane: ARIA grid. div[role=grid] > div[role=row] > span[role=row] x N > span[role=gridcell] >
+  button. The app moves the focus between the buttons itself (ArrowUp / ArrowDown).
+
+  Right pane (Timeline): div[role=presentation][tabindex=-1] with a keydown handler > main >
+  div[role=list] > div[role=listitem] > div[role=article][aria-labelledby][aria-roledescription] >
+  div.module-message[tabindex=0][role=row] (the focus target; every message is tabbable, there is
+  no roving tabindex) > div[role=row][tabindex=-1][id=message-accessibility-contents:ID] (the content,
+  the article's name source).
+  ArrowUp / ArrowDown are handled by the Timeline: it moves the targeted message, keeps a window of
+  the messages in the DOM (virtualized list: nodes appear and vanish only at the window's edges) and
+  focuses the neighbour's row. The chain above the timeline sits under aria-live=polite.
+-->
+<div id="app-container"><div id="app">
+<div id="left">
+  <nav>
+    <button type="button" aria-label="Menu">menu</button>
+    <div role="tablist" aria-orientation="vertical">
+      <div role="tab" id="tab-chats" aria-selected="true" aria-controls="panel-chats" tabindex="0">Chats</div>
+      <div role="tab" id="tab-calls" aria-selected="false" tabindex="-1">Calls</div>
+      <div role="tab" id="tab-stories" aria-selected="false" tabindex="-1">Stories</div>
+      <div role="tab" id="tab-settings" aria-selected="false" tabindex="-1">Settings</div>
+    </div>
+  </nav>
+  <div role="tabpanel" id="panel-chats" aria-labelledby="tab-chats" style="display:flex;flex-direction:column;flex:1;min-height:0">
+    <div><nav aria-label="Left pane header">
+      <h1 aria-live="assertive" aria-relevant="additions text">Chats</h1>
+      <button type="button" aria-label="Compose new message">compose</button>
+      <button type="button" aria-label="Chat actions" aria-haspopup="menu" aria-expanded="false">actions</button>
+      <nav><div><i></i><input type="text" aria-label="Search" placeholder="Search"></div></nav>
+    </nav></div>
+    <div aria-live="polite" aria-relevant="additions text" role="presentation" id="convlist">
+      <div role="grid" aria-label="Conversations" id="grid"><div role="row" id="gridrows"></div></div>
+    </div>
+  </div>
+</div>
+<div id="right">
+  <div class="ConversationView__header"><h2>Contact 0</h2></div>
+  <div class="ConversationView__pane" style="display:flex;flex-direction:column;flex:1;min-height:0">
+    <div class="ConversationView__timeline--container" style="flex:1;min-height:0;display:flex">
+      <div aria-live="polite" class="ConversationView__timeline" style="flex:1;display:flex;min-height:0">
+        <div role="presentation" tabindex="-1" id="timeline" style="flex:1;display:flex;min-height:0">
+          <main id="timeline-container"><div id="timeline-list" role="list"></div></main>
+        </div>
+      </div>
+    </div>
+    <div id="composer" role="textbox" aria-multiline="true" aria-label="Send a message" contenteditable="true" tabindex="0" data-supertab="true"></div>
+  </div>
+</div>
+</div></div>
+<script>
+"use strict";
+// ---- data (synthetic) ----
+var NCONV = 24, NMSG = 400, WINDOW = 14;
+var convs = [];
+for (var i = 0; i < NCONV; i++) convs.push({ id: "c" + i, title: "Contact " + i, last: "last message of contact " + i });
+var msgs = [];
+for (var m = 0; m < NMSG; m++) msgs.push({ id: "m" + m, from: (m % 3 === 1) ? "Me" : "Contact 0", text: "Message number " + m + " body text", time: "10:" + String(m % 60).padStart(2, "0") });
+
+// ---- left pane: grid > row > row > gridcell > button, app-managed focus ----
+var gridrows = document.getElementById("gridrows");
+convs.forEach(function (c, i) {
+  var r = document.createElement("span"); r.setAttribute("role", "row");
+  var cell = document.createElement("span"); cell.setAttribute("role", "gridcell");
+  var b = document.createElement("button"); b.type = "button"; b.className = "conv"; b.dataset.i = i;
+  b.tabIndex = i === 0 ? 0 : -1;
+  b.setAttribute("aria-label", c.title + ", " + c.last + ", 10:0" + (i % 10));
+  b.innerHTML = '<div><div><div class="avatar"></div></div><div><span>' + c.title + '</span><time>10:0' + (i % 10) + '</time></div><div><span>' + c.last + '</span></div></div>';
+  b.addEventListener("click", function () { document.querySelector("#right h2").textContent = c.title; });
+  cell.appendChild(b); r.appendChild(cell); gridrows.appendChild(r);
+});
+document.getElementById("grid").addEventListener("keydown", function (e) {
+  var bs = Array.from(gridrows.querySelectorAll("button.conv"));
+  var i = bs.indexOf(document.activeElement);
+  if (i < 0) return;
+  var j = i;
+  if (e.key === "ArrowDown") j = Math.min(bs.length - 1, i + 1);
+  else if (e.key === "ArrowUp") j = Math.max(0, i - 1);
+  else return;
+  e.preventDefault(); bs[i].tabIndex = -1; bs[j].tabIndex = 0; bs[j].focus();
+});
+
+// ---- right pane: virtualized timeline ----
+var list = document.getElementById("timeline-list");
+var first = NMSG, last = NMSG - 1; // empty window; grows to the newest messages
+function renderItem(msg, idx) {
+  var li = document.createElement("div");
+  li.setAttribute("role", "listitem"); li.dataset.messageId = msg.id; li.dataset.itemIndex = idx;
+  var art = document.createElement("div"); art.setAttribute("role", "article");
+  art.setAttribute("aria-labelledby", "message-accessibility-contents:" + msg.id);
+  art.setAttribute("aria-roledescription", "Message");
+  var row = document.createElement("div"); row.className = "module-message msg-row"; row.tabIndex = 0;
+  row.setAttribute("role", "row"); row.dataset.messageId = msg.id;
+  var outer = document.createElement("div");
+  var cont = document.createElement("div"); cont.id = "message-accessibility-contents:" + msg.id;
+  cont.setAttribute("role", "row"); cont.tabIndex = -1;
+  cont.innerHTML = '<div class="author"><span>' + msg.from + '</span></div><div dir="auto"><div class="module-message__text">' + msg.text + '</div><div><time>' + msg.time + '</time></div></div>';
+  var react = document.createElement("button"); react.type = "button"; react.setAttribute("aria-label", "React to message"); react.tabIndex = -1;
+  outer.appendChild(cont); outer.appendChild(react); row.appendChild(outer);
+  art.appendChild(row); li.appendChild(art);
+  return li;
+}
+// keep messages [lo, hi] in the DOM; only the edges change (like a virtualized list)
+function window_(lo, hi) {
+  while (first < lo && list.firstChild) { list.removeChild(list.firstChild); first++; }
+  while (last > hi && list.lastChild) { list.removeChild(list.lastChild); last--; }
+  if (list.childNodes.length === 0) { first = lo; last = lo - 1; }
+  while (first > lo) { first--; list.insertBefore(renderItem(msgs[first], first), list.firstChild); }
+  while (last < hi) { last++; list.appendChild(renderItem(msgs[last], last)); }
+}
+function focusMsg(i) {
+  var row = list.querySelector('[data-message-id="m' + i + '"] .msg-row');
+  if (row) row.focus();
+}
+// Like Signal: the Timeline keydown moves the targeted message; the neighbour's row is focused.
+document.getElementById("timeline").addEventListener("keydown", function (e) {
+  if (e.key !== "ArrowUp" && e.key !== "ArrowDown" && e.key !== "Home" && e.key !== "End") return;
+  var cur = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.messageId : null;
+  if (!cur) return;
+  var idx = parseInt(cur.slice(1), 10), t = idx;
+  if (e.key === "ArrowUp") t = Math.max(0, idx - 1);
+  else if (e.key === "ArrowDown") t = Math.min(NMSG - 1, idx + 1);
+  else if (e.key === "Home") t = 0; else t = NMSG - 1;
+  e.preventDefault(); e.stopPropagation();
+  if (t === idx) return;
+  var lo = Math.max(0, Math.min(first, t - 3)), hi = Math.min(NMSG - 1, Math.max(last, t + 3));
+  // keep a bounded window around the target
+  if (hi - lo + 1 > WINDOW) { if (t < idx) hi = lo + WINDOW - 1; else lo = hi - WINDOW + 1; }
+  if (Math.abs(t - idx) > 1) { lo = Math.max(0, t - WINDOW + 4); hi = Math.min(NMSG - 1, lo + WINDOW - 1); }
+  window_(lo, hi);
+  focusMsg(t);
+});
+window_(NMSG - WINDOW, NMSG - 1);
+// ?focus=timeline: the newest message row takes the focus; ?focus=grid: the first conversation
+// button (the test harness uses this instead of counting Tab presses)
+(function () {
+  var f = /[?&]focus=([a-z]+)/.exec(location.search);
+  window.addEventListener("load", function () {
+    setTimeout(function () {
+      if (f && f[1] === "timeline") focusMsg(NMSG - 1);
+      else if (f && f[1] === "grid") document.querySelector("button.conv").focus();
+    }, 800);
+  });
+})();
+</script>
+</body>
+</html>

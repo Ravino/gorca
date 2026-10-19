@@ -1,0 +1,24 @@
+settle  -       consumed=None  passed=None  focus-events=1 (+0 
+prime   Shift   consumed=False passed=True  focus-events=1 +11 button name='Contact 0, last message of contact 0, 10' butto
+        PAUSE self
+        CANCEL self
+        RESUME self
+        SPEAK Signal-like fixture - Chromium, Contact 0, last message of contact 0, 10:00, button
+        STOP  self
+        SPEAK browse mode, Signal-like fixture, Contact 0, last message of contact 0, 10:00, button
+down1   Down    consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK last message of contact 0
+down2   Down    consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK button, Contact 1, last message of contact 1, 10:01
+down3   Down    consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK last message of contact 1
+up1     Up      consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK Contact 1
+up2     Up      consumed=True  passed=False focus-events=1 (+0 
+        STOP  self
+        SPEAK last message of contact 0
+flush   -       consumed=None  passed=None  focus-events=1 (+0 
