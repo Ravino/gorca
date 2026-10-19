@@ -1108,6 +1108,7 @@ dependencies = [
 name = "gorca-config"
 version = "0.0.0"
 dependencies = [
+ "arc-swap",
  "thiserror",
  "toml_edit",
 ]
