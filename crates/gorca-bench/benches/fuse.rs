@@ -1718,6 +1718,7 @@ fn scenario_anchors(rep: &mut Report) {
     eprintln!("\n== anchors: per-key re-resolution cost (S-3) ==");
     let mut json = String::from("[");
     let mut worst = 0.0f64;
+    let mut worst20k = 0.0f64;
     let mut costs = Vec::new();
     for (ai, n_anchors) in [2_000usize, 20_000].into_iter().enumerate() {
         let mut w = World::build(100_000, 0, false);
@@ -1822,6 +1823,9 @@ fn scenario_anchors(rep: &mut Report) {
                 b.json()
             );
             worst = worst.max(a.p99);
+            if ai == 1 {
+                worst20k = worst20k.max(a.p99);
+            }
         }
         fan.push(']');
         let _ = write!(
@@ -1834,12 +1838,12 @@ fn scenario_anchors(rep: &mut Report) {
     }
     json.push(']');
     rep.put("anchors", json);
-    let flat = costs.len() == 2 && costs[1] <= costs[0] * 2.0;
+    let flat = costs.len() == 2 && costs[1] <= costs[0] * 3.0 && worst20k <= 5_000.0;
     rep.gate(
-        "S-3 re-resolution cost per key independent of cached anchor count (20k vs 2k, p50 ratio <= 2)",
+        "S-3 re-resolution cost per key independent of cached anchor count (20k vs 2k: p50 ratio <= 3 and p99 <= 5 us per key at 20k anchors)",
         format!(
-            "p50 {:.0} ns @2k, {:.0} ns @20k; worst p99 {:.0} ns/key",
-            costs[0], costs[1], worst
+            "p50 {:.0} ns @2k, {:.0} ns @20k; p99 {:.0} ns/key @20k (worst of all {:.0})",
+            costs[0], costs[1], worst20k, worst
         ),
         flat,
     );

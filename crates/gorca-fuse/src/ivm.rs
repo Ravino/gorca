@@ -25,7 +25,7 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gorca_model::fact::{BindGen, SourceId};
 use gorca_model::sem::{BindQuality, Group, GroupMask, SemEntry};
@@ -210,6 +210,16 @@ const REST_CLASS: u8 = 3;
 /// Runs a node must wait in the dirty set before aging may pick it ahead of depth order.
 const AGE_RUNS: u64 = 3;
 
+/// The synchronous priority drain stops after this long (it always takes at least one fusion);
+/// what is left stays dirty in front for the next `run`. The read-time silence mask already hides
+/// silenced values on nodes the drain did not reach, so this bounds latency only.
+const SYNC_DRAIN_TIME: Duration = Duration::from_micros(400);
+
+/// Debug builds only: a node fused more often than this inside one drain is a scheduling loop
+/// (a dependency cycle between propagation and fusion); fail fast instead of hanging.
+#[cfg(debug_assertions)]
+const MAX_REFUSIONS_PER_DRAIN: u32 = 256;
+
 /// A per-source re-fuse sweep; the anchor list is built when the sweep starts, inside `run`.
 #[derive(Debug)]
 struct SourceSweep {
@@ -333,6 +343,9 @@ pub struct Ivm<Q: Quirks, P: PatchSource> {
     tick: u64,
     fused_total: u64,
     aged_total: u64,
+    sync_drain_time: Duration,
+    #[cfg(debug_assertions)]
+    refusions: HashMap<NodeIdx, u32>,
     s0_computes: u64,
     s0_neighbour_hits: u64,
     s0_resident_nodes: usize,
@@ -525,6 +538,9 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             tick: 0,
             fused_total: 0,
             aged_total: 0,
+            sync_drain_time: SYNC_DRAIN_TIME,
+            #[cfg(debug_assertions)]
+            refusions: HashMap::new(),
             s0_computes: 0,
             s0_neighbour_hits: 0,
             s0_resident_nodes: 0,
@@ -1383,6 +1399,12 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         self.drain_priority().published
     }
 
+    /// Override the time bound of the synchronous drain (tests).
+    #[doc(hidden)]
+    pub fn set_sync_drain_time(&mut self, t: Duration) {
+        self.sync_drain_time = t;
+    }
+
     pub fn global_epoch(&self) -> u64 {
         self.epochs.global()
     }
@@ -1399,11 +1421,17 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     /// `run`. Publications go to `sink` the moment they happen.
     fn drain_priority_with(&mut self, sink: &mut dyn FnMut(Published)) -> RunReport {
         let cap = self.profile.limits.max_sync_drain.max(1);
+        let (t0, limit) = (Instant::now(), self.sync_drain_time);
         let mut rep = RunReport::default();
+        #[cfg(debug_assertions)]
+        self.refusions.clear();
         loop {
             let before = rep.fuse_calls;
             while let Some(key) = self.dirty.peek() {
-                if key.0 >= REST_CLASS || rep.fuse_calls >= cap {
+                if key.0 >= REST_CLASS
+                    || rep.fuse_calls >= cap
+                    || (rep.fuse_calls > 0 && t0.elapsed() >= limit)
+                {
                     break;
                 }
                 self.take_dirty(key);
@@ -1411,7 +1439,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             }
             // Fusing changes which nodes feed the priority nodes: refresh the set and go on while
             // a priority node is still dirty (keys are scheduling hints, never results).
-            if rep.fuse_calls == before || rep.fuse_calls >= cap {
+            if rep.fuse_calls == before || rep.fuse_calls >= cap || t0.elapsed() >= limit {
                 break;
             }
             self.apply_prio();
@@ -1447,6 +1475,8 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     /// empty).
     pub fn run_with(&mut self, budget: Budget, sink: &mut dyn FnMut(Published)) -> RunReport {
         let mut rep = RunReport::default();
+        #[cfg(debug_assertions)]
+        self.refusions.clear();
         self.tick += 1;
         let share = if budget.max_calls == usize::MAX {
             BACKGROUND_CHUNK
@@ -1501,6 +1531,15 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     }
 
     fn process(&mut self, x: NodeIdx, rep: &mut RunReport, sink: &mut dyn FnMut(Published)) {
+        #[cfg(debug_assertions)]
+        {
+            let c = self.refusions.entry(x).or_insert(0);
+            *c += 1;
+            assert!(
+                *c <= MAX_REFUSIONS_PER_DRAIN,
+                "node {x:?} fused {c} times in one drain: scheduling loop"
+            );
+        }
         let mut buf = std::mem::take(&mut self.s0_buf);
         let (alive, fused) = {
             let Some(node) = node_of(&self.nodes, x) else {
