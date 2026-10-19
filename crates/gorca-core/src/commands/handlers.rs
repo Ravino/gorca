@@ -205,6 +205,7 @@ impl Reader {
             CoreCmd::DebugNodeInfo | CoreCmd::DebugAppInfo => {
                 self.ask_node(PendingKind::NodeInfo, rep, fx);
             }
+            CoreCmd::DebugExplainLast => self.explain_last(fx),
             CoreCmd::InfoTimeDate => {
                 let t = self.cmd.clock.now();
                 let text = if rep >= 2 {
@@ -541,6 +542,32 @@ impl Reader {
             FocusState::Orphaned { last, .. } => Some(last),
             FocusState::NoFocus => None,
         }
+    }
+
+    /// `debug.explain_last` (dev builds): log where the words of the last utterance came from and
+    /// say a short summary. Reads the mirror only; the fused entry of the node the utterance was
+    /// about is read as it is now. Never touches the key path.
+    fn explain_last(&mut self, fx: &mut ReaderEffects) {
+        let Some(u) = self.cmd.last_spoken.clone() else {
+            self.say(t(M::ExplainNone), fx);
+            return;
+        };
+        let entry = self
+            .cmd
+            .last_spoken_node
+            .and_then(|k| self.dir.lookup(k).hit())
+            .and_then(|n| n.sem.entry.clone());
+        let r = super::diag::log_report(&self.sources, &u, entry.as_deref());
+        let text = msg!(
+            ExplainSummary,
+            segments = r.segments.len(),
+            catalogue = r.catalogue(),
+            literal = r.literal(),
+            groups = r.group_count(),
+            hedged = r.hedged(),
+            tainted = r.tainted(),
+        );
+        self.say(&text, fx);
     }
 
     fn ask_node(&mut self, kind: PendingKind, repeat: u8, fx: &mut ReaderEffects) {

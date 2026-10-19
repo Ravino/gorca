@@ -409,6 +409,8 @@ pub struct Reader {
     /// Time of the message being handled.
     pub(crate) now: Instant,
     pub(crate) present_log: Option<Arc<PresentLog>>,
+    /// The registered fact sources, for naming in `debug.explain_last`.
+    pub(crate) sources: Arc<crate::SourceDirectory>,
     pub(crate) counters: ReaderCounters,
     /// Review cursor state, models and the pending review operation (ADR-0006).
     pub(crate) review: ReviewState,
@@ -507,6 +509,7 @@ impl Reader {
             presented: None,
             now: Instant::now(),
             present_log: None,
+            sources: Arc::new(crate::SourceDirectory::new()),
             counters: ReaderCounters::default(),
             review: ReviewState::new(),
             web: None,
@@ -593,6 +596,13 @@ impl Reader {
         self
     }
 
+    /// The registered fact sources (`debug.explain_last` names them).
+    #[must_use]
+    pub fn with_sources(mut self, sources: Arc<crate::SourceDirectory>) -> Self {
+        self.sources = sources;
+        self
+    }
+
     pub fn counters(&self) -> ReaderCounters {
         self.counters
     }
@@ -674,6 +684,7 @@ impl Reader {
             .find(|e| matches!(e, ReaderEffect::Speak(_)))
         {
             self.cmd.last_spoken = Some(s.utterance.clone());
+            self.cmd.last_spoken_node = self.current_node();
         }
     }
 

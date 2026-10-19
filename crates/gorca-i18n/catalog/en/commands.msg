@@ -43,6 +43,7 @@ cmd-settings-save = save the current settings
 cmd-settings-report-problems = report problems found in the settings file
 cmd-debug-node-info = report debug information about the focused object
 cmd-debug-app-info = report debug information about the application
+cmd-debug-explain-last = explain where the words of the last utterance came from
 cmd-gorca-quit = quit the screen reader
 cmd-text-say-all = read from here to the end
 cmd-text-say-char = report the current character

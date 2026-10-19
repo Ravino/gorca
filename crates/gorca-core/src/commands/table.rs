@@ -56,6 +56,7 @@ pub enum CoreCmd {
     SettingsReportProblems,
     DebugNodeInfo,
     DebugAppInfo,
+    DebugExplainLast,
     GorcaQuit,
     TextSayAll,
     TextSayChar,
@@ -329,7 +330,7 @@ macro_rules! planned_cmds {
 pub(crate) use planned_cmds;
 
 /// Number of commands.
-pub const COUNT: usize = 248;
+pub const COUNT: usize = 249;
 
 impl CoreCmd {
     /// Every command, in discriminant order.
@@ -377,6 +378,7 @@ impl CoreCmd {
         CoreCmd::SettingsReportProblems,
         CoreCmd::DebugNodeInfo,
         CoreCmd::DebugAppInfo,
+        CoreCmd::DebugExplainLast,
         CoreCmd::GorcaQuit,
         CoreCmd::TextSayAll,
         CoreCmd::TextSayChar,
@@ -1015,6 +1017,22 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdDebugAppInfo,
+    },
+    CmdSpec {
+        cmd: CoreCmd::DebugExplainLast,
+        name: "debug.explain_last",
+        // Dev builds only: a release build keeps the name (so a keymap that binds it still
+        // loads) but the command is inert and its chord is not grabbed (KC-10).
+        available: if cfg!(debug_assertions) {
+            Availability::Implemented
+        } else {
+            Availability::Planned(Milestone::Later)
+        },
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: M::CmdDebugExplainLast,
     },
     CmdSpec {
         cmd: CoreCmd::GorcaQuit,

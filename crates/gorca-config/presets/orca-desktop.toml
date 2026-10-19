@@ -31,6 +31,7 @@
 "gorca+ctrl+shift+r" = "settings.report_problems"
 "gorca+f1" = "debug.node_info"
 "gorca+ctrl+f1" = "debug.app_info"
+"gorca+shift+f1" = "debug.explain_last"
 "ctrl+alt+shift+q" = "input.sleep_toggle"
 "kp_add" = "text.say_all"
 "kp_subtract" = "review.toggle"

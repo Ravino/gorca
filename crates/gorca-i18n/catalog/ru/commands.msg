@@ -43,6 +43,7 @@ cmd-settings-save = сохранить текущие настройки
 cmd-settings-report-problems = сообщить о проблемах в файле настроек
 cmd-debug-node-info = сообщить отладочные сведения о текущем объекте
 cmd-debug-app-info = сообщить отладочные сведения о приложении
+cmd-debug-explain-last = объяснить, откуда взялись слова последней фразы
 cmd-gorca-quit = выйти из программы экранного доступа
 cmd-text-say-all = читать отсюда до конца
 cmd-text-say-char = сообщить текущий символ

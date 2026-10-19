@@ -48,6 +48,7 @@
 "gorca+ctrl+shift+r" = "settings.report_problems"
 "gorca+f1" = "debug.node_info"
 "gorca+ctrl+f1" = "debug.app_info"
+"gorca+shift+f1" = "debug.explain_last"
 "gorca+q" = "gorca.quit"
 "gorca+space" = "browse.toggle"
 "gorca+shift+space" = "browse.single_letter_toggle"
