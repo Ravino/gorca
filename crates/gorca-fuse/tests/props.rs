@@ -17,8 +17,8 @@ mod support;
 use std::sync::Arc;
 
 use gorca_fuse::{
-    AnchorId, AnchorIndex, FactIn, Layer, NodeIdx, Payload, PrimarySlot, Profile, Slot, UserOp,
-    Write, hedge_cap, invariant_violations,
+    AnchorId, AnchorIndex, FactIn, Grant, Layer, NodeIdx, Payload, PrimarySlot, Profile, Slot,
+    UserOp, Write, grant_class, invariant_violations,
 };
 use gorca_model::fact::{Basis, BindGen, EvidenceValue, SourceId};
 use gorca_model::sem::{
@@ -298,7 +298,7 @@ fn eval_traced(wl: &Workload, w: &World) -> TreeOut {
 }
 
 fn rand_fact(r: &mut Rng, w: &World, profile: &Profile, n: usize, seq: u64) -> FactIn {
-    let (slot, _name, tier, groups, evidence) = *r.pick(SOURCES);
+    let (slot, _name, _tier, groups, evidence) = *r.pick(SOURCES);
     let x = r.below(n);
     let index = ToyIndex::new(profile, w);
     let dom_ids: Vec<&String> = w.attr.values().filter_map(|(_, id)| id.as_ref()).collect();
@@ -314,7 +314,7 @@ fn rand_fact(r: &mut Rng, w: &World, profile: &Profile, n: usize, seq: u64) -> F
     };
     let res = index.resolve(&anchor);
     let tx = res.node.map_or(x, |n| n.0 as usize);
-    let (group, payload, min_bind) = if !evidence.is_empty() && r.chance(35) {
+    let (group, payload) = if !evidence.is_empty() && r.chance(35) {
         let k = *r.pick(evidence);
         let p = if k == EvidenceKind::LayoutCssHidden {
             Payload::Evidence(EvidenceValue::Flag(r.chance(50)))
@@ -322,12 +322,7 @@ fn rand_fact(r: &mut Rng, w: &World, profile: &Profile, n: usize, seq: u64) -> F
             let texts = ["Close", "Delete", "Search", "", "Menu"];
             Payload::Evidence(EvidenceValue::Text(Arc::from(*r.pick(&texts))))
         };
-        let mb = if k == EvidenceKind::VisualOcrText {
-            BindQuality::Geometric
-        } else {
-            BindQuality::Heuristic
-        };
-        (k.group_code(), p, mb)
+        (k.group_code(), p)
     } else {
         let g = *r.pick(groups);
         let p = if r.chance(5) {
@@ -335,16 +330,9 @@ fn rand_fact(r: &mut Rng, w: &World, profile: &Profile, n: usize, seq: u64) -> F
         } else {
             Payload::Sem(rand_write(r, g))
         };
-        (g.group_code(), p, BindQuality::Unique)
+        (g.group_code(), p)
     };
     let p_milli = u16::try_from(r.below(400) + 600).unwrap();
-    let base = if p_milli >= 970 {
-        ConfClass::High
-    } else if p_milli >= 900 {
-        ConfClass::Probable
-    } else {
-        ConfClass::Possible
-    };
     let inferred = slot >= 3;
     let basis = i64::from(w.vis[tx]) - i64::from(r.chance(10));
     FactIn {
@@ -357,8 +345,6 @@ fn rand_fact(r: &mut Rng, w: &World, profile: &Profile, n: usize, seq: u64) -> F
         seq,
         payload,
         p_milli,
-        class: hedge_cap(base, tier),
-        floor_ok: p_milli >= 800,
         basis: Basis::VisRev(u32::try_from(basis + 1).unwrap()),
         bind_gen: res.generation,
         admitted_at_ms: w.clock,
@@ -367,7 +353,6 @@ fn rand_fact(r: &mut Rng, w: &World, profile: &Profile, n: usize, seq: u64) -> F
         } else {
             None
         },
-        min_bind,
     }
 }
 
@@ -997,7 +982,7 @@ fn f11_a_fact_below_its_floor_never_wins_and_changes_only_its_own_cell() {
         let cell = fact_cell(&wl, &base, &f);
         let mut lowered = f.clone();
         lowered.seq = u64::MAX / 2;
-        lowered.floor_ok = false;
+        lowered.p_milli = 0;
         lowered.payload = f.payload.clone();
         let mut retracted = lowered.clone();
         retracted.payload = Payload::Retract;
@@ -1121,7 +1106,8 @@ fn f15_a_fact_bound_below_its_minimum_never_matters() {
         let index = ToyIndex::new(&wl.case.profile, &w);
         let weak = |f: &FactIn| {
             let q = index.resolve(&f.anchor).quality;
-            !q.at_least(f.min_bind) && q != BindQuality::Unbound
+            !q.at_least(Grant::standard().min_bind(grant_class(f.group)))
+                && q != BindQuality::Unbound
         };
         // An ambiguous DOM id is never `Unique`.
         for f in fact_events(&wl) {
@@ -1272,13 +1258,10 @@ fn two_inferred_sources(slot_a: u32, slot_b: u32) -> (Workload, World) {
             seq: 1,
             payload: Payload::Sem(Write::Val(gorca_fuse::Val::Name(Arc::from(text)))),
             p_milli: 990,
-            class: ConfClass::High,
-            floor_ok: true,
             basis: Basis::VisRev(1),
             bind_gen: BindGen(1),
             admitted_at_ms: 0,
             ttl_ms: Some(300_000),
-            min_bind: BindQuality::Unique,
         })));
     }
     let w = wl.world();
@@ -1316,7 +1299,7 @@ fn a_t3_fact_ranks_below_a_t2_fact_of_the_same_raw_class() {
         seq: 1,
         alive: true,
     });
-    let mk = |slot: u32, tier: TrustTier, text: &str| FactIn {
+    let mk = |slot: u32, text: &str| FactIn {
         source: SourceId {
             slot,
             generation: 0,
@@ -1326,21 +1309,51 @@ fn a_t3_fact_ranks_below_a_t2_fact_of_the_same_raw_class() {
         seq: 1,
         payload: Payload::Sem(Write::Val(gorca_fuse::Val::Name(Arc::from(text)))),
         p_milli: 990,
-        class: hedge_cap(ConfClass::High, tier),
-        floor_ok: true,
         basis: Basis::VisRev(1),
         bind_gen: BindGen(1),
         admitted_at_ms: 0,
         ttl_ms: Some(300_000),
-        min_bind: BindQuality::Unique,
     };
-    wl.events
-        .push(Ev::Fact(Box::new(mk(5, TrustTier::T3Untrusted, "ExtT3"))));
-    wl.events
-        .push(Ev::Fact(Box::new(mk(3, TrustTier::T2FirstParty, "OcrT2"))));
+    wl.events.push(Ev::Fact(Box::new(mk(5, "ExtT3"))));
+    wl.events.push(Ev::Fact(Box::new(mk(3, "OcrT2"))));
     let out = eval(&wl, &wl.world());
     let e = &out.nodes[0].as_ref().unwrap().fused.entry;
     assert_eq!(e.name.as_deref(), Some("OcrT2"));
     assert_eq!(e.hedge.get(Group::Name), ConfClass::High.code());
     let _ = toy_str(&Slot::Unknown);
+}
+
+#[test]
+fn an_inferred_fact_on_another_group_is_reported_not_applicable() {
+    // S4 fills only name and description; the trail must say so instead of omitting the fact.
+    let (mut wl, _) = two_inferred_sources(7, 9);
+    wl.events.clear();
+    wl.events.push(Ev::Life {
+        src: PrimarySlot::P0,
+        x: 0,
+        seq: 1,
+        alive: true,
+    });
+    wl.events.push(Ev::Fact(Box::new(FactIn {
+        source: SourceId {
+            slot: 7,
+            generation: 0,
+        },
+        anchor: AnchorId::Node(NodeIdx(0)),
+        group: Group::Check.group_code(),
+        seq: 1,
+        payload: Payload::Sem(write_from_toy(Group::Check, &json!("on"))),
+        p_milli: 990,
+        basis: Basis::VisRev(1),
+        bind_gen: BindGen(1),
+        admitted_at_ms: 0,
+        ttl_ms: Some(300_000),
+    })));
+    let out = eval_traced(&wl, &wl.world());
+    let ex = out.nodes[0].as_ref().unwrap().explain.as_ref().unwrap();
+    let trail = ex.trail(Group::Check);
+    assert!(trail.iter().any(|t| matches!(
+        t,
+        gorca_fuse::TrailEntry::Fact(f) if f.status == gorca_fuse::TrailStatus::NotApplicable
+    )));
 }

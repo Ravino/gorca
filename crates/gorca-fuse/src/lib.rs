@@ -27,8 +27,8 @@ pub use register::{MAX_PRIMARIES, NodeRegs, PrimarySlot, Reg, SrcRegs, UserOp, U
 pub use repair::{Eff, invariant_violations, repair as repair_eff};
 pub use side::{
     AnchorId, AnchorIndex, Bound, EpochSnapshot, FactCand, FactIn, FactLayer, FactTrail, FuseCtx,
-    NodeCands, NodeIdx, Payload, Ranked, Resolved, SideError, SideTable, SourceInfo, SourceState,
-    Status, TrailStatus,
+    Grant, GrantClass, NodeCands, NodeIdx, Payload, Ranked, Resolved, SideError, SideTable,
+    SourceInfo, SourceState, Status, TrailStatus, grant_class,
 };
 pub use strata::{
     ChildView, Fused, Layer, Neighbours, NoPatches, NoQuirks, PatchHit, PatchSource, Quirks,

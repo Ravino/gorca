@@ -623,6 +623,22 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
         }
     }
 
+    // S4 only fills name and description: an Inferred fact for any other group is reported as
+    // not applicable instead of silently missing from the trail.
+    if T::ON {
+        for e in cands
+            .inferred()
+            .iter()
+            .filter(|e| !matches!(e.target(), Group::Name | Group::Description))
+        {
+            let st = match e.trail().status {
+                TrailStatus::Ok => TrailStatus::NotApplicable,
+                other => other,
+            };
+            tr.fact(e.target(), e, st);
+        }
+    }
+
     // Defaults for what is still Unknown; `known` is set by any layer before defaults.
     let mut known = GroupMask::EMPTY;
     for g in Group::ALL.iter().copied() {

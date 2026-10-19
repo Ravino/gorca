@@ -103,11 +103,10 @@ impl EpochSnapshot {
         self.states.insert(source, state);
     }
 
-    pub fn state(&self, source: SourceId) -> SourceState {
-        self.states
-            .get(&source)
-            .copied()
-            .unwrap_or(SourceState::Active)
+    /// The state of `source`, or `None` when the snapshot has no entry for it. The validity
+    /// filter fails closed: a source missing from the snapshot is masked, never assumed active.
+    pub fn state(&self, source: SourceId) -> Option<SourceState> {
+        self.states.get(&source).copied()
     }
 }
 
@@ -122,6 +121,84 @@ pub struct SourceInfo {
     pub tier: TrustTier,
     /// Position of the source's kind inside S4 ranking (static data).
     pub kind_order: u8,
+    /// The source's grant data: confidence floors and minimum binding per group class. Owned by
+    /// the side table so a writer cannot assert a class, a floor or a binding minimum per fact.
+    pub grant: Grant,
+}
+
+/// Group class of a grant: floors and binding minima are per class (ADR-0024 section 2.5).
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum GrantClass {
+    /// `name` and `description`.
+    Name,
+    /// Every other semantic group.
+    Sem,
+    /// Evidence other than `visual.*`.
+    Evidence,
+    /// `visual.*` evidence.
+    Visual,
+}
+
+/// The grant data of one source.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct Grant {
+    floor: [u16; 4],
+    min_bind: [BindQuality; 4],
+}
+
+impl Grant {
+    /// Floors and minima per class `[name, sem, evidence, visual]`.
+    pub const fn new(floor: [u16; 4], min_bind: [BindQuality; 4]) -> Grant {
+        Grant { floor, min_bind }
+    }
+
+    /// Floor 800 for every class; name and semantic facts need a `Unique` binding, evidence a
+    /// `Heuristic` one and visual evidence a `Geometric` one.
+    pub const fn standard() -> Grant {
+        Grant::new(
+            [800; 4],
+            [
+                BindQuality::Unique,
+                BindQuality::Unique,
+                BindQuality::Heuristic,
+                BindQuality::Geometric,
+            ],
+        )
+    }
+
+    const fn idx(c: GrantClass) -> usize {
+        match c {
+            GrantClass::Name => 0,
+            GrantClass::Sem => 1,
+            GrantClass::Evidence => 2,
+            GrantClass::Visual => 3,
+        }
+    }
+
+    /// The `p_milli` floor of a class.
+    pub fn floor(&self, c: GrantClass) -> u16 {
+        self.floor.get(Self::idx(c)).copied().unwrap_or(u16::MAX)
+    }
+
+    /// The minimum binding quality of a class.
+    pub fn min_bind(&self, c: GrantClass) -> BindQuality {
+        self.min_bind
+            .get(Self::idx(c))
+            .copied()
+            .unwrap_or(BindQuality::Exact)
+    }
+}
+
+/// The grant class of a group code.
+pub fn grant_class(code: GroupCode) -> GrantClass {
+    match code.classify() {
+        GroupClass::Evidence(EvidenceKind::VisualOcrText | EvidenceKind::VisualLabelGuess) => {
+            GrantClass::Visual
+        }
+        GroupClass::Evidence(_) => GrantClass::Evidence,
+        GroupClass::Semantic(Group::Name | Group::Description) => GrantClass::Name,
+        GroupClass::Semantic(_) | GroupClass::Unregistered(_) => GrantClass::Sem,
+    }
 }
 
 /// The payload of a non-primary register.
@@ -163,8 +240,9 @@ impl Payload {
 }
 
 /// One admitted fact as the side table stores it. The writer builds this from
-/// `gorca_fact_api::Admitted` (class after the tier cap, standing, binding generation); the
-/// side table recomputes the binding itself.
+/// `gorca_fact_api::Admitted`; the only writer-stamped judgement is `bind_gen`. The class, the
+/// floor and the binding minimum are the side table's (registered per source), and the binding is
+/// recomputed at `FUSE` time.
 #[derive(Clone, Debug)]
 pub struct FactIn {
     pub source: SourceId,
@@ -172,21 +250,16 @@ pub struct FactIn {
     pub group: GroupCode,
     pub seq: Seq,
     pub payload: Payload,
+    /// The source's calibrated precision estimate. The class, the floor check and the binding
+    /// minimum are computed by the side table from this and the source's [`Grant`].
     pub p_milli: u16,
-    /// The class recomputed at admission from `p_milli` and the grant, after the tier cap. Never
-    /// taken from the source.
-    pub class: ConfClass,
-    /// False when `p_milli` is below the grant's floor for the group class: the fact is stored
-    /// for `explain` and never wins.
-    pub floor_ok: bool,
+    /// `Capture` and `Snapshot` bases are rejected at insert until their owners exist.
     pub basis: Basis,
     /// The `BindGen` the writer stamped at admission.
     pub bind_gen: BindGen,
     pub admitted_at_ms: u64,
     /// Required for Inferred (the admission default applies before this point).
     pub ttl_ms: Option<u64>,
-    /// Minimum binding quality of the grant for this group class.
-    pub min_bind: BindQuality,
 }
 
 #[derive(Debug, thiserror::Error, Eq, PartialEq)]
@@ -197,6 +270,10 @@ pub enum SideError {
     NotFusable,
     #[error("evidence side table is full")]
     Full,
+    #[error("capture and snapshot bases are not supported yet")]
+    UnsupportedBasis,
+    #[error("another source already uses this stable name")]
+    DuplicateName,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -247,8 +324,18 @@ impl SideTable {
         }
     }
 
-    pub fn set_source(&mut self, info: SourceInfo) {
+    /// Register a source. Stable names are unique: they order ranking ties, so two sources must
+    /// never share one (the tie-break would otherwise fall to allocation order).
+    pub fn set_source(&mut self, info: SourceInfo) -> Result<(), SideError> {
+        if self
+            .sources
+            .values()
+            .any(|s| s.id != info.id && s.name == info.name)
+        {
+            return Err(SideError::DuplicateName);
+        }
         self.sources.insert(info.id, info);
+        Ok(())
     }
 
     pub fn len(&self) -> usize {
@@ -281,6 +368,9 @@ impl SideTable {
         match info.class {
             SourceClass::Secondary | SourceClass::Inferred => {}
             SourceClass::Primary | SourceClass::Annotation => return Err(SideError::NotFusable),
+        }
+        if matches!(f.basis, Basis::Capture(..) | Basis::Snapshot(_)) {
+            return Err(SideError::UnsupportedBasis);
         }
         cap_payload(&mut f.payload);
         let key = SideKey {
@@ -429,7 +519,7 @@ pub enum Status {
     Ok,
 }
 
-/// Group class of the grant (floors and binding minima are per class).
+/// True for `visual.*` evidence (always subject to `vis_rev` staleness).
 fn is_visual(code: GroupCode) -> bool {
     matches!(
         code.classify(),
@@ -443,13 +533,14 @@ fn status_of(bf: &Bf<'_>, node: NodeIdx, ctx: &FuseCtx<'_>) -> Status {
         return Status::Retracted;
     }
     match ctx.epoch.state(f.source) {
-        SourceState::Paused | SourceState::Quarantined | SourceState::Revoked => {
+        None | Some(SourceState::Paused | SourceState::Quarantined | SourceState::Revoked) => {
             return Status::Masked;
         }
-        SourceState::Detached => return Status::Detached,
-        SourceState::Active | SourceState::Throttled => {}
+        Some(SourceState::Detached) => return Status::Detached,
+        Some(SourceState::Active | SourceState::Throttled) => {}
     }
-    if !bf.res.quality.at_least(f.min_bind) {
+    let gc = grant_class(f.group);
+    if !bf.res.quality.at_least(bf.info.grant.min_bind(gc)) {
         return match bf.res.quality {
             BindQuality::Unbound => Status::Unbound,
             BindQuality::Geometric
@@ -465,8 +556,9 @@ fn status_of(bf: &Bf<'_>, node: NodeIdx, ctx: &FuseCtx<'_>) -> Status {
     let stale = match f.basis {
         Basis::VisRev(n) => visual_or_inferred && n < (ctx.vis_rev)(node),
         Basis::DocRev(n) => n < (ctx.doc_rev)(node),
-        // A capture fingerprint and a host snapshot token are judged by their owners (M24, M18a).
-        Basis::None | Basis::Capture(..) | Basis::Snapshot(_) => false,
+        Basis::None => false,
+        // Rejected at insert; if one is ever stored it fails closed (stale), never "never stale".
+        Basis::Capture(..) | Basis::Snapshot(_) => true,
     };
     if stale {
         return Status::Stale;
@@ -476,10 +568,17 @@ fn status_of(bf: &Bf<'_>, node: NodeIdx, ctx: &FuseCtx<'_>) -> Status {
     {
         return Status::Expired;
     }
-    if !f.floor_ok {
+    if f.p_milli < bf.info.grant.floor(gc) {
         return Status::LowConfidence;
     }
     Status::Ok
+}
+
+/// The class a fact gets, computed from `p_milli`, the source's tier and the **side table's own**
+/// grant data (never supplied by the writer): thresholds by `p_milli`, capped for T3 and never
+/// `Asserted`.
+fn class_of(info: &SourceInfo, p_milli: u16) -> ConfClass {
+    crate::taint::non_primary_class(ConfClass::from_p_milli(p_milli), info.tier)
 }
 
 // ---- entries -------------------------------------------------------------------------------------
@@ -711,7 +810,7 @@ fn build_entry(bf: &Bf<'_>, node: NodeIdx, ctx: &FuseCtx<'_>) -> (FactLayer, Ent
     let f = &bf.reg.fact;
     let status = status_of(bf, node, ctx);
     // N-2: a non-primary winner is never Asserted.
-    let class = (status == Status::Ok).then(|| f.class.weaker(ConfClass::High));
+    let class = (status == Status::Ok).then(|| class_of(bf.info, f.p_milli));
     let (layer, target, rule) = match f.group.classify() {
         GroupClass::Semantic(g) => match bf.info.class {
             SourceClass::Secondary => (FactLayer::Secondary, g, 0),
@@ -895,6 +994,7 @@ mod tests {
 
     use super::*;
 
+    /// Nodes bind `Exact`; a DOM id binds `Heuristic` (ambiguous); everything else is unbound.
     struct Idx;
     impl AnchorIndex for Idx {
         fn resolve(&self, a: &AnchorId) -> Resolved {
@@ -904,43 +1004,56 @@ mod tests {
                     quality: BindQuality::Exact,
                     generation: BindGen(1),
                 },
+                AnchorId::Dom { .. } => Resolved {
+                    node: Some(NodeIdx(0)),
+                    quality: BindQuality::Heuristic,
+                    generation: BindGen(1),
+                },
                 _ => Resolved::UNBOUND,
             }
         }
     }
 
+    fn id(slot: u32) -> SourceId {
+        SourceId {
+            slot,
+            generation: 0,
+        }
+    }
+
     fn src(slot: u32, name: &str, class: SourceClass, tier: TrustTier) -> SourceInfo {
         SourceInfo {
-            id: SourceId {
-                slot,
-                generation: 0,
-            },
+            id: id(slot),
             name: Arc::from(name),
             class,
             tier,
             kind_order: 0,
+            grant: Grant::standard(),
         }
     }
 
     fn fact(source: u32, node: u32, g: Group, seq: u64, w: Write) -> FactIn {
         FactIn {
-            source: SourceId {
-                slot: source,
-                generation: 0,
-            },
+            source: id(source),
             anchor: AnchorId::Node(NodeIdx(node)),
             group: g.group_code(),
             seq,
             payload: Payload::Sem(w),
             p_milli: 990,
-            class: ConfClass::High,
-            floor_ok: true,
             basis: Basis::None,
             bind_gen: BindGen(1),
             admitted_at_ms: 0,
             ttl_ms: None,
-            min_bind: BindQuality::Exact,
         }
+    }
+
+    /// A snapshot with every listed source `Active` (a missing source is masked).
+    fn active(slots: &[u32]) -> EpochSnapshot {
+        let mut e = EpochSnapshot::default();
+        for s in slots {
+            e.set(id(*s), SourceState::Active);
+        }
+        e
     }
 
     fn ctx(e: &EpochSnapshot, clock: u64) -> FuseCtx<'_> {
@@ -959,13 +1072,15 @@ mod tests {
             "bus",
             SourceClass::Secondary,
             TrustTier::T3Untrusted,
-        ));
+        ))
+        .expect("bus");
         t.set_source(src(
             2,
             "ocr",
             SourceClass::Inferred,
             TrustTier::T2FirstParty,
-        ));
+        ))
+        .expect("ocr");
         t
     }
 
@@ -973,22 +1088,61 @@ mod tests {
         Write::Val(Val::Orientation(Orientation::Vertical))
     }
 
-    #[test]
-    fn a_valid_fact_becomes_a_candidate_and_is_never_asserted() {
-        let mut t = table();
-        let mut f = fact(1, 0, Group::Orientation, 1, vertical());
-        f.class = ConfClass::Asserted;
-        assert_eq!(t.insert(f), Ok(true));
+    fn status_of_only(t: &SideTable, e: &EpochSnapshot, clock: u64) -> Status {
         let b = t.bind(&Idx);
-        let e = EpochSnapshot::default();
+        let r = b.node(NodeIdx(0), &ctx(e, clock));
+        r.view().secondary()[0].status()
+    }
+
+    #[test]
+    fn a_valid_fact_becomes_a_candidate_with_a_side_table_class() {
+        let mut t = table();
+        // p = 990 from a T3 source: High capped to Probable by the side table itself.
+        t.insert(fact(1, 0, Group::Orientation, 1, vertical()))
+            .expect("insert");
+        let b = t.bind(&Idx);
+        let e = active(&[1, 2]);
         let r = b.node(NodeIdx(0), &ctx(&e, 0));
         let c = r.view().secondary()[0].cand().expect("valid");
-        assert_eq!(c.conf(), ConfClass::High, "clamped below Asserted (N-2)");
+        assert_eq!(c.conf(), ConfClass::Probable);
+    }
+
+    #[test]
+    fn a_writer_cannot_assert_class_floor_or_binding_minimum() {
+        // The fact type carries no class, floor flag or minimum: a low-precision fact is below the
+        // floor, and a fact on an ambiguous anchor is below the minimum, whatever else it says.
+        let e = active(&[1, 2]);
+        let mut low = table();
+        let mut f = fact(1, 0, Group::Orientation, 1, vertical());
+        f.p_milli = 500;
+        low.insert(f).expect("insert");
+        assert_eq!(status_of_only(&low, &e, 0), Status::LowConfidence);
+
+        let mut amb = table();
+        let mut f = fact(1, 0, Group::Orientation, 1, vertical());
+        f.anchor = AnchorId::Dom {
+            id: Arc::from("x"),
+            count: 2,
+            frame: 0,
+            shadow: 0,
+        };
+        amb.insert(f).expect("insert");
+        assert_eq!(status_of_only(&amb, &e, 0), Status::WeakBinding);
+
+        // A source registered with a stricter grant is held to it.
+        let mut strict = SideTable::default();
+        let mut info = src(1, "bus", SourceClass::Secondary, TrustTier::T2FirstParty);
+        info.grant = Grant::new([999; 4], [BindQuality::Exact; 4]);
+        strict.set_source(info).expect("bus");
+        strict
+            .insert(fact(1, 0, Group::Orientation, 1, vertical()))
+            .expect("insert");
+        assert_eq!(status_of_only(&strict, &e, 0), Status::LowConfidence);
     }
 
     #[test]
     fn every_filter_step_blocks_the_candidate() {
-        let e = EpochSnapshot::default();
+        let e = active(&[1, 2]);
         let cases: Vec<(&str, FactIn, Status)> = vec![
             (
                 "retracted",
@@ -1003,11 +1157,15 @@ mod tests {
                 "weak binding",
                 {
                     let mut f = fact(1, 0, Group::Orientation, 1, vertical());
-                    f.min_bind = BindQuality::Exact;
-                    f.anchor = AnchorId::Content(1);
+                    f.anchor = AnchorId::Dom {
+                        id: Arc::from("x"),
+                        count: 1,
+                        frame: 0,
+                        shadow: 0,
+                    };
                     f
                 },
-                Status::Unbound,
+                Status::WeakBinding,
             ),
             (
                 "rebound",
@@ -1031,7 +1189,7 @@ mod tests {
                 "floor",
                 {
                     let mut f = fact(1, 0, Group::Orientation, 1, vertical());
-                    f.floor_ok = false;
+                    f.p_milli = 100;
                     f
                 },
                 Status::LowConfidence,
@@ -1039,20 +1197,30 @@ mod tests {
         ];
         for (name, f, want) in cases {
             let mut t = table();
-            let parked = f.anchor != AnchorId::Node(NodeIdx(0));
             t.insert(f).expect("insert");
             let b = t.bind(&Idx);
-            let c = ctx(&e, 10);
-            let r = b.node(NodeIdx(0), &c);
-            if parked {
-                assert!(r.view().secondary().is_empty(), "{name}");
-                assert_eq!(b.parked().len(), 1);
-                continue;
-            }
+            let r = b.node(NodeIdx(0), &ctx(&e, 10));
             let ent = &r.view().secondary()[0];
             assert_eq!(ent.status(), want, "{name}");
             assert!(ent.cand().is_none(), "{name}");
         }
+    }
+
+    #[test]
+    fn unbound_facts_are_parked() {
+        let mut t = table();
+        let mut f = fact(1, 0, Group::Orientation, 1, vertical());
+        f.anchor = AnchorId::Content(1);
+        t.insert(f).expect("insert");
+        let b = t.bind(&Idx);
+        let e = active(&[1, 2]);
+        assert!(
+            b.node(NodeIdx(0), &ctx(&e, 0))
+                .view()
+                .secondary()
+                .is_empty()
+        );
+        assert_eq!(b.parked().len(), 1);
     }
 
     #[test]
@@ -1068,11 +1236,7 @@ mod tests {
         f.basis = Basis::VisRev(1);
         t.insert(f).expect("insert");
         let b = t.bind(&Idx);
-        let mut e = EpochSnapshot::default();
-        let id = SourceId {
-            slot: 2,
-            generation: 0,
-        };
+        let mut e = active(&[1, 2]);
         let status = |e: &EpochSnapshot, vis: u32| {
             let c = FuseCtx {
                 epoch: e,
@@ -1084,12 +1248,62 @@ mod tests {
         };
         assert_eq!(status(&e, 1), Status::Ok);
         assert_eq!(status(&e, 2), Status::Stale);
-        e.set(id, SourceState::Revoked);
+        e.set(id(2), SourceState::Revoked);
         assert_eq!(status(&e, 1), Status::Masked);
-        e.set(id, SourceState::Detached);
+        e.set(id(2), SourceState::Detached);
         assert_eq!(status(&e, 1), Status::Detached);
-        e.set(id, SourceState::Throttled);
+        e.set(id(2), SourceState::Throttled);
         assert_eq!(status(&e, 1), Status::Ok);
+    }
+
+    #[test]
+    fn a_source_missing_from_the_epoch_snapshot_fails_closed() {
+        let mut t = table();
+        t.insert(fact(1, 0, Group::Orientation, 1, vertical()))
+            .expect("insert");
+        // Source 1 has no entry: masked, never assumed active.
+        let e = active(&[2]);
+        assert_eq!(status_of_only(&t, &e, 0), Status::Masked);
+        assert_eq!(
+            status_of_only(&t, &EpochSnapshot::default(), 0),
+            Status::Masked
+        );
+    }
+
+    #[test]
+    fn capture_and_snapshot_bases_are_rejected_at_insert() {
+        use gorca_model::fact::{CaptureId, SnapshotToken};
+        let mut t = table();
+        let mut f = fact(1, 0, Group::Orientation, 1, vertical());
+        f.basis = Basis::Capture(CaptureId(1), 7);
+        assert_eq!(t.insert(f.clone()), Err(SideError::UnsupportedBasis));
+        f.basis = Basis::Snapshot(SnapshotToken(1));
+        assert_eq!(t.insert(f), Err(SideError::UnsupportedBasis));
+        assert!(t.is_empty());
+    }
+
+    #[test]
+    fn stable_names_are_unique() {
+        let mut t = table();
+        assert_eq!(
+            t.set_source(src(
+                9,
+                "bus",
+                SourceClass::Inferred,
+                TrustTier::T2FirstParty
+            )),
+            Err(SideError::DuplicateName)
+        );
+        // Re-registering the same id under its name is an update, not a duplicate.
+        assert_eq!(
+            t.set_source(src(
+                1,
+                "bus",
+                SourceClass::Secondary,
+                TrustTier::T2FirstParty
+            )),
+            Ok(())
+        );
     }
 
     #[test]
@@ -1111,12 +1325,14 @@ mod tests {
         assert_eq!(a.len(), 1);
         assert_eq!(b.len(), 1);
         let mut small = SideTable::with_cap(1);
-        small.set_source(src(
-            1,
-            "bus",
-            SourceClass::Secondary,
-            TrustTier::T3Untrusted,
-        ));
+        small
+            .set_source(src(
+                1,
+                "bus",
+                SourceClass::Secondary,
+                TrustTier::T3Untrusted,
+            ))
+            .expect("bus");
         small
             .insert(fact(1, 0, Group::Orientation, 1, vertical()))
             .expect("first");
@@ -1133,13 +1349,15 @@ mod tests {
     #[test]
     fn primary_and_annotation_sources_are_not_fusable() {
         let mut t = SideTable::default();
-        t.set_source(src(5, "atspi", SourceClass::Primary, TrustTier::T1Platform));
+        t.set_source(src(5, "atspi", SourceClass::Primary, TrustTier::T1Platform))
+            .expect("atspi");
         t.set_source(src(
             6,
             "note",
             SourceClass::Annotation,
             TrustTier::T2FirstParty,
-        ));
+        ))
+        .expect("note");
         for s in [5, 6] {
             assert_eq!(
                 t.insert(fact(s, 0, Group::Name, 1, vertical())),

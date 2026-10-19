@@ -15,15 +15,15 @@ use std::sync::Arc;
 
 use gorca_fuse::{
     AnchorId, AnchorIndex, Bound, ChildView, EpochSnapshot, Explain, FactIn, FactLayer, FactTrail,
-    FuseCtx, Fused, Neighbours, NoTrace, NodeCands, NodeIdx, NodeRegs, PatchHit, PatchSource,
-    Payload, PrimarySlot, Profile, Quirks, Ranked, Record, Resolved, RoleSet, Rules, S0Node,
-    Scratch, SideTable, Slot, SourceInfo, SourceState, Trace, TrailEntry, UserOp, Val, Write,
-    fuse_node_with, hedge_cap, s0_with,
+    FuseCtx, Fused, Grant, Neighbours, NoTrace, NodeCands, NodeIdx, NodeRegs, PatchHit,
+    PatchSource, Payload, PrimarySlot, Profile, Quirks, Ranked, Record, Resolved, RoleSet, Rules,
+    S0Node, Scratch, SideTable, Slot, SourceInfo, SourceState, Trace, TrailEntry, UserOp, Val,
+    Write, fuse_node_with, s0_with,
 };
 use gorca_model::event::Politeness;
 use gorca_model::fact::{Basis, BindGen, EvidenceValue, SourceId};
 use gorca_model::sem::{
-    Avail, BindQuality, Check, ConfClass, EvidenceKind, Expand, Group, GroupClass, GroupCode, Live,
+    Avail, BindQuality, Check, EvidenceKind, Expand, Group, GroupClass, GroupCode, Live,
     Orientation, Relevant, SemEntry, SemRole, SourceClass, TrustTier,
 };
 use serde_json::{Value, json};
@@ -492,6 +492,23 @@ pub fn side_table_for(tables: &Value) -> SideTable {
         for (name, row) in src {
             let slot = u32::try_from(row[0].as_u64().unwrap()).unwrap();
             let generation = u32::try_from(row[1].as_u64().unwrap()).unwrap();
+            // Grant data lives in the side table (registered per source), not in the facts.
+            let grant = match tables["grants"].get(name) {
+                Some(g) => {
+                    let floor = |c: &str| u16::try_from(g["floor"][c].as_u64().unwrap()).unwrap();
+                    let mb = |c: &str| bind_min(tables, c);
+                    Grant::new(
+                        [
+                            floor("name"),
+                            floor("sem"),
+                            floor("evidence"),
+                            floor("visual"),
+                        ],
+                        [mb("name"), mb("sem"), mb("evidence"), mb("visual")],
+                    )
+                }
+                None => Grant::standard(),
+            };
             side.set_source(SourceInfo {
                 id: SourceId { slot, generation },
                 name: Arc::from(name.as_str()),
@@ -499,7 +516,9 @@ pub fn side_table_for(tables: &Value) -> SideTable {
                 tier: TrustTier::from_code(u8::try_from(row[3].as_u64().unwrap()).unwrap())
                     .unwrap(),
                 kind_order: row[4].as_u64().map_or(0, |k| u8::try_from(k).unwrap()),
-            });
+                grant,
+            })
+            .unwrap();
         }
     }
     side
@@ -652,18 +671,7 @@ pub fn admit(case: &Case, ev: &[Value]) -> (String, Option<FactIn>) {
         }
         Payload::Sem(write_from_toy(g, value))
     };
-    let tier = TrustTier::from_code(u8::try_from(row[3].as_u64().unwrap()).unwrap()).unwrap();
-    let floor = grant["floor"][group_class(code)].as_i64().unwrap();
     let p16 = u16::try_from(p).unwrap();
-    let (cls, floor_ok) = if p >= 970 {
-        (ConfClass::High, true)
-    } else if p >= 900 {
-        (ConfClass::Probable, true)
-    } else if p >= floor {
-        (ConfClass::Possible, true)
-    } else {
-        (ConfClass::Possible, false)
-    };
     let ttl = ev[11]
         .as_u64()
         .or_else(|| (class == "Inferred").then(|| t["default_ttl_ms"].as_u64().unwrap()));
@@ -678,15 +686,11 @@ pub fn admit(case: &Case, ev: &[Value]) -> (String, Option<FactIn>) {
         seq: ev[5].as_u64().unwrap(),
         payload,
         p_milli: p16,
-        // The admission contract: class from `p_milli` and the grant, after the tier cap.
-        class: hedge_cap(cls, tier),
-        floor_ok,
         // The oracle's basis can be -1 (stamped stale at vis 0): shift both sides by one.
         basis: Basis::VisRev(u32::try_from(basis + 1).unwrap()),
         bind_gen: BindGen(u32::try_from(ev[9].as_u64().unwrap()).unwrap()),
         admitted_at_ms: ev[10].as_u64().unwrap(),
         ttl_ms: ttl,
-        min_bind: bind_min(t, group_class(code)),
     };
     (label.to_owned(), Some(fact))
 }
@@ -884,6 +888,18 @@ impl ToyIndex {
 pub fn epoch_snapshot(case: &Case, w: &World) -> EpochSnapshot {
     let mut e = EpochSnapshot::default();
     let side = &case.tables["sources"];
+    // The filter fails closed on a source missing from the snapshot, so list them all.
+    if let Some(all) = side.as_object() {
+        for row in all.values() {
+            e.set(
+                SourceId {
+                    slot: u32::try_from(row[0].as_u64().unwrap()).unwrap(),
+                    generation: u32::try_from(row[1].as_u64().unwrap()).unwrap(),
+                },
+                SourceState::Active,
+            );
+        }
+    }
     for (name, (_, state)) in &w.epoch {
         let row = &side[name.as_str()];
         let id = SourceId {
