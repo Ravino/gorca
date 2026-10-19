@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 gorca-model = { workspace = true }
 thiserror = { workspace = true }
+toml_edit = { workspace = true }
 
 [features]
 # After every drained run, compare the incremental result with a from-scratch FUSE (F7).

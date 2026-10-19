@@ -1,0 +1,3 @@
+# Groups Blink can never express through AT-SPI (ADR-0024 section 2.2, H-3). See gecko.toml.
+#
+# None today: Blink expresses `invalid` through INVALID_ENTRY; only the kind is missing.

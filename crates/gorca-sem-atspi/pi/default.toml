@@ -1,0 +1,8 @@
+# Default trust table PI (ADR-0022 section 2.2): per group, the primary sources in priority order.
+# p0 = AT-SPI, p1 = a second primary (AccessKit/Newton, M19). Today only p0 reports, so p0 first
+# everywhere; p1 follows as the fallback. Per-group rows override the default.
+[pi]
+default = ["p0", "p1"]
+
+# [pi.groups]
+# level = ["p1", "p0"]

@@ -66,3 +66,6 @@ Expectation fixed: textbox.password / gtk4.entry.password now expect `passwordbo
   `error_text`, `details_target` stay empty until S3/B5 or a relations input is added.
 - Quirk/PI/inexpressible tables are B5; the tag refinements above may move into quirk rows then.
 - `SemText` has no slot for index texts or the invalid kind; GTK/Gecko/Blink never export the invalid kind anyway.
+
+## B5 (quirks, PI, inexpressible)
+`gorca_fuse::quirk::QuirkSet` implements the S-1 `Quirks` seam; tables ship as text in `gorca_sem_atspi::tables` (`BUNDLES`, `SELECTOR`). Corpus checks in `crates/gorca-sem-atspi/tests/quirks.rs`: the Gecko marker row strips 45 names and reproduces the Blink name for the same fixture element; Gecko menu positions (per-role counts) become Unknown; 292 Blink xml-roles tokens trusted, 1 overridden (presentation/password). No group is statically inexpressible (R-1: the `invalid` kind is missing but the group is expressible; follow-up for the kind). Role is never allowed; `validate_against` rejects unknown-group rows on inexpressible groups (R-3); selector app-name rows are a fallback after engine/toolkit rows (R-2).

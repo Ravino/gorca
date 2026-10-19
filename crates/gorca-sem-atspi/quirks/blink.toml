@@ -1,0 +1,11 @@
+# Blink (Chromium) quirk rows for the AT-SPI source.
+#
+# xml-roles verified against the A2 corpus (tests/quirks.rs, `blink_xml_roles_are_trusted`): Blink
+# exports `xml-roles` only for authored roles and for landmarks, and every token it exports that
+# the normaliser knows is the role the node should have. Native elements it exports weakly
+# (code, time, mark, figure, fieldset) are refined by tag in the normaliser (HTML-AAM), not here.
+#
+# No Blink role rewrite is needed on the corpus, so this table is empty on purpose. The known
+# Blink differences are handled elsewhere: placeholder key `placeholder` and `level=1` on list
+# items in the normaliser, `INVALID_ENTRY` only (no kind) as an `inexpressible` row, an empty
+# figure name as an S3 derived rule.

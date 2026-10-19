@@ -1,0 +1,6 @@
+# GTK4 quirk rows for the AT-SPI source.
+#
+# The A2 corpus shows GTK4 roles that are lost on the wire (switch = check-box, search entry =
+# entry, column view = tree-table, navigation/main/feed = filler, search = form). Nothing on the
+# wire distinguishes them from the plain widget, so there is no row that could fix them.
+# Empty on purpose.

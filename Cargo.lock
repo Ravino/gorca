@@ -1320,6 +1320,7 @@ dependencies = [
  "gorca-model",
  "serde_json",
  "thiserror",
+ "toml_edit",
 ]
 
 [[package]]
@@ -1437,6 +1438,7 @@ dependencies = [
 name = "gorca-sem-atspi"
 version = "0.0.0"
 dependencies = [
+ "gorca-fuse",
  "gorca-model",
  "serde_json",
  "toml_edit",

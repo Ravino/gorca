@@ -11,6 +11,7 @@ publish.workspace = true
 gorca-model = { workspace = true }
 
 [dev-dependencies]
+gorca-fuse = { workspace = true }
 serde_json = "1"
 toml_edit = { workspace = true }
 
