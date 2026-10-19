@@ -94,10 +94,23 @@ def main():
                 if s in states:
                     st.append("unexpected-state:" + s)
             for k, v in pat.get("at", {}).items():
-                if k not in attrs:
+                # "a|b" is an alias set: the engines name the same fact differently
+                hit = next((x for x in k.split("|") if x in attrs), None)
+                if hit is None:
                     st.append("missing-attr:" + k)
-                elif v != "*" and attrs[k] != v:
-                    st.append("attr-value:%s=%s" % (k, attrs[k]))
+                elif v != "*" and attrs[hit] != v:
+                    st.append("attr-value:%s=%s" % (hit, attrs[hit]))
+            if pat.get("pos") and not any(k in pat.get("at", {}) for k in ("posinset", "setsize")):
+                got = (attrs.get("posinset"), attrs.get("setsize"))
+                if got[0] is None or got[1] is None:
+                    st.append("missing-attr:posinset/setsize")
+                elif (int(got[0]), int(got[1])) != tuple(pat["pos"]):
+                    st.append("pos:%s/%s" % got)
+            if pat.get("level") and "level" not in pat.get("at", {}):
+                if "level" not in attrs:
+                    st.append("missing-attr:level")
+                elif int(attrs["level"]) != pat["level"]:
+                    st.append("level:%s" % attrs["level"])
             if pat.get("name") is not None and (n["name"] or "") != pat["name"]:
                 st.append("name:%s" % (n["name"] or ""))
             obs[e] = {"role": n["role_name"], "raw_role": n["role"], "aria": attrs.get("xml-roles", ""),

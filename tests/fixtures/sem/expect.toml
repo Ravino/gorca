@@ -469,6 +469,7 @@ fixture = "cb-required"
 role = "checkbox"
 check = "false"
 need_states = ["required"]
+note = "both engines add INVALID_ENTRY to an unchecked required checkbox (HTML validity), unlike the textbox row"
 disagree = false
 [pattern."checkbox.required".firefox]
 status = ["ok"]
@@ -496,6 +497,7 @@ page = "widgets"
 fixture = "rg-1"
 role = "radio"
 check = "true"
+pos = [1, 3]
 need_states = ["checked"]
 disagree = false
 [pattern."radio.aria.checked".firefox]
@@ -860,9 +862,12 @@ attrs = {"name-from" = "contents"}
 page = "widgets"
 fixture = "alert-1"
 role = "alert"
+need_attrs = {"atomic" = "true"}
+note = "ARIA 1.2: alert has implicit aria-atomic=true; Blink maps it to ATK notification"
 disagree = true
+never_exported = ["firefox:atomic"]
 [pattern."alert.role".firefox]
-status = ["ok"]
+status = ["missing-attr:atomic"]
 role = "alert"
 raw_role = 2
 aria_token = "alert"
@@ -886,9 +891,12 @@ attrs = {"atomic" = "true", "container-atomic" = "true", "container-busy" = "fal
 page = "widgets"
 fixture = "status-1"
 role = "status"
-disagree = false
+need_attrs = {"atomic" = "true"}
+note = "ARIA 1.2: status has implicit aria-atomic=true; Gecko does not export it"
+disagree = true
+never_exported = ["firefox:atomic"]
 [pattern."status.role".firefox]
-status = ["ok"]
+status = ["missing-attr:atomic"]
 role = "status-bar"
 raw_role = 54
 aria_token = "status"
@@ -969,6 +977,7 @@ page = "forms"
 fixture = "tx-required"
 role = "textbox"
 need_states = ["required"]
+note = "Gecko adds INVALID_ENTRY to an empty required input (HTML validity), Blink does not; invalid must not be derived from it alone"
 disagree = true
 [pattern."textbox.required".firefox]
 status = ["ok"]
@@ -1052,6 +1061,7 @@ attrs = {"name-from" = "attribute", "text-input-type" = "text", "text-model" = "
 page = "forms"
 fixture = "tx-invalid-spelling"
 role = "textbox"
+need_states = ["invalid-entry"]
 need_attrs = {"invalid" = "spelling"}
 note = "invalid kind only via attribute"
 disagree = false
@@ -1109,12 +1119,12 @@ attrs = {"name-from" = "attribute", "text-model" = "a1"}
 page = "forms"
 fixture = "tx-placeholder"
 role = "textbox"
-need_attrs = {"placeholder-text" = "Search terms"}
-note = "name from placeholder: engines differ on whether it is the name or description"
+name = "Search terms"
+name_from = "placeholder"
+note = "HTML-AAM: placeholder is the name fallback; then neither engine exports it as an attribute"
 disagree = false
-missing_in_both = ["missing-attr:placeholder-text"]
 [pattern."textbox.placeholder-only".firefox]
-status = ["missing-attr:placeholder-text"]
+status = ["ok"]
 role = "entry"
 raw_role = 79
 aria_token = ""
@@ -1124,7 +1134,7 @@ ifaces = ["Accessible", "Action", "Collection", "Component", "EditableText", "Hy
 name = "Search terms"
 attrs = {"text-input-type" = "text"}
 [pattern."textbox.placeholder-only".chromium]
-status = ["missing-attr:placeholder-text"]
+status = ["ok"]
 role = "entry"
 raw_role = 79
 aria_token = ""
@@ -1133,6 +1143,36 @@ states = ["editable", "enabled", "focusable", "single-line"]
 ifaces = ["Accessible", "Action", "Collection", "Component", "Document", "Hyperlink", "Text"]
 name = "Search terms"
 attrs = {"name-from" = "placeholder", "text-input-type" = "text", "text-model" = "a1"}
+
+[pattern."textbox.placeholder-with-label"]
+page = "forms"
+fixture = "tx-placeholder-label"
+role = "textbox"
+name = "Real name"
+name_from = "author"
+need_attrs = {"placeholder-text|placeholder" = "Hint only"}
+note = "placeholder survives as an attribute only when it is not the name; key differs: Gecko placeholder-text, Blink placeholder (alias row, any key matches)"
+disagree = false
+[pattern."textbox.placeholder-with-label".firefox]
+status = ["ok"]
+role = "entry"
+raw_role = 79
+aria_token = ""
+tag = "input"
+states = ["editable", "enabled", "focusable", "single-line"]
+ifaces = ["Accessible", "Action", "Collection", "Component", "EditableText", "Hyperlink", "Hypertext", "Text"]
+name = "Real name"
+attrs = {"placeholder-text" = "Hint only", "text-input-type" = "text"}
+[pattern."textbox.placeholder-with-label".chromium]
+status = ["ok"]
+role = "entry"
+raw_role = 79
+aria_token = ""
+tag = "input"
+states = ["editable", "enabled", "focusable", "single-line"]
+ifaces = ["Accessible", "Action", "Collection", "Component", "Document", "Hyperlink", "Text"]
+name = "Real name"
+attrs = {"name-from" = "attribute", "placeholder" = "Hint only", "text-input-type" = "text", "text-model" = "a1"}
 
 [pattern."textbox.password"]
 page = "forms"
@@ -1250,7 +1290,9 @@ page = "forms"
 fixture = "lb-1"
 role = "option"
 select = "true"
+pos = [1, 3]
 need_states = ["selected"]
+note = "Gecko prefixes the name with a list marker ('• Alpha'): X1/B5 quirk row, not the author's name"
 disagree = true
 [pattern."option.selected".firefox]
 status = ["ok"]
@@ -1278,6 +1320,7 @@ page = "forms"
 fixture = "lb-2"
 role = "option"
 select = "false"
+pos = [2, 3]
 need_states = ["selectable"]
 forbid_states = ["selected"]
 disagree = true
@@ -1389,6 +1432,8 @@ attrs = {"haspopup" = "menu", "name-from" = "related-element", "posinset" = "2",
 page = "forms"
 fixture = "fs-1"
 role = "group"
+name = "Delivery"
+name_from = "native"
 note = "fieldset+legend name"
 disagree = false
 [pattern."group.fieldset".firefox]
@@ -1474,6 +1519,7 @@ page = "composite"
 fixture = "tab-1"
 role = "tab"
 select = "true"
+pos = [1, 3]
 need_states = ["selected"]
 disagree = false
 [pattern."tab.selected".firefox]
@@ -1502,6 +1548,7 @@ page = "composite"
 fixture = "tab-2"
 role = "tab"
 select = "false"
+pos = [2, 3]
 forbid_states = ["selected"]
 disagree = false
 [pattern."tab.unselected".firefox]
@@ -1585,9 +1632,11 @@ attrs = {"name-from" = "attribute", "setsize" = "9"}
 page = "composite"
 fixture = "mi-1"
 role = "menuitem"
-disagree = false
+pos = [1, 9]
+note = "ARIA set = all menuitem/menuitemcheckbox/menuitemradio of the menu (Blink: 1 of 9); Gecko counts per role (1 of 3): do not trust Gecko's setsize on menus"
+disagree = true
 [pattern."menuitem.plain".firefox]
-status = ["ok"]
+status = ["pos:1/3"]
 role = "menu-item"
 raw_role = 35
 aria_token = "menuitem"
@@ -1612,10 +1661,11 @@ page = "composite"
 fixture = "mic-1"
 role = "menuitemcheckbox"
 check = "true"
+pos = [4, 9]
 need_states = ["checked"]
-disagree = false
+disagree = true
 [pattern."menuitem.checkbox.true".firefox]
-status = ["ok"]
+status = ["pos:1/6"]
 role = "check-menu-item"
 raw_role = 8
 aria_token = "menuitemcheckbox"
@@ -1695,10 +1745,14 @@ attrs = {"checkable" = "true", "name-from" = "contents", "posinset" = "7", "sets
 page = "composite"
 fixture = "mi-sub"
 role = "menuitem"
-note = "Gecko exports a submenu trigger as role menu"
+expand = "false"
+pos = [3, 9]
+need_states = ["has-popup", "expandable"]
+need_attrs = {"haspopup" = "*"}
+note = "Gecko exports a submenu trigger as AT-SPI role menu; haspopup value differs (Gecko true, Blink menu): normalise true to menu"
 disagree = true
 [pattern."menuitem.submenu".firefox]
-status = ["ok"]
+status = ["pos:3/3"]
 role = "menu"
 raw_role = 33
 aria_token = "menuitem"
@@ -1899,6 +1953,8 @@ attrs = {"level" = "1", "name-from" = "contents", "posinset" = "2", "setsize" = 
 page = "composite"
 fixture = "tim-3"
 role = "treeitem"
+level = 3
+pos = [1, 1]
 note = "levels computed by the engine, not authored"
 disagree = false
 [pattern."treeitem.implicit-level".firefox]
@@ -2209,6 +2265,8 @@ attrs = {"name-from" = "attribute"}
 page = "composite"
 fixture = "car-1"
 role = "region"
+name = "Highlights"
+name_from = "author"
 need_attrs = {"roledescription" = "carousel"}
 disagree = false
 [pattern."roledescription.carousel".firefox]
@@ -2621,6 +2679,7 @@ fixture = "lia-1"
 role = "listitem"
 pos = [2, 10]
 need_attrs = {"posinset" = "2", "setsize" = "10"}
+note = "Blink also exports level=1 on every listitem: the normaliser must ignore level outside heading/tree roles"
 disagree = false
 [pattern."listitem.pos".firefox]
 status = ["ok"]
@@ -2715,7 +2774,10 @@ attrs = {"name-from" = "attribute"}
 page = "structure"
 fixture = "fig-1"
 role = "figure"
-disagree = false
+name = "Figure caption"
+name_from = "native"
+note = "HTML-AAM: figure is named from figcaption; Blink exports an empty name (engine gap)"
+disagree = true
 [pattern."figure".firefox]
 status = ["ok"]
 role = "panel"
@@ -2727,7 +2789,7 @@ ifaces = ["Accessible", "Action", "Collection", "Component", "EditableText", "Hy
 name = "Figure caption"
 attrs = {}
 [pattern."figure".chromium]
-status = ["ok"]
+status = ["name:"]
 role = "panel"
 raw_role = 39
 aria_token = ""
@@ -2819,6 +2881,7 @@ attrs = {}
 page = "structure"
 fixture = "tl-mark"
 role = "mark"
+note = "role mark is ARIA 1.3 / HTML-AAM, not in the 1.2 role table; Blink exports static"
 disagree = true
 [pattern."mark".firefox]
 status = ["ok"]
@@ -2899,6 +2962,7 @@ fixture = "math-aria"
 role = "math"
 name = "x squared"
 name_from = "author"
+note = "Gecko role unknown, token via xml-roles; Blink role math"
 disagree = true
 [pattern."math".firefox]
 status = ["ok"]
@@ -2925,6 +2989,7 @@ attrs = {"name-from" = "attribute"}
 page = "structure"
 fixture = "comment-1"
 role = "comment"
+note = "role comment is ARIA 1.3, not in the 1.2 role table; level/posinset/setsize exported by both"
 disagree = true
 [pattern."comment".firefox]
 status = ["ok"]
@@ -3320,7 +3385,8 @@ attrs = {"current" = "true", "name-from" = "contents"}
 page = "aria-props"
 fixture = "cur-bogus"
 role = "link"
-note = "invalid token must normalise to false/absent"
+need_attrs = {"current" = "true"}
+note = "ARIA 1.2 aria-current: an unrecognised token is treated as true (both engines agree)"
 disagree = false
 [pattern."current.bogus".firefox]
 status = ["ok"]
@@ -3628,8 +3694,8 @@ attrs = {"name-from" = "attribute", "text-model" = "a1"}
 page = "aria-props"
 fixture = "p-selected-absent"
 role = "option"
-select = "false"
-note = "absent aria-selected on option"
+select = "absent"
+note = "orphan role=option (no listbox) without aria-selected: ARIA value undefined = not selectable; Blink demotes it to section with an empty name, Gecko keeps list-item + SELECTABLE"
 disagree = true
 [pattern."selected.absent".firefox]
 status = ["ok"]
@@ -3712,6 +3778,7 @@ attrs = {"name-from" = "contents"}
 page = "aria-props"
 fixture = "p-readonly-grid"
 role = "grid"
+note = "aria-readonly: Blink exports READ_ONLY, Gecko exports nothing (inexpressible there)"
 disagree = true
 [pattern."readonly.grid".firefox]
 status = ["ok"]
@@ -3959,6 +4026,7 @@ attrs = {"name-from" = "attribute"}
 page = "names"
 fixture = "nm-labelledby"
 role = "button"
+name = "Alpha Beta"
 name_from = "author"
 disagree = false
 [pattern."name.labelledby".firefox]
@@ -4152,6 +4220,8 @@ attrs = {"name-from" = "related-element"}
 page = "names"
 fixture = "nm-in-ph"
 role = "textbox"
+name = "Placeholder name"
+name_from = "placeholder"
 note = "placeholder as name fallback"
 disagree = false
 [pattern."name.input-placeholder".firefox]
@@ -4761,10 +4831,10 @@ attrs = {"keyshortcuts" = "Control+K", "toolkit" = "GTK"}
 [pattern."gtk4.accprop.level"]
 page = "accprops"
 fixture = "ap-level"
-role = "heading"
+role = "label"
 level = 2
 need_attrs = {"level" = "2"}
-note = "level attribute on a label whose role stays label"
+note = "GtkLabel keeps AT-SPI role label (no ARIA role, static text) even with the LEVEL property: the level attribute alone does not make a heading; the role is HEADING only via the HEADING accessible role"
 disagree = false
 [pattern."gtk4.accprop.level".gtk4]
 status = ["ok"]
@@ -4802,6 +4872,7 @@ fixture = "ap-checked-mixed"
 role = "checkbox"
 check = "mixed"
 need_states = ["indeterminate"]
+note = "SUSPECT FIXTURE: GtkCheckButton re-syncs CHECKED from active/inconsistent, so the manual MIXED update is overwritten; the real mixed path is gtk4.checkbutton.mixed (inconsistent). Not evidence of a GTK wire gap"
 disagree = false
 [pattern."gtk4.accprop.checked-mixed".gtk4]
 status = ["missing-state:indeterminate"]
@@ -4821,6 +4892,7 @@ fixture = "ap-expanded-true"
 role = "button"
 expand = "true"
 need_states = ["expanded"]
+note = "UNVERIFIED gap: EXPANDABLE is exported but not EXPANDED for a manual EXPANDED=true on a GtkButton; gtk4.expander.open shows the working path"
 disagree = false
 [pattern."gtk4.accprop.expanded".gtk4]
 status = ["missing-state:expanded"]
@@ -4976,3 +5048,4 @@ desc = "fx:role-treegrid"
 attrs = {"toolkit" = "GTK"}
 
 # never-exported summary (engine:evidence -> patterns)
+# firefox:atomic -> alert.role, status.role
