@@ -260,3 +260,36 @@ Remaining items:
 
 Nothing else in the r3 text forces a later WIT break. `fact-target` has all of its cases now,
 `prov-info` uses `u8` codes, and `GroupCode` uses bit 15 for evidence.
+
+## M22a-A1 code review (2026-10-19, branch `worktree-agent-adb1bb7a7180aa6c5`, 93280c7f + 5888e8b9)
+
+**Verdict: MERGE AFTER FIXES.** The fixes are small (F-1 must land; F-2..F-4 can go in the same
+commit).
+
+What I ran (own target dir):
+- `cargo fmt --check`: OK.
+- `cargo test` for `gorca-model`, `gorca-ext-api`, `gorca-fuse`, `gorca-fact-api` and
+  `gorca-sem-atspi`: all pass (33 + 13 + 4 + 4 tests). The size test asserts `SemEntry` = 128 B.
+- `cargo xtask deps`: OK (40 crates). `cargo test -p xtask`: 19 passed.
+- `cargo clippy --workspace --all-targets -D warnings`: clean.
+- `git merge-tree` against main `311a5592`: clean.
+- No `unwrap`, `expect` or `panic` outside tests.
+
+I confirmed each of the claims I checked: layout x32, the `const` asserts, `ProvCode` without
+`Fallback`, the fixture diffs being limited to `Fallback` and the header label, rule 10 plus
+`core_forbidden` blocking `gorca-sem-atspi` and `gorca-source-*`, and `SemText` comparing by
+contents.
+
+| # | Sev | Where | Problem (verified) | Fix |
+|---|---|---|---|---|
+| F-1 | Medium (WIT stability) | `tools/gen-sem-codes.py`, `crates/gorca-ext-api/tests/codes.rs` | The append-only guard does not protect anything. The generator **rewrites** `codes.snapshot` from the current tables. Probe (in a scratch copy): renumber `SemRole` button 8 → 9 and caption 9 → 8 with the lines reordered, rerun the generator, and **all `gorca-ext-api` and `gorca-model` tests pass**. Only a reviewer reading the snapshot diff would notice | Make the generator append-only: read the existing snapshot and exit non-zero if any row changed or disappeared. Also add a CI or xtask check that `git diff <merge-base> -- codes.snapshot` contains only `+` lines |
+| F-2 | Low-medium (M18a) | `sem/states.rs`, `SemFlags` | The tri-state codes (`Check`, `Press`, `Expand`, `Select`, `Current`, `Invalid`, `Popup`, `Avail`, `NameFrom`, `Orientation`, `Sort`, `PosSrc`) and the `SemFlags`/`Relevant` bit values will be wire values inside `prop-value`, but they are not in `REGISTRIES` or the snapshot | Add them to the registries and the snapshot now, while it is cheap |
+| F-3 | Low | `sem/role.rs` | The doc comment says "ARIA 1.2 + graphics-aria + DPUB subset". None of the DPUB or graphics roles are present, nor the ADR-0022 r2 additions (`Comment`, `Suggestion`, `Details`, `Summary`, `DescriptionList`, `Time`, `Iframe`), nor ARIA 1.2 `emphasis`, `strong`, `subscript`, `superscript`, `none`/`presentation`. Appending later is safe because codes are append-only | Append the r2 additions in A1, as the spec requires, or correct the comment and leave the rest to B4 (M-10 coverage) |
+| F-4 | Low | `sem/codes.rs` `coded_enum!` derives `Ord` | `ConfClass` and `TrustTier` sort with lower code = stronger, but `BindQuality` sorts with higher code = stronger. A future `class >= floor` written like `quality >= min_bind` is silently inverted | Drop `Ord`/`PartialOrd` from `ConfClass` and `TrustTier` (keep `weaker()` and add a `stronger_than`), or document the direction on each type |
+| F-5 | Low | `fact.rs` `PropValue::matches` | Any `Evidence` payload matches any evidence kind: `Flag(true)` passes for `hint.title_attr`. The helper `evidence_is_text_kind` exists but is not used, so a malformed fact would pass the well-formedness check | Check the payload shape per kind in `matches` (B3 needs this for admission) |
+| F-6 | Note (for B1b) | `SourceId` derives `Ord`; ADR §2.2 S4 tie-break "(…, source id, …)" | Slots are recycled, so `SourceId` order depends on allocation order, and run-to-run results would differ (my M-9) | Break S4 ties by `StableIdentity` name or model id, not `SourceId` |
+| F-7 | Nit | `gorca-sem-atspi/src/lib.rs:5` | Says "Empty until M22a-B2"; the normaliser is task B4 | Fix the comment |
+
+Accepted deviations: `gen` → `generation` (`gen` is a reserved keyword in edition 2024) and
+`SemRole::coarse()` deferred (SM-1 lands with the writers). `gen-sem-codes.py` reads the oracle
+fixture rather than `gorca-model`, but the two equality tests keep all three in step.
