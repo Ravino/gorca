@@ -1357,3 +1357,19 @@ fn an_inferred_fact_on_another_group_is_reported_not_applicable() {
         gorca_fuse::TrailEntry::Fact(f) if f.status == gorca_fuse::TrailStatus::NotApplicable
     )));
 }
+
+#[test]
+fn the_no_quirk_fast_path_equals_the_generic_path() {
+    // `NoQuirks` (NOOP) reads the registers directly; `NoQ` goes through per-source records.
+    // Both must publish the same entries for every workload.
+    let mut nodes = 0usize;
+    for seed in 0..trials() {
+        let wl = workload(seed + 130_000, size(seed, 38), true);
+        let w = wl.world();
+        let fast = evaluate_full(&wl.case, &w, &gorca_fuse::NoQuirks, false);
+        let slow = evaluate_full(&wl.case, &w, &NoQ, false);
+        assert_eq!(fast.entries(), slow.entries(), "seed {seed}");
+        nodes += fast.nodes.iter().flatten().count();
+    }
+    assert!(nodes > 1000);
+}

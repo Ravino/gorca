@@ -309,6 +309,11 @@ pub struct SideTable {
     by_anchor: HashMap<AnchorId, Vec<SideKey>>,
     /// Reverse index: the anchors with registers of each source.
     by_source: HashMap<SourceId, BTreeSet<AnchorId>>,
+    /// TTL index: expiry time (ms) to the registers expiring then. Entries of replaced or released
+    /// registers are not removed; a pop checks the register's current expiry, and the index is
+    /// rebuilt when stale entries outnumber live ones.
+    ttl: BTreeMap<u64, Vec<SideKey>>,
+    ttl_entries: usize,
     cap: usize,
 }
 
@@ -326,6 +331,8 @@ impl SideTable {
             regs: HashMap::new(),
             by_anchor: HashMap::new(),
             by_source: HashMap::new(),
+            ttl: BTreeMap::new(),
+            ttl_entries: 0,
             cap,
         }
     }
@@ -390,7 +397,9 @@ impl SideTable {
         };
         if let Some(cur) = self.regs.get_mut(&key) {
             if new.cmp_key(cur) == Ordering::Greater {
+                let at = expiry_of(&new.fact);
                 *cur = new;
+                self.index_ttl(&key, at);
                 return Ok(true);
             }
             return Ok(false);
@@ -406,8 +415,33 @@ impl SideTable {
             .entry(key.anchor.clone())
             .or_default()
             .push(key.clone());
-        self.regs.insert(key, new);
+        let at = expiry_of(&new.fact);
+        self.regs.insert(key.clone(), new);
+        self.index_ttl(&key, at);
         Ok(true)
+    }
+
+    fn index_ttl(&mut self, key: &SideKey, at: Option<u64>) {
+        if let Some(at) = at {
+            self.ttl.entry(at).or_default().push(key.clone());
+            self.ttl_entries += 1;
+            if self.ttl_entries > 2 * self.regs.len() + 1024 {
+                self.rebuild_ttl();
+            }
+        }
+    }
+
+    fn rebuild_ttl(&mut self) {
+        let mut idx: BTreeMap<u64, Vec<SideKey>> = BTreeMap::new();
+        let mut n = 0;
+        for (k, r) in &self.regs {
+            if let Some(at) = expiry_of(&r.fact) {
+                idx.entry(at).or_default().push(k.clone());
+                n += 1;
+            }
+        }
+        self.ttl = idx;
+        self.ttl_entries = n;
     }
 
     /// Release a source: forget its registration **and every register it owns**. A source that
@@ -489,19 +523,32 @@ impl SideTable {
             .unwrap_or_default()
     }
 
-    /// Anchors with a register whose TTL expires in `(from_ms, to_ms]`.
-    pub fn expiring(&self, from_ms: u64, to_ms: u64) -> Vec<AnchorId> {
-        let mut v: Vec<AnchorId> = self
-            .regs
-            .iter()
-            .filter(|(_, r)| {
-                r.fact.ttl_ms.is_some_and(|t| {
-                    let at = r.fact.admitted_at_ms.saturating_add(t);
-                    at > from_ms && at <= to_ms
-                })
-            })
-            .map(|(k, _)| k.anchor.clone())
+    /// Anchors with a register whose TTL expires in `(from_ms, to_ms]`, taken from the TTL index:
+    /// the cost is proportional to what expires, not to the number of registers. The returned
+    /// buckets are consumed, so each expiry is reported once.
+    pub fn expiring(&mut self, from_ms: u64, to_ms: u64) -> Vec<AnchorId> {
+        use std::ops::Bound::{Excluded, Included};
+        if to_ms <= from_ms {
+            return Vec::new();
+        }
+        let due: Vec<u64> = self
+            .ttl
+            .range((Excluded(from_ms), Included(to_ms)))
+            .map(|(t, _)| *t)
             .collect();
+        let mut v: Vec<AnchorId> = Vec::new();
+        for t in due {
+            let Some(keys) = self.ttl.remove(&t) else {
+                continue;
+            };
+            self.ttl_entries = self.ttl_entries.saturating_sub(keys.len());
+            for k in keys {
+                // Only a register whose current expiry is `t` expires now.
+                if self.regs.get(&k).and_then(|r| expiry_of(&r.fact)) == Some(t) {
+                    v.push(k.anchor);
+                }
+            }
+        }
         v.sort();
         v.dedup();
         v
@@ -583,6 +630,11 @@ impl SideTable {
             .then_with(|| a.anchor.cmp(&b.anchor))
             .then_with(|| a.group.cmp(&b.group))
     }
+}
+
+/// When a register's TTL runs out (`None` without a TTL).
+fn expiry_of(f: &FactIn) -> Option<u64> {
+    f.ttl_ms.map(|t| f.admitted_at_ms.saturating_add(t))
 }
 
 fn cap_payload(p: &mut Payload) {
@@ -1365,6 +1417,32 @@ mod tests {
             assert_eq!(ent.status(), want, "{name}");
             assert!(ent.cand().is_none(), "{name}");
         }
+    }
+
+    #[test]
+    fn the_ttl_index_reports_each_expiry_once_and_ignores_replaced_registers() {
+        let mut t = table();
+        let mut f = fact(1, 0, Group::Orientation, 1, vertical());
+        f.ttl_ms = Some(100);
+        t.insert(f.clone()).expect("first");
+        // A newer register of the same key with a later expiry replaces it.
+        let mut g = f.clone();
+        g.seq = 2;
+        g.ttl_ms = Some(500);
+        t.insert(g).expect("second");
+        let mut other = fact(1, 1, Group::Orientation, 1, vertical());
+        other.ttl_ms = Some(150);
+        t.insert(other).expect("other");
+        assert!(t.expiring(0, 99).is_empty());
+        let at_150 = t.expiring(99, 200);
+        assert_eq!(
+            at_150,
+            vec![AnchorId::Node(NodeIdx(1))],
+            "the replaced register's old expiry is stale"
+        );
+        assert!(t.expiring(99, 200).is_empty(), "consumed");
+        assert_eq!(t.expiring(200, 500), vec![AnchorId::Node(NodeIdx(0))]);
+        assert!(t.expiring(500, 10_000).is_empty());
     }
 
     #[test]

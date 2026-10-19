@@ -22,6 +22,7 @@ pub mod quirk;
 pub mod register;
 pub mod repair;
 pub mod s4;
+mod sched;
 pub mod side;
 pub mod strata;
 pub mod taint;
@@ -30,7 +31,7 @@ pub mod value;
 pub use epoch::{Epochs, silences};
 pub use explain::{Conflict, Explain, NoTrace, ObsCand, PatchTrail, Trace, Tracer, TrailEntry};
 pub use ivm::{
-    ApplyReport, Budget, Input, Ivm, IvmError, Published, RELATION_FANOUT_CAP, RunReport,
+    ApplyReport, Budget, Input, Ivm, IvmError, IvmStats, Published, RELATION_FANOUT_CAP, RunReport,
 };
 pub use profile::{Limits, PiRow, Profile, RoleSet, Rules};
 pub use quirk::{

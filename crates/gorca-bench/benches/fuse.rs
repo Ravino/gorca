@@ -47,6 +47,18 @@ use gorca_model::sem::{
 
 // ---- small utilities ------------------------------------------------------------------------
 
+/// Share of events that hit the 2000-node hot set (default 70; `M22A_HOT_PCT=100` shows the
+/// cache-warm floor, `0` the fully cold case).
+fn hot_pct() -> usize {
+    static P: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *P.get_or_init(|| {
+        std::env::var("M22A_HOT_PCT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(70)
+    })
+}
+
 struct Rng(u64);
 
 impl Rng {
@@ -273,6 +285,14 @@ impl PatchSource for Patches {
         }
     }
 
+    fn writes(&self) -> gorca_model::sem::GroupMask {
+        // The rules above only write level, orientation and availability.
+        gorca_model::sem::GroupMask::EMPTY
+            .with(Group::Level)
+            .with(Group::Orientation)
+            .with(Group::Avail)
+    }
+
     fn reads(&self) -> SelectorReads {
         if self.wide_reads {
             SelectorReads::ALL
@@ -448,7 +468,7 @@ impl World {
     }
 
     fn pick(&mut self) -> usize {
-        if self.rng.pct(70) {
+        if self.rng.pct(hot_pct()) {
             self.hot[self.rng.below(self.hot.len())]
         } else {
             self.rng.below(self.n)
@@ -615,13 +635,13 @@ fn scenario_mem(rep: &mut Report) {
     // copies instead) to separate the 128 B entries from the rest of the engine.
     let before_copy = trim_rss_kb();
     let copies: Vec<Arc<SemEntry>> = (0..w.n)
-        .filter_map(|i| w.e.entry(nid(i)))
+        .filter_map(|i| w.e.entry_unmasked(nid(i)))
         .map(|a| Arc::new(SemEntry::clone(a)))
         .collect();
     let entries_mb = trim_rss_kb().saturating_sub(before_copy) as f64 / 1024.0;
     black_box(&copies);
     drop(copies);
-    let fused = (0..w.n).filter(|i| w.e.entry(nid(*i)).is_some()).count();
+    let fused = (0..w.n).filter(|i| w.e.entry_unmasked(nid(*i)).is_some()).count();
     eprintln!(
         "build {:.0} ms ({:.2} us/node), fused {fused}, RSS +{delta_mb:.1} MB total engine, entries alone +{entries_mb:.1} MB",
         build.as_secs_f64() * 1e3,
@@ -634,6 +654,16 @@ fn scenario_mem(rep: &mut Report) {
         size_of::<S0Node>(),
         size_of::<Input>(),
         size_of::<FactIn>()
+    );
+    let st = w.e.stats();
+    eprintln!(
+        "stats: node record {} B, resident S0 {} nodes / {} B, S0 computes {}, neighbour hits {}, fusions {}",
+        st.node_record_bytes,
+        st.s0_resident_nodes,
+        st.s0_resident_bytes,
+        st.s0_computes,
+        st.s0_neighbour_hits,
+        st.fusions
     );
     rep.put(
         "mem",
@@ -665,6 +695,10 @@ fn scenario_mem(rep: &mut Report) {
 
 struct StormOut {
     per_event_ns: Pct,
+    /// Event time divided by the fusions it caused (per-event mode).
+    per_fusion_ns: Pct,
+    /// Time of events that caused exactly one fusion (no cascade).
+    single_fusion_ns: Pct,
     batch_ns_per_event: Pct,
     batch_total_us: Pct,
     lag_batches: usize,
@@ -697,6 +731,8 @@ fn storm(w: &mut World, rate: usize, secs: f64, batched: bool, facts_rate: usize
     let fact_per_event = facts_rate as f64 / rate as f64;
     let total_ticks = (secs / tick.as_secs_f64()) as usize;
     let mut per_event = Vec::with_capacity(total_ticks);
+    let mut per_fusion = Vec::with_capacity(total_ticks);
+    let mut single_fusion = Vec::with_capacity(total_ticks);
     let mut batch_pe = Vec::new();
     let mut batch_tot = Vec::new();
     let mut focus = Vec::new();
@@ -747,6 +783,7 @@ fn storm(w: &mut World, rate: usize, secs: f64, batched: bool, facts_rate: usize
         let rr =
             w.e.run(Budget::until(Instant::now() + Duration::from_millis(2)));
         let publ = rr.published.len();
+        let fc = rr.fuse_calls;
         fuses += rr.fuse_calls;
         cutoffs += rr.cutoff;
         pubs += publ;
@@ -764,6 +801,10 @@ fn storm(w: &mut World, rate: usize, secs: f64, batched: bool, facts_rate: usize
             }
         } else {
             per_event.push(dt.as_nanos() as f64);
+            per_fusion.push(dt.as_nanos() as f64 / fc.max(1) as f64);
+            if fc == 1 {
+                single_fusion.push(dt.as_nanos() as f64);
+            }
             if dt > Duration::from_micros(50) {
                 lag += 1;
             }
@@ -782,6 +823,8 @@ fn storm(w: &mut World, rate: usize, secs: f64, batched: bool, facts_rate: usize
     w.e.run(Budget::UNLIMITED);
     StormOut {
         per_event_ns: pct(per_event),
+        per_fusion_ns: pct(per_fusion),
+        single_fusion_ns: pct(single_fusion),
         batch_ns_per_event: pct(batch_pe),
         batch_total_us: pct(batch_tot),
         lag_batches: lag,
@@ -832,6 +875,14 @@ fn scenario_storm(rep: &mut Report, secs: f64) {
                 eprintln!(
                     "    per-event cost (apply+run+publish): {}",
                     r.per_event_ns.show("ns")
+                );
+                eprintln!(
+                    "    per-fusion cost (event time / fusions): {}",
+                    r.per_fusion_ns.show("ns")
+                );
+                eprintln!(
+                    "    events with exactly one fusion:        {}",
+                    r.single_fusion_ns.show("ns")
                 );
                 worst_pe = worst_pe.max(r.per_event_ns.p99);
             }
@@ -902,6 +953,11 @@ fn scenario_attrib(rep: &mut Report, secs: f64) {
             r.per_event_ns.show("ns"),
             r.fuse_per_event,
             r.cutoff_share * 100.0
+        );
+        eprintln!(
+            "                          per-fusion: {}  | single-fusion events: {}",
+            r.per_fusion_ns.show("ns"),
+            r.single_fusion_ns.show("ns")
         );
         let _ = write!(
             json,
@@ -1011,22 +1067,25 @@ fn scenario_focus(rep: &mut Report) {
         // the focus may go first: `calls` counts them).
         // Generic and group nodes cannot be named (repair R masks it): they are fused but
         // never publish a change here, so only the nameable chain nodes are awaited.
-        let mut need: std::collections::HashSet<NodeIdx> = chain
+        // "Fused" = no longer dirty (a name patch may override the fresh observed name, in which
+        // case fusing legitimately publishes nothing); every chain node must get there.
+        let need: Vec<NodeIdx> = chain
             .iter()
             .copied()
-            .filter(|c| (1..=6).contains(&(c.0 as usize % ROLES.len())))
+            .filter(|c| w.e.is_dirty(*c))
             .collect();
         let mut calls = 0usize;
-        while !need.is_empty() && calls < 1500 {
+        let mut need_left = need.len();
+        while need_left > 0 && calls < 1500 {
             let r = w.e.run(Budget::calls(16));
             if r.fuse_calls == 0 {
                 break;
             }
             calls += r.fuse_calls;
-            for p in &r.published {
-                need.remove(&p.node);
-            }
+            need_left = need.iter().filter(|c| w.e.is_dirty(**c)).count();
         }
+        let mut need = need;
+        need.retain(|c| w.e.is_dirty(*c));
         let t2 = Instant::now();
         chain_calls.push(calls as f64);
         if !need.is_empty() {
@@ -1148,9 +1207,16 @@ fn scenario_global(rep: &mut Report) {
                     } else {
                         Budget::until(Instant::now() + Duration::from_millis(2))
                     };
-                    let r = w.e.run(budget);
-                    let got = r.published.iter().any(|p| p.node == nid(node));
-                    let v = if got { us(te.elapsed()) } else { f64::NAN };
+                    // Incremental publication: the time is to the moment the node's result is
+                    // handed to the sink, not to the end of the (possibly 2 ms) run.
+                    let mut first: Option<Instant> = None;
+                    let r = w.e.run_with(budget, &mut |p| {
+                        if p.node == nid(node) && first.is_none() {
+                            first = Some(Instant::now());
+                        }
+                    });
+                    black_box(r.fuse_calls);
+                    let v = first.map_or(f64::NAN, |t| us(t.duration_since(te)));
                     match series {
                         0 => evt_us.push(v),
                         1 => evt_small_us.push(v),
@@ -1191,7 +1257,7 @@ fn scenario_global(rep: &mut Report) {
     eprintln!("sweep total (100k nodes):             {}", sw.show("ms"));
     eprintln!("runs per sweep:                       {}", nr.show("runs"));
     eprintln!(
-        "priority event during sweep -> published, run(until 2 ms): {} (missed: {missed})",
+        "priority event during sweep -> visible via run_with sink, run(until 2 ms): {} (missed: {missed})",
         ev.show("us")
     );
     eprintln!(
@@ -1222,7 +1288,7 @@ fn scenario_global(rep: &mut Report) {
     );
     rep.gate(
         "bump_global sweep: focused-leaf event published by the run that follows it (2 ms deadline)",
-        format!("{missed} of {n_evt} missed, p99 {:.1} us (run duration, not time-to-fuse)", ev.p99),
+        format!("{missed} of {n_evt} missed, time to the sink p99 {:.1} us (p50 {:.1}); run() would return only after 2 ms", ev.p99, ev.p50),
         missed == 0,
     );
     rep.gate(

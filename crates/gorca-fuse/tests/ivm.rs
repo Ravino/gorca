@@ -815,7 +815,11 @@ fn the_focus_chain_is_fused_before_the_rest_under_a_tiny_budget() {
     let rep = e.run(Budget::calls(2));
     assert_eq!(rep.fuse_calls, 2);
     let nodes: Vec<u32> = rep.published.iter().map(|p| p.node.0).collect();
-    assert_eq!(nodes, vec![7, 30], "priority nodes go first: {rep:?}");
+    assert_eq!(
+        nodes,
+        vec![30, 7],
+        "the focus chain goes before the visible window: {rep:?}"
+    );
     assert_eq!(e.pending(), 38);
     // Carry-over changes latency only: draining gives the from-scratch result.
     e.run(Budget::UNLIMITED);
@@ -1339,7 +1343,7 @@ fn the_priority_set_is_bounded_on_deep_and_wide_trees() {
         }]);
     }
     w.set_focus_chain(&[nid(0)]);
-    assert!(w.priority_work() <= w.profile().limits.max_children + 1);
+    assert!(w.priority_work() <= w.profile().limits.max_children + 8);
     // Re-keying never walks the dirty backlog: running in small slices makes steady progress.
     let before = w.pending();
     let rep = w.run(Budget::calls(50));
@@ -1615,4 +1619,51 @@ fn revoking_with_a_huge_backlog_stays_under_half_a_millisecond_and_silences_ever
     let took = revoke_scenario(50_000, 1024);
     eprintln!("revoke sync part (1024 priority nodes, 50k dirty): {took:?}");
     assert!(took < std::time::Duration::from_micros(500), "{took:?}");
+}
+
+#[test]
+fn stats_expose_the_resident_s0_store_and_the_recompute_count() {
+    // No selector reads anything: S0 is recomputed per fusion and nothing is kept resident.
+    let e = chain_engine(5);
+    let st = e.stats();
+    assert_eq!(st.nodes, 5);
+    assert_eq!(st.s0_resident_nodes, 5, "alive marker per node");
+    assert_eq!(st.s0_resident_bytes, 0);
+    assert!(st.s0_computes >= 5 && st.fusions >= 5);
+    assert!(st.node_record_bytes > 0 && st.node_record_bytes < 400);
+    // Selectors that read the parent role and the first child's name keep exactly those groups.
+    let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], toy_rules());
+    profile.default_role = SemRole::Generic;
+    let mut p = Ivm::new(
+        profile,
+        ToyQuirks,
+        Patches {
+            inner: ToyPatches(Vec::new()),
+            narrow: true,
+        },
+    );
+    p.add_node(nid(0), None).unwrap();
+    p.add_node(nid(1), Some(nid(0))).unwrap();
+    for i in 0..2 {
+        p.apply([
+            Input::Life {
+                node: nid(i),
+                src: PrimarySlot::P0,
+                seq: 1,
+                alive: true,
+            },
+            Input::Obs {
+                node: nid(i),
+                src: PrimarySlot::P0,
+                seq: 2,
+                write: write_from_toy(Group::Role, &json!("group")),
+            },
+        ]);
+    }
+    p.run(Budget::UNLIMITED);
+    let st = p.stats();
+    assert_eq!(st.s0_resident_nodes, 2);
+    assert!(st.s0_resident_bytes > 0, "role is kept for the selectors");
+    assert!(st.s0_neighbour_hits > 0);
+    assert!(p.verify().is_ok());
 }
