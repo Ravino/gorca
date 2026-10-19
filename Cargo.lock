@@ -1488,6 +1488,7 @@ dependencies = [
  "gorca-bench-b1",
  "gorca-connector-api",
  "gorca-doc-source-api",
+ "gorca-fact-api",
  "gorca-ingress",
  "gorca-model",
  "gorca-rt",
