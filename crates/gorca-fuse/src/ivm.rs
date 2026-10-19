@@ -783,6 +783,72 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         Ok(())
     }
 
+    /// Move `node` and its subtree under `parent` as the **last** child, or make it a root with
+    /// `None` (a writer that learns a node's parent after the node: a reply for a child arrives
+    /// before the parent's own). A node already under `parent` stays where it is. Atomic: on
+    /// `Err` nothing changed. The old and the new parent and the node itself are re-fused (a
+    /// content name reads the children, and the depth order of the dirty set follows the move).
+    pub fn reparent(&mut self, node: NodeIdx, parent: Option<NodeIdx>) -> Result<(), IvmError> {
+        let (old_parent, old_depth) = node_of(&self.nodes, node)
+            .map(|n| (n.parent, n.depth))
+            .ok_or(IvmError::UnknownNode)?;
+        if old_parent == parent {
+            return Ok(());
+        }
+        let new_depth = match parent {
+            None => 0,
+            Some(p) => {
+                if p == node {
+                    return Err(IvmError::Cycle);
+                }
+                let pn = node_of(&self.nodes, p).ok_or(IvmError::UnknownParent)?;
+                // `node` may not be an ancestor of `p`; depths are kept exact, so the walk is
+                // bounded by the depth of `p`.
+                let mut up = pn.parent;
+                let mut hops = 0u32;
+                while let Some(a) = up {
+                    if a == node {
+                        return Err(IvmError::Cycle);
+                    }
+                    hops += 1;
+                    if hops > pn.depth {
+                        break;
+                    }
+                    up = node_of(&self.nodes, a).and_then(|n| n.parent);
+                }
+                pn.depth + 1
+            }
+        };
+        if let Some(op) = old_parent
+            && let Some(Some(opn)) = self.nodes.get_mut(slot(op))
+        {
+            opn.children.retain(|x| *x != node);
+            for (j, k) in opn.children.clone().into_iter().enumerate() {
+                if let Some(Some(kn)) = self.nodes.get_mut(slot(k)) {
+                    kn.pos = u32::try_from(j).unwrap_or(u32::MAX);
+                }
+            }
+            self.mark_dirty(op);
+        }
+        let mut pos = 0u32;
+        if let Some(p) = parent
+            && let Some(Some(pn)) = self.nodes.get_mut(slot(p))
+        {
+            pos = u32::try_from(pn.children.len()).unwrap_or(u32::MAX);
+            pn.children.push(node);
+            self.mark_dirty(p);
+        }
+        if let Some(Some(nd)) = self.nodes.get_mut(slot(node)) {
+            nd.parent = parent;
+            nd.pos = pos;
+        }
+        if old_depth != new_depth {
+            self.set_subtree_depth(node, new_depth);
+        }
+        self.mark_dirty(node);
+        Ok(())
+    }
+
     /// Detach `c` from its parent's list (renumbering the siblings) and make it a root at
     /// `depth`; used for former children that a new list no longer names.
     fn relink(&mut self, c: NodeIdx, parent: Option<NodeIdx>, pos: u32, depth: u32) {

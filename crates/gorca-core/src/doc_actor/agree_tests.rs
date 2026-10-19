@@ -13,7 +13,7 @@ use gorca_doc_source_api::web_attrs;
 use gorca_doc_source_atspi::norm::{KeyNames, fuse_setup, record_interned};
 use gorca_doc_source_atspi::wire::AttrInterner;
 use gorca_doc_source_atspi::{WebQuirks, roles};
-use gorca_model::{AppInfo, ConnectorKind, DocDelta, SrcNode, SrcNodeId, WebEngine};
+use gorca_model::{AppInfo, ConnectorKind, DocDelta, Role, SrcNode, SrcNodeId, WebEngine};
 
 use super::agree::{Aspect, compare, deviation};
 use super::fuse::{FuseStage, SemLookup};
@@ -113,14 +113,21 @@ fn info(engine: WebEngine, name: &str) -> AppInfo {
     }
 }
 
-/// Compare one recorded page: the nodes compared and the disagreements found.
-fn run_page(
+/// One recorded page, normalised and fused the way the document actor does it.
+struct Built {
+    recs: Vec<Rec>,
+    nodes: Vec<SrcNode>,
+    stage: FuseStage,
+    batch: Vec<DocDelta>,
+}
+
+fn build(
     engine: WebEngine,
     app: &str,
     legacy: WebQuirks,
     page: &str,
     dir: &str,
-) -> (usize, Vec<(Aspect, String)>) {
+) -> Result<Built, String> {
     let recs = load(dir, page);
     let interner = AttrInterner::default();
     let alias_rows: Vec<Vec<(&'static str, Arc<str>)>> = recs
@@ -169,7 +176,7 @@ fn run_page(
         nodes.push(SrcNode {
             id: SrcNodeId(i as u64 + 1),
             role,
-            states: legacy.states(role, roles::map_states(r.states)),
+            states: legacy.states(role, roles::map_web_states(r.states)),
             name: legacy.name(role, authored, raw_name),
             text: None,
             attrs: attrs.into_iter().collect(),
@@ -178,7 +185,7 @@ fn run_page(
         });
     }
     let Some(setup) = fuse_setup(&info(engine, app)) else {
-        return (0, vec![(Aspect::Role, "no fusion tables".to_owned())]);
+        return Err("no fusion tables".to_owned());
     };
     let mut stage = FuseStage::new(setup);
     let mut kids: BTreeMap<usize, Vec<SrcNodeId>> = BTreeMap::new();
@@ -201,6 +208,35 @@ fn run_page(
         });
     }
     stage.apply(&batch);
+    // The engine fuses under a time budget; the page is complete before anything is compared.
+    while stage.pending() > 0 {
+        stage.step();
+    }
+    Ok(Built {
+        recs,
+        nodes,
+        stage,
+        batch,
+    })
+}
+
+/// Compare one recorded page: the nodes compared and the disagreements found.
+fn run_page(
+    engine: WebEngine,
+    app: &str,
+    legacy: WebQuirks,
+    page: &str,
+    dir: &str,
+) -> (usize, Vec<(Aspect, String)>) {
+    let Built {
+        nodes,
+        stage,
+        batch,
+        ..
+    } = match build(engine, app, legacy, page, dir) {
+        Ok(b) => b,
+        Err(e) => return (0, vec![(Aspect::Role, e)]),
+    };
     let mut bad_live: Vec<(Aspect, String)> = Vec::new();
     // The same batch through the translator: every node is checked against its entry while the
     // mirror is built (a debug build asserts), then the tracker's region parse is checked.
@@ -210,7 +246,7 @@ fn run_page(
         // The translator checks every node (a debug assertion): the first one stops the pass,
         // the per-node report below says which ones.
         let applied = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            t.apply_fused(&mut w, batch, &stage, &[]).is_ok()
+            t.apply_fused(&mut w, batch.clone(), &stage, &[]).is_ok()
         }));
         if !matches!(applied, Ok(true)) {
             eprintln!("{page}: the translator pass stopped at a disagreement or an error");
@@ -290,4 +326,433 @@ fn the_legacy_and_fused_views_agree_on_the_recorded_pages() {
         eprintln!("  {l}");
     }
     assert!(report.is_empty(), "{} disagreements", report.len());
+}
+
+// ---- C3: the fused entry replaces `subtree_label` (X1) -----------------------------------------
+
+/// The retired `subtree_label` of `browse/commands.rs`, kept here as the oracle of the parity
+/// test: the visible text of a node's subtree as a one-line label (whitespace collapsed, icon
+/// glyphs dropped, capped), or `None` when it holds none.
+fn legacy_subtree_label(d: &gorca_doc::web::WebDoc, id: gorca_model::DocNodeId) -> Option<String> {
+    const CAP: u32 = 160;
+    let (a, b) = d.subtree_text_range(id)?;
+    if a >= b {
+        return None;
+    }
+    let mut raw = String::new();
+    d.read_text(a, b.min(a.saturating_add(CAP)), &mut raw);
+    let raw: String = raw
+        .chars()
+        .filter(|c| {
+            !gorca_model::text::is_icon_glyph(*c) && !gorca_model::text::is_object_marker(*c)
+        })
+        .collect();
+    let label = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!crate::present::name_is_blank(Some(&label))).then_some(label)
+}
+
+/// The CSS list markers the engine puts in front of a list item's name.
+const MARKERS: [&str; 10] = ["• ", "◦ ", "▪ ", "■ ", "□ ", "– ", "● ", "○ ", "‣ ", "⁃ "];
+
+#[derive(Default, Debug)]
+struct Parity {
+    /// Controls the legacy overlay would have named from the page text.
+    legacy_fills: usize,
+    /// ... of which the entry gives the same name.
+    same: usize,
+    /// ... of which the entry's name differs only by what the text normalisation does.
+    same_after_normalising: usize,
+    different: Vec<String>,
+    /// The legacy overlay found text, the entry no name.
+    lost: Vec<String>,
+    /// The entry names a control the legacy overlay left nameless.
+    gained: usize,
+    /// List and tree items whose engine name carries a marker.
+    marked: usize,
+    marker_stripped: usize,
+}
+
+fn collapse(s: &str) -> String {
+    s.chars()
+        .filter(|c| {
+            !gorca_model::text::is_icon_glyph(*c) && !gorca_model::text::is_object_marker(*c)
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn parity_of_page(
+    engine: WebEngine,
+    app: &str,
+    legacy: WebQuirks,
+    page: &str,
+    dir: &str,
+    out: &mut Parity,
+) {
+    let Ok(Built {
+        recs,
+        nodes,
+        stage,
+        batch,
+    }) = build(engine, app, legacy, page, dir)
+    else {
+        return;
+    };
+    let (mut w, _read) = gorca_doc::web::channel(1);
+    let mut t = Translator::new();
+    if t.apply_fused(&mut w, batch, &stage, &[]).is_err() {
+        return;
+    }
+    let doc = w.doc();
+    let mut by_src: BTreeMap<u64, gorca_model::DocNodeId> = BTreeMap::new();
+    for id in doc.preorder() {
+        if let Some(src) = doc.node(id).and_then(|v| v.meta).and_then(|m| m.src) {
+            by_src.insert(src.0, id);
+        }
+    }
+    for (i, r) in recs.iter().enumerate() {
+        let Some(id) = by_src.get(&(i as u64 + 1)).copied() else {
+            continue;
+        };
+        let role = roles::map_role(r.role);
+        let node = &nodes[i];
+        let Some(entry) = stage.sem(node.id) else {
+            continue;
+        };
+        let snap_name = (!r.name.is_empty()).then(|| Arc::<str>::from(r.name.as_str()));
+        let snap = fake_snapshot(role, snap_name.clone());
+        let fused = crate::browse::commands::fused_name(&snap, &entry);
+        // The list marker.
+        if matches!(role, Role::ListItem | Role::TreeItem)
+            && let Some(n) = snap_name.as_deref()
+            && MARKERS.iter().any(|m| n.starts_with(m))
+        {
+            out.marked += 1;
+            if fused
+                .as_deref()
+                .is_some_and(|f| !f.starts_with(['•', '◦', '▪', '■', '□', '–', '●', '○', '‣', '⁃']))
+            {
+                out.marker_stripped += 1;
+            }
+        }
+        let blank = crate::present::name_is_blank(snap_name.as_deref());
+        if !(blank && crate::present::needs_name(role) && role != Role::ComboBox) {
+            continue;
+        }
+        let old = legacy_subtree_label(doc, id);
+        let new = entry
+            .name
+            .as_deref()
+            .filter(|n| !crate::present::name_is_blank(Some(n)))
+            .map(str::to_owned);
+        match (old, new) {
+            (None, None) => {}
+            (None, Some(_)) => out.gained += 1,
+            (Some(o), None) => out.lost.push(format!("{page} #{i} {role:?}: legacy {o:?}")),
+            (Some(o), Some(n)) => {
+                out.legacy_fills += 1;
+                if o == n {
+                    out.same += 1;
+                } else if collapse(&o) == collapse(&n) {
+                    out.same_after_normalising += 1;
+                } else {
+                    out.different
+                        .push(format!("{page} #{i} {role:?}: legacy {o:?} fused {n:?}"));
+                }
+            }
+        }
+    }
+}
+
+fn fake_snapshot(role: Role, name: Option<Arc<str>>) -> gorca_model::NodeSnapshot {
+    use gorca_model::{
+        AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSem, PropMask,
+    };
+    gorca_model::NodeSnapshot {
+        key: NodeKey {
+            app: AppId {
+                connector: ConnectorId(1),
+                serial: 1,
+            },
+            local: LocalId(1),
+        },
+        role,
+        states: gorca_model::StateSet::empty(),
+        name,
+        description: None,
+        value: None,
+        parent: None,
+        children: ChildList::Unknown,
+        interfaces: Ifaces::empty(),
+        attrs: gorca_model::AttrMap::default(),
+        relations: gorca_model::Relations::default(),
+        bounds: None,
+        have: PropMask::PRESENT,
+        confirmed_seq: 0,
+        fresh: Freshness::Fresh {
+            at: std::time::Instant::now(),
+        },
+        sem: NodeSem::NONE,
+    }
+}
+
+#[test]
+fn the_fused_entry_names_the_controls_subtree_label_used_to_name() {
+    let mut p = Parity::default();
+    for (dir, engine, app, legacy) in [
+        ("firefox", WebEngine::Gecko, "Firefox", WebQuirks::GECKO),
+        ("chromium", WebEngine::Blink, "Chromium", WebQuirks::BLINK),
+    ] {
+        for page in pages(dir) {
+            parity_of_page(engine, app, legacy, &page, dir, &mut p);
+        }
+    }
+    eprintln!(
+        "overlay parity: legacy fills {} same {} same-after-normalising {} different {} lost {} gained {}; markers {} stripped {}",
+        p.legacy_fills,
+        p.same,
+        p.same_after_normalising,
+        p.different.len(),
+        p.lost.len(),
+        p.gained,
+        p.marked,
+        p.marker_stripped
+    );
+    for l in p.different.iter().chain(p.lost.iter()).take(60) {
+        eprintln!("  {l}");
+    }
+    assert!(p.marked > 0, "the corpus has marked list items");
+    assert_eq!(
+        p.marked, p.marker_stripped,
+        "every marker is stripped by the entry"
+    );
+    assert!(p.lost.is_empty(), "{:?}", p.lost);
+    assert!(p.different.is_empty(), "{:?}", p.different);
+}
+
+// ---- synthetic controls: the cases the recorded pages never hit -----------------------------------
+//
+// A recorded page has a name for every control the engine names from content, so the corpus above
+// says only that the quirk rows strip what the legacy overlay stripped. These small trees are the
+// controls the engine left nameless: the retired `subtree_label` against the fused entry.
+
+enum Kid {
+    /// A text run (a synthetic node, the source's inline text).
+    Run(&'static str),
+    /// A real static-text leaf: the text is both its name and its text.
+    Leaf(&'static str),
+    /// A nameless generic wrapper around more content.
+    Wrap(Vec<Kid>),
+}
+
+use gorca_model::sem::{Group, GroupMask, SemRole, SrcRecord};
+
+fn syn_rec(role: SemRole, name: Option<&str>) -> Arc<SrcRecord> {
+    let mut r = SrcRecord::default();
+    r.sem.role = role;
+    r.name = name.map(Arc::from);
+    r.known = GroupMask::EMPTY;
+    r.known.set(Group::Role, true);
+    r.known.set(Group::Name, true);
+    Arc::new(r)
+}
+fn syn_node(id: u64, role: Role, rec: Option<Arc<SrcRecord>>, text: Option<&str>) -> SrcNode {
+    SrcNode {
+        id: SrcNodeId(id),
+        role,
+        states: gorca_model::StateSet::VISIBLE
+            | gorca_model::StateSet::SHOWING
+            | gorca_model::StateSet::ENABLED,
+        name: None,
+        text: text.map(Arc::from),
+        attrs: gorca_model::AttrMap::default(),
+        local: None,
+        rec,
+    }
+}
+fn syn_add(
+    parent: u64,
+    kids: Vec<Kid>,
+    next: &mut u64,
+    nodes: &mut Vec<SrcNode>,
+    lists: &mut Vec<(u64, Vec<u64>)>,
+) {
+    let mut ids = Vec::new();
+    for k in kids {
+        let id = *next;
+        *next += 1;
+        ids.push(id);
+        match k {
+            Kid::Run(t) => nodes.push(syn_node(id, Role::StaticText, None, Some(t))),
+            Kid::Leaf(t) => nodes.push(syn_node(
+                id,
+                Role::StaticText,
+                Some(syn_rec(SemRole::StaticText, Some(t))),
+                Some(t),
+            )),
+            Kid::Wrap(inner) => {
+                nodes.push(syn_node(
+                    id,
+                    Role::Panel,
+                    Some(syn_rec(SemRole::Generic, None)),
+                    None,
+                ));
+                syn_add(id, inner, next, nodes, lists);
+            }
+        }
+    }
+    lists.push((parent, ids));
+}
+
+/// Build `control` (nameless, role `sem`) with `kids`, fuse it, and give back the legacy label and
+/// what the overlay would take from the entry.
+fn synthetic(
+    sem: gorca_model::sem::SemRole,
+    legacy_role: Role,
+    kids: Vec<Kid>,
+) -> (Option<String>, Option<String>) {
+    let mut next = 3u64;
+    let mut nodes: Vec<SrcNode> = Vec::new();
+    let mut lists: Vec<(u64, Vec<u64>)> = Vec::new();
+    nodes.push(syn_node(
+        1,
+        Role::DocumentWeb,
+        Some(syn_rec(SemRole::DocumentWeb, None)),
+        None,
+    ));
+    nodes.push(syn_node(2, legacy_role, Some(syn_rec(sem, None)), None));
+    lists.push((1, vec![2]));
+    syn_add(2, kids, &mut next, &mut nodes, &mut lists);
+    let Some(setup) = fuse_setup(&info(WebEngine::Gecko, "Firefox")) else {
+        return (None, None);
+    };
+    let mut stage = FuseStage::new(setup);
+    let mut batch = vec![
+        DocDelta::Reset {
+            root: SrcNodeId(1),
+            nav_id: 1,
+        },
+        DocDelta::Upsert(nodes),
+    ];
+    for (p, k) in lists {
+        batch.push(DocDelta::Children {
+            parent: SrcNodeId(p),
+            children: k.into_iter().map(SrcNodeId).collect(),
+        });
+    }
+    batch.push(DocDelta::Settled { batch: 1 });
+    stage.apply(&batch);
+    while stage.pending() > 0 {
+        stage.step();
+    }
+    let (mut w, _read) = gorca_doc::web::channel(1);
+    let mut t = Translator::new();
+    assert!(t.apply_fused(&mut w, batch, &stage, &[]).is_ok());
+    let doc = w.doc();
+    let id = doc
+        .preorder()
+        .find(|id| doc.node(*id).and_then(|v| v.meta).and_then(|m| m.src) == Some(SrcNodeId(2)))
+        .expect("the control is in the mirror");
+    let old = legacy_subtree_label(doc, id);
+    let entry = stage.sem(SrcNodeId(2)).expect("fused");
+    let new = crate::browse::commands::fused_name(&fake_snapshot(legacy_role, None), &entry)
+        .map(|n| n.to_string());
+    (old, new)
+}
+
+type Case = (&'static str, SemRole, Role, Vec<Kid>, Option<&'static str>);
+
+#[test]
+fn a_nameless_control_is_named_from_its_content_as_subtree_label_did() {
+    use gorca_model::sem::SemRole as S;
+    let cases: Vec<Case> = vec![
+        (
+            "one run",
+            S::Button,
+            Role::Button,
+            vec![Kid::Run("Save")],
+            Some("Save"),
+        ),
+        (
+            "runs and blanks",
+            S::Link,
+            Role::Link,
+            vec![Kid::Run("  Save "), Kid::Run(" "), Kid::Run("all  ")],
+            Some("Save all"),
+        ),
+        (
+            "an icon glyph and a word",
+            S::Button,
+            Role::Button,
+            vec![Kid::Run("\u{e900}"), Kid::Run("Mute")],
+            Some("Mute"),
+        ),
+        (
+            "an icon glyph alone",
+            S::Button,
+            Role::Button,
+            vec![Kid::Run("\u{e900}")],
+            None,
+        ),
+        (
+            "static text leaves",
+            S::MenuItem,
+            Role::MenuItem,
+            vec![Kid::Leaf("Open "), Kid::Leaf("recent")],
+            Some("Open recent"),
+        ),
+        (
+            "a tab",
+            S::Tab,
+            Role::Tab,
+            vec![Kid::Run("Inbox")],
+            Some("Inbox"),
+        ),
+        ("no content", S::Button, Role::Button, vec![], None),
+    ];
+    for (what, sem, role, kids, want) in cases {
+        let (old, new) = synthetic(sem, role, kids);
+        assert_eq!(old.as_deref(), want, "{what}: the retired label");
+        assert_eq!(new.as_deref(), want, "{what}: the fused entry");
+    }
+}
+
+#[test]
+fn a_long_content_name_is_cut_like_the_old_label() {
+    use gorca_model::sem::SemRole as S;
+    let (old, new) = synthetic(
+        S::Button,
+        Role::Button,
+        vec![Kid::Run(
+            "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor \
+             incididunt ut labore et dolore magna aliqua Ut enim ad minim veniam quis nostrud \
+             exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat",
+        )],
+    );
+    let (old, new) = (old.unwrap(), new.unwrap());
+    assert!(new.chars().count() <= 160);
+    // The old label cut the raw text at 160 characters, the new one cuts the cleaned label there.
+    assert!(new.starts_with(old.trim_end()) || old.starts_with(new.trim_end()));
+}
+
+/// Known gap, kept visible: S3 reads the final names of the *direct* children, and a nameless
+/// wrapper has none, so a control the engine left nameless whose text sits in a wrapper (a `div`
+/// inside a `button`) takes no name from the entry, where the retired `subtree_label` read the
+/// whole subtree. Engines name such controls themselves (accname 2F); the case only arises when
+/// the engine deliberately leaves the name empty.
+#[test]
+fn a_nameless_wrapper_hides_its_text_from_the_content_name_known_gap() {
+    use gorca_model::sem::SemRole as S;
+    let (old, new) = synthetic(
+        S::Button,
+        Role::Button,
+        vec![Kid::Wrap(vec![Kid::Run("Save")])],
+    );
+    assert_eq!(old.as_deref(), Some("Save"));
+    assert_eq!(
+        new, None,
+        "the day S3 recurses through wrappers this becomes Some(\"Save\")"
+    );
 }

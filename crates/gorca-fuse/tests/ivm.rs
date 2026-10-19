@@ -1946,3 +1946,114 @@ fn set_children_rekeys_dirty_nodes_so_a_parent_fuses_once_not_once_per_child() {
     );
     assert!(e.verify().is_ok());
 }
+
+// ---- reparent (C3: a writer learns a node's parent after the node) --------------------------------
+
+/// `n` roots (0..n), each a button with no name yet.
+fn roots_engine(n: usize) -> Ivm<NoQuirks, NoPatches> {
+    let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], toy_rules());
+    profile.default_role = SemRole::Generic;
+    let mut e = Ivm::new(profile, NoQuirks, NoPatches);
+    for i in 0..n {
+        e.add_node(nid(i), None).unwrap();
+        e.apply([
+            Input::Life {
+                node: nid(i),
+                src: PrimarySlot::P0,
+                seq: 1,
+                alive: true,
+            },
+            Input::Obs {
+                node: nid(i),
+                src: PrimarySlot::P0,
+                seq: 2,
+                write: write_from_toy(Group::Role, &json!("button")),
+            },
+        ]);
+    }
+    e.run(Budget::UNLIMITED);
+    e
+}
+
+#[test]
+fn reparent_lets_a_parent_take_its_content_name_from_children_that_arrived_first() {
+    let mut e = roots_engine(3);
+    name(&mut e, 1, 5, "Save");
+    name(&mut e, 2, 5, "all");
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry_view(nid(0)).unwrap().name.as_deref(), None);
+    e.reparent(nid(1), Some(nid(0))).unwrap();
+    e.reparent(nid(2), Some(nid(0))).unwrap();
+    assert_eq!(e.children(nid(0)), &[nid(1), nid(2)], "appended in order");
+    e.run(Budget::UNLIMITED);
+    assert_eq!(
+        e.entry_view(nid(0)).unwrap().name.as_deref(),
+        Some("Save all")
+    );
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn reparent_moves_a_subtree_and_both_parents_follow() {
+    // 0 -> 1 -> 2 (leaf named), and a second root 3: move 1 under 3.
+    let mut e = roots_engine(4);
+    e.set_children(nid(0), &[nid(1)]).unwrap();
+    e.set_children(nid(1), &[nid(2)]).unwrap();
+    name(&mut e, 2, 9, "Leaf");
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry_view(nid(0)).unwrap().name.as_deref(), Some("Leaf"));
+    e.reparent(nid(1), Some(nid(3))).unwrap();
+    assert_eq!(e.parent(nid(1)), Some(nid(3)));
+    assert!(e.children(nid(0)).is_empty());
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry_view(nid(0)).unwrap().name.as_deref(), None);
+    assert_eq!(e.entry_view(nid(3)).unwrap().name.as_deref(), Some("Leaf"));
+    // The same parent again is a no-op that does not reorder or dirty anything.
+    e.reparent(nid(1), Some(nid(3))).unwrap();
+    assert_eq!(e.pending(), 0);
+    // None makes it a root again.
+    e.reparent(nid(1), None).unwrap();
+    e.run(Budget::UNLIMITED);
+    assert_eq!(e.entry_view(nid(3)).unwrap().name.as_deref(), None);
+    assert_eq!(e.entry_view(nid(1)).unwrap().name.as_deref(), Some("Leaf"));
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn reparent_refuses_cycles_and_unknown_nodes_without_changing_anything() {
+    let mut e = chain_engine(3);
+    assert_eq!(
+        e.reparent(nid(0), Some(nid(2))),
+        Err(gorca_fuse::IvmError::Cycle)
+    );
+    assert_eq!(
+        e.reparent(nid(1), Some(nid(1))),
+        Err(gorca_fuse::IvmError::Cycle)
+    );
+    assert_eq!(
+        e.reparent(nid(9), Some(nid(0))),
+        Err(gorca_fuse::IvmError::UnknownNode)
+    );
+    assert_eq!(
+        e.reparent(nid(1), Some(nid(9))),
+        Err(gorca_fuse::IvmError::UnknownParent)
+    );
+    assert_eq!(e.parent(nid(1)), Some(nid(0)));
+    assert_eq!(e.parent(nid(2)), Some(nid(1)));
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn reparent_keeps_depth_order_so_a_parent_fuses_once() {
+    // Roots wired into a tree before the first run: no node fuses twice for stale depth keys.
+    let mut e = roots_engine(40);
+    for i in 1..40 {
+        name(&mut e, i, 5, "x");
+    }
+    for i in (1..40).rev() {
+        e.reparent(nid(i), Some(nid(i - 1))).unwrap();
+    }
+    let rep = e.run(Budget::UNLIMITED);
+    assert!(rep.fuse_calls <= 2 * 40, "{} fusions", rep.fuse_calls);
+    assert!(e.verify().is_ok());
+}

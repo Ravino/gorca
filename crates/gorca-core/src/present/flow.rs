@@ -830,8 +830,9 @@ impl Reader {
         }
     }
 
-    /// The snapshot as it is spoken: with what the document mirror adds (M8b, and the name of a
-    /// control the engine left nameless), and a name that is only an icon glyph counted as none.
+    /// The snapshot as it is spoken: with what the document's fused entry adds (M8b, M22a-C3: the
+    /// name of a control the engine left nameless, the quirk-stripped name, description and the
+    /// read-only and popup states), and a name that is only an icon glyph counted as none.
     fn spoken_snapshot(&self, snap: &Arc<NodeSnapshot>) -> Arc<NodeSnapshot> {
         let overlaid = self.web_overlay(snap);
         if overlaid.name.is_some() && name_is_blank(overlaid.name.as_deref()) {

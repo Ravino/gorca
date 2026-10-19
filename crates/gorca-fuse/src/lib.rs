@@ -52,4 +52,4 @@ pub use strata::{
     Record, S0Node, S0Slot, S0View, Scratch, SelectorReads, default_slot, fuse_node,
     fuse_node_with, is_alive, rebuild_slot, s0, s0_with,
 };
-pub use value::{Info, MAX_TEXT_BYTES, Seq, Slot, Val, Write, hedge_cap};
+pub use value::{Info, MAX_TEXT_BYTES, Seq, Slot, Val, Write, hedge_cap, rare_write};

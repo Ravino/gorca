@@ -60,6 +60,14 @@ const EVENTED: PropMask = PropMask::NAME
     .union(PropMask::STATES)
     .union(PropMask::ATTRS)
     .union(PropMask::BOUNDS);
+/// The fields the fused entry is made of: a property event on one of them invalidates the
+/// fusion engine's registers too (M22a review W-6).
+const FUSED_FIELDS: PropMask = PropMask::NAME
+    .union(PropMask::DESCRIPTION)
+    .union(PropMask::VALUE)
+    .union(PropMask::ROLE)
+    .union(PropMask::STATES)
+    .union(PropMask::ATTRS);
 /// Known ancestors whose name may derive from content that a NAME change invalidates (P9-3).
 const NAME_ANCESTOR_LEVELS: usize = 8;
 /// Pause before a fusion step that ran out of budget continues.
@@ -884,14 +892,26 @@ impl AppActor {
         self.read.view(k).hit().and_then(|v| v.snap.parent)
     }
 
+    /// Mark fields of `k` untrustworthy in the mirror and, when one of them feeds the fused entry,
+    /// in the fusion engine too (M22a W-6): the entry must not read fresh next to a stale
+    /// snapshot. The engine's invalidation carries the mirror sequence the invalidation got, so a
+    /// reply issued after it (same or newer sequence) is fresh again and one issued before it is not.
+    fn invalidate_node(&mut self, k: NodeKey, mask: PropMask, now: Instant) {
+        self.writer.invalidate(k, mask, now);
+        if mask.intersects(FUSED_FIELDS) {
+            self.fuse.invalidate(k, self.writer.seq());
+        }
+    }
+
     /// B-1 5.1: the event to mirror-effect table (same for every policy).
     fn invalidate_for(&mut self, events: &[NodeEvent], dirty: Option<&DirtySet>, now: Instant) {
         if let Some(d) = dirty {
             if d.is_all() {
                 self.writer.invalidate_all(now);
+                self.fuse.invalidate_all(self.writer.seq());
             } else {
                 for k in d.iter() {
-                    self.writer.invalidate(k, PropMask::ALL, now);
+                    self.invalidate_node(k, PropMask::ALL, now);
                 }
             }
         }
@@ -900,21 +920,21 @@ impl AppActor {
                 NodeEvent::PropertiesChanged { node, mask } => {
                     let m = *mask & EVENTED;
                     if !m.is_empty() {
-                        self.writer.invalidate(*node, m, now);
+                        self.invalidate_node(*node, m, now);
                     }
                     if m.contains(PropMask::NAME) {
                         self.invalidate_name_ancestors(*node, now);
                     }
                 }
                 NodeEvent::ChildrenChanged { node } => {
-                    self.writer.invalidate(*node, PropMask::CHILDREN, now);
+                    self.invalidate_node(*node, PropMask::CHILDREN, now);
                 }
                 NodeEvent::NodeRemoved { node } => {
                     let parent = self.parent_of(*node);
                     self.writer.tombstone(*node, now, RemovalCause::Event);
                     self.fuse.forget(*node);
                     if let Some(p) = parent {
-                        self.writer.invalidate(p, PropMask::CHILDREN, now);
+                        self.invalidate_node(p, PropMask::CHILDREN, now);
                     }
                 }
                 NodeEvent::TextChanged { node, .. } => {
@@ -922,7 +942,7 @@ impl AppActor {
                         .invalidate(*node, PropMask::NAME | PropMask::VALUE, now);
                 }
                 NodeEvent::ActiveDescendantChanged { container, .. } => {
-                    self.writer.invalidate(*container, PropMask::STATES, now);
+                    self.invalidate_node(*container, PropMask::STATES, now);
                 }
                 NodeEvent::WindowEvent { node, kind } => match kind {
                     WindowKind::Destroy => {
@@ -931,8 +951,7 @@ impl AppActor {
                         self.fuse.forget(*node);
                     }
                     WindowKind::Activate | WindowKind::Deactivate | WindowKind::Create => {
-                        self.writer
-                            .invalidate(*node, PropMask::STATES | PropMask::NAME, now);
+                        self.invalidate_node(*node, PropMask::STATES | PropMask::NAME, now);
                     }
                 },
                 NodeEvent::FocusChanged { .. }
@@ -952,7 +971,7 @@ impl AppActor {
             let Some(v) = self.read.view(a).hit() else {
                 break;
             };
-            self.writer.invalidate(a, PropMask::NAME, now);
+            self.invalidate_node(a, PropMask::NAME, now);
             if !v.snap.role.takes_name_from_content() {
                 break;
             }

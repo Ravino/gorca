@@ -86,13 +86,13 @@ pub const DEVIATIONS: &[Deviation] = &[
         id: "gecko-list-marker",
         group: Group::Name,
         reason: "the engine's name of a list or menu item carries the CSS marker (\"• Alpha\") or the counter \
-                 of an ordered list (\"1. First\"); the S-1 quirk rows strip them (X1 does it in an extension today, C3 removes X1)",
+                 of an ordered list (\"1. First\"); the S-1 quirk rows strip them (the Reader's overlay takes the stripped name from the document entry; M22a-C3 removed the old role-gated branch)",
     },
     Deviation {
         id: "name-from-content",
         group: Group::Name,
         reason: "the legacy snapshot has no name; S3 derives one from the content (accname 1.2 \
-                 step 2F), which replaces `subtree_label` (X4) in C3",
+                 step 2F), which replaced the Reader's `subtree_label` (M22a-C3)",
     },
     Deviation {
         id: "aria-role-over-engine",

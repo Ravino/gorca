@@ -159,7 +159,8 @@ pub enum ChildList {
 /// legacy `role`/`states`/`attrs` fields a snapshot carries what the normaliser made of the same
 /// raw data (`rec`, set by the connector) and what `FUSE` made of it (`entry`, set by the app
 /// actor's writer, which drops `rec` once fused). Speech reads `entry` only through the writer's
-/// `Ivm::entry_view`-backed stamping; nothing speaks from it before M22a-C3.
+/// `Ivm::entry_view`-backed stamping. Nothing speaks from it yet (M22b); the Reader's web overlay
+/// reads the document mirror's entry (`NodeMeta::sem`) instead.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NodeSem {
     /// The normalised source record of the AT-SPI source (connector output).

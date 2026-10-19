@@ -33,6 +33,15 @@ fn rows(r: Vec<Row>) -> BTreeMap<String, u64> {
         .collect()
 }
 
+/// Registered groups with no oracle row, in code order.
+const APPENDED_GROUPS: [&str; 5] = [
+    "roledescription",
+    "placeholder",
+    "keyshortcuts",
+    "valuetext",
+    "namefrom",
+];
+
 #[test]
 fn x32_header_tables_equal_the_rust_registries() {
     let doc = load("fuse-x32.json");
@@ -40,6 +49,15 @@ fn x32_header_tables_equal_the_rust_registries() {
     let t = &doc["tables"];
 
     let mut groups = rows(registry::groups());
+    // Groups appended to the registry after the corpus was generated (M22a-C3, review W-6): the
+    // rare text and the name source. They have no oracle rows and no corpus case writes them;
+    // they are plain string/enum registers under the same join as `description`.
+    for name in APPENDED_GROUPS {
+        let code = groups
+            .remove(name)
+            .unwrap_or_else(|| panic!("{name} is not registered"));
+        assert!(code >= 18, "{name}: appended codes follow the oracle's 18");
+    }
     groups.extend(rows(registry::evidence()));
     assert_eq!(table(t, "group_codes"), groups, "group_codes");
     assert_eq!(

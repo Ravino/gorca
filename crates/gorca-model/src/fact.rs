@@ -340,11 +340,18 @@ mod tests {
             ),
             (PropValue::Sort(Sort::Ascending), Group::Sort),
         ];
+        let primary_only = Group::ALL.iter().filter(|g| g.is_primary_only()).count();
         assert_eq!(
-            cases.len(),
+            cases.len() + primary_only,
             Group::ALL.len(),
-            "one case per registered group"
+            "one case per fact-carrying group; the primary-only groups have no fact shape"
         );
+        for g in Group::ALL.iter().filter(|g| g.is_primary_only()) {
+            assert!(
+                !cases.iter().any(|(v, _)| v.matches(g.group_code())),
+                "no fact value may match primary-only {g:?}"
+            );
+        }
         for (v, g) in cases {
             assert_eq!(v.group(), Some(g));
             assert!(v.matches(g.group_code()), "{g:?}");
