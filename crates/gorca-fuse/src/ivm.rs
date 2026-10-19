@@ -193,6 +193,9 @@ struct Node {
     doc_rev: u64,
     s0: Option<S0Node>,
     published: Option<Arc<SemEntry>>,
+    /// Which non-primary source produced which group of the published entry (including through
+    /// tainted content): what the silence mask consults at read time.
+    contrib: Vec<(Group, SourceId)>,
 }
 
 /// Relation reverse index: `target -> sources` that read the target's text.
@@ -277,6 +280,9 @@ pub struct Ivm<Q: Quirks, P: PatchSource> {
     /// Silencing states by stable source name: a revoked, quarantined or paused source keeps its
     /// state when it reconnects or is re-registered.
     retained: HashMap<Arc<str>, (u64, SourceState)>,
+    /// Silenced sources (masked, paused, quarantined, revoked, detached, released): consulted at
+    /// read time so a published value of such a source is never read, whatever the drain cap.
+    silenced: HashSet<SourceId>,
     relations: Relations,
     background: VecDeque<NodeIdx>,
     in_background: HashSet<NodeIdx>,
@@ -453,6 +459,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             prio: HashSet::new(),
             prio_work: 0,
             retained: HashMap::new(),
+            silenced: HashSet::new(),
             relations: Relations::default(),
             background: VecDeque::new(),
             in_background: HashSet::new(),
@@ -472,9 +479,43 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         &self.patches
     }
 
-    /// The published entry of `node`.
-    pub fn entry(&self, node: NodeIdx) -> Option<&Arc<SemEntry>> {
+    /// The published entry of `node` **without** the silence mask: it may still carry the value
+    /// of a silenced source until the bounded re-fusion reaches the node. Speech and every other
+    /// reader must use [`Ivm::entry_view`]; this exists for the engine's own tests.
+    #[doc(hidden)]
+    pub fn entry_unmasked(&self, node: NodeIdx) -> Option<&Arc<SemEntry>> {
         node_of(&self.nodes, node).and_then(|n| n.published.as_ref())
+    }
+
+    /// The entry to **read** (key to speech): the published entry with every group produced by a
+    /// silenced source suppressed at once (default value, plain `Default` provenance, unknown),
+    /// for all nodes and independent of how far the re-fusion has got. O(1) for the common
+    /// case; allocates only for an entry that actually carries a silenced source's value.
+    pub fn entry_view(&self, node: NodeIdx) -> Option<Arc<SemEntry>> {
+        let n = node_of(&self.nodes, node)?;
+        let e = n.published.as_ref()?;
+        if self.silenced.is_empty() || n.contrib.is_empty() {
+            return Some(Arc::clone(e));
+        }
+        let hit: Vec<Group> = n
+            .contrib
+            .iter()
+            .filter(|(_, s)| self.silenced.contains(s))
+            .map(|(g, _)| *g)
+            .collect();
+        if hit.is_empty() {
+            return Some(Arc::clone(e));
+        }
+        let mut m = (**e).clone();
+        for g in hit {
+            crate::value::write_default(&mut m, g, self.profile.default_role);
+            m.prov.set(g, gorca_model::sem::ProvCode::Default);
+            m.hedge.set(g, 0);
+            m.taint.set(g, 0);
+            m.known = m.known.without(g);
+        }
+        m.sem_rev = e.sem_rev.wrapping_add(1);
+        Some(Arc::new(m))
     }
 
     /// Dirty nodes plus background dependents not yet re-fused.
@@ -536,6 +577,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             doc_rev: 0,
             s0: None,
             published: None,
+            contrib: Vec::new(),
         });
         if let Some(p) = parent
             && let Some(Some(pn)) = self.nodes.get_mut(slot(p))
@@ -1086,6 +1128,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     /// rest follows in `run`).
     pub fn release_source(&mut self, id: SourceId) -> Vec<Published> {
         self.retain_silence(id);
+        self.silenced.insert(id);
         let anchors = self.side.release_source(id);
         self.refresh_snapshot();
         let touched = self.forget_anchors(&anchors);
@@ -1108,6 +1151,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         let (new_id, name) = (info.id, Arc::clone(&info.name));
         let old_state = self.epochs.entry(old);
         let anchors = self.side.reconnect(old, info)?;
+        self.silenced.insert(old);
         if let Some(&(n, state)) = old_state.as_ref().filter(|(_, s)| sticky(*s)) {
             self.retained.insert(name.clone(), (n, state));
         }
@@ -1144,6 +1188,11 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 self.retained.remove(&name);
             }
         }
+        if silences(state) {
+            self.silenced.insert(src);
+        } else {
+            self.silenced.remove(&src);
+        }
         self.refresh_snapshot();
         self.touch_priority_nodes();
         self.source_sweeps.push_back(SourceSweep {
@@ -1158,16 +1207,23 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         }
     }
 
-    /// Dirty the priority nodes that carry non-primary facts (cutoff keeps this cheap).
+    /// Re-fuse the priority nodes that carry non-primary facts: as many as the synchronous drain
+    /// can take go to the front of the dirty set; the rest wait in the background queue (the
+    /// silence mask already hides their silenced values).
     fn touch_priority_nodes(&mut self) {
+        let cap = self.profile.limits.max_sync_drain.max(1);
         let nodes: Vec<NodeIdx> = self
             .prio
             .iter()
             .copied()
             .filter(|n| self.anchor_nodes.get(n).is_some_and(|s| !s.is_empty()))
             .collect();
-        for n in nodes {
-            self.mark_dirty(n);
+        for (i, n) in nodes.into_iter().enumerate() {
+            if i < cap {
+                self.mark_dirty(n);
+            } else if !self.dirty_of.contains_key(&n) && self.in_background.insert(n) {
+                self.background.push_back(n);
+            }
         }
     }
 
@@ -1264,6 +1320,12 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             self.process(NodeIdx(key.2), &mut rep);
         }
         rep.pending = self.pending();
+        if rep.pending == 0 {
+            // Nothing references a released or re-registered id any more.
+            let (side, epochs) = (&self.side, &self.epochs);
+            self.silenced
+                .retain(|s| side.has_source(*s) && epochs.state(*s).is_some_and(silences));
+        }
         #[cfg(feature = "fuse_full_check")]
         if rep.pending == 0 {
             rep.check_mismatches = Some(self.verify().err().map_or(0, |v| v.len()));
@@ -1335,6 +1397,23 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         };
 
         // Phase B: store, publish with early cutoff, propagate.
+        let (new_entry, mut contrib, content_children) = match fused {
+            Some(f) => (Some(f.entry), f.winners, f.content_children),
+            None => (None, Vec::new(), Vec::new()),
+        };
+        // A name built from tainted children carries their sources up the content edge.
+        for c in &content_children {
+            if let Some(cn) = node_of(&self.nodes, NodeIdx(*c)) {
+                contrib.extend(
+                    cn.contrib
+                        .iter()
+                        .filter(|(g, _)| *g == Group::Name)
+                        .copied(),
+                );
+            }
+        }
+        contrib.sort_by_key(|(g, s)| (g.slot(), s.slot, s.generation));
+        contrib.dedup();
         let reads = self.patches.reads();
         let max_children = self.profile.limits.max_children.max(1);
         let Some(Some(node)) = self.nodes.get_mut(slot(x)) else {
@@ -1342,9 +1421,9 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         };
         let s0_changed = S0Node::changed_groups(node.s0.as_ref(), new_s0.as_ref());
         node.s0 = new_s0;
+        node.contrib = contrib;
         let (parent, pos, children) = (node.parent, node.pos, node.children.clone());
         let old_pub = node.published.clone();
-        let new_entry = fused.map(|f| f.entry);
         let published_entry: Option<Arc<SemEntry>> = match (&old_pub, new_entry) {
             (None | Some(_), None) => None,
             (None, Some(mut e)) => {

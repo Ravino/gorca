@@ -14,6 +14,7 @@
 use std::cmp::Ordering;
 use std::sync::Arc;
 
+use gorca_model::fact::SourceId;
 use gorca_model::sem::{
     Avail, Check, Current, Expand, GROUP_COUNT, Group, GroupMask, Invalid, Orientation, Popup,
     Press, ProvCode, Select, SemEntry, SemFlags, SemRole, Sort,
@@ -82,6 +83,8 @@ pub struct S0Slot {
     pub stale: bool,
     /// Quirk rule id that produced the winner's value (0 = none).
     pub hit: u16,
+    /// The Secondary source whose fact won this group (None for primaries and defaults).
+    pub sec_src: Option<SourceId>,
 }
 
 impl S0Slot {
@@ -94,6 +97,7 @@ impl S0Slot {
             fallback: false,
             stale: false,
             hit: 0,
+            sec_src: None,
         }
     }
 }
@@ -229,6 +233,7 @@ fn s0_group<T: Tracer>(
                 fallback,
                 stale: src.is_stale(g),
                 hit: rec.hit[ix(g)],
+                sec_src: None,
             });
             if !T::ON {
                 break;
@@ -285,6 +290,7 @@ fn secondary_slot(c: &crate::side::FactCand) -> S0Slot {
         fallback: false,
         stale: false,
         hit: 0,
+        sec_src: Some(c.source_id()),
     }
 }
 
@@ -468,6 +474,11 @@ pub struct Fused {
     pub masked: GroupMask,
     /// Groups whose derived string was cut at the profile's text limit.
     pub truncated: GroupMask,
+    /// The non-primary sources whose facts won a group of this entry (Secondary, `title`
+    /// evidence, Inferred). Name from tainted content is attributed through `content_children`.
+    pub winners: Vec<(Group, SourceId)>,
+    /// The tainted children a derived name was built from (their contributions flow up).
+    pub content_children: Vec<u32>,
 }
 
 impl Fused {
@@ -542,12 +553,15 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
     let mut layer = [Layer::Default; GROUP_COUNT];
     let mut info = [Info::DEFAULT; GROUP_COUNT];
     let mut winner: [Option<PrimarySlot>; GROUP_COUNT] = [None; GROUP_COUNT];
+    let mut win_src: [Option<SourceId>; GROUP_COUNT] = [None; GROUP_COUNT];
+    let mut content_children: Vec<u32> = Vec::new();
     for g in Group::ALL.iter().copied() {
         let s = node.get(g);
         let i = ix(g);
         eff[i] = s.slot.clone();
         info[i] = s.info;
         winner[i] = s.src;
+        win_src[i] = s.sec_src;
         layer[i] = match (&s.slot, s.info.prov) {
             (Slot::Unknown, _) => Layer::Default,
             (_, ProvCode::ObservedSecondary) => Layer::Secondary,
@@ -631,6 +645,10 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
         if T::ON {
             tr.content(&c.name, &c.from, &c.tainted_from);
         }
+        if c.info.prov == ProvCode::DerivedTainted {
+            content_children.clone_from(&c.tainted_from);
+        }
+        win_src[ix(Group::Name)] = None;
         eff[ix(Group::Name)] = Slot::Val(Val::Name(c.name));
         layer[ix(Group::Name)] = Layer::Derived;
         info[ix(Group::Name)] = c.info;
@@ -648,6 +666,8 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
                 eff[ix(Group::Name)] = c.write().slot();
                 layer[ix(Group::Name)] = Layer::Derived;
                 info[ix(Group::Name)] = title_info(c);
+                win_src[ix(Group::Name)] = Some(c.source_id());
+                content_children.clear();
             }
             if T::ON {
                 tr.fact(Group::Name, e, st);
@@ -667,6 +687,7 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
                 eff[ix(g)] = c.write().slot();
                 layer[ix(g)] = Layer::Inferred;
                 info[ix(g)] = inferred_info(c);
+                win_src[ix(g)] = Some(c.source_id());
             }
             if T::ON {
                 tr.fact(g, e, st);
@@ -742,11 +763,27 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
     entry.known = known;
     entry.stale = stale;
     entry.fallback = fallback;
+    let mut winners = Vec::new();
+    for g in Group::ALL.iter().copied() {
+        if matches!(
+            layer[ix(g)],
+            Layer::Secondary | Layer::Derived | Layer::Inferred
+        ) && !masked.has(g)
+            && let Some(s) = win_src[ix(g)]
+        {
+            winners.push((g, s));
+        }
+    }
+    if !matches!(layer[ix(Group::Name)], Layer::Derived) || masked.has(Group::Name) {
+        content_children.clear();
+    }
     Fused {
         entry,
         layer,
         masked,
         truncated,
+        winners,
+        content_children,
     }
 }
 
