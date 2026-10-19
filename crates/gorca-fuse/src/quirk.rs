@@ -266,6 +266,22 @@ impl QuirkSet {
         Ok(())
     }
 
+    /// Reject a rule that makes a group `Unknown` when the profile lists that group as
+    /// statically inexpressible: Unknown would let a Secondary in through the back door (H-3).
+    pub fn validate_against(&self, inexpressible: GroupMask) -> Result<()> {
+        for (i, r) in self.rules.iter().enumerate() {
+            if let QuirkAction::UnknownGroup(g) = &r.action
+                && inexpressible.has(*g)
+            {
+                return Err(QuirkError::Invalid {
+                    row: i + 1,
+                    why: "unknown-group on a group the profile lists as inexpressible",
+                });
+            }
+        }
+        Ok(())
+    }
+
     pub fn len(&self) -> usize {
         self.rules.len()
     }
@@ -811,6 +827,23 @@ group = "name"
             a.extend(QuirkSet::parse(MARKER).expect("b")),
             Err(QuirkError::DuplicateId(7))
         );
+    }
+
+    #[test]
+    fn unknown_group_on_an_inexpressible_group_is_rejected() {
+        let q = QuirkSet::parse(
+            "[[rule]]\nid = 1\nname = \"n\"\naction = \"unknown-group\"\ngroup = \"invalid\"",
+        )
+        .expect("parses");
+        assert!(q.validate_against(GroupMask::EMPTY).is_ok());
+        assert!(
+            q.validate_against(GroupMask::EMPTY.with(Group::Name))
+                .is_ok()
+        );
+        assert!(matches!(
+            q.validate_against(GroupMask::EMPTY.with(Group::Invalid)),
+            Err(QuirkError::Invalid { row: 1, .. })
+        ));
     }
 
     #[test]

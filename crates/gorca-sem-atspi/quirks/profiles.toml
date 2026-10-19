@@ -1,26 +1,31 @@
 # Source-profile selection (ADR-0024 section 2.13 terminology): the first row whose conditions all
-# match the app's facts wins; `default` applies when none does. Conditions are data:
+# match the app's facts wins; the caller uses its default profile when none does. Conditions:
 #   app_name   case-insensitive patterns with `*` wildcards, any may match
 #   toolkit    exact, case-insensitive (the AT-SPI `toolkit` attribute)
 #   web_engine exact, case-insensitive (what the connector detected)
 # Engine identity lives here, never in the normaliser.
+#
+# Order matters: engine and toolkit detection come first; app-name rows are only a FALLBACK,
+# because apps choose their own AT-SPI names. The glob is local and minimal; it moves to the shared
+# gorca-config matcher with M14a (ADR-0016).
 
 [[profile]]
 name = "gecko"
 web_engine = "gecko"
 
 [[profile]]
+name = "blink"
+web_engine = "blink"
+
+[[profile]]
+name = "gtk4"
+toolkit = "gtk"
+
+# Fallbacks by app name, after detection found nothing.
+[[profile]]
 name = "gecko"
 app_name = ["firefox*", "thunderbird*", "librewolf*", "zen*"]
 
 [[profile]]
 name = "blink"
-web_engine = "blink"
-
-[[profile]]
-name = "blink"
 app_name = ["chromium*", "chrome*", "google-chrome*", "brave*", "microsoft-edge*", "electron*"]
-
-[[profile]]
-name = "gtk4"
-toolkit = "gtk"

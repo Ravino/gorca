@@ -80,11 +80,12 @@ fn every_shipped_table_loads_and_builds_a_profile() {
             "{}",
             b.name
         );
-        match b.name {
-            "gecko" | "blink" => assert!(p.inexpressible.has(Group::Invalid), "{}", b.name),
-            _ => assert!(p.inexpressible.is_empty(), "{}", b.name),
-        }
+        // R-1: nothing is statically inexpressible on the corpus today.
+        assert!(p.inexpressible.is_empty(), "{}", b.name);
         assert!(!p.inexpressible.has(Group::Role), "{}", b.name);
+        // R-3: no quirk row may make an inexpressible group Unknown.
+        q.validate_against(p.inexpressible)
+            .unwrap_or_else(|e| panic!("{}: {e}", b.name));
         assert_eq!(
             q.is_empty(),
             b.name != "gecko",
@@ -262,4 +263,29 @@ fn blink_xml_roles_are_trusted() {
     }
     eprintln!("blink xml-roles: {trusted} trusted, {overridden} overridden by native semantics");
     assert!(trusted >= 100, "only {trusted} Blink tokens on the corpus");
+}
+
+/// R-1 (H-3): a group is inexpressible only if the normaliser never has an opinion on it for that
+/// engine. Every shipped inexpressible group must be unknown in every corpus record of the
+/// engine, even with everything fetched.
+#[test]
+fn inexpressible_groups_are_never_known_to_the_normaliser() {
+    for (profile, engine) in [
+        ("gecko", "firefox"),
+        ("blink", "chromium"),
+        ("gtk4", "gtk4"),
+    ] {
+        let b = bundle(profile).expect("bundle");
+        let mask = parse_inexpressible(b.inexpressible).expect("loads");
+        for g in Group::ALL.iter().filter(|g| mask.has(**g)) {
+            for page in pages(engine) {
+                for r in load(engine, &page).unwrap_or_default() {
+                    assert!(
+                        !run(engine, &r).known.has(*g),
+                        "{profile}: {g:?} is listed inexpressible but known on {engine}/{page}"
+                    );
+                }
+            }
+        }
+    }
 }
