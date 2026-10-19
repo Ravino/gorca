@@ -11,6 +11,8 @@ const IFACE = `<node><interface name="org.gorca.MouseProbe">
 <method name="Button"><arg type="u" direction="in" name="button"/><arg type="b" direction="in" name="pressed"/></method>
 <method name="Click"><arg type="u" direction="in" name="button"/><arg type="x" direction="out" name="us"/></method>
 <method name="HideOverview"/>
+<method name="ShowOverview"/>
+<method name="Notify"><arg type="s" direction="in" name="title"/></method>
 <method name="MoveFrame"><arg type="t" direction="in" name="id"/><arg type="i" direction="in" name="x"/><arg type="i" direction="in" name="y"/></method>
 <method name="Pointer"><arg type="i" direction="out" name="x"/><arg type="i" direction="out" name="y"/></method>
 <method name="Frames"><arg type="a(sstiiii)" direction="out" name="w"/></method>
@@ -53,6 +55,8 @@ export default class MouseProbe extends Extension {
             if (a.meta_window.get_id() === id) a.meta_window.move_frame(true, x, y);
     }
     HideOverview() { Main.overview.hide(); }
+    ShowOverview() { Main.overview.show(); }
+    Notify(title) { Main.notify(title, 'gorca test banner'); }
     Pointer() { const [x, y] = global.get_pointer(); return [x, y]; }
     Frames() {
         return global.get_window_actors().map(a => {
