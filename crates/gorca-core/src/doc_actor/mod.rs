@@ -193,8 +193,10 @@ impl DocHandle {
     pub fn request_repair(&self, r: RepairReason) {
         use std::sync::atomic::Ordering;
         let prev = self.repair_flag.fetch_max(r.code(), Ordering::AcqRel);
-        if prev == 0 && self.ctl.try_send(DocCtl::RepairPending).is_err() {
-            self.repair_flag.store(0, Ordering::Release);
+        // A full control queue leaves the flag set: the actor's tick takes it (never wiped here,
+        // another caller may have raised it meanwhile).
+        if prev == 0 {
+            let _ = self.ctl.try_send(DocCtl::RepairPending);
         }
     }
 }
@@ -351,6 +353,10 @@ struct Actor {
     /// Why the repair in flight was started, and the mirror's fingerprint when it started.
     repair_reason: Option<RepairReason>,
     repair_before: (usize, usize),
+    /// The orphan keys the last settle period sampled, and whether the next orphan repair must
+    /// skip the cheap look because the last one passed while those keys were still unknown.
+    orphan_keys: Vec<NodeKey>,
+    escalate_orphans: bool,
     /// Follow-up checks spent after a load-end repair that found the mirror still tiny.
     load_retries: usize,
 }
@@ -549,11 +555,15 @@ impl Actor {
             .requests
             .try_send(DocRequest::Repair {
                 reply,
-                cheap_check: r.cheap_check(),
+                cheap_check: r.cheap_check()
+                    && !(r == RepairReason::Orphans && self.escalate_orphans),
             })
             .is_ok()
         {
             self.gate.started(r);
+            if r == RepairReason::Orphans {
+                self.escalate_orphans = false;
+            }
             self.repair_reason = Some(r);
             self.repair_before = self.fingerprint();
             *rx = Some(rcv);
@@ -612,6 +622,7 @@ impl Actor {
                 Some(due) if now >= due => {
                     self.orphan_due = None;
                     let keys = self.orphans.take();
+                    self.orphan_keys.clone_from(&keys);
                     // Still unknown after the settle period: the incremental update did not
                     // catch up, the mirror is behind.
                     if keys.iter().any(|k| self.join.get(*k).is_none()) {
@@ -716,6 +727,8 @@ async fn run(
         young_done: 0,
         repair_reason: None,
         repair_before: (0, 0),
+        orphan_keys: Vec::new(),
+        escalate_orphans: false,
         load_retries: 0,
     };
     let mut repair_rx: Option<RepairRx> = None;
@@ -813,6 +826,7 @@ async fn run(
                     Ok(Err(_)) | Err(_) => RepairReport { failed: true, ..RepairReport::default() },
                 };
                 let now = Instant::now();
+                let reason = a.repair_reason;
                 let after = a.fingerprint();
                 let changed = after != a.repair_before;
                 tracing::info!(
@@ -827,12 +841,25 @@ async fn run(
                     quiet = a.gate.quiet(),
                 );
                 a.load_end_follow_up(report, changed, now);
+                // An orphan repair that the cheap look answered while the sampled keys are still
+                // unknown: the staleness sits below what the look sees, so look no more (D-2).
+                if reason == Some(RepairReason::Orphans)
+                    && report.nodes == 0
+                    && !report.failed
+                    && a.orphan_keys.iter().any(|k| a.join.get(*k).is_none())
+                {
+                    a.escalate_orphans = true;
+                }
                 if let Some(next) = a.gate.finished(report, changed, now) {
                     a.repair_request(next, now, &mut repair_rx);
                 }
             }
             _ = notice_tick.tick() => {
                 a.retry_notice();
+                let code = repair_flag.swap(0, std::sync::atomic::Ordering::AcqRel);
+                if let Some(r) = RepairReason::from_code(code) {
+                    a.repair_request(r, Instant::now(), &mut repair_rx);
+                }
                 a.repair_tick(Instant::now(), &mut repair_rx);
             }
         }

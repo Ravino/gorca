@@ -582,12 +582,64 @@ fn note(live: &mut Live, e: &AtspiEvent) {
     }
 }
 
+/// What the cheap look found.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum Look {
+    Same,
+    /// A child list differs, or the look could not tell: refetch.
+    Changed,
+    /// A user request is waiting: the look stopped.
+    Busy,
+}
+
 /// Nodes and time of the cheap look before a guessed repair ([`AtspiDocSource::top_unchanged`]).
 const CHEAP_NODES: usize = 48;
 const CHEAP_BUDGET: Duration = Duration::from_millis(150);
 
 /// How long the pre-click read of the target may take before the click goes ahead unchecked.
 const VERIFY_TIMEOUT: Duration = Duration::from_millis(150);
+
+/// The net effect of a repair batch (a refetch's difference followed by the re-read of nodes the
+/// page changed meanwhile): a node the old snapshot lacked is removed by the first part and
+/// upserted again by the second, which must not reach the mirror as a removal (the cursor on it
+/// would be lost); of several child lists of one parent the last one wins.
+fn net_effect(deltas: Vec<DocDelta>) -> Vec<DocDelta> {
+    let mut upserted: HashSet<SrcNodeId> = HashSet::new();
+    for d in &deltas {
+        if let DocDelta::Upsert(v) = d {
+            upserted.extend(v.iter().map(|n| n.id));
+        }
+    }
+    let mut last_list: HashMap<SrcNodeId, usize> = HashMap::new();
+    for (i, d) in deltas.iter().enumerate() {
+        if let DocDelta::Children { parent, .. } = d {
+            last_list.insert(*parent, i);
+        }
+    }
+    let mut out = Vec::with_capacity(deltas.len());
+    for (i, d) in deltas.into_iter().enumerate() {
+        match d {
+            DocDelta::Removed(v) => {
+                let kept: Vec<SrcNodeId> =
+                    v.into_iter().filter(|id| !upserted.contains(id)).collect();
+                if !kept.is_empty() {
+                    out.push(DocDelta::Removed(kept));
+                }
+            }
+            DocDelta::Children { parent, children } => {
+                if last_list.get(&parent) == Some(&i) {
+                    out.push(DocDelta::Children { parent, children });
+                }
+            }
+            other @ (DocDelta::Reset { .. }
+            | DocDelta::Upsert(_)
+            | DocDelta::Text { .. }
+            | DocDelta::Hint(_)
+            | DocDelta::Settled { .. }) => out.push(other),
+        }
+    }
+    out
+}
 
 /// Root list failures before the source gives up the document.
 const ROOT_ERROR_LIMIT: u32 = 3;
@@ -729,7 +781,7 @@ impl AtspiDocSource {
                     }
                 }, if flight.is_some() => {
                     if let Some(f) = flight.take() {
-                        self.finish_flight(&mut live, &ctx, &mut flight, f, res);
+                        self.finish_flight(&mut live, &ctx, &mut flight, f, res).await;
                     }
                     if live.root_errors >= ROOT_ERROR_LIMIT {
                         return Err(SourceError::Detached);
@@ -1057,6 +1109,19 @@ impl AtspiDocSource {
 
     /// One settled burst: plan, refetch what changed, push deltas.
     async fn process_dirty(&mut self, live: &mut Live, ctx: &DocSourceCtx) {
+        self.process_dirty_with(live, ctx, Vec::new(), false).await;
+    }
+
+    /// `process_dirty` that starts from `carry` (deltas already decided, a repair's difference)
+    /// and pushes everything as one batch ending in one `Settled`; `force_emit` pushes even when
+    /// the batch is empty (the repair's waiter needs its `Settled`).
+    async fn process_dirty_with(
+        &mut self,
+        live: &mut Live,
+        ctx: &DocSourceCtx,
+        carry: Vec<DocDelta>,
+        force_emit: bool,
+    ) {
         while let Ok(e) = self.events.try_recv() {
             note(live, &e);
         }
@@ -1088,7 +1153,7 @@ impl AtspiDocSource {
             rewrite_note: None,
             errors: 0,
         };
-        let mut deltas: Vec<DocDelta> = Vec::new();
+        let mut deltas: Vec<DocDelta> = carry;
 
         if taken.map.len() > self.config.resync_threshold {
             rec.resync = true;
@@ -1254,8 +1319,11 @@ impl AtspiDocSource {
             }
         }
 
+        if force_emit {
+            deltas = net_effect(deltas);
+        }
         rec.deltas = deltas.len();
-        if !deltas.is_empty() {
+        if force_emit || !deltas.is_empty() {
             live.out.emit(&ctx.sink, deltas);
         }
         rec.pushed_at = Instant::now();
@@ -1393,7 +1461,7 @@ impl AtspiDocSource {
 
     /// The background refetch ended: apply it, push the difference followed by `Settled` (also
     /// when nothing changed, so the waiter wakes), answer the waiters.
-    fn finish_flight(
+    async fn finish_flight(
         &mut self,
         live: &mut Live,
         ctx: &DocSourceCtx,
@@ -1443,7 +1511,6 @@ impl AtspiDocSource {
         }
         rec.deltas = deltas.len();
         report.deltas = deltas.len();
-        live.out.emit(&ctx.sink, deltas);
         rec.pushed_at = Instant::now();
         report.took = fl.started.elapsed();
         self.metrics.push(rec);
@@ -1471,6 +1538,13 @@ impl AtspiDocSource {
             }
         }
         if std::mem::take(&mut live.touched_overflow) {
+            fl.again = true;
+        }
+        // The repair's difference and the re-read of the touched nodes go out as one batch with
+        // one `Settled`: the Reader never sees an update vanish and come back (review D-1).
+        self.process_dirty_with(live, ctx, deltas, true).await;
+        if live.resync_wanted {
+            live.resync_wanted = false;
             fl.again = true;
         }
         for w in std::mem::take(&mut fl.waiters) {
@@ -1568,7 +1642,8 @@ impl AtspiDocSource {
             DocRequest::Repair { cheap_check, reply } => {
                 if cheap_check && flight.is_none() {
                     let t = Instant::now();
-                    if self.top_unchanged(live).await {
+                    // Same, or a user request is waiting (skipped: the next guess looks again).
+                    if self.top_unchanged(live, ctx).await != Look::Changed {
                         let _ = reply.send(Ok(RepairReport {
                             took: t.elapsed(),
                             ..RepairReport::default()
@@ -1870,9 +1945,9 @@ impl AtspiDocSource {
     /// (breadth first, [`CHEAP_NODES`] of them, [`CHEAP_BUDGET`] at most) still match the browser?
     /// A node that gained children, the empty `main` of a shell that rendered, shows here without
     /// a refetch of the whole document. Any doubt answers false (the repair runs).
-    async fn top_unchanged(&self, live: &mut Live) -> bool {
+    async fn top_unchanged(&self, live: &mut Live, ctx: &DocSourceCtx) -> Look {
         let Some(root) = live.root_key.and_then(|k| live.ident.id_of(k)) else {
-            return false;
+            return Look::Changed;
         };
         let look = async {
             let mut queue = std::collections::VecDeque::from([root]);
@@ -1880,6 +1955,10 @@ impl AtspiDocSource {
             while let Some(id) = queue.pop_front() {
                 if seen >= CHEAP_NODES {
                     break;
+                }
+                // A click or selection is queued behind this look: give way (review D-3).
+                if !ctx.requests.is_empty() {
+                    return Some(Look::Busy);
                 }
                 seen += 1;
                 let path = live.ident.path_of(id).and_then(|p| live.paths.path_of(p))?;
@@ -1891,17 +1970,17 @@ impl AtspiDocSource {
                         .zip(&mine)
                         .any(|(k, c)| live.ident.path_of(*c) != Some(*k))
                 {
-                    return Some(false);
+                    return Some(Look::Changed);
                 }
                 queue.extend(mine);
             }
-            Some(true)
+            Some(Look::Same)
         };
         tokio::time::timeout(CHEAP_BUDGET, look)
             .await
             .ok()
             .flatten()
-            .unwrap_or(false)
+            .unwrap_or(Look::Changed)
     }
 
     fn path_of(live: &Live, node: SrcNodeId) -> Option<String> {

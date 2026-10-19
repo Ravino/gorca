@@ -1955,7 +1955,12 @@ async fn incremental_updates_are_applied_while_a_repair_runs_and_survive_it() {
     fake.link(doc, p);
     fake.set_text(p, "one");
     let mut b = start_browse(fake, conn, doc).await;
-    let _ = until_settled(&mut b).await;
+    let first = until_settled(&mut b).await;
+    let doc_id = upserts_of(&first)
+        .into_iter()
+        .find(|n| n.role == Role::DocumentWeb)
+        .map(|n| n.id)
+        .expect("document mirrored");
     // The repair's role pass takes about 450 ms.
     b.fake
         .tree
@@ -1989,16 +1994,22 @@ async fn incremental_updates_are_applied_while_a_repair_runs_and_survive_it() {
         })
         .await
         .unwrap();
+    let mut all: Vec<DocDelta> = Vec::new();
     let mut fresh_id = None;
     let mut seen_after = None;
     let end = Instant::now() + Duration::from_secs(3);
     while Instant::now() < end && fresh_id.is_none() {
-        if let Ok(Some(DocDelta::Upsert(v))) =
+        if let Ok(Some(d)) =
             tokio::time::timeout(Duration::from_millis(20), b.rx.deltas.recv()).await
-            && let Some(n) = v.iter().find(|n| n.text.as_deref() == Some("fresh"))
         {
-            fresh_id = Some(n.id);
-            seen_after = Some(t.elapsed());
+            if let DocDelta::Upsert(v) = &d
+                && v.iter().any(|n| n.text.as_deref() == Some("fresh"))
+                && let Some(n) = v.iter().find(|n| n.role == Role::Paragraph)
+            {
+                fresh_id = Some(n.id);
+                seen_after = Some(t.elapsed());
+            }
+            all.push(d);
         }
     }
     let seen_after = seen_after.expect("the incremental add reached the sink");
@@ -2013,31 +2024,31 @@ async fn incremental_updates_are_applied_while_a_repair_runs_and_survive_it() {
         .expect("reply sent")
         .expect("repair ok");
     assert!(!report.failed);
-    let mut deltas = Vec::new();
     let end = Instant::now() + Duration::from_millis(1200);
     while Instant::now() < end {
         if let Ok(Some(d)) =
             tokio::time::timeout(Duration::from_millis(50), b.rx.deltas.recv()).await
         {
-            deltas.push(d);
+            all.push(d);
         }
     }
     let id = fresh_id.unwrap();
-    let removed = deltas
-        .iter()
-        .any(|d| matches!(d, DocDelta::Removed(v) if v.contains(&id)));
-    assert!(!removed, "the repair removed the node the update added");
-    let last_children = deltas.iter().rev().find_map(|d| match d {
-        DocDelta::Children { children, .. } if children.contains(&id) => Some(true),
-        DocDelta::Children { .. } => Some(false),
-        DocDelta::Reset { .. }
-        | DocDelta::Upsert(_)
-        | DocDelta::Removed(_)
-        | DocDelta::Text { .. }
-        | DocDelta::Hint(_)
-        | DocDelta::Settled { .. } => None,
-    });
-    assert_ne!(last_children, Some(false), "a later list dropped the node");
+    // From the moment the update added the node, nothing may take it away again, not even for
+    // one publish: no removal of it and no child list of the document without it (D-1).
+    for d in &all {
+        match d {
+            DocDelta::Removed(v) => assert!(!v.contains(&id), "the node was removed: {all:?}"),
+            DocDelta::Children { parent, children } if *parent == doc_id => {
+                assert!(children.contains(&id), "a list dropped the node: {all:?}");
+            }
+            DocDelta::Children { .. }
+            | DocDelta::Reset { .. }
+            | DocDelta::Upsert(_)
+            | DocDelta::Text { .. }
+            | DocDelta::Hint(_)
+            | DocDelta::Settled { .. } => {}
+        }
+    }
     b.shutdown.cancel();
     let _ = b.task.await;
 }

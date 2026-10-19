@@ -489,7 +489,10 @@ async fn a_dormant_document_does_not_repair_and_requests_coalesce_into_one_contr
 
 #[tokio::test]
 async fn events_on_unknown_nodes_repair_after_the_settle_period_only_if_still_unknown() {
-    let mut r = rig();
+    let mut r = rig_with(repair::RepairPolicy {
+        young: false,
+        ..repair::RepairPolicy::ALL
+    });
     r.script.batches.send(first_batch()).await.unwrap();
     next_notice(&mut r).await;
     // A node the join already knows is no orphan.
@@ -498,6 +501,10 @@ async fn events_on_unknown_nodes_repair_after_the_settle_period_only_if_still_un
     // An unknown one is, but only after the settle period.
     r.handle.orphans.note(nk(99));
     no_seen_within(&mut r, 400).await;
+    assert_eq!(next_seen(&mut r).await, Seen::RepairCheap);
+    // The cheap look answered (the fake reports nothing fetched) while the orphan is still
+    // unknown: the next orphan repair skips the look and refetches (D-2).
+    r.handle.orphans.note(nk(99));
     assert_eq!(next_seen(&mut r).await, Seen::Repair);
     r.shutdown.cancel();
     let _ = r.task.await;

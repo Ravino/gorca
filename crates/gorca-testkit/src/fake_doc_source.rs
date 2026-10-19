@@ -26,6 +26,8 @@ pub enum Seen {
     Rebuild,
     /// A repair request (answered with an empty report).
     Repair,
+    /// A repair request that may be answered by the cheap look (a guess).
+    RepairCheap,
     Other,
 }
 
@@ -111,9 +113,13 @@ impl DocSource for ScriptedDocSource {
                             }
                             DocRequest::SetActivity(a) => Seen::Activity(a),
                             DocRequest::Rebuild => Seen::Rebuild,
-                            DocRequest::Repair { reply, .. } => {
+                            DocRequest::Repair { reply, cheap_check } => {
                                 let _ = reply.send(Ok(gorca_doc_source_api::RepairReport::default()));
-                                Seen::Repair
+                                if cheap_check {
+                                    Seen::RepairCheap
+                                } else {
+                                    Seen::Repair
+                                }
                             }
                             DocRequest::Text { reply, .. } => {
                                 let _ = reply.send(Ok(String::new()));
