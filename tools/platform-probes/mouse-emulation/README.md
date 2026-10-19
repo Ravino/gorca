@@ -6,4 +6,4 @@ PRIVATE headless shell only; report: `docs/reports/mouse-emulation-design.md`. P
 (`client.py` click logger, `client_btn.py 3|4` button, `page.html` for browsers) and print results; `extents*.py` dump AT-SPI
 extents (needs a registryd, the drive scripts start one and record `reg.pid`); `ei_pointer.c` direct RemoteDesktop + libei
 absolute pointer; `rd_probe.py` direct RD D-Bus calls; `lat.py` round trips.
-Teardown: `kill -TERM -- -<rig pid>` (own process group) and kill `reg.pid`. Never kill by pattern.
+Teardown: `teardown.sh WORKDIR` (kills only recorded PIDs in `pids`/`*.pid` and the rig process group in `rig.pgid`). Never kill by pattern.
