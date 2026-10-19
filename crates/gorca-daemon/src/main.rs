@@ -15,6 +15,10 @@ fn main() -> Result<ExitCode> {
         println!("gorca {}", env!("GORCA_GIT_REV"));
         return Ok(ExitCode::SUCCESS);
     }
+    // CI opt-in: page text in the legacy-agreement log lines (default off, it can be private).
+    if std::env::var_os("GORCA_AGREE_NAMES").is_some_and(|v| v == "1") {
+        gorca_core::set_agreement_log_names(true);
+    }
     let opts = match gorca_daemon::parse(std::env::args().skip(1)) {
         Ok(Parsed::Run(opts)) => opts
             .with_env(|k| std::env::var(k).ok())

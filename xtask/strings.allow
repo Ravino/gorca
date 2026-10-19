@@ -29,6 +29,8 @@ crates/gorca-core/src/commands/info.rs | node {} of application {}, role {}, {},
 crates/gorca-core/src/commands/info.rs | no listed
 crates/gorca-core/src/commands/keys.rs | focused node never presented: presenting it again at a key
 crates/gorca-core/src/doc_actor/agree.rs | legacy and fused values disagree
+crates/gorca-core/src/doc_actor/agree.rs | legacy name {} bytes #{:08x}, fused name {} bytes #{:08x}
+crates/gorca-core/src/doc_actor/agree.rs | ; legacy {:?}, fused {:?}
 crates/gorca-core/src/doc_actor/agree.rs | legacy agreement: {} disagrees on a {:?} node (see the gorca_agree log)
 crates/gorca-core/src/doc_actor/agree.rs | legacy agreement: {} disagrees on a {role:?} node: {detail}
 crates/gorca-core/src/doc_actor/live.rs | legacy region root, no fused live

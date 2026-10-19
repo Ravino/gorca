@@ -9,7 +9,7 @@
 //! legacy name is empty may get a content name (S3), that is the feature, not a disagreement.
 
 use std::sync::LazyLock;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use gorca_doc::web::NodeFlags;
 use gorca_fuse::Rules;
@@ -168,6 +168,47 @@ fn role_agrees(legacy: Role, sem: SemRole) -> Option<bool> {
     Some(ok.contains(&sem))
 }
 
+/// Whether a disagreement log line may carry page text (names). Off unless the daemon's main
+/// turns it on from an explicit environment opt-in (CI and the e2e harness); library code never
+/// reads the environment.
+static LOG_NAMES: AtomicBool = AtomicBool::new(false);
+
+/// Opt in to page text in disagreement log lines (default off: a name can be a private message
+/// or a form value, and a log is not the place for it).
+pub fn set_log_names(on: bool) {
+    LOG_NAMES.store(on, Ordering::Relaxed);
+}
+
+/// A short stable digest of a string, enough to tell two names apart in a log without saying
+/// what they were.
+fn short_hash(s: Option<&str>) -> u32 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut h);
+    let v = h.finish();
+    u32::try_from(v & 0xFFFF_FFFF).unwrap_or(0)
+}
+
+/// What a disagreement log line says about the names: lengths and short hashes by default,
+/// the (cut) text itself only with the opt-in.
+fn describe(n: &SrcNode, e: &SemEntry, with_names: bool) -> String {
+    use std::fmt::Write as _;
+    let legacy = n.name.as_deref();
+    let fused = e.name.as_deref();
+    let mut out = format!(
+        "legacy name {} bytes #{:08x}, fused name {} bytes #{:08x}",
+        legacy.map_or(0, str::len),
+        short_hash(legacy),
+        fused.map_or(0, str::len),
+        short_hash(fused)
+    );
+    if with_names {
+        let cut = |s: Option<&str>| s.map(|s| s.chars().take(40).collect::<String>());
+        let _ = write!(out, "; legacy {:?}, fused {:?}", cut(legacy), cut(fused));
+    }
+    out
+}
+
 fn note(n: &SrcNode, a: Aspect, e: &SemEntry) {
     MISMATCH[a.ix()].fetch_add(1, Ordering::Relaxed);
     if LOGGED.fetch_add(1, Ordering::Relaxed) < LOG_CAP {
@@ -176,8 +217,7 @@ fn note(n: &SrcNode, a: Aspect, e: &SemEntry) {
             aspect = a.label(),
             legacy_role = ?n.role,
             fused_role = e.sem.role.name(),
-            legacy_name = ?n.name.as_deref().map(|s| s.chars().take(40).collect::<String>()),
-            fused_name = ?e.name.as_deref().map(|s| s.chars().take(40).collect::<String>()),
+            names = %describe(n, e, LOG_NAMES.load(Ordering::Relaxed)),
             "legacy and fused values disagree"
         );
     }
@@ -443,6 +483,30 @@ mod tests {
         assert!(compare(&n, NodeFlags::NONE, 0, &e).is_empty());
         assert_eq!(compare(&n, NodeFlags::NONE, 6, &e), vec![Aspect::Level]);
         assert!(marker_only("1. First", "First") && !marker_only("Say First", "First"));
+    }
+
+    #[test]
+    fn the_default_log_line_carries_no_page_text() {
+        let secret = "Dinner at 7 with Anna, door code 4821";
+        let n = node(Role::Link, Some(secret), StateSet::default());
+        let e = entry(SemRole::Link, Some("Another private message"));
+        let line = describe(&n, &e, false);
+        assert!(!line.contains("Dinner") && !line.contains("4821"), "{line}");
+        assert!(
+            !line.contains("Another") && !line.contains("private"),
+            "{line}"
+        );
+        assert!(line.contains(&format!("{} bytes", secret.len())), "{line}");
+        // Two different names stay distinguishable.
+        assert_ne!(short_hash(Some("a")), short_hash(Some("b")));
+        // The opt-in adds the text (cut), nothing else changes.
+        let full = describe(&n, &e, true);
+        assert!(
+            full.starts_with(&line) && full.contains("Dinner at 7"),
+            "{full}"
+        );
+        // The default is off.
+        assert!(!LOG_NAMES.load(Ordering::Relaxed));
     }
 
     #[test]
