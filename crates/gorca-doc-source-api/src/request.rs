@@ -60,7 +60,14 @@ pub enum DocRequest {
     /// but answered with a report once the difference is in the sink, so the document actor can
     /// meter repairs by their cost. The source runs it off its request loop: requests that arrive
     /// meanwhile are served against the old mirror.
-    Repair { reply: Reply<RepairReport> },
+    ///
+    /// `cheap_check`: the request is a guess (events on unknown nodes, a state flip), so the source
+    /// first looks at the child counts of the top of its tree and answers without a refetch when
+    /// they match the mirror.
+    Repair {
+        cheap_check: bool,
+        reply: Reply<RepairReport>,
+    },
     /// Urgent marks for nodes at the cursor (UP-2, M7b): the source bypasses its settle for
     /// events on them.
     Prioritize { nodes: SmallVec<[SrcNodeId; 8]> },
@@ -102,7 +109,7 @@ pub enum SourceError {
     /// re-used or re-ordered its rows since the mirror last said so). The mirror is refreshed;
     /// the user hears what is there now and decides (CHR-0, act only on what was spoken).
     #[error("target object changed since it was spoken")]
-    Displaced,
+    Displaced(Option<std::sync::Arc<str>>),
     /// A page selection was applied, but not exactly as asked (the engine rounded it).
     #[error("applied approximately")]
     Approximate,

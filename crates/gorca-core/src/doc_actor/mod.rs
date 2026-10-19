@@ -101,6 +101,8 @@ pub enum DocCtl {
     /// Repair a mirror that may be stale (CHR-0). The actor's gate decides whether and when:
     /// one repair in flight, a gap that follows the cost of the last one.
     Repair(RepairReason),
+    /// `DocHandle::request_repair` set the coalescing flag: take it and ask the gate.
+    RepairPending,
     /// A user-driven pull on a node: focus it, click it, scroll it into view (IR-5).
     Act { node: DocNodeId, act: DocAction },
     /// A page-selection action whose result comes back as [`DocNotice::SelectionDone`] with the
@@ -151,7 +153,11 @@ pub enum DocNotice {
     ActionFailed { doc: DocId, gone: bool },
     /// A click was refused because the object at the node is no longer what was spoken (the
     /// source re-read its role and name before clicking). Nothing was clicked.
-    ActionDisplaced { doc: DocId },
+    ActionDisplaced {
+        doc: DocId,
+        /// What the object says now (its name), for the Reader to speak.
+        now: Option<Arc<str>>,
+    },
     /// A live region changed (ADR-0003 13): already classified, deduplicated and rate-limited by
     /// the document, so the Reader only decides whether this document is the one in front.
     Live { doc: DocId, msg: LiveMsg },
@@ -175,6 +181,22 @@ pub struct DocHandle {
     pub events: mpsc::Sender<DocEvent>,
     /// Events the router saw on nodes no join knows (the repair trigger of CHR-0).
     pub orphans: Arc<Orphans>,
+    /// The strongest repair reason asked for and not yet taken by the actor (0: none). The router
+    /// and the hub set it and send one `DocCtl::RepairPending` per transition from empty, so a
+    /// storm of load or state events costs one control slot, never the 64 that also carry clicks
+    /// (review F-6).
+    pub repair_flag: Arc<std::sync::atomic::AtomicU8>,
+}
+
+impl DocHandle {
+    /// Ask the document to repair its mirror (the actor's gate decides whether and when).
+    pub fn request_repair(&self, r: RepairReason) {
+        use std::sync::atomic::Ordering;
+        let prev = self.repair_flag.fetch_max(r.code(), Ordering::AcqRel);
+        if prev == 0 && self.ctl.try_send(DocCtl::RepairPending).is_err() {
+            self.repair_flag.store(0, Ordering::Release);
+        }
+    }
 }
 
 /// Lock-free directory of live documents (DR-2).
@@ -284,12 +306,14 @@ pub fn prepare(
         ctl: ctl_tx,
         events: ev_tx,
         orphans: Arc::default(),
+        repair_flag: Arc::default(),
     };
     let fut = run(
         spec,
         writer,
         handle.read.clone(),
         Arc::clone(&handle.orphans),
+        Arc::clone(&handle.repair_flag),
         ctl_rx,
         ev_rx,
     );
@@ -498,6 +522,10 @@ impl Actor {
 
     /// A repair request (CHR-0): the gate decides, the actor sends or keeps it.
     fn repair_request(&mut self, r: RepairReason, now: Instant, rx: &mut Option<RepairRx>) {
+        // A dormant document tracks nothing (DM-I5) and its wake rebuilds it anyway (F-4).
+        if !self.awake {
+            return;
+        }
         if r == RepairReason::RootState
             && (self.gate.loaded_seen() || now.saturating_duration_since(self.born) > YOUNG_WINDOW)
         {
@@ -517,8 +545,15 @@ impl Actor {
 
     fn repair_start(&mut self, r: RepairReason, now: Instant, rx: &mut Option<RepairRx>) {
         let (reply, rcv) = oneshot::channel();
-        if self.requests.try_send(DocRequest::Repair { reply }).is_ok() {
-            self.gate.started();
+        if self
+            .requests
+            .try_send(DocRequest::Repair {
+                reply,
+                cheap_check: r.cheap_check(),
+            })
+            .is_ok()
+        {
+            self.gate.started(r);
             self.repair_reason = Some(r);
             self.repair_before = self.fingerprint();
             *rx = Some(rcv);
@@ -558,6 +593,12 @@ impl Actor {
     /// Timers of the repair triggers: a deferred repair, events on unknown nodes after their
     /// settle period, the young-document checks.
     fn repair_tick(&mut self, now: Instant, rx: &mut Option<RepairRx>) {
+        if !self.awake {
+            self.deferred = None;
+            self.orphan_due = None;
+            let _ = self.orphans.take();
+            return;
+        }
         if let Some((r, at)) = self.deferred
             && now >= at
             && !self.gate.in_flight()
@@ -617,6 +658,7 @@ async fn run(
     writer: DocWriter,
     read: DocRead,
     orphans: Arc<Orphans>,
+    repair_flag: Arc<std::sync::atomic::AtomicU8>,
     mut ctl_rx: mpsc::Receiver<DocCtl>,
     ev_rx: mpsc::Receiver<DocEvent>,
 ) {
@@ -724,6 +766,12 @@ async fn run(
                     }
                     DocCtl::Rebuild => { let _ = a.requests.try_send(DocRequest::Rebuild); }
                     DocCtl::Repair(r) => a.repair_request(r, Instant::now(), &mut repair_rx),
+                    DocCtl::RepairPending => {
+                        let code = repair_flag.swap(0, std::sync::atomic::Ordering::AcqRel);
+                        if let Some(r) = RepairReason::from_code(code) {
+                            a.repair_request(r, Instant::now(), &mut repair_rx);
+                        }
+                    }
                     DocCtl::Act { node, act } => {
                         if actions.len() < MAX_ACTIONS {
                             spawn_action(&mut actions, &a, node, act, None);
@@ -942,8 +990,11 @@ fn spawn_action(
             && let Some(Err(e)) = &result
             && !matches!(e, SourceError::Timeout)
         {
-            if matches!(e, SourceError::Displaced) {
-                let _ = notices.try_send(DocNotice::ActionDisplaced { doc });
+            if let SourceError::Displaced(now) = e {
+                let _ = notices.try_send(DocNotice::ActionDisplaced {
+                    doc,
+                    now: now.clone(),
+                });
             } else {
                 let gone = matches!(e, SourceError::Gone);
                 let _ = notices.try_send(DocNotice::ActionFailed { doc, gone });

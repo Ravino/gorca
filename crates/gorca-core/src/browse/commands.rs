@@ -1694,16 +1694,24 @@ impl Reader {
                     );
                 }
             }
-            DocNotice::ActionDisplaced { doc } => {
-                // The source did not click: the object is not what was spoken. Say so; the
-                // mirror is being refreshed and the next Enter reads what is there now.
+            DocNotice::ActionDisplaced { doc, now } => {
+                // The source did not click: the object is not what was spoken. Say what it is
+                // now; the mirror is being refreshed and the next Enter acts on that name.
                 if let Some(b) = self.web.as_mut()
                     && b.mode.doc() == Some(doc)
                 {
                     b.activated = None;
                     b.click_target = None;
                     b.activated_node = None;
-                    self.say(t(M::WebItemChanged), fx);
+                    b.displaced = None;
+                    b.announced_change = true;
+                    let said = match now {
+                        Some(name) if !name.is_empty() => {
+                            format!("{}: {name}", t(M::WebItemChanged))
+                        }
+                        Some(_) | None => t(M::WebItemChanged).to_owned(),
+                    };
+                    self.say(&said, fx);
                 }
             }
             DocNotice::Gone { doc } => {
@@ -1933,6 +1941,12 @@ impl Reader {
         if g.doc != doc {
             return;
         }
+        if self.now.saturating_duration_since(g.at) > super::GRACE_REJOIN_WINDOW {
+            if let Some(b) = self.web.as_mut() {
+                b.grace_fallback = None;
+            }
+            return;
+        }
         let at_root =
             matches!(b.mode, WebMode::Browse { doc: d, cur, .. } if d == doc && cur.node == g.root);
         // A focus change clears the fallback (`web_on_focus`), so the focus is still the one that
@@ -2011,7 +2025,11 @@ impl Reader {
                     && h.read
                         .with(|dd| content_sig(dd, n).is_some_and(|now| now != sig))
                 {
-                    b.displaced = Some(n);
+                    if b.announced_change {
+                        b.announced_change = false;
+                    } else {
+                        b.displaced = Some(n);
+                    }
                 }
                 tracing::debug!(
                     target: "gorca_phase",
@@ -2249,6 +2267,7 @@ impl Reader {
                         focus: waiting_focus,
                         doc,
                         root: cur.node,
+                        at: now,
                     });
                 }
             }
@@ -2378,6 +2397,9 @@ impl Reader {
     ) {
         if let Some(b) = self.web.as_mut() {
             b.grace_fallback = None;
+            if c != CoreCmd::BrowseActivate {
+                b.announced_change = false;
+            }
         }
         self.browse_command_inner(c, rep, now, fx);
         // Any command but Enter is the user moving or reading: a displacement mark is spent.

@@ -111,7 +111,7 @@ impl DocSource for ScriptedDocSource {
                             }
                             DocRequest::SetActivity(a) => Seen::Activity(a),
                             DocRequest::Rebuild => Seen::Rebuild,
-                            DocRequest::Repair { reply } => {
+                            DocRequest::Repair { reply, .. } => {
                                 let _ = reply.send(Ok(gorca_doc_source_api::RepairReport::default()));
                                 Seen::Repair
                             }

@@ -440,24 +440,49 @@ async fn a_second_repair_waits_for_the_gap_the_first_one_earned() {
 }
 
 #[tokio::test]
-async fn a_gecko_document_ignores_the_load_complete_repair() {
+async fn a_gecko_document_never_repairs() {
     let mut r = rig_with(repair::RepairPolicy::for_engine(
         gorca_model::WebEngine::Gecko,
     ));
     r.script.batches.send(first_batch()).await.unwrap();
     next_notice(&mut r).await;
+    for why in [
+        repair::RepairReason::LoadComplete,
+        repair::RepairReason::FocusMiss,
+    ] {
+        r.handle.ctl.send(DocCtl::Repair(why)).await.unwrap();
+    }
+    no_seen_within(&mut r, 600).await;
+    r.shutdown.cancel();
+    let _ = r.task.await;
+}
+
+#[tokio::test]
+async fn a_dormant_document_does_not_repair_and_requests_coalesce_into_one_control_message() {
+    let mut r = rig();
+    r.script.batches.send(first_batch()).await.unwrap();
+    next_notice(&mut r).await;
     r.handle
         .ctl
-        .send(DocCtl::Repair(repair::RepairReason::LoadComplete))
+        .send(DocCtl::Activity(Activity::Dormant))
         .await
         .unwrap();
+    assert_eq!(next_seen(&mut r).await, Seen::Activity(Activity::Dormant));
+    r.handle.request_repair(repair::RepairReason::LoadComplete);
     no_seen_within(&mut r, 500).await;
+    // Awake again: a storm of requests reaches the source as one repair.
     r.handle
         .ctl
-        .send(DocCtl::Repair(repair::RepairReason::FocusMiss))
+        .send(DocCtl::Activity(Activity::Awake))
         .await
         .unwrap();
+    assert_eq!(next_seen(&mut r).await, Seen::Activity(Activity::Awake));
+    for _ in 0..50 {
+        r.handle.request_repair(repair::RepairReason::LoadComplete);
+        r.handle.request_repair(repair::RepairReason::Orphans);
+    }
     assert_eq!(next_seen(&mut r).await, Seen::Repair);
+    no_seen_within(&mut r, 300).await;
     r.shutdown.cancel();
     let _ = r.task.await;
 }

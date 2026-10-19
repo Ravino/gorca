@@ -403,7 +403,7 @@ impl Hub {
                     // The focus is inside a document we already mirror but the mirror does not
                     // know the node: it is stale. One repair at a time per document, metered by
                     // the document's gate (CHR-0).
-                    let _ = h.ctl.try_send(DocCtl::Repair(RepairReason::FocusMiss));
+                    h.request_repair(RepairReason::FocusMiss);
                     self.notify(DocNotice::InDocument { focus, doc: h.doc });
                     return;
                 }

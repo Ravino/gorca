@@ -15,7 +15,7 @@ use gorca_doc_source_api::DocEvent;
 use gorca_model::{AppId, AppInfo, AppLifecycle, DocKind, NodeEvent};
 
 use crate::doc_actor::repair::RepairReason;
-use crate::doc_actor::{DocCtl, DocDirectory, WebJoin};
+use crate::doc_actor::{DocDirectory, WebJoin};
 use crate::doc_registry::{HubMsg, HubTx};
 use gorca_model::PropMask;
 
@@ -119,7 +119,7 @@ impl DocRouter {
         if let Some((doc, _)) = self.link.join.get(node)
             && let Some(h) = self.link.docs.get(doc)
         {
-            let _ = h.ctl.try_send(DocCtl::Repair(why));
+            h.request_repair(why);
         }
     }
 
@@ -130,7 +130,7 @@ impl DocRouter {
             && let Some(h) = self.link.docs.get(doc)
             && h.root == node
         {
-            let _ = h.ctl.try_send(DocCtl::Repair(RepairReason::RootState));
+            h.request_repair(RepairReason::RootState);
         }
     }
 
@@ -165,7 +165,7 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
     use super::*;
-    use crate::doc_actor::DocHandle;
+    use crate::doc_actor::{DocCtl, DocHandle};
     use gorca_doc::web::channel;
     use gorca_model::{ConnectorId, DocId, DocNodeId, LocalId, NodeKey};
     use gorca_rt::mpsc;
@@ -208,6 +208,7 @@ mod tests {
             ctl: ctl_tx,
             events: ev_tx,
             orphans: Arc::default(),
+            repair_flag: Arc::default(),
         });
         join.set(nk(11), (DocId(1), DocNodeId::from_parts(0, 0)));
         join.set(nk(12), (DocId(1), DocNodeId::from_parts(1, 0)));
@@ -245,10 +246,13 @@ mod tests {
             }],
             now,
         );
-        assert!(matches!(
-            r.ctl.try_recv(),
-            Ok(DocCtl::Repair(RepairReason::LoadComplete))
-        ));
+        assert!(matches!(r.ctl.try_recv(), Ok(DocCtl::RepairPending)));
+        assert_eq!(
+            r.handle
+                .repair_flag
+                .load(std::sync::atomic::Ordering::Relaxed),
+            RepairReason::LoadComplete.code()
+        );
     }
 
     #[test]
@@ -265,10 +269,52 @@ mod tests {
             "a child's state is no load signal"
         );
         r.router.route(&[states(11)], now);
-        assert!(matches!(
-            r.ctl.try_recv(),
-            Ok(DocCtl::Repair(RepairReason::RootState))
-        ));
+        assert!(matches!(r.ctl.try_recv(), Ok(DocCtl::RepairPending)));
+        assert_eq!(
+            r.handle
+                .repair_flag
+                .load(std::sync::atomic::Ordering::Relaxed),
+            RepairReason::RootState.code()
+        );
+    }
+
+    #[test]
+    fn a_storm_of_root_state_events_takes_one_control_slot_and_cannot_drop_a_click() {
+        let mut r = rig();
+        let now = Instant::now();
+        let st = NodeEvent::PropertiesChanged {
+            node: nk(11),
+            mask: PropMask::STATES,
+        };
+        for _ in 0..64 {
+            r.router.route(std::slice::from_ref(&st), now);
+        }
+        r.router.route(
+            &[NodeEvent::DocumentEvent {
+                node: nk(11),
+                kind: DocKind::LoadComplete,
+            }],
+            now,
+        );
+        let click = DocCtl::Act {
+            node: DocNodeId::from_parts(1, 0),
+            act: gorca_model::DocAction::Click,
+        };
+        assert!(r.handle.ctl.try_send(click).is_ok(), "the click fits");
+        let mut pending = 0;
+        while let Ok(m) = r.ctl.try_recv() {
+            if matches!(m, DocCtl::RepairPending) {
+                pending += 1;
+            }
+        }
+        assert_eq!(pending, 1, "one control message for the whole storm");
+        // The strongest reason won.
+        assert_eq!(
+            r.handle
+                .repair_flag
+                .load(std::sync::atomic::Ordering::Relaxed),
+            RepairReason::LoadComplete.code()
+        );
     }
 
     #[test]

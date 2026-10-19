@@ -370,7 +370,7 @@ async fn a_focus_miss_inside_a_mirrored_document_asks_it_to_repair() {
     f.map_document(nk(101), nk(11));
     let mut r = rig(f.clone());
     let mut gecko = info();
-    gecko.web_engine = gorca_model::WebEngine::Gecko;
+    gecko.web_engine = gorca_model::WebEngine::Blink;
     r.tx.send(HubMsg::Appeared {
         app: app(),
         info: Box::new(gecko),

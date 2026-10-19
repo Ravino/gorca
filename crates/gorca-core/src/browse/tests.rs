@@ -515,6 +515,7 @@ fn rig() -> Rig {
         ctl: ctl_tx,
         events: ev_tx,
         orphans: Arc::default(),
+        repair_flag: Arc::default(),
     });
     let keys = ModeKeys {
         web_escape: vec![escape_chord()],
@@ -1078,6 +1079,7 @@ fn navigate_to_a_page_that_builds_progressively(
         ctl: ctl_tx,
         events: ev_tx,
         orphans: Arc::default(),
+        repair_flag: Arc::default(),
     });
     r.reader.handle(
         ReaderMsg::Doc(DocNotice::FirstUseful {
@@ -2867,6 +2869,7 @@ fn add_second_doc_unjoined(r: &mut Rig, title: &str) -> Vec<(LocalId, DocNodeId)
         ctl: ctl_tx,
         events: ev_tx,
         orphans: Arc::default(),
+        repair_flag: Arc::default(),
     });
     std::mem::forget(writer);
     r.mirror.apply(
@@ -3372,7 +3375,10 @@ fn a_displaced_click_says_the_item_changed_and_clicks_nothing() {
     let mut r = rig();
     r.focus(1006);
     let fx = r.reader.handle(
-        ReaderMsg::Doc(DocNotice::ActionDisplaced { doc: DocId(1) }),
+        ReaderMsg::Doc(DocNotice::ActionDisplaced {
+            doc: DocId(1),
+            now: None,
+        }),
         r.now,
     );
     assert_eq!(spoken(&fx), ["that item changed"]);
@@ -3383,8 +3389,82 @@ fn a_displaced_click_says_the_item_changed_and_clicks_nothing() {
     );
     // Another document's refusal is not ours to speak.
     let fx = r.reader.handle(
-        ReaderMsg::Doc(DocNotice::ActionDisplaced { doc: DocId(9) }),
+        ReaderMsg::Doc(DocNotice::ActionDisplaced {
+            doc: DocId(9),
+            now: None,
+        }),
         r.now,
     );
     assert!(spoken(&fx).is_empty());
+}
+
+// ---- review F-3 / F-7 ---------------------------------------------------------------------
+
+/// The link at 1006 becomes a button called `name` with the visible text `text`.
+fn relabel_button(r: &mut Rig, name: &str, text: &str, rev: u64) {
+    let mut n = src(6, Role::Button, Some(1006));
+    n.states |= StateSet::FOCUSABLE;
+    n.name = Some(Arc::from(name));
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![n, run(7, text)]),
+            DocDelta::Settled { batch: rev },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev }),
+        r.now,
+    );
+}
+
+fn refuse_click(r: &mut Rig, now: &str) -> ReaderEffects {
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::ActionDisplaced {
+            doc: DocId(1),
+            now: Some(Arc::from(now)),
+        }),
+        r.now,
+    )
+}
+
+#[test]
+fn a_refused_click_speaks_the_new_name_and_the_next_enter_acts_on_it_after_a_name_only_change() {
+    let mut r = rig();
+    relabel_button(&mut r, "Delete message from Bob", "Delete", 2);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    let fx = refuse_click(&mut r, "Delete message from Alice");
+    assert_eq!(
+        spoken(&fx),
+        ["that item changed: Delete message from Alice"]
+    );
+    // The refresh lands: same visible text, new name.
+    relabel_button(&mut r, "Delete message from Alice", "Delete", 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(click_of(&fx), "the name was said, the Enter acts on it");
+}
+
+#[test]
+fn a_refused_click_whose_visible_text_changed_needs_no_extra_enter() {
+    let mut r = rig();
+    relabel_button(&mut r, "Reply", "Reply", 2);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    refuse_click(&mut r, "Forward");
+    relabel_button(&mut r, "Forward", "Forward", 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(click_of(&fx), "{:?}", spoken(&fx));
+}
+
+#[test]
+fn a_late_repair_does_not_move_the_cursor_after_the_rejoin_window() {
+    let mut r = grace_rig();
+    let at_top = cursor_node(&r);
+    // Longer than the window: the user is doing something else by now.
+    r.now += super::GRACE_REJOIN_WINDOW + Duration::from_secs(1);
+    mirror_the_late_link(&mut r, 2);
+    assert_eq!(cursor_node(&r), at_top);
 }

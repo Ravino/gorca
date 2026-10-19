@@ -1,0 +1,192 @@
+--- a/crates/gorca-doc-source-atspi/src/fetch.rs
++++ b/crates/gorca-doc-source-atspi/src/fetch.rs
+@@ -1159,6 +1159,20 @@
+     }
+ 
+     #[test]
++    fn probe_review_absorb_keeps_error_targets_and_keys() {
++        let mut live = PathTable::default();
++        let mut fork = live.fork();
++        // The background fetch learns an aria-errormessage target.
++        fork.note_error_target(PathKey(70), PathKey(80));
++        // Meanwhile the live table interns the same odd path the fork also interned.
++        let kf = fork.intern("/odd/path");
++        let kl = live.intern("/odd/path");
++        live.absorb(fork);
++        eprintln!("PROBE error_fields after absorb = {:?}", live.error_fields(PathKey(70)));
++        eprintln!("PROBE fork key {kf:?} live key {kl:?} path_of(fork key) = {:?}", live.path_of(kf));
++    }
++
++    #[test]
+     fn error_targets_map_to_their_fields_and_stay_bounded() {
+         let mut t = PathTable::default();
+         let (target, f1, f2) = (PathKey(7), PathKey(8), PathKey(9));
+--- a/crates/gorca-doc-source-atspi/tests/fake_peer.rs
++++ b/crates/gorca-doc-source-atspi/tests/fake_peer.rs
+@@ -1933,3 +1933,91 @@
+     // The same document either way.
+     assert_eq!(first.block.nodes.len(), second.block.nodes.len());
+ }
++
++#[tokio::test]
++async fn probe_review_incremental_update_waits_behind_a_repair() {
++    let (fake, conn) = Fake::start(2).await;
++    let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
++    let p = fake.node(raw::PARAGRAPH, "", "p", None).await;
++    fake.link(doc, p);
++    fake.set_text(p, "one");
++    let mut b = start_browse(fake, conn, doc).await;
++    let _ = until_settled(&mut b).await;
++    // A slow repair (a big page): 600 ms.
++    b.fake.tree.lock().unwrap().nodes.get_mut(&p).unwrap().role_delay = Duration::from_millis(600);
++    let (reply, _repaired) = gorca_rt::oneshot::channel::<Result<gorca_doc_source_api::RepairReport, gorca_doc_source_api::SourceError>>();
++    b.requests.send(DocRequest::Repair { reply }).await.unwrap();
++    tokio::time::sleep(Duration::from_millis(20)).await;
++    // The page adds a paragraph and says so (an ordinary incremental update).
++    let q = b.fake.node(raw::PARAGRAPH, "", "p", Some("q")).await;
++    b.fake.set_text(q, "fresh");
++    b.fake.link(doc, q);
++    let t = Instant::now();
++    b.events
++        .send(DocEvent {
++            ev: NodeEvent::ChildrenChanged { node: node_key(doc) },
++            seq: 1,
++            at: Instant::now(),
++        })
++        .await
++        .unwrap();
++    let end = Instant::now() + Duration::from_secs(5);
++    let mut seen = None;
++    while Instant::now() < end {
++        if let Ok(Some(d)) = tokio::time::timeout(Duration::from_millis(20), b.rx.deltas.recv()).await {
++            if let DocDelta::Upsert(v) = &d
++                && v.iter().any(|n| n.text.as_deref() == Some("fresh"))
++            {
++                seen = Some(t.elapsed());
++                break;
++            }
++        }
++    }
++    eprintln!("PROBE incremental add visible after {seen:?} (repair in flight 600 ms)");
++    b.shutdown.cancel();
++    let _ = b.task.await;
++}
++
++#[tokio::test]
++async fn probe_review_incremental_update_control_no_repair() {
++    let (fake, conn) = Fake::start(2).await;
++    let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
++    let p = fake.node(raw::PARAGRAPH, "", "p", None).await;
++    fake.link(doc, p);
++    fake.set_text(p, "one");
++    let mut b = start_browse(fake, conn, doc).await;
++    let _ = until_settled(&mut b).await;
++    // A slow repair (a big page): 600 ms.
++    b.fake.tree.lock().unwrap().nodes.get_mut(&p).unwrap().role_delay = Duration::from_millis(600);
++    let (reply, _repaired) = gorca_rt::oneshot::channel::<Result<gorca_doc_source_api::RepairReport, gorca_doc_source_api::SourceError>>();
++    drop(reply);
++    tokio::time::sleep(Duration::from_millis(20)).await;
++    // The page adds a paragraph and says so (an ordinary incremental update).
++    let q = b.fake.node(raw::PARAGRAPH, "", "p", Some("q")).await;
++    b.fake.set_text(q, "fresh");
++    b.fake.link(doc, q);
++    let t = Instant::now();
++    b.events
++        .send(DocEvent {
++            ev: NodeEvent::ChildrenChanged { node: node_key(doc) },
++            seq: 1,
++            at: Instant::now(),
++        })
++        .await
++        .unwrap();
++    let end = Instant::now() + Duration::from_secs(5);
++    let mut seen = None;
++    while Instant::now() < end {
++        if let Ok(Some(d)) = tokio::time::timeout(Duration::from_millis(20), b.rx.deltas.recv()).await {
++            if let DocDelta::Upsert(v) = &d
++                && v.iter().any(|n| n.text.as_deref() == Some("fresh"))
++            {
++                seen = Some(t.elapsed());
++                break;
++            }
++        }
++    }
++    eprintln!("PROBE incremental add visible after {seen:?} (repair in flight 600 ms)");
++    b.shutdown.cancel();
++    let _ = b.task.await;
++}
+--- a/crates/gorca-core/src/app_actor/doc_route.rs
++++ b/crates/gorca-core/src/app_actor/doc_route.rs
+@@ -292,4 +292,21 @@
+         assert_eq!(r.handle.orphans.take(), vec![nk(98)]);
+         assert!(r.join.get(nk(12)).is_some());
+     }
++
++    #[test]
++    fn probe_review_root_state_storm_fills_ctl_and_drops_a_click() {
++        let mut r = rig();
++        let now = Instant::now();
++        let st = NodeEvent::PropertiesChanged { node: nk(11), mask: PropMask::STATES };
++        // One batch per pump; the doc actor is busy (not draining) for a moment.
++        for _ in 0..16 {
++            r.router.route(&[st.clone()], now);
++        }
++        let act = DocCtl::Act { node: DocNodeId::from_parts(1, 0), act: gorca_model::DocAction::Click };
++        let res = r.handle.ctl.try_send(act);
++        eprintln!("PROBE ctl after 16 root-state batches (cap 16 in rig): click try_send ok = {}", res.is_ok());
++        let mut n = 0;
++        while let Ok(DocCtl::Repair(_)) = r.ctl.try_recv() { n += 1; }
++        eprintln!("PROBE queued Repair ctl messages = {n}");
++    }
+ }
+--- a/crates/gorca-core/src/browse/tests.rs
++++ b/crates/gorca-core/src/browse/tests.rs
+@@ -3388,3 +3388,48 @@
+     );
+     assert!(spoken(&fx).is_empty());
+ }
++
++fn probe_labelled(r: &mut Rig, name: &str, text: &str, rev: u64) {
++    let mut n = src(6, Role::Button, Some(1006));
++    n.states |= StateSet::FOCUSABLE;
++    n.name = Some(Arc::from(name));
++    r.tr.apply(
++        &mut r.writer,
++        vec![DocDelta::Upsert(vec![n, run(7, text)]), DocDelta::Settled { batch: rev }],
++    )
++    .unwrap();
++    r.writer.publish();
++    r.reader.handle(ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev }), r.now);
++}
++
++#[test]
++fn probe_review_displaced_refusal_then_name_only_refresh() {
++    let mut r = rig();
++    probe_labelled(&mut r, "Delete message from Bob", "Delete", 2);
++    r.focus(1006);
++    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
++    // The source re-read the button: its name is now Alice's row. Refused.
++    let fx = r.reader.handle(ReaderMsg::Doc(DocNotice::ActionDisplaced { doc: DocId(1) }), r.now);
++    eprintln!("PROBE refusal said {:?}", spoken(&fx));
++    // The refresh lands: same visible text, new name.
++    probe_labelled(&mut r, "Delete message from Alice", "Delete", 3);
++    let fx2 = r.key(CoreCmd::BrowseActivate);
++    eprintln!("PROBE 2nd Enter: click={} spoken={:?}", click_of(&fx2), spoken(&fx2));
++    let fx3 = r.key(CoreCmd::BrowseActivate);
++    eprintln!("PROBE 3rd Enter: click={} spoken={:?}", click_of(&fx3), spoken(&fx3));
++}
++
++#[test]
++fn probe_review_displaced_refusal_then_text_refresh() {
++    let mut r = rig();
++    probe_labelled(&mut r, "Reply", "Reply", 2);
++    r.focus(1006);
++    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
++    let fx = r.reader.handle(ReaderMsg::Doc(DocNotice::ActionDisplaced { doc: DocId(1) }), r.now);
++    eprintln!("PROBE B refusal said {:?}", spoken(&fx));
++    probe_labelled(&mut r, "Forward", "Forward", 3);
++    let fx2 = r.key(CoreCmd::BrowseActivate);
++    eprintln!("PROBE B 2nd Enter: click={} spoken={:?}", click_of(&fx2), spoken(&fx2));
++    let fx3 = r.key(CoreCmd::BrowseActivate);
++    eprintln!("PROBE B 3rd Enter: click={} spoken={:?}", click_of(&fx3), spoken(&fx3));
++}

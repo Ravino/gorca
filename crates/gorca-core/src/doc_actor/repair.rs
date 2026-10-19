@@ -41,6 +41,33 @@ pub enum RepairReason {
 }
 
 impl RepairReason {
+    /// A non-zero code for the router's coalescing flag (0 means no request pending).
+    pub fn code(self) -> u8 {
+        match self {
+            RepairReason::Orphans => 1,
+            RepairReason::FocusMiss => 2,
+            RepairReason::Young => 3,
+            RepairReason::RootState => 4,
+            RepairReason::LoadComplete => 5,
+        }
+    }
+
+    pub fn from_code(c: u8) -> Option<Self> {
+        match c {
+            1 => Some(RepairReason::Orphans),
+            2 => Some(RepairReason::FocusMiss),
+            3 => Some(RepairReason::Young),
+            4 => Some(RepairReason::RootState),
+            5 => Some(RepairReason::LoadComplete),
+            _ => None,
+        }
+    }
+
+    /// Guesses may be answered by a cheap look before the refetch; the exact signals are not.
+    pub fn cheap_check(self) -> bool {
+        matches!(self, RepairReason::Orphans | RepairReason::RootState)
+    }
+
     /// Label of the phase log.
     pub fn label(self) -> &'static str {
         match self {
@@ -80,16 +107,13 @@ impl RepairPolicy {
         young: true,
     };
 
-    /// Gecko sends the structural events a mirror needs, so only the focus miss (a rare gap,
-    /// rate limited) repairs. Blink suppresses them during a load, so every trigger is on.
+    /// Gecko sends the structural events a mirror needs, so its documents never repair: a
+    /// whole-document refetch there only delays the incremental update that would join a focus
+    /// (review F-1). Blink suppresses the events during a load, so every trigger is on.
     pub fn for_engine(e: WebEngine) -> Self {
         match e {
             WebEngine::Blink => Self::ALL,
-            WebEngine::Gecko => RepairPolicy {
-                focus_miss: true,
-                ..Self::NONE
-            },
-            WebEngine::None => Self::NONE,
+            WebEngine::Gecko | WebEngine::None => Self::NONE,
         }
     }
 
@@ -129,9 +153,15 @@ pub struct RepairGate {
     queued: Option<RepairReason>,
     last_end: Option<Instant>,
     last_cost: Duration,
-    /// Repairs in a row that changed nothing.
-    quiet: u32,
+    /// Repairs in a row that changed nothing, per reason (index = `code() - 1`): fruitless orphan
+    /// guesses must not delay a real focus-miss repair (review F-5).
+    quiet: [u32; 5],
+    current: Option<RepairReason>,
     loaded_seen: bool,
+}
+
+fn slot(r: RepairReason) -> usize {
+    usize::from(r.code() - 1)
 }
 
 impl RepairGate {
@@ -142,7 +172,8 @@ impl RepairGate {
             queued: None,
             last_end: None,
             last_cost: Duration::ZERO,
-            quiet: 0,
+            quiet: [0; 5],
+            current: None,
             loaded_seen: false,
         }
     }
@@ -170,7 +201,11 @@ impl RepairGate {
         };
         // An exact signal (the load ended) is not a guess, so a run of fruitless guesses does not
         // delay it; every kind pays for the cost of the last repair.
-        let backoff = if exact { 1 } else { 1u32 << self.quiet.min(6) };
+        let backoff = if exact {
+            1
+        } else {
+            1u32 << self.quiet[slot(r)].min(6)
+        };
         (base * backoff)
             .max(self.last_cost * COST_FACTOR)
             .min(MAX_GAP)
@@ -196,8 +231,9 @@ impl RepairGate {
         }
     }
 
-    pub fn started(&mut self) {
+    pub fn started(&mut self, r: RepairReason) {
         self.in_flight = true;
+        self.current = Some(r);
     }
 
     /// The repair ended; `changed` says whether it changed the mirror (a refetch pushes its
@@ -213,10 +249,14 @@ impl RepairGate {
         self.last_end = Some(now);
         self.last_cost = report.took;
         if report.failed || !changed {
-            self.quiet = self.quiet.saturating_add(1);
+            if let Some(r) = self.current {
+                let q = &mut self.quiet[slot(r)];
+                *q = q.saturating_add(1);
+            }
         } else {
-            self.quiet = 0;
+            self.quiet = [0; 5];
         }
+        self.current = None;
         self.queued.take()
     }
 
@@ -233,9 +273,9 @@ impl RepairGate {
         )
     }
 
-    /// Fruitless repairs in a row (for the log).
+    /// Fruitless repairs in a row, all reasons (for the log).
     pub fn quiet(&self) -> u32 {
-        self.quiet
+        self.quiet.iter().sum()
     }
 }
 
@@ -301,13 +341,37 @@ mod tests {
     }
 
     #[test]
-    fn a_gecko_document_repairs_only_on_a_focus_miss() {
+    fn a_gecko_document_never_repairs() {
         let mut g = RepairGate::new(RepairPolicy::for_engine(WebEngine::Gecko));
         let t = Instant::now();
-        assert_eq!(g.request(RepairReason::LoadComplete, t), Verdict::Refused);
-        assert_eq!(g.request(RepairReason::Orphans, t), Verdict::Refused);
-        assert_eq!(g.request(RepairReason::FocusMiss, t), Verdict::Start);
+        for r in [
+            RepairReason::LoadComplete,
+            RepairReason::Orphans,
+            RepairReason::FocusMiss,
+            RepairReason::Young,
+            RepairReason::RootState,
+        ] {
+            assert_eq!(g.request(r, t), Verdict::Refused, "{r:?}");
+        }
         assert!(!g.loaded_seen());
+    }
+
+    #[test]
+    fn fruitless_orphan_guesses_do_not_delay_a_focus_miss() {
+        let mut g = RepairGate::new(RepairPolicy::ALL);
+        let mut t = Instant::now();
+        for _ in 0..8 {
+            g.started(RepairReason::Orphans);
+            g.finished(rep(0, 1), false, t);
+            t += Duration::from_secs(60);
+        }
+        // Eight fruitless orphan repairs later a focus miss waits only for the cost gap.
+        g.started(RepairReason::Orphans);
+        g.finished(rep(0, 1), false, t);
+        assert_eq!(
+            g.request(RepairReason::FocusMiss, t),
+            Verdict::Wait(t + Duration::from_millis(400)),
+        );
     }
 
     #[test]
@@ -315,7 +379,7 @@ mod tests {
         let mut g = RepairGate::new(RepairPolicy::ALL);
         let t = Instant::now();
         assert_eq!(g.request(RepairReason::FocusMiss, t), Verdict::Start);
-        g.started();
+        g.started(RepairReason::FocusMiss);
         assert_eq!(g.request(RepairReason::Orphans, t), Verdict::Queued);
         assert_eq!(g.request(RepairReason::LoadComplete, t), Verdict::Queued);
         assert_eq!(g.request(RepairReason::FocusMiss, t), Verdict::Queued);
@@ -331,7 +395,7 @@ mod tests {
     fn the_gap_follows_the_cost_of_the_last_repair() {
         let mut g = RepairGate::new(RepairPolicy::ALL);
         let t = Instant::now();
-        g.started();
+        g.started(RepairReason::FocusMiss);
         g.finished(rep(5, 400), true, t);
         // 400 ms of repair buys 3.2 s of quiet for the guesses and for the exact signal alike.
         let want = t + Duration::from_millis(3200);
@@ -349,7 +413,7 @@ mod tests {
         let mut t = Instant::now();
         let mut last_gap = Duration::ZERO;
         for _ in 0..4 {
-            g.started();
+            g.started(RepairReason::Orphans);
             g.finished(rep(0, 1), false, t);
             let Verdict::Wait(at) = g.request(RepairReason::Orphans, t) else {
                 panic!("a guess right after a fruitless repair must wait");
@@ -365,7 +429,7 @@ mod tests {
             t = at;
         }
         // A repair that changed something resets the guess back-off.
-        g.started();
+        g.started(RepairReason::FocusMiss);
         g.finished(rep(2, 1), true, t);
         assert_eq!(g.quiet(), 0);
     }
@@ -374,7 +438,7 @@ mod tests {
     fn the_gap_is_capped() {
         let mut g = RepairGate::new(RepairPolicy::ALL);
         let t = Instant::now();
-        g.started();
+        g.started(RepairReason::FocusMiss);
         g.finished(rep(1, 60_000), true, t);
         assert_eq!(
             g.request(RepairReason::Orphans, t),
@@ -394,7 +458,7 @@ mod tests {
     fn an_unsendable_repair_counts_as_fruitless() {
         let mut g = RepairGate::new(RepairPolicy::ALL);
         let t = Instant::now();
-        g.started();
+        g.started(RepairReason::FocusMiss);
         assert_eq!(g.aborted(t), None);
         assert_eq!(g.quiet(), 1);
     }

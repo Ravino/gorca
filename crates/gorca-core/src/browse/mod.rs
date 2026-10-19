@@ -59,7 +59,12 @@ pub struct GraceFallback {
     pub doc: DocId,
     /// Where the fallback put the cursor (the document root).
     pub root: DocNodeId,
+    /// When the fallback started: a rejoin later than [`GRACE_REJOIN_WINDOW`] is not wanted.
+    pub at: Instant,
 }
+
+/// How long after the loading grace a repair may still move the cursor to the focus (review F-7).
+pub const GRACE_REJOIN_WINDOW: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// The browse/focus state machine (ADR-0003 `WebMode`).
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -521,6 +526,7 @@ pub enum CursorFrom {
 
 /// Everything the Reader keeps for browse mode.
 #[derive(Debug)]
+#[allow(clippy::struct_excessive_bools)] // independent one-shot flags of the web layer
 pub struct BrowseState {
     pub mode: WebMode,
     pub docs: Arc<DocDirectory>,
@@ -593,6 +599,9 @@ pub struct BrowseState {
     /// top of the page (7.3). When a repair or an update later mirrors the focused node and
     /// neither the focus nor the cursor moved, the focus is joined after all (CHR-0 B-2).
     pub grace_fallback: Option<GraceFallback>,
+    /// The Reader just said what a refused click's object says now: the refresh that follows is
+    /// not a second displacement (the next Enter acts on the name that was spoken).
+    pub announced_change: bool,
     /// The node we last clicked: the cursor node it was clicked from, the control itself, its
     /// role, and when. Only a relabel of exactly this control right after the click is the
     /// click's answer and not a swap.
@@ -668,6 +677,7 @@ impl BrowseState {
             restore_until: None,
             displaced: None,
             grace_fallback: None,
+            announced_change: false,
             activated_node: None,
             cursor_sig: None,
             single_letter: true,

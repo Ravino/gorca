@@ -450,7 +450,16 @@ struct Live {
     resync_wanted: bool,
     /// Frontier leaves whose `GetTree` was heavy (B-3), handed to the next fetch.
     heavy: std::collections::HashSet<String>,
+    /// A background refetch runs: incremental updates keep being applied (review F-1) and the
+    /// nodes they touched are re-marked when the refetch lands, so an older snapshot never
+    /// leaves them reverted.
+    flight_active: bool,
+    touched: std::collections::HashSet<PathKey>,
+    touched_overflow: bool,
 }
+
+/// Most nodes remembered as touched during one refetch; beyond it the refetch runs again.
+const MAX_TOUCHED: usize = 4096;
 
 /// A background refetch of the whole document (CHR-0 B-1). The fetch interns into a forked path
 /// table and never touches the mirror, so the request loop keeps serving `Action`, `Text` and
@@ -573,6 +582,10 @@ fn note(live: &mut Live, e: &AtspiEvent) {
     }
 }
 
+/// Nodes and time of the cheap look before a guessed repair ([`AtspiDocSource::top_unchanged`]).
+const CHEAP_NODES: usize = 48;
+const CHEAP_BUDGET: Duration = Duration::from_millis(150);
+
 /// How long the pre-click read of the target may take before the click goes ahead unchecked.
 const VERIFY_TIMEOUT: Duration = Duration::from_millis(150);
 
@@ -603,6 +616,9 @@ impl AtspiDocSource {
             wake: wake::WakePlan::default(),
             resync_wanted: false,
             heavy: std::collections::HashSet::new(),
+            flight_active: false,
+            touched: std::collections::HashSet::new(),
+            touched_overflow: false,
         };
         let mut flight: Option<Flight> = None;
 
@@ -752,7 +768,7 @@ impl AtspiDocSource {
                         None => events_open = false,
                     }
                 }
-                () = sleep, if live.activity == Activity::Awake && flight.is_none() => {
+                () = sleep, if live.activity == Activity::Awake => {
                     self.process_dirty(&mut live, &ctx).await;
                     if live.resync_wanted {
                         live.resync_wanted = false;
@@ -1045,6 +1061,15 @@ impl AtspiDocSource {
             note(live, &e);
         }
         let taken = live.dirty.take();
+        if live.flight_active {
+            for path in taken.map.keys() {
+                if live.touched.len() >= MAX_TOUCHED {
+                    live.touched_overflow = true;
+                    break;
+                }
+                live.touched.insert(*path);
+            }
+        }
         let planned_at = Instant::now();
         let mut rec = UpdateRecord {
             events: taken.events,
@@ -1344,9 +1369,9 @@ impl AtspiDocSource {
             }
             return;
         }
-        // Whatever was marked before is covered by the refetch; what arrives while it runs stays
-        // marked and is processed after it.
-        let _ = live.dirty.take();
+        live.flight_active = true;
+        live.touched.clear();
+        live.touched_overflow = false;
         let app = Arc::clone(&self.app);
         let interner = Arc::clone(&self.interner);
         let mut paths = live.paths.fork();
@@ -1426,6 +1451,28 @@ impl AtspiDocSource {
             // The document object is gone: the doc actor attaches a new source.
             live.root_errors = ROOT_ERROR_LIMIT;
         }
+        // Updates applied while the snapshot was being fetched are newer than it: read those
+        // nodes again so the older snapshot cannot leave them reverted.
+        live.flight_active = false;
+        let at = Instant::now();
+        for path in std::mem::take(&mut live.touched) {
+            for kind in [
+                EventKind::ChildAdded {
+                    index: -1,
+                    child: None,
+                },
+                EventKind::StateChanged {
+                    state: Arc::from("props"),
+                    on: true,
+                },
+                EventKind::TextChanged { insert: true },
+            ] {
+                live.dirty.note(&AtspiEvent { path, kind, at });
+            }
+        }
+        if std::mem::take(&mut live.touched_overflow) {
+            fl.again = true;
+        }
         for w in std::mem::take(&mut fl.waiters) {
             let _ = w.send(Ok(report));
         }
@@ -1468,8 +1515,10 @@ impl AtspiDocSource {
                 deadline,
                 reply,
             } => {
-                if matches!(act, DocAction::Click) && self.displaced(live, node).await {
-                    let _ = reply.send(Err(SourceError::Displaced));
+                if matches!(act, DocAction::Click)
+                    && let Some(now) = self.displaced(live, node).await
+                {
+                    let _ = reply.send(Err(SourceError::Displaced(now)));
                     return;
                 }
                 let mut r = self.action(live, node, &act, deadline).await;
@@ -1507,11 +1556,28 @@ impl AtspiDocSource {
                 // M7a: waking always rebuilds (AM-13); ids are kept, W0 was served from the
                 // snapshot while the document slept.
                 if was == Activity::Dormant && a == Activity::Awake {
+                    // Whatever was marked while dormant is covered by the refetch.
+                    let _ = live.dirty.take();
                     self.start_flight(live, flight, None);
                 }
             }
-            DocRequest::Rebuild => self.start_flight(live, flight, None),
-            DocRequest::Repair { reply } => self.start_flight(live, flight, Some(reply)),
+            DocRequest::Rebuild => {
+                let _ = live.dirty.take();
+                self.start_flight(live, flight, None);
+            }
+            DocRequest::Repair { cheap_check, reply } => {
+                if cheap_check && flight.is_none() {
+                    let t = Instant::now();
+                    if self.top_unchanged(live).await {
+                        let _ = reply.send(Ok(RepairReport {
+                            took: t.elapsed(),
+                            ..RepairReport::default()
+                        }));
+                        return;
+                    }
+                }
+                self.start_flight(live, flight, Some(reply));
+            }
             // M7b: urgent marks and the W3 drift check.
             DocRequest::Prioritize { .. } | DocRequest::DriftCheck => {}
         }
@@ -1765,19 +1831,13 @@ impl AtspiDocSource {
     /// re-used or re-ordered its rows since, nothing is clicked; the node is marked for a refresh
     /// and the caller says so. A read that fails or is slow lets the click go: this guard must
     /// never turn a working Enter into a silent one.
-    async fn displaced(&self, live: &mut Live, node: SrcNodeId) -> bool {
-        let Some(path_key) = live.ident.path_of(node) else {
-            return false;
-        };
-        let Some(path) = live.paths.path_of(path_key) else {
-            return false;
-        };
-        let Some(old) = live.ident.info_of(node).map(|i| i.sig.clone()) else {
-            return false;
-        };
+    async fn displaced(&self, live: &mut Live, node: SrcNodeId) -> Option<Option<Arc<str>>> {
+        let path_key = live.ident.path_of(node)?;
+        let path = live.paths.path_of(path_key)?;
+        let old = live.ident.info_of(node).map(|i| i.sig.clone())?;
         let read = tokio::time::timeout(VERIFY_TIMEOUT, self.read_nodes(vec![(node, path)])).await;
-        let Some((_, Some(read))) = read.ok().and_then(|mut v| v.pop()) else {
-            return false;
+        let (_, Some(read)) = read.ok().and_then(|mut v| v.pop())? else {
+            return None;
         };
         let (_, fresh) = self.node_from_read(node, read, None, false, None);
         let name_differs = match (&old.name, &fresh.sig.name) {
@@ -1785,22 +1845,63 @@ impl AtspiDocSource {
             (Some(_) | None, None) | (None, Some(_)) => false,
         };
         let differs = old.role != fresh.sig.role || name_differs;
-        if differs {
-            tracing::info!(
-                target: "gorca_phase",
-                phase = "click_displaced",
-                role_changed = old.role != fresh.sig.role,
-            );
-            live.dirty.note(&AtspiEvent {
-                path: path_key,
-                kind: EventKind::StateChanged {
-                    state: Arc::from("props"),
-                    on: true,
-                },
-                at: Instant::now(),
-            });
+        if !differs {
+            return None;
         }
-        differs
+        tracing::info!(
+            target: "gorca_phase",
+            phase = "click_displaced",
+            role_changed = old.role != fresh.sig.role,
+        );
+        live.dirty.note(&AtspiEvent {
+            path: path_key,
+            kind: EventKind::StateChanged {
+                state: Arc::from("props"),
+                on: true,
+            },
+            at: Instant::now(),
+        });
+        // What the object says now: the caller speaks it, so the next Enter acts on a name the
+        // user has heard.
+        Some(fresh.sig.name.clone())
+    }
+
+    /// A cheap look before a guessed repair: do the child lists of the first nodes of the mirror
+    /// (breadth first, [`CHEAP_NODES`] of them, [`CHEAP_BUDGET`] at most) still match the browser?
+    /// A node that gained children, the empty `main` of a shell that rendered, shows here without
+    /// a refetch of the whole document. Any doubt answers false (the repair runs).
+    async fn top_unchanged(&self, live: &mut Live) -> bool {
+        let Some(root) = live.root_key.and_then(|k| live.ident.id_of(k)) else {
+            return false;
+        };
+        let look = async {
+            let mut queue = std::collections::VecDeque::from([root]);
+            let mut seen = 0;
+            while let Some(id) = queue.pop_front() {
+                if seen >= CHEAP_NODES {
+                    break;
+                }
+                seen += 1;
+                let path = live.ident.path_of(id).and_then(|p| live.paths.path_of(p))?;
+                let kids = self.list_children(live, &path).await.ok()?;
+                let mine: Vec<SrcNodeId> = live.ident.children_of(id).unwrap_or_default().to_vec();
+                if kids.len() != mine.len()
+                    || kids
+                        .iter()
+                        .zip(&mine)
+                        .any(|(k, c)| live.ident.path_of(*c) != Some(*k))
+                {
+                    return Some(false);
+                }
+                queue.extend(mine);
+            }
+            Some(true)
+        };
+        tokio::time::timeout(CHEAP_BUDGET, look)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or(false)
     }
 
     fn path_of(live: &Live, node: SrcNodeId) -> Option<String> {

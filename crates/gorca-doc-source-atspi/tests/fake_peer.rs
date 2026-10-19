@@ -1781,7 +1781,7 @@ async fn a_click_on_an_object_that_no_longer_says_what_was_spoken_is_refused() {
     b.fake.rename(lis[1], "item 1 (draft)");
     let r = click(&b, ids[1]).await;
     assert!(
-        matches!(r, Err(gorca_doc_source_api::SourceError::Displaced)),
+        matches!(&r, Err(gorca_doc_source_api::SourceError::Displaced(Some(n))) if &**n == "item 1 (draft)"),
         "{r:?}"
     );
     assert!(b.fake.tree.lock().unwrap().acted.is_empty());
@@ -1816,7 +1816,13 @@ async fn text_requests_are_served_while_a_repair_fetches() {
         .unwrap()
         .role_delay = Duration::from_millis(400);
     let (reply, repaired) = gorca_rt::oneshot::channel();
-    b.requests.send(DocRequest::Repair { reply }).await.unwrap();
+    b.requests
+        .send(DocRequest::Repair {
+            cheap_check: false,
+            reply,
+        })
+        .await
+        .unwrap();
     let t = Instant::now();
     let (reply, text) = gorca_rt::oneshot::channel();
     b.requests
@@ -1876,7 +1882,13 @@ async fn growth_without_events_stays_invisible_until_a_repair_finds_it() {
         "no event, so nothing is pushed"
     );
     let (reply, report) = gorca_rt::oneshot::channel();
-    b.requests.send(DocRequest::Repair { reply }).await.unwrap();
+    b.requests
+        .send(DocRequest::Repair {
+            cheap_check: false,
+            reply,
+        })
+        .await
+        .unwrap();
     let pushed = until_settled(&mut b).await;
     let report = report.await.unwrap().unwrap();
     assert!(report.nodes >= 42, "{report:?}");
@@ -1932,4 +1944,156 @@ async fn a_heavy_subtree_is_expanded_by_the_next_fetch_so_no_get_tree_covers_it_
     assert!(second.timings.heavy_roots.is_empty());
     // The same document either way.
     assert_eq!(first.block.nodes.len(), second.block.nodes.len());
+}
+
+#[tokio::test]
+async fn incremental_updates_are_applied_while_a_repair_runs_and_survive_it() {
+    // Review F-1: a repair used to freeze every event-driven update for its whole length.
+    let (fake, conn) = Fake::start(2).await;
+    let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+    let p = fake.node(raw::PARAGRAPH, "", "p", None).await;
+    fake.link(doc, p);
+    fake.set_text(p, "one");
+    let mut b = start_browse(fake, conn, doc).await;
+    let _ = until_settled(&mut b).await;
+    // The repair's role pass takes about 450 ms.
+    b.fake
+        .tree
+        .lock()
+        .unwrap()
+        .nodes
+        .get_mut(&p)
+        .unwrap()
+        .role_delay = Duration::from_millis(450);
+    let (reply, repaired) = gorca_rt::oneshot::channel();
+    b.requests
+        .send(DocRequest::Repair {
+            cheap_check: false,
+            reply,
+        })
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(30)).await;
+    // The page adds a paragraph and says so (an ordinary incremental update).
+    let q = b.fake.node(raw::PARAGRAPH, "", "p", Some("q")).await;
+    b.fake.set_text(q, "fresh");
+    b.fake.link(doc, q);
+    let t = Instant::now();
+    b.events
+        .send(DocEvent {
+            ev: NodeEvent::ChildrenChanged {
+                node: node_key(doc),
+            },
+            seq: 1,
+            at: Instant::now(),
+        })
+        .await
+        .unwrap();
+    let mut fresh_id = None;
+    let mut seen_after = None;
+    let end = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < end && fresh_id.is_none() {
+        if let Ok(Some(DocDelta::Upsert(v))) =
+            tokio::time::timeout(Duration::from_millis(20), b.rx.deltas.recv()).await
+            && let Some(n) = v.iter().find(|n| n.text.as_deref() == Some("fresh"))
+        {
+            fresh_id = Some(n.id);
+            seen_after = Some(t.elapsed());
+        }
+    }
+    let seen_after = seen_after.expect("the incremental add reached the sink");
+    assert!(
+        seen_after < Duration::from_millis(250),
+        "the update waited behind the repair: {seen_after:?}"
+    );
+    // The repair ends (its snapshot may predate the add) and the add is still there afterwards.
+    let report = tokio::time::timeout(Duration::from_secs(5), repaired)
+        .await
+        .expect("the repair answers")
+        .expect("reply sent")
+        .expect("repair ok");
+    assert!(!report.failed);
+    let mut deltas = Vec::new();
+    let end = Instant::now() + Duration::from_millis(1200);
+    while Instant::now() < end {
+        if let Ok(Some(d)) =
+            tokio::time::timeout(Duration::from_millis(50), b.rx.deltas.recv()).await
+        {
+            deltas.push(d);
+        }
+    }
+    let id = fresh_id.unwrap();
+    let removed = deltas
+        .iter()
+        .any(|d| matches!(d, DocDelta::Removed(v) if v.contains(&id)));
+    assert!(!removed, "the repair removed the node the update added");
+    let last_children = deltas.iter().rev().find_map(|d| match d {
+        DocDelta::Children { children, .. } if children.contains(&id) => Some(true),
+        DocDelta::Children { .. } => Some(false),
+        DocDelta::Reset { .. }
+        | DocDelta::Upsert(_)
+        | DocDelta::Removed(_)
+        | DocDelta::Text { .. }
+        | DocDelta::Hint(_)
+        | DocDelta::Settled { .. } => None,
+    });
+    assert_ne!(last_children, Some(false), "a later list dropped the node");
+    b.shutdown.cancel();
+    let _ = b.task.await;
+}
+
+#[tokio::test]
+async fn a_guessed_repair_is_answered_by_the_cheap_look_when_nothing_changed() {
+    let (fake, conn) = Fake::start(2).await;
+    let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+    let main = fake.node(raw::SECTION, "App", "main", None).await;
+    fake.link(doc, main);
+    let mut b = start_browse(fake, conn, doc).await;
+    let _ = until_settled(&mut b).await;
+    let ask = |b: &Browse, cheap: bool| {
+        let (reply, rx) = gorca_rt::oneshot::channel();
+        let tx = b.requests.clone();
+        async move {
+            tx.send(DocRequest::Repair {
+                cheap_check: cheap,
+                reply,
+            })
+            .await
+            .unwrap();
+            tokio::time::timeout(Duration::from_secs(5), rx)
+                .await
+                .expect("answer")
+                .expect("sent")
+                .expect("ok")
+        }
+    };
+    // Nothing changed: answered without a refetch (no nodes fetched, no deltas pushed).
+    let r = ask(&b, true).await;
+    assert_eq!((r.nodes, r.deltas), (0, 0), "{r:?}");
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), b.rx.deltas.recv())
+            .await
+            .is_err()
+    );
+    // The empty main grows without an event: the look sees the child count and refetches.
+    for i in 0..5 {
+        let p = b
+            .fake
+            .node(raw::PARAGRAPH, "", "p", Some(&format!("g{i}")))
+            .await;
+        b.fake.set_text(p, "grown");
+        b.fake.link(main, p);
+    }
+    let r = ask(&b, true).await;
+    assert!(r.nodes >= 7, "the look missed the growth: {r:?}");
+    let pushed = until_settled(&mut b).await;
+    assert_eq!(
+        upserts_of(&pushed)
+            .iter()
+            .filter(|n| n.role == Role::Paragraph)
+            .count(),
+        5
+    );
+    b.shutdown.cancel();
+    let _ = b.task.await;
 }

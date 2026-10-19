@@ -621,7 +621,9 @@ fn scenario_mem(rep: &mut Report) {
     let entries_mb = trim_rss_kb().saturating_sub(before_copy) as f64 / 1024.0;
     black_box(&copies);
     drop(copies);
-    let fused = (0..w.n).filter(|i| w.e.entry_unmasked(nid(*i)).is_some()).count();
+    let fused = (0..w.n)
+        .filter(|i| w.e.entry_unmasked(nid(*i)).is_some())
+        .count();
     eprintln!(
         "build {:.0} ms ({:.2} us/node), fused {fused}, RSS +{delta_mb:.1} MB total engine, entries alone +{entries_mb:.1} MB",
         build.as_secs_f64() * 1e3,

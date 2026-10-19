@@ -181,9 +181,17 @@ impl PathTable {
     /// table). A path the live table interned meanwhile under another key keeps that key.
     pub fn absorb(&mut self, other: PathTable) {
         for (k, p) in other.other {
+            // The fork's key always resolves (the fetched nodes carry it); the live table's own
+            // key for the same string stays the one `intern` hands out.
             if let std::collections::hash_map::Entry::Vacant(v) = self.by_str.entry(p.clone()) {
                 v.insert(k);
-                self.other.insert(k, p);
+            }
+            self.other.insert(k, p);
+        }
+        // What the refetch learned about `aria-errormessage` targets (review F-2).
+        for (target, fields) in other.error_targets {
+            for f in fields {
+                self.note_error_target(target, f);
             }
         }
         self.next = self.next.max(other.next);
@@ -1156,6 +1164,28 @@ mod tests {
         let nodes = vec![rn(0), rn(0)];
         let counts = vec![0, 0];
         assert!(rebuild_children(&nodes, &counts).is_err());
+    }
+
+    #[test]
+    fn absorb_keeps_error_targets_and_resolves_the_forks_keys() {
+        let mut live = PathTable::default();
+        let mut fork = live.fork();
+        // The background fetch learns an aria-errormessage target.
+        fork.note_error_target(PathKey(70), PathKey(80));
+        // Meanwhile the live table interns the same odd path the fork also interned.
+        let kf = fork.intern("/odd/path");
+        let kl = live.intern("/odd/path");
+        assert_ne!(kf, kl);
+        live.absorb(fork);
+        assert_eq!(live.error_fields(PathKey(70)), &[PathKey(80)]);
+        // The fetched nodes carry the fork's key: it still names the path.
+        assert_eq!(live.path_of(kf).as_deref(), Some("/odd/path"));
+        assert_eq!(live.path_of(kl).as_deref(), Some("/odd/path"));
+        assert_eq!(
+            live.intern("/odd/path"),
+            kl,
+            "the live key stays the one handed out"
+        );
     }
 
     #[test]
