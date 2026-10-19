@@ -28,14 +28,28 @@ pub struct Scope {
     pub tab: Option<u64>,
 }
 
+/// What the source-wide quarantine counts. Typed per kind, so a site hash, a tab id and a
+/// document id with the same number can never collide.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum WideKey {
+    /// The site (document host) within an app: the preferred key, stable across reloads and tabs.
+    Site(AppId, u64),
+    /// The tab, when the site is unknown: stable across reloads of that tab.
+    Tab(AppId, u64),
+    /// The document, when neither site nor tab is known: the only information there is.
+    Doc(AppId, u64),
+    /// A whole application without documents (native toolkit scope).
+    App(AppId),
+}
+
 impl Scope {
-    /// What the source-wide quarantine counts: the site within an app, not the document. Without
-    /// a site the key falls back to the tab (stable across reloads), never to the per-navigation
-    /// document id, so a site-less page reloading itself stays one key.
-    pub const fn site_key(&self) -> (AppId, Option<u64>, Option<u64>) {
-        match self.site {
-            Some(_) => (self.app, self.site, None),
-            None => (self.app, None, self.tab),
+    /// Site if known, else tab if known, else document, else the app.
+    pub const fn wide_key(&self) -> WideKey {
+        match (self.site, self.tab, self.doc) {
+            (Some(h), _, _) => WideKey::Site(self.app, h),
+            (None, Some(t), _) => WideKey::Tab(self.app, t),
+            (None, None, Some(d)) => WideKey::Doc(self.app, d),
+            (None, None, None) => WideKey::App(self.app),
         }
     }
 }

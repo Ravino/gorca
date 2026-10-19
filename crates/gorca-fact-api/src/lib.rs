@@ -16,7 +16,7 @@ mod state;
 
 pub use admit::{
     Admission, Admitted, BindInfo, MAX_PAGE_STRING, PrivacyClass, RejectReason, Rejection, Scope,
-    ScopeLookup, ScopeView, Severity, Standing, admit,
+    ScopeLookup, ScopeView, Severity, Standing, WideKey, admit,
 };
 pub use descriptor::{AnchorKinds, InputNeeds, PeerProof, SourceDescriptor, StableIdentity};
 pub use epoch::{EpochBook, MaskKind, MaskMessage, SourceEpoch};
