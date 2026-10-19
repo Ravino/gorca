@@ -10,6 +10,8 @@
 # Known gap, tracked for M14: settings and keymap diagnostics (compile.rs, config_task.rs) are read
 # out by settings.report_problems in English; they quote paths and values. The rest below is not
 # speech: log text, internal ids, match patterns, protocol names.
+crates/gorca-core/src/app_actor/agree.rs | *
+crates/gorca-core/src/app_actor/fuse.rs | *
 crates/gorca-core/src/browse/latency.rs | *
 crates/gorca-core/src/present/log.rs | *
 crates/gorca-core/src/present/window/m4b_rereview_probes.rs | *

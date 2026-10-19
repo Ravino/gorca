@@ -54,6 +54,7 @@ fn snap(role: Role, states: StateSet) -> Arc<NodeSnapshot> {
         have: PropMask::PRESENT,
         confirmed_seq: 0,
         fresh: Freshness::Fresh { at: Instant::now() },
+        sem: gorca_model::NodeSem::NONE,
     })
 }
 
@@ -2546,10 +2547,8 @@ fn app_said(g: &Rig, texts: &[&str]) -> Vec<String> {
     let mut u = crate::present::message("", gorca_model::UttId(900), gorca_model::Epoch(1));
     u.segments.clear();
     for t in texts {
-        u.segments.push(Segment {
-            text: Arc::from(*t),
-            kind: SegmentKind::Text,
-        });
+        u.segments
+            .push(Segment::new(Arc::from(*t), SegmentKind::Text));
     }
     g.r.symbolize(u)
         .segments
@@ -2613,10 +2612,8 @@ fn the_readers_own_words_and_plain_names_are_left_alone() {
     let mut g = rig();
     set_speech(&mut g, "ru", gorca_config::Punct::All);
     let mut u = crate::present::message("a, b.", gorca_model::UttId(901), gorca_model::Epoch(1));
-    u.segments.push(Segment {
-        text: Arc::from("Кнопка OK"),
-        kind: SegmentKind::Text,
-    });
+    u.segments
+        .push(Segment::new(Arc::from("Кнопка OK"), SegmentKind::Text));
     let said = g.r.symbolize(u);
     let t: Vec<_> = said.segments.iter().map(|s| &*s.text).collect();
     assert_eq!(t, ["a, b.", "Кнопка OK"]);

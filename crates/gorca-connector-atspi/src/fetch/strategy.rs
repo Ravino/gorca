@@ -139,6 +139,8 @@ async fn fetch_node(
     // A failed or timed-out call leaves the node poorer (no `ATTRS` in `have`): it is asked again.
     if let Ok(Some(pairs)) = attrs {
         raw.attrs = crate::decode::keep_attrs(pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        raw.sem_attrs =
+            crate::decode::keep_sem_attrs(pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
         have |= PropMask::ATTRS;
     }
     let mut parent_ref = None;

@@ -43,6 +43,7 @@ fn node(n: u64) -> Arc<NodeSnapshot> {
         have: PropMask::PRESENT,
         confirmed_seq: 0,
         fresh: Freshness::Fresh { at: Instant::now() },
+        sem: gorca_model::NodeSem::NONE,
     })
 }
 

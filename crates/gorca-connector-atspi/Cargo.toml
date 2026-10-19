@@ -13,6 +13,8 @@ gorca-rt = { workspace = true }
 gorca-connector-api = { workspace = true }
 gorca-doc-source-api = { workspace = true }
 gorca-dbus = { workspace = true }
+gorca-fuse = { workspace = true }
+gorca-sem-atspi = { workspace = true }
 atspi = { workspace = true }
 zbus = { workspace = true }
 tokio = { workspace = true }
@@ -26,6 +28,7 @@ tracing = { workspace = true }
 workspace = true
 
 [dev-dependencies]
+serde_json = "1"
 tokio = { workspace = true, features = ["test-util"] }
 gorca-ingress = { workspace = true }
 gorca-core = { workspace = true }

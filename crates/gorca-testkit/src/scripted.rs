@@ -165,6 +165,7 @@ fn snapshot(key: NodeKey, n: &ScriptedNode) -> Arc<NodeSnapshot> {
         have: gorca_model::PropMask::PRESENT,
         confirmed_seq: 0,
         fresh: Freshness::Fresh { at: Instant::now() },
+        sem: gorca_model::NodeSem::NONE,
     })
 }
 
@@ -240,6 +241,7 @@ impl Connector for ScriptedConnector {
                     page_events_settle_ms: 0,
                     web_engine: gorca_model::WebEngine::None,
                     root: None,
+                    sem_tables: None,
                 };
                 let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
                 let mut port = ctx

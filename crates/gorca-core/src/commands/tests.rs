@@ -52,6 +52,7 @@ fn snap(n: u64, role: Role, name: &str, parent: Option<u64>) -> Arc<NodeSnapshot
         have: gorca_model::PropMask::PRESENT,
         confirmed_seq: 0,
         fresh: Freshness::Fresh { at: Instant::now() },
+        sem: gorca_model::NodeSem::NONE,
     })
 }
 
@@ -879,10 +880,10 @@ impl crate::AppExt for RecordingExt {
         _epoch: u64,
     ) -> Option<Vec<gorca_model::Segment>> {
         (snap.name.as_deref() == Some("OK")).then(|| {
-            vec![gorca_model::Segment {
-                text: Arc::from("ext says"),
-                kind: gorca_model::SegmentKind::Text,
-            }]
+            vec![gorca_model::Segment::new(
+                Arc::from("ext says"),
+                gorca_model::SegmentKind::Text,
+            )]
         })
     }
     fn command(&self, ext: &str, local: u32) {

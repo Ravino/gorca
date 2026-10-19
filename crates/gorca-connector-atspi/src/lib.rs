@@ -33,8 +33,11 @@ mod doc_source;
 mod enablement;
 mod events;
 mod fetch;
+#[cfg(test)]
+mod legacy_agreement_tests;
 mod proc;
 mod role_map;
+mod sem_profile;
 mod text;
 mod toolkit;
 

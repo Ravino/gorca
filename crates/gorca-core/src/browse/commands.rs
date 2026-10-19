@@ -1356,6 +1356,7 @@ impl Reader {
                     since: Instant::now(),
                     mask: PropMask::VALUE,
                 },
+                sem: gorca_model::NodeSem::NONE,
             })
         })
     }
@@ -1910,13 +1911,7 @@ impl Reader {
             .map(Arc::<str>::from)
             .chain([Arc::from(title)]);
         for (at, text) in front.enumerate() {
-            u.segments.insert(
-                at,
-                Segment {
-                    text,
-                    kind: SegmentKind::Text,
-                },
-            );
+            u.segments.insert(at, Segment::new(text, SegmentKind::Text));
         }
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
@@ -2353,10 +2348,8 @@ impl Reader {
             LIVE_TTL_POLITE
         };
         u.segments.clear();
-        u.segments.push(Segment {
-            text: Arc::clone(&msg.text),
-            kind: SegmentKind::Text,
-        });
+        u.segments
+            .push(Segment::new(Arc::clone(&msg.text), SegmentKind::Text));
         // Through the owner's speech budget like any other notice (2026-10-16 fairness): a page
         // that floods its regions spends its own process's tokens, never another app's.
         match app {
@@ -2379,10 +2372,8 @@ impl Reader {
         u.may_refine = true;
         u.segments.clear();
         if let Some(w) = word {
-            u.segments.push(Segment {
-                text: Arc::from(w),
-                kind: SegmentKind::Text,
-            });
+            u.segments
+                .push(Segment::new(Arc::from(w), SegmentKind::Text));
         }
         u.segments
             .extend(present::segments(items, self.verbalize_opts()));

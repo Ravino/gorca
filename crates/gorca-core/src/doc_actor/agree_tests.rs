@@ -109,6 +109,7 @@ fn info(engine: WebEngine, name: &str) -> AppInfo {
         page_events_settle_ms: 0,
         web_engine: engine,
         root: None,
+        sem_tables: None,
     }
 }
 

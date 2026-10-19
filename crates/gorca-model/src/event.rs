@@ -162,6 +162,22 @@ pub enum WebEngine {
     Blink,
 }
 
+/// The data tables of one source profile (quirk rows, source priority, statically inexpressible
+/// groups), as text the core parses with `gorca-fuse` (M22a-C1b). The connector picks the profile
+/// from its own facts and hands the tables over inside [`AppInfo`], so the core never names a
+/// connector crate or a toolkit.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct SemTables {
+    /// Profile name, for logs and `explain`.
+    pub name: &'static str,
+    /// `[[rule]]` document (`QuirkSet::parse`).
+    pub quirks: &'static str,
+    /// `[pi]` document (`parse_pi`).
+    pub pi: &'static str,
+    /// `[[row]]` document (`parse_inexpressible`).
+    pub inexpressible: &'static str,
+}
+
 /// Extensions match on these; the core never branches on toolkit or app name.
 #[derive(Clone, Debug)]
 pub struct AppInfo {
@@ -203,6 +219,10 @@ pub struct AppInfo {
     /// The application's root node, when the connector knows it. A fill policy that starts at
     /// the root (an eager dump, a window prefetch) gets it with `FillInput::Appeared`.
     pub root: Option<crate::NodeKey>,
+    /// The semantic source profile tables of this application (M22a-C1b), chosen by the
+    /// connector from its own facts. `None` for a connector without one: the core then fuses
+    /// with the default profile and no quirk rows.
+    pub sem_tables: Option<SemTables>,
 }
 
 #[derive(Clone, Debug)]

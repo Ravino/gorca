@@ -39,10 +39,7 @@ pub(super) fn mixed_word(role: Role) -> Option<&'static str> {
 }
 
 pub(super) fn seg(text: &str, kind: SegmentKind) -> Segment {
-    Segment {
-        text: Arc::from(text),
-        kind,
-    }
+    Segment::new(Arc::from(text), kind)
 }
 
 /// Presentation of a focused node. Stale nodes are presented too, tagged `may_refine`.
@@ -550,6 +547,7 @@ mod change_tests {
             have: PropMask::PRESENT,
             confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
+            sem: gorca_model::NodeSem::NONE,
         }
     }
 
