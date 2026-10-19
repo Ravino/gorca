@@ -861,6 +861,30 @@ pub async fn locate(
     }
 }
 
+/// The application's own click (or context-menu) action. `Ok(true)`: done by the action. `Ok(false)`: the node
+/// has no such action (or the application refused it): use the pointer. Only a timeout is an error.
+pub async fn try_item_action(
+    io: &ReviewIo,
+    req: ActionReq,
+) -> Result<bool, gorca_output_api::PointerError> {
+    let r = with_deadline(
+        io.deadline(BudgetClass::Interactive),
+        io.call(BudgetClass::Interactive, BackendOp::Action(req)),
+    )
+    .await;
+    match r {
+        Ok(Ok(_)) => Ok(true),
+        Ok(Err(BackendError::Timeout)) | Err(_) => Err(gorca_output_api::PointerError::Timeout),
+        Ok(Err(
+            BackendError::NotSupported
+            | BackendError::Gone
+            | BackendError::Busy
+            | BackendError::Protocol(_)
+            | BackendError::Unresolved,
+        )) => Ok(false),
+    }
+}
+
 /// An action on the navigator (`review.activate`, `review.move_focus`).
 pub async fn act(io: &ReviewIo, req: ActionReq) -> Result<(), NavFetchError> {
     // A user's keypress: Interactive.

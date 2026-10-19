@@ -83,12 +83,22 @@ impl Mock {
 impl PointerSink for Mock {
     fn click_at(
         &self,
-        _t: PointTarget,
-        _b: Button,
-        _o: ClickOpts,
+        t: PointTarget,
+        b: Button,
+        o: ClickOpts,
         _d: Deadline,
     ) -> BoxFuture<'_, Result<PointerOutcome, PointerError>> {
-        Box::pin(async { Err(PointerError::NoLocation) })
+        Box::pin(async move {
+            let at = match t {
+                PointTarget::Window { top, x, y } => format!("{} {x} {y}", top.title),
+                PointTarget::Stage { x, y } => format!("stage {x} {y}"),
+            };
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("click_at {at} {b:?} covered={:?}", o.if_covered));
+            Ok(self.outcome())
+        })
     }
 
     fn move_to(
@@ -366,6 +376,76 @@ async fn route_to_review_locates_the_focused_node_in_its_app_and_moves_the_point
     );
     // the scripted app's resolver put the node id in x: the located node is the focused one
     assert_eq!(mock.calls(), ["move_to scripted 3 7 covered=Proceed"]);
+    r.stop().await;
+    let _ = connector.await;
+}
+
+async fn item_rig() -> (
+    Rig,
+    gorca_testkit::ScriptedHandle,
+    tokio::task::JoinHandle<Result<(), gorca_connector_api::ConnectorError>>,
+) {
+    let speech = Arc::new(Recording::default());
+    let mock = Mock::new(PointerAvail::Ready { version: 2 });
+    let mut core = Core::new(CoreConfig::default())
+        .with_speech(Arc::clone(&speech) as Arc<dyn SpeechOut>)
+        .with_pointer(Arc::clone(&mock) as Arc<dyn PointerSink>);
+    let registry = core.connector_registrar(ConnectorId(1));
+    let senders = core.reader_senders();
+    let shutdown = CancellationToken::new();
+    let core = tokio::spawn(core.run(shutdown.clone()));
+    let apps = vec![ScriptedApp {
+        scope: "app".to_owned(),
+        nodes: vec![(3, ScriptedNode::new(Role::Button, "OK"))],
+    }];
+    let (conn, handle) = ScriptedConnector::new(apps);
+    let ctx = ConnectorCtx {
+        id: ConnectorId(1),
+        registry,
+        shutdown: shutdown.clone(),
+        clock: Clock::System,
+    };
+    let connector = tokio::spawn(Box::new(conn).run(ctx));
+    handle.wait_app("app").await;
+    handle.focus("app", 3);
+    let r = Rig {
+        speech,
+        mock,
+        senders,
+        shutdown,
+        core,
+        epoch: 0,
+    };
+    assert!(r.wait_text("OK button", 5).await.is_some());
+    tokio::time::sleep(Duration::from_millis(80)).await;
+    (r, handle, connector)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_left_item_click_uses_the_applications_own_action_and_never_the_pointer() {
+    let (mut r, _h, connector) = item_rig().await;
+    r.press(CoreCmd::MouseLeftClickItem, 1).await;
+    assert!(r.wait_text("Left click", 5).await.is_some());
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(
+        r.mock.calls().is_empty(),
+        "the action path needs no pointer: {:?}",
+        r.mock.calls()
+    );
+    r.stop().await;
+    let _ = connector.await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_right_item_click_without_a_menu_action_falls_back_to_the_pointer() {
+    let (mut r, _h, connector) = item_rig().await;
+    r.press(CoreCmd::MouseRightClickItem, 1).await;
+    assert!(r.wait_text("Right click", 5).await.is_some());
+    // the app has no context-menu action: the located point was right-clicked, refusing a covered target
+    assert_eq!(
+        r.mock.calls(),
+        ["click_at scripted 3 7 Right covered=Refuse"]
+    );
     r.stop().await;
     let _ = connector.await;
 }

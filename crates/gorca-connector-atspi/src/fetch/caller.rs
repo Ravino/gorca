@@ -540,6 +540,32 @@ impl Caller {
             .map_err(DbusError::Zbus)
     }
 
+    /// `Component.GetAccessibleAtPoint(x, y, WINDOW)`: the deepest object the application itself puts at the point,
+    /// `None` when it answers nothing (GTK4 has no hit test) or a null reference.
+    pub(super) async fn accessible_at_point(
+        &self,
+        path: &str,
+        x: i32,
+        y: i32,
+        deadline: Deadline,
+    ) -> Result<Option<(String, String)>, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                COMPONENT,
+                "GetAccessibleAtPoint",
+                &(x, y, COORD_WINDOW),
+            )
+            .await?;
+        let (bus, p) = m
+            .body()
+            .deserialize::<(String, OwnedObjectPath)>()
+            .map_err(DbusError::Zbus)?;
+        Ok((p.as_str() != NULL_PATH && !bus.is_empty()).then(|| (bus, p.as_str().to_owned())))
+    }
+
     pub(super) async fn grab_focus(
         &self,
         path: &str,
@@ -767,6 +793,52 @@ impl Caller {
                 TEXT,
                 "SetCaretOffset",
                 &(offset,),
+            )
+            .await?;
+        m.body().deserialize::<bool>().map_err(DbusError::Zbus)
+    }
+
+    /// The names of the object's actions, in order, by asking `Action.GetName(i)` until an index has no name (what
+    /// libatspi's `atspi_action_get_action_name` does). `NActions` is not used: Gecko reports 0 for a button whose
+    /// `GetName(0)` is "press". At most 8 actions are read. An error at index 0 is the error (no `Action` interface).
+    pub(super) async fn action_names(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<Vec<String>, DbusError> {
+        let mut names = Vec::new();
+        for i in 0..8_i32 {
+            let m = match self
+                .call(&self.bus_name, deadline, path, ACTION, "GetName", &(i,))
+                .await
+            {
+                Ok(m) => m,
+                Err(e) if i == 0 => return Err(e),
+                Err(_) => break,
+            };
+            match m.body().deserialize::<String>() {
+                Ok(name) if !name.is_empty() => names.push(name),
+                Ok(_) | Err(_) => break,
+            }
+        }
+        Ok(names)
+    }
+
+    /// `Component.ScrollTo(ScrollType)`.
+    pub(super) async fn scroll_to(
+        &self,
+        path: &str,
+        scroll_type: u32,
+        deadline: Deadline,
+    ) -> Result<bool, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                COMPONENT,
+                "ScrollTo",
+                &(scroll_type,),
             )
             .await?;
         m.body().deserialize::<bool>().map_err(DbusError::Zbus)

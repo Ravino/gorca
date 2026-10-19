@@ -70,9 +70,13 @@ async fn name(conn: &zbus::Connection, bus: &str, path: &str) -> Option<String> 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let [_, address, pid, wanted] = args.as_slice() else {
-        eprintln!("usage: locate_cli A11Y_ADDRESS PID NAME");
-        std::process::exit(2);
+    let (address, pid, wanted, mode) = match args.as_slice() {
+        [_, a, p, w] => (a, p, w, "locate"),
+        [_, a, p, w, m] => (a, p, w, m.as_str()),
+        _ => {
+            eprintln!("usage: locate_cli A11Y_ADDRESS PID NAME [locate|act-click|act-menu]");
+            std::process::exit(2);
+        }
     };
     let pid: u32 = pid.parse().unwrap_or(0);
     let conn = match zbus::connection::Builder::address(address.as_str()) {
@@ -121,6 +125,24 @@ async fn main() {
             }
             if name(&conn, &bus, &path).await.as_deref() == Some(wanted.as_str()) {
                 let d = Deadline(Instant::now() + Duration::from_secs(3));
+                if mode.starts_with("act-") {
+                    match gorca_connector_atspi::act_object(
+                        conn.clone(),
+                        &bus,
+                        &path,
+                        mode == "act-menu",
+                        d,
+                    )
+                    .await
+                    {
+                        Ok(()) => println!("acted"),
+                        Err(gorca_connector_api::BackendError::NotSupported) => {
+                            println!("no action");
+                        }
+                        Err(e) => println!("action failed: {e}"),
+                    }
+                    return;
+                }
                 match gorca_connector_atspi::locate_object(conn.clone(), &bus, &path, None, pid, d)
                     .await
                 {

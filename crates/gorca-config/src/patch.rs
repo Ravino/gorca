@@ -8,8 +8,9 @@
 use std::collections::BTreeMap;
 
 use crate::settings::{
-    Backend, BoundaryMode, Caps, Confirmations, InterruptPolicy, Layout, ModeDefault, Preset,
-    Punct, SETTINGS, SettingDef, SettingType, Settings, Verbosity, WordLevel,
+    Backend, BoundaryMode, Caps, Confirmations, IfCoveredPolicy, InterruptPolicy, ItemClick,
+    Layout, ModeDefault, Preset, Punct, SETTINGS, SettingDef, SettingType, Settings, Verbosity,
+    WordLevel,
 };
 
 /// Index of a row of [`SETTINGS`]: the dense key id every resolver uses.
@@ -128,6 +129,8 @@ pub(crate) fn enum_name(key: KeyId, text: &str) -> Option<&'static str> {
         ("speech", "backend") => Backend::parse(text).map(Backend::name),
         ("speech", "punctuation") => Punct::parse(text).map(Punct::name),
         ("editing", "word") => WordLevel::parse(text).map(WordLevel::name),
+        ("mouse", "item_click") => ItemClick::parse(text).map(ItemClick::name),
+        ("mouse", "if_covered") => IfCoveredPolicy::parse(text).map(IfCoveredPolicy::name),
         ("browse", "mode_default") => ModeDefault::parse(text).map(ModeDefault::name),
         ("verbosity", "level") => Verbosity::parse(text).map(Verbosity::name),
         ("verbosity", "confirmations") => Confirmations::parse(text).map(Confirmations::name),
@@ -165,6 +168,9 @@ pub fn get_value(s: &Settings, key: KeyId) -> Value {
         ("speech", "caps") => names(s.speech.caps.names()),
         ("speech", "caps_pitch_change") => Value::Int(i64::from(s.speech.caps_pitch_change)),
         ("mouse", "enabled") => Value::Bool(s.mouse.enabled),
+        ("mouse", "item_click") => Value::Str(s.mouse.item_click.name().to_owned()),
+        ("mouse", "if_covered") => Value::Str(s.mouse.if_covered.name().to_owned()),
+        ("mouse", "announce_move") => Value::Bool(s.mouse.announce_move),
         ("echo", "typed_characters") => Value::Bool(s.echo.typed_characters),
         ("echo", "typed_words") => Value::Bool(s.echo.typed_words),
         ("echo", "command_keys") => Value::Bool(s.echo.command_keys),
@@ -250,6 +256,11 @@ pub fn set_value(s: &mut Settings, key: KeyId, v: &Value) -> bool {
         ("speech", "caps") => put!(s.speech.caps, list(v).and_then(caps_of)),
         ("speech", "caps_pitch_change") => put!(s.speech.caps_pitch_change, int_u8(v)),
         ("mouse", "enabled") => put!(s.mouse.enabled, boolean(v)),
+        ("mouse", "item_click") => put!(s.mouse.item_click, text(v).and_then(ItemClick::parse)),
+        ("mouse", "if_covered") => {
+            put!(s.mouse.if_covered, text(v).and_then(IfCoveredPolicy::parse))
+        }
+        ("mouse", "announce_move") => put!(s.mouse.announce_move, boolean(v)),
         ("echo", "typed_characters") => put!(s.echo.typed_characters, boolean(v)),
         ("echo", "typed_words") => put!(s.echo.typed_words, boolean(v)),
         ("echo", "command_keys") => put!(s.echo.command_keys, boolean(v)),
@@ -437,6 +448,8 @@ mod tests {
                     ("speech", "backend") => &["ssip", "auto"],
                     ("speech", "punctuation") => &["all", "none"],
                     ("editing", "word") => &["coarse", "auto"],
+                    ("mouse", "item_click") => &["pointer", "action_first"],
+                    ("mouse", "if_covered") => &["click", "refuse"],
                     ("browse", "mode_default") => &["focus", "browse"],
                     ("verbosity", "level") => &["brief", "normal"],
                     ("verbosity", "confirmations") => &["brief", "full"],

@@ -385,6 +385,64 @@ fn refused(done: bool) -> Result<BackendReply, BackendError> {
     }
 }
 
+/// Action names that click, in Orca's order (`refs/orca/src/orca/ax_event_synthesizer.py`).
+pub(crate) const CLICK_ACTIONS: &[&str] = &["click", "press", "jump", "open", "activate"];
+/// Action names that open the context menu.
+pub(crate) const MENU_ACTIONS: &[&str] = &["show-context-menu", "menu"];
+/// `ATSPI_SCROLL_ANYWHERE`.
+const SCROLL_ANYWHERE: u32 = 6;
+
+/// The index of the first action named like one of `wanted` (case-insensitive, `wanted` in priority order).
+pub(crate) fn pick_action(names: &[String], wanted: &[&str]) -> Option<usize> {
+    wanted
+        .iter()
+        .find_map(|w| names.iter().position(|n| n.eq_ignore_ascii_case(w)))
+}
+
+/// Do the first of `wanted` the object has; `NotSupported` when it has none.
+async fn do_named_action(
+    c: &super::caller::Caller,
+    path: &str,
+    wanted: &[&str],
+    dl: Deadline,
+) -> Result<BackendReply, BackendError> {
+    let names = c
+        .action_names(path, dl)
+        .await
+        .map_err(|e| backend_error(&e))?;
+    // Gecko quirk: a button can answer an Action interface whose `GetName(i)` is empty although `DoAction(0)` presses
+    // it. For a click (never for a context menu) an interface with no readable name falls back to action 0.
+    let i = match pick_action(&names, wanted) {
+        Some(i) => i,
+        None if names.is_empty() && std::ptr::eq(wanted, CLICK_ACTIONS) => 0,
+        None => return Err(BackendError::NotSupported),
+    };
+    let index = i32::try_from(i).map_err(|_| BackendError::NotSupported)?;
+    let ok = c
+        .do_action(path, index, dl)
+        .await
+        .map_err(|e| backend_error(&e))?;
+    refused(ok)
+}
+
+/// Click (or open the context menu of) one object through its own action, without a connector (tools, end-to-end
+/// tests): the code of `ActionReq::Click` / `ActionReq::ContextMenu`. `NotSupported` when it has no such action.
+pub async fn act_object(
+    conn: zbus::Connection,
+    bus_name: &str,
+    path: &str,
+    context_menu: bool,
+    dl: Deadline,
+) -> Result<(), BackendError> {
+    let c = super::caller::Caller::new(conn, Arc::from(bus_name));
+    let wanted = if context_menu {
+        MENU_ACTIONS
+    } else {
+        CLICK_ACTIONS
+    };
+    do_named_action(&c, path, wanted, dl).await.map(|_| ())
+}
+
 /// `review.activate`, `review.move_focus` and caret placement. Not allowed in shadow mode.
 pub(super) async fn action(
     cx: &CallCx,
@@ -443,7 +501,24 @@ pub(super) async fn action(
                 .map_err(|e| backend_error(&e))?;
             refused(ok)
         }
-        ActionReq::ScrollTo { .. } | ActionReq::SetValue { .. } => Err(BackendError::NotSupported),
+        ActionReq::Click { node } => {
+            let n = resolve(cx, *node)?;
+            do_named_action(c, &n.path, CLICK_ACTIONS, dl).await
+        }
+        ActionReq::ContextMenu { node } => {
+            let n = resolve(cx, *node)?;
+            do_named_action(c, &n.path, MENU_ACTIONS, dl).await
+        }
+        ActionReq::ScrollTo { node } => {
+            let n = resolve(cx, *node)?;
+            // ATSPI_SCROLL_ANYWHERE: bring it into view wherever the toolkit likes.
+            let ok = c
+                .scroll_to(&n.path, SCROLL_ANYWHERE, dl)
+                .await
+                .map_err(|e| backend_error(&e))?;
+            refused(ok)
+        }
+        ActionReq::SetValue { .. } => Err(BackendError::NotSupported),
     }
 }
 
@@ -751,5 +826,30 @@ mod tests {
             ..rule
         });
         assert_eq!((open.1, open.5), (MATCH_EMPTY, MATCH_EMPTY));
+    }
+
+    #[test]
+    fn actions_are_picked_in_orcas_order_ignoring_case() {
+        let n = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        assert_eq!(
+            pick_action(&n(&["activate", "click"]), CLICK_ACTIONS),
+            Some(1),
+            "click beats activate"
+        );
+        assert_eq!(pick_action(&n(&["Press"]), CLICK_ACTIONS), Some(0));
+        assert_eq!(
+            pick_action(&n(&["open", "jump"]), CLICK_ACTIONS),
+            Some(1),
+            "jump beats open"
+        );
+        assert_eq!(
+            pick_action(&n(&["expand or contract"]), CLICK_ACTIONS),
+            None
+        );
+        assert_eq!(
+            pick_action(&n(&["menu", "show-context-menu"]), MENU_ACTIONS),
+            Some(1)
+        );
+        assert_eq!(pick_action(&[], MENU_ACTIONS), None);
     }
 }

@@ -479,15 +479,12 @@ fn say_position_reads_the_window_position_once_and_the_screen_position_twice() {
 }
 
 #[test]
-fn item_clicks_and_review_to_pointer_say_no_location_until_they_exist() {
+fn review_to_pointer_says_no_location_until_it_exists() {
     let mut f = ready_fixture();
-    for c in [
-        CoreCmd::MouseReviewToPointer,
-        CoreCmd::MouseLeftClickItem,
-        CoreCmd::MouseRightClickItem,
-    ] {
-        assert_eq!(spoken(&f.run(c, 1)), ["No location"], "{}", c.name());
-    }
+    assert_eq!(
+        spoken(&f.run(CoreCmd::MouseReviewToPointer, 1)),
+        ["No location"]
+    );
 }
 
 fn at_reqs(fx: &ReaderEffects) -> Vec<crate::commands::PointerAtReq> {
@@ -599,4 +596,147 @@ fn a_lost_reply_does_not_wedge_the_lock() {
         PointerOp::ReleaseAll,
         "recovers instead of answering busy forever"
     );
+}
+
+// ---- MO-5b: item clicks ------------------------------------------------------------------------------------
+
+use crate::commands::ItemAction;
+
+fn load_mouse(f: &mut Fx, text: &str) {
+    let mut l = (*loaded(text, LoadCause::Startup)).clone();
+    l.mode_keys.gated = f.reader.keys.gated.clone();
+    f.control(ControlMsg::Settings(SettingsMsg::Loaded(Arc::new(l))));
+}
+
+#[test]
+fn item_clicks_try_the_applications_action_first_with_the_right_kind() {
+    let mut f = ready_fixture();
+    f.focus(1);
+    let left = at_reqs(&f.run(CoreCmd::MouseLeftClickItem, 1));
+    assert_eq!(left.len(), 1);
+    assert_eq!(
+        (left[0].node, left[0].act, left[0].item),
+        (
+            key(1),
+            crate::commands::AtAct::Click(Button::Left),
+            Some(ItemAction::Click)
+        )
+    );
+    assert_eq!(left[0].if_covered, gorca_output_api::IfCovered::Refuse);
+    let right = at_reqs(&f.run(CoreCmd::MouseRightClickItem, 1));
+    assert_eq!(
+        (right[0].act, right[0].item),
+        (
+            crate::commands::AtAct::Click(Button::Right),
+            Some(ItemAction::ContextMenu)
+        )
+    );
+}
+
+#[test]
+fn an_item_click_is_spoken_after_the_outcome_whatever_did_it() {
+    let mut f = ready_fixture();
+    f.focus(1);
+    let go = |f: &mut Fx, cmd, result| {
+        let id = at_reqs(&f.run(cmd, 1))[0].id;
+        spoken(&reply(f, id, result, Duration::from_millis(5)))
+    };
+    // done by the application's action
+    assert_eq!(
+        go(&mut f, CoreCmd::MouseLeftClickItem, Ok(PointerDone::Acted)),
+        ["Left click"]
+    );
+    // done by the pointer
+    assert_eq!(
+        go(
+            &mut f,
+            CoreCmd::MouseRightClickItem,
+            Ok(PointerDone::Outcome(outcome(0)))
+        ),
+        ["Right click"]
+    );
+    // covered / outside / hidden / failed
+    let mut cov = outcome(0);
+    cov.kind = OutcomeKind::RefusedOccluded;
+    assert_eq!(
+        go(
+            &mut f,
+            CoreCmd::MouseLeftClickItem,
+            Ok(PointerDone::Outcome(cov))
+        ),
+        ["Covered"]
+    );
+    let mut out = outcome(0);
+    out.kind = OutcomeKind::RefusedOutside;
+    assert_eq!(
+        go(
+            &mut f,
+            CoreCmd::MouseLeftClickItem,
+            Ok(PointerDone::Outcome(out))
+        ),
+        ["No location"]
+    );
+    assert_eq!(
+        go(
+            &mut f,
+            CoreCmd::MouseLeftClickItem,
+            Err(PointerError::NotVisible)
+        ),
+        ["Window not visible"]
+    );
+    assert_eq!(
+        go(
+            &mut f,
+            CoreCmd::MouseLeftClickItem,
+            Err(PointerError::NoLocation)
+        ),
+        ["No location"]
+    );
+}
+
+#[test]
+fn the_action_path_works_without_a_pointer_backend_but_the_pointer_path_says_why_it_cannot() {
+    // action_first (the default): no helper at all, the action is still tried
+    let mut f = fixture();
+    f.focus(1);
+    let fx = f.run(CoreCmd::MouseLeftClickItem, 1);
+    assert_eq!(at_reqs(&fx).len(), 1, "the action path needs no helper");
+    // item_click = pointer: the pointer is needed, so the missing helper is spoken and nothing is sent
+    let mut f = fixture();
+    f.focus(1);
+    load_mouse(&mut f, "[mouse]\nitem_click = \"pointer\"\n");
+    let fx = f.run(CoreCmd::MouseLeftClickItem, 1);
+    assert!(at_reqs(&fx).is_empty());
+    assert_eq!(
+        spoken(&fx),
+        ["Mouse not available: the pointer service is not running"]
+    );
+}
+
+#[test]
+fn item_click_pointer_mode_skips_the_action_and_if_covered_click_proceeds() {
+    let mut f = ready_fixture();
+    f.focus(1);
+    load_mouse(
+        &mut f,
+        "[mouse]\nitem_click = \"pointer\"\nif_covered = \"click\"\n",
+    );
+    let r = at_reqs(&f.run(CoreCmd::MouseLeftClickItem, 1));
+    assert_eq!(r[0].item, None);
+    assert_eq!(r[0].if_covered, gorca_output_api::IfCovered::Proceed);
+}
+
+#[test]
+fn announce_move_off_keeps_route_to_review_quiet() {
+    let mut f = ready_fixture();
+    f.focus(1);
+    load_mouse(&mut f, "[mouse]\nannounce_move = false\n");
+    let id = at_reqs(&f.run(CoreCmd::MouseRouteToReview, 1))[0].id;
+    let fx = reply(
+        &mut f,
+        id,
+        Ok(PointerDone::Outcome(outcome(0))),
+        Duration::from_millis(3),
+    );
+    assert!(spoken(&fx).is_empty());
 }
