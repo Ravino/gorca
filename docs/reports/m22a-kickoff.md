@@ -56,12 +56,12 @@ stratum S4 inferred below derived; open source-slot list).
 | Id | Property | Oracle |
 |---|---|---|
 | F11 | **Confidence gate**: a fact below its grant floor never wins; moving `p_milli` across the floor changes only that (x, g) winner and hedge | value + hedge diff |
-| F12 | **Class safety**: adding any set of Secondary/Inferred facts never changes a group whose winner is User, Patch, Observed-primary or untainted Derived; a secondary never wins a group not listed `inexpressible` for its source profile; values derived from T3/Inferred inputs are tainted and hedged | equality on protected groups + taint check |
+| F12 | **Class safety** (r3 wording, math §10.4): adding Secondary/Inferred facts never changes a group whose winner is User, Patch, untainted Derived, or Observed-primary with a non-empty value (empty primary names/descriptions are fillable); no secondary wins a group not listed `inexpressible`; values derived from T3/Inferred inputs are tainted and hedged; name from content uses untainted children first | equality on protected groups + taint check |
 | F13 | **Basis staleness**: after a `vis_rev` bump past an inferred winner's basis, the group falls to the next candidate (or default) and no change utterance is produced | value + ST output count = 0 |
 | F14 | **Revocation equivalence**: masking or revoking source s yields the state of the run without s's facts | equality |
 | F15 | **Binding safety**: no fact with binding below its group-class minimum ever wins; ambiguous `DomId` never binds `Unique` | predicate |
 | F16 | **Isolation under flood**: a flood from source s changes no other source's registers and no primary-derived entry; drops counted | equality + counters |
-| F17 | **Hot-path independence**: removing every non-primary fact at keypress time gives the same first utterance for that key (non-primary facts reach speech only as refine tails) | transcript equality |
+| F17 | **Hot-path independence**: removing every non-primary fact at keypress time gives the same first utterance for that key (non-primary facts reach speech only as refine tails) | transcript equality (holds by construction in a pure model; tested only in M22a C5) |
 | F18 | **Rebinding**: after a `BindGen` bump of an anchor, no fact asserted under the old generation wins until re-asserted | predicate |
 | F19 | **Scope pinning**: a fact whose transport scope differs from its target's scope is rejected and never stored | predicate |
 
@@ -131,7 +131,8 @@ with M7b; M22a only provides `BindQuality` and provenance it can use.
 ## 8. Unverified
 
 - `SemEntry` layouts were measured with rustc (scratch probe, x86_64): r2 120 B, r2 + hedge 128 B,
-  20 groups with u128 provenance 128 B, chosen 16-group layout 104 B (ADR-0024 §2.12). A1 re-asserts
+  20 groups with u128 provenance 128 B, r2 16-group layout 104 B; r3 target is x32 at 128 B
+  (owner: extensibility over memory; math §10.1, ADR-0024 §2.12). A1 re-asserts
   it on the real types.
 - Native-host pid → browser `AppId` mapping under Flatpak/Snap (FS-11); M23's first task.
 - Exact cross-source keys for elements without an HTML id (TBD-S3); M23's first task.

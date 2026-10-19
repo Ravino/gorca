@@ -1,8 +1,10 @@
 # ADR-0024: Fact sources: taxonomy, contract, identity, trust and confidence for the semantic model
 
-Status: **Proposed** (r2, 2026-10-19; r1 reviewed in `docs/reports/adr-0024-review.md`,
-ACCEPT-WITH-CHANGES, all findings integrated, §8 maps them). Owner: architect. Amends ADR-0022 r2
-§2.1 (entry layout, frozen groups) and §2.2 (layers, source slots); ADR-0022 r3 points here.
+Status: **Proposed** (r3, 2026-10-19; r1 reviewed in `docs/reports/adr-0024-review.md`,
+ACCEPT-WITH-CHANGES, all findings integrated, §8 maps them; r3 integrates the oracle findings of
+`docs/reports/semantic-fusion-math.md` §10 and the owner's 2026-10-19 rule that extensibility beats
+per-entry memory). Owner: architect. Amends ADR-0022 r2
+§2.1 (entry layout, group slots) and §2.2 (layers, source slots); ADR-0022 r3 points here.
 
 - Kickoff analysis, prior art, worked examples, owner questions: `docs/reports/m22a-kickoff.md`.
 - Implementation plan for the parts M22a builds: `docs/plan/m22a-spec.md`.
@@ -17,7 +19,11 @@ ACCEPT-WITH-CHANGES, all findings integrated, §8 maps them). Owner: architect. 
   (WIT 0.9 `facts`), **M23** (browser add-on bus), **M24** (local inference facts), **M25**
   (annotations). `docs/plan/phase-3.md` §M22, §M23–M25.
 
-r2 changes: frozen 16 fused groups and a 104 B entry (H-1, H-2); secondaries win only statically
+r3 changes: x32 entry layout (32 group slots, 18 registered, 128 B; §2.12), name-from-content uses
+trusted children first (§2.2), empty primary values are fillable in F12, S4 ranks by the tier-capped
+class, `ProvCode::Fallback` removed, `BindGen` stamped at admission.
+
+r2 changes: frozen 16 fused groups and a 104 B entry (H-1, H-2; superseded by r3 x32); secondaries win only statically
 inexpressible groups (H-3); transport-pinned scopes (H-4, FS-11); taint through derivation (H-5);
 binding generations and two-sided id uniqueness (H-6); normaliser placement (H-7); runtime moved to
 M23-0 (M-3); admission slicing, port caps, per-scope strikes, stable-identity quarantine,
@@ -72,7 +78,7 @@ content utterances (ADR-0022 §2.9); never part of a `SemEntry`, a name or a cac
 
 A fact has a **kind**:
 
-- **Semantic fact**: a value for one of the 16 fused groups (§2.12).
+- **Semantic fact**: a value for one of the registered fused groups (18 of 32 slots, §2.12).
 - **Evidence fact**: an input that rules must interpret (`hint.icon_class`, `hint.src_name`,
   `hint.title_attr`, `visual.ocr_text`, `visual.label_guess`, `layout.box`, `layout.css_hidden`).
   Evidence lives in a sparse side table, is never presented directly, and is read only by the
@@ -89,8 +95,8 @@ Precedence per group, highest first:
 | S-1 quirk | rows per (source profile, source); a browser add-on gets its own rows |
 | S0 observed | candidates are the Primary sources of the node's scope, ordered by `PI[source profile][group]`. **A Secondary is a candidate only for groups the source profile's static `inexpressible` row lists for that primary** (H-3; e.g. a hypothetical `layout.css_hidden`-derived flag a given engine never exports). A dynamic `Unknown` of the primary (not fetched yet, partial focus mask) **never** admits a secondary. `inexpressible` rows are first-party data with a decision row each (D-4) |
 | S1 patch, S2 user | unchanged (S2 also holds user selector rules, §2.13 PS-6) |
-| S3 derived | deterministic rules over the node's final values, children, relation targets and evidence (`title` names an unnamed control, `aria-describedby` text). Fills only when the winner so far is `Unknown`, observed-empty or default (A6 fill rule) |
-| **S4 inferred** | Inferred-class facts that pass the grant's confidence floor (§2.5), are not stale (§2.4) and are bound well enough (§2.3). Fill rule as S3, evaluated after S3. Ranking inside S4: `(ConfClass desc, kind order, ext_id or model id)`, all static or deterministic per fact (M-9, L-5) |
+| S3 derived | deterministic rules over the node's final values, children, relation targets and evidence (`title` names an unnamed control, `aria-describedby` text). Fills only when the winner so far is `Unknown`, observed-empty or default (A6 fill rule). **Name from content uses only untainted children's names; tainted (Secondary, Inferred, DerivedTainted) child names are used only if no untainted part exists, and then the parent's name is DerivedTainted** (math §10.4 item 1: concatenating all children broke F12 in 23 cells) |
+| **S4 inferred** | Inferred-class facts that pass the grant's confidence floor (§2.5), are not stale (§2.4) and are bound well enough (§2.3). Fill rule as S3, evaluated after S3. Ranking inside S4: `(ConfClass after the tier cap desc, kind order, source id, direct fact before rule output, value, anchor, seq)`, all static or deterministic per fact (M-9, L-5). The T3 cap applies **before** ranking: a T3 fact at p = 0.99 ranks as `Probable`, below a T2 model's `High` (math §10.4 item 3) |
 | R repair | unchanged; also masks inferred values on role-inapplicable groups |
 
 **Taint (H-5).** Every value produced by S3 or S4 carries the lowest trust tier and the lowest
@@ -147,9 +153,8 @@ pub struct Binding { pub node: NodeKey, pub quality: BindQuality, pub gen: BindG
 | `Region` | `Geometric` (largest overlap ≥ 0.8 of the smaller box, one candidate) |
 | none | `Unbound`: parked (≤ 256 per source and scope, TTL 5 s), retried on index change, then dropped and counted |
 
-**Binding generations (H-6).** Each binding has a `BindGen`, bumped whenever the anchor resolves to
-a different node or the bound node is removed. A register stores the `BindGen` it was asserted
-against. A fact whose stored generation differs from the current binding is **stale**: it never
+**Binding generations (H-6).** Each binding has a `BindGen` (definition: the primary seq at which the anchor's current target acquired it; a `u32` counter bumped on the same events is equivalent), bumped whenever the anchor resolves to
+a different node or the bound node is removed. The writer **stamps the current `BindGen` on the fact at admission** and the register carries it (stamping later would let admission order leak into the result, math §10.4 item 5). A fact whose stored generation differs from the current binding is **stale**: it never
 wins until the source re-asserts it with a newer document revision. So a `DomId` reused by a new
 element after an SPA re-render, a virtualised list recycle or a CHR-0 rebuild never inherits the old
 element's facts.
@@ -216,7 +221,7 @@ Every non-primary register keeps `(seq, conf, basis, bind_gen, admitted_at)`:
    `p_milli` and the grant's thresholds (never taken from the source): `Asserted`, `High` (≥ 0.97),
    `Probable` (≥ 0.90), `Possible` (≥ floor). Below the floor: stored for `explain`, never wins.
 3. **Ranking.** Across layers and across primaries: the static order of §2.2. Inside S4 only:
-   `(ConfClass desc, kind order, id)`. The class is a deterministic function of the fact and the
+   `(ConfClass after the T3 cap desc, kind order, id, ...)` (§2.2). The class is a deterministic function of the fact and the
    grant, so this is order-independent; raw `p_milli` values are never compared.
 4. **Hedge.** `SemEntry.hedge` (2 bits per group) holds the winner's class (or the taint class).
    Presentation (M22b1) speaks `Probable` as "probably X" and `Possible` as "maybe X" (catalog ids,
@@ -400,43 +405,54 @@ silent immediately; the rest is re-fused in background chunks, and the side tabl
 - **FS-11** A fact's scope comes from its transport, never from the fact.
 - **FS-12** Values derived from untrusted or inferred inputs are tainted and hedged.
 
-### 2.12 Representation, frozen groups and memory (H-1, H-2)
+### 2.12 Representation, group slots and memory (r3: layout x32)
 
-**Frozen fused groups (16)**, in code order: `role` (incl. `roledescription`), `name`, `description`,
-`check`, `press`, `expand`, `select`, `current`, `invalid`, `popup`, `avail`, `flags` (all boolean
-flags plus `orientation` and `sort`), `level`, `setpos`, `grid`, `live`. Not fused groups, outside
-`ProvTag`: `existence` (lifecycle register) and `text`/value/caret (primary-only, ADR-0022 math §1.4).
-A 17th group requires a layout change and an ADR amendment; WIT is unaffected (codes and accessors).
-`const` assertion: `GROUP_COUNT * 4 <= u64::BITS` and `GROUP_COUNT * 2 <= u32::BITS`.
+Owner rule (2026-10-19): per-entry memory is not a hard constraint; room for future enrichment
+matters more. The 100k-node RSS gate stays the real ceiling.
 
-**`SemEntry` layout (measured with rustc, x86_64, `Semantics` = 64 B):**
+**Group slots.** `GROUP_CAP = 32` slots; **18 registered now**, append-only codes: the 16 of r2 in
+the same order — `role` (incl. `roledescription`), `name`, `description`, `check`, `press`, `expand`,
+`select`, `current`, `invalid`, `popup`, `avail`, `flags`, `level`, `setpos`, `grid`, `live` — then
+`orientation` = 16 and `sort` = 17 (split back out of `flags`). Not fused, outside `ProvTag`:
+`existence` (lifecycle register) and `text`/value/caret (primary-only). A new group up to 32 is a
+registry append (decision row + WIT code), no layout change and no ADR amendment.
+
+**`SemEntry` layout x32 (measured 128 B, rustc x86_64, `research/semsize/layout.rs`):**
 
 ```rust
 pub struct SemEntry {
-    pub sem: Semantics,              // 64 B; description moves into the existing Arc<SemText>
+    pub sem: Semantics,              // 64 B today; description and roledescription in Arc<SemText>
     pub name: Option<Arc<str>>,      // 16 B
-    pub prov: ProvTag,               // u64: 16 groups x 4 bits, ProvCode index
-    pub hedge: u32,                  // 16 groups x 2 bits
+    pub prov: ProvTag,               // [u64; 2]: 32 slots x 4 bits, ProvCode index (not u128: alignment)
+    pub hedge: u64,                  // 32 x 2 bits: ConfClass of the winner after the T3 cap
+    pub taint: u64,                  // 32 x 2 bits: highest trust tier among the winner's inputs (FS-12)
+    pub known: u32, pub stale: u32, pub fallback: u32,   // GroupMask = u32
     pub sem_rev: u32,
-    pub known: u16, pub stale: u16, pub fallback: u16,   // GroupMask = u16
-}                                    // = 104 B (r2 layout was 120 B; +hedge 128 B)
+}
 ```
 
-| Layout | Size |
-|---|---|
-| ADR-0022 r2 (`name` + `description` as `Option<Arc<str>>`, u32 masks) | 120 B |
-| r2 + `hedge` | 128 B |
-| 20 groups, `ProvTag` u128, `hedge` u64 | 128 B (u128 alignment) |
-| **chosen: 16 groups, u16 masks, description in `SemText`** | **104 B** |
-| alternative: name + description in one `Arc<NameDesc>` | 96 B (rejected: every name change reallocates the description) |
+| Layout | size | status |
+|---|---|---|
+| ADR-0022 r2 | 120 B | superseded |
+| r2-16 (ADR-0024 r2: 16 groups, u16 masks) | 104 B | kept as oracle fixture `tests/fixtures/fuse/fuse-r2-16.json` |
+| **x32** | **128 B** | **target**; oracle fixture `tests/fixtures/fuse/fuse-x32.json` |
+| x32 with `Semantics` 80 B | 144 B | allowed by the gates |
 
-Gate: `SemEntry ≤ 104 B` (`const` assert); ADR-0022 M-9 (≤ 112 B, 100k-node RSS ≤ 25 MB all
-carriers) stays as the ceiling. `ProvCode` (4 bits): `Default, Derived, DerivedTainted, Inferred,
-ObservedPrimary, ObservedSecondary, Patch, User, Fallback`, 7 spare.
+`const` gates: `size_of::<Semantics>() <= 80`, `size_of::<SemEntry>() <= 160`,
+`GROUP_COUNT <= GROUP_CAP`, `GROUP_CAP * 4 <= 128`, `GROUP_CAP * 2 <= 64`. Run-time gate: 100k-node
+page RSS increase ≤ 25 MB counting every carrier (ADR-0022 M-9; entries alone 12.8 MB at 128 B).
+Cost (math §10.1): key → speech reads ≤ 50 entries, the 128 vs 104 B difference is < 0.3 µs;
+quick nav answers from the treap's category aggregates and reads one entry; fusion adds 5–9 ns
+per event at 160 B.
+
+`ProvCode` (4 bits): `Default, Derived, DerivedTainted, Inferred, ObservedPrimary,
+ObservedSecondary, Patch, User`, 8 spare. A primary value used because a higher-ranked primary is
+`Unknown` is `ObservedPrimary` + the `fallback` mask bit; there is no separate `Fallback` code
+(math §10.4 item 4).
 
 Primary registers stay inline per node. Secondary, Inferred and evidence registers live in a sparse
 side table per writer keyed by (source, scope, anchor), only for nodes that have them, counted against
-`max_registers` and M-9.
+`max_registers` and the RSS gate.
 
 ### 2.13 Profiles (ADR-0016, M14a) and the model: two planes, one trigger matcher
 
@@ -479,7 +495,7 @@ be written).
 
 | Part | M22a | Later |
 |---|---|---|
-| Value types (`Fact`, `Subject`, `AnchorKey`, `Confidence`, `Basis`, `BindQuality`, `BindGen`, `SourceId`, frozen `GroupCode`s, `ProvCode`) | **yes** | — |
+| Value types (`Fact`, `Subject`, `AnchorKey`, `Confidence`, `Basis`, `BindQuality`, `BindGen`, `SourceId`, `GroupCode`s (18 of 32 slots), `ProvCode`) | **yes** | — |
 | `SourceDescriptor`, `SourceGrant`, pure `admit`, pure state-machine `step` (exhaustively tested) | **yes** | — |
 | Strata S-1..R including S4, evidence side table, taint, hedge mask, binding generations, epoch snapshot input | **yes** (driven by the fake source writing registers directly) | rule rows for real evidence: M23/M24 |
 | Binding for `Node` and `Exact` anchors | **yes** | `DomId`/`Structural` M23, `Region`/`Content` M24 |
@@ -513,8 +529,9 @@ be written).
   transient and produced phantom state changes.
 - **H. Scope declared by the source** (r1). Rejected (H-4): any same-uid process could claim another
   app's documents.
-- **I. 128 B entry with 20 groups.** Rejected for 104 B with 16 groups (§2.12): same expressiveness
-  (orientation and sort share `flags`' provenance), two fewer cache-line-straddling entries per 4.
+- **I. 104 B entry with 16 frozen groups** (r2). Superseded by x32 (§2.12): the owner prefers
+  enrichment headroom; the measured cost is < 0.3 µs per key and 3.2 MB per 100k nodes. A `u128`
+  `ProvTag` was rejected for `[u64; 2]` (same size, but 16-byte alignment on every container).
 
 ## 4. Consequences
 
@@ -534,7 +551,7 @@ load and governor labelled (M-4).
 
 | Id | Metric | Gate | When |
 |---|---|---|---|
-| M-9' | `SemEntry` size | ≤ 104 B (`const` assert) | M22a |
+| M-9' | `SemEntry` / `Semantics` size | ≤ 160 B / ≤ 80 B (`const` asserts; x32 measures 128 B); 100k-node RSS ≤ 25 MB | M22a |
 | M-14 | Admission cost, fake Secondary at 5k facts/s beside the B-FUSE mix | ≤ 1 µs/fact p99; slices ≤ 50 µs; K2 Δp99 ≤ 0.1 ms | M23-0 |
 | M-15 | Flood, one source at 100k facts/s for 60 s | registers and port ≤ caps; `Throttled` ≤ 1 s; other scopes unaffected; **K2 Δp99 ≤ 0.2 ms** | M23-0 |
 | M-16 | Revocation of a source holding 100k registers | synchronous part ≤ 0.5 ms and silences focus chain + visible window; full equivalence ≤ 1 s | M23-0 (pure equivalence F14 in M22a) |
@@ -553,14 +570,17 @@ ordering (ADR-0022 QO-4); whether CHR-0 changes `SrcNode` (decides the C2c merge
 
 ## 7. Properties added by this ADR
 
-F11–F17 as in the kickoff report §4, amended: F12 also covers tainted Derived values and requires
-that no secondary wins an expressible group; plus **F18** (rebinding: after a `BindGen` bump no fact
+F11–F17 as in the kickoff report §4, amended: **F12** reads "adding non-primary facts never changes a
+group whose winner is User, Patch, untainted Derived, or Observed-primary with a non-empty value (an
+empty primary name or description is fillable, A6)"; tainted Derived values are hedged; no secondary
+wins an expressible group. **F17** holds by construction in a pure model (speech reads a published
+snapshot) and is tested only in M22a C5 against the real pipeline; plus **F18** (rebinding: after a `BindGen` bump no fact
 asserted under the old generation wins) and **F19** (scope pinning: a fact whose transport scope
 differs from its target's scope is rejected and never stored).
 
 ## 8. Review traceability (`docs/reports/adr-0024-review.md`)
 
-H-1, H-2 → §2.12. H-3 → §2.2 (S0, class transitions), alt. G. H-4 → §2.3.4, FS-11, F19. H-5 → §2.2
+H-1, H-2 → §2.12 (r3: x32). H-3 → §2.2 (S0, class transitions), alt. G. H-4 → §2.3.4, FS-11, F19. H-5 → §2.2
 taint, FS-12. H-6 → §2.3.2 `BindGen`, §2.3.3, F18. H-7 → §4 and spec C2. M-1, M-2 → spec §3–§4. M-3
 → §2.14, M23-0. M-4 → §2.6, §2.8, §5. M-5, M-11 → §2.6 port. M-6, M-7 → §2.6 state machine. M-8 →
 `SourceId`, §2.10. M-9, L-5 → §2.2 S4, §2.5. M-10 → §2.6 masking. M-12 → TP-3. W-1..W-4 → §2.10.

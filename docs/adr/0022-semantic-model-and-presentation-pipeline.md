@@ -11,10 +11,12 @@ inferred > default); a secondary source is an S0 candidate only for groups a sta
 row declares inexpressible for the primary, never because a primary value is not fetched yet; values
 derived from untrusted or inferred inputs are tainted and hedged; confidence gates admission, sets a
 spoken hedge and orders candidates only inside S4 by class (alternative G stands for cross-source
-ranking). (2) §2.1: the fused groups are frozen at 16 (`orientation` and `sort` live in `flags`;
-`existence` and `text` are not fused), `description` moves into `Semantics`' `Arc<SemText>`, masks
-are `u16`, `SemEntry` gains `hedge: u32` and is 104 B (r2 was 120 B as measured); gate ≤ 104 B,
-M-9 stays the ceiling. (3) `PI[app profile]` is `PI[source profile]` (engine/toolkit class, not an
+ranking). (2) §2.1, layout x32 (owner 2026-10-19: extensibility beats per-entry memory): 32 group slots, 18
+registered (the 16 of r2 plus `orientation` and `sort`; `existence` and `text` are not fused),
+`description` moves into `Semantics`' `Arc<SemText>`, `u32` masks, `ProvTag` `[u64; 2]`,
+`hedge: u64`, `taint: u64`; `SemEntry` measures 128 B (r2 was 120 B); gates `SemEntry` ≤ 160 B,
+`Semantics` ≤ 80 B, and M-9's 100k-node RSS ≤ 25 MB as the real ceiling (the 112 B entry gate is
+retired). Name from content uses untainted children first. (3) `PI[app profile]` is `PI[source profile]` (engine/toolkit class, not an
 ADR-0016 user profile). (4) The AT-SPI normaliser runs inside the AT-SPI crates; `SrcNode` carries a
 normalised `SrcRecord`. Everything else in r2 is unchanged. M22a plan: `docs/plan/m22a-spec.md`.
 
