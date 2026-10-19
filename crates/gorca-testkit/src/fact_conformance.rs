@@ -1176,6 +1176,7 @@ pub fn doc_changed_needs_evidence() -> Report {
     };
     let mut w = RefWriter::new(Scope {
         doc: Some(6),
+        tab: Some(1),
         ..kit_scope(1)
     });
     w.add_node(other, other_doc);
@@ -1215,6 +1216,45 @@ pub fn doc_changed_needs_evidence() -> Report {
     r.check(
         "slow races never strike",
         matches!(spaced, SourceState::Active(_)),
+    );
+    r
+}
+
+/// A web-document scope without a tab admits nothing, and the rejection is not a strike.
+pub fn web_scope_needs_a_tab() -> Report {
+    let mut r = Report::default();
+    let sec = full_grant(SourceClass::Secondary, TrustTier::T3Untrusted);
+    let src = SourceId {
+        slot: 5,
+        generation: 0,
+    };
+    let mut s = FakeFactSource::new("s", SourceClass::Secondary);
+    s.name(kit_node(1), "x", 990);
+    let Some(f) = s.facts().next().cloned() else {
+        r.check("fact", false);
+        return r;
+    };
+    let mut w = RefWriter::new(Scope {
+        doc: Some(3),
+        ..kit_scope(1)
+    });
+    r.check(
+        "tab-less web scope is rejected with MissingTab",
+        offer_once(&mut w, src, &sec, &f) == Offer::Rejected(RejectReason::MissingTab)
+            && w.registers().is_empty(),
+    );
+    r.check(
+        "MissingTab is not a strike",
+        RejectReason::MissingTab.severity() != gorca_fact_api::Severity::Violation,
+    );
+    let mut w = RefWriter::new(Scope {
+        doc: Some(3),
+        tab: Some(1),
+        ..kit_scope(1)
+    });
+    r.check(
+        "the same web scope with a tab admits",
+        offer_once(&mut w, src, &sec, &f) == Offer::Stored,
     );
     r
 }
@@ -1289,6 +1329,7 @@ pub fn run_all(seed: u64) -> Report {
     r.merge(identity_keyed_on_peer());
     r.merge(page_caused_rejections_do_not_strike());
     r.merge(doc_changed_needs_evidence());
+    r.merge(web_scope_needs_a_tab());
     r
 }
 
@@ -1349,6 +1390,11 @@ mod tests {
     #[test]
     fn state_machine() {
         assert_ok(&state_machine_exhaustive());
+    }
+
+    #[test]
+    fn web_tab() {
+        assert_ok(&web_scope_needs_a_tab());
     }
 
     #[test]

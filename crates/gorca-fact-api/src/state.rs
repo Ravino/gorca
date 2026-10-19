@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::admit::Scope;
+use crate::admit::{Scope, WideKey};
 use crate::descriptor::{PeerProof, StableIdentity};
 
 /// Window of the strike counter: 3 strikes within this many milliseconds quarantine a scope.
@@ -612,16 +612,20 @@ impl SourceBook {
         if log.len() > MAX_QUARANTINE_LOG {
             log.remove(0);
         }
-        // One entry per typed key (Site, Tab, Doc, App), so reloads of one tab or site are one
-        // entry and ids of different kinds cannot collide. All keys count normally.
-        log.len() >= WIDE_LIMIT
+        // One entry per typed key, so reloads of one tab or site are one entry and ids of
+        // different kinds cannot collide. Site, Tab and App keys count; Doc keys never do: the
+        // per-scope quarantine contains the source there, and a per-navigation id is
+        // page-controlled (see `Scope::wide_key`).
+        log.iter()
+            .filter(|(s, _)| !matches!(s.wide_key(), WideKey::Doc(..)))
+            .count()
+            >= WIDE_LIMIT
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::admit::WideKey;
     use crate::descriptor::PeerProof;
     use gorca_model::ids::{AppId, ConnectorId};
 
@@ -953,18 +957,14 @@ mod tests {
     }
 
     #[test]
-    fn counting_tab_less_site_less_docs_stay_distinct() {
-        assert!(quarantined_count_trips(&[
+    fn counting_doc_only_keys_never_trip_the_wide_limit() {
+        assert!(!quarantined_count_trips(&[
             bare_doc(1),
             bare_doc(2),
             bare_doc(3)
         ]));
-        // The same bare doc quarantined repeatedly is one key.
-        assert!(!quarantined_count_trips(&[
-            bare_doc(1),
-            bare_doc(1),
-            bare_doc(1)
-        ]));
+        let reloads: Vec<Scope> = (1..=50).map(bare_doc).collect();
+        assert!(!quarantined_count_trips(&reloads));
     }
 
     #[test]
@@ -978,22 +978,24 @@ mod tests {
 
     #[test]
     fn counting_mixed_kinds_do_not_collide() {
-        // The same number 7 as site, tab and doc is three keys, so it trips; a collision
-        // would leave fewer than three.
-        assert!(quarantined_count_trips(&[
+        // Site 7, tab 7 and an app-level scope are three distinct counted keys; Doc 7 is not
+        // counted at all.
+        let app_only = Scope {
+            doc: None,
+            site: None,
+            tab: None,
+            ..doc(0, 0)
+        };
+        assert!(quarantined_count_trips(&[doc(7, 7), tab(70, 7), app_only]));
+        assert!(!quarantined_count_trips(&[
             doc(7, 7),
             tab(70, 7),
             bare_doc(7)
         ]));
-        assert!(quarantined_count_trips(&[
+        assert!(!quarantined_count_trips(&[
             tab(1, 1),
             tab(2, 2),
             bare_doc(3)
-        ]));
-        assert!(!quarantined_count_trips(&[
-            doc(1, 1),
-            bare_doc(2),
-            bare_doc(2)
         ]));
     }
 
