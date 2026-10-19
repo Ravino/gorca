@@ -2057,3 +2057,226 @@ fn reparent_keeps_depth_order_so_a_parent_fuses_once() {
     assert!(rep.fuse_calls <= 2 * 40, "{} fusions", rep.fuse_calls);
     assert!(e.verify().is_ok());
 }
+
+// ---- name from content looks through nameless containers (C3, accname 2F) ----------------------
+
+/// Roots `0..roles.len()`, each with the given toy role, content depth `depth`.
+fn tree_engine(roles: &[&str], depth: u8) -> Ivm<NoQuirks, NoPatches> {
+    let mut rules = toy_rules();
+    rules.content_depth = depth;
+    let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], rules);
+    profile.default_role = SemRole::Generic;
+    let mut e = Ivm::new(profile, NoQuirks, NoPatches);
+    for (i, r) in roles.iter().enumerate() {
+        e.add_node(nid(i), None).unwrap();
+        e.apply([
+            Input::Life {
+                node: nid(i),
+                src: PrimarySlot::P0,
+                seq: 1,
+                alive: true,
+            },
+            Input::Obs {
+                node: nid(i),
+                src: PrimarySlot::P0,
+                seq: 2,
+                write: write_from_toy(Group::Role, &json!(r)),
+            },
+        ]);
+    }
+    e
+}
+
+fn name_of(e: &Ivm<NoQuirks, NoPatches>, i: usize) -> Option<String> {
+    e.entry_view(nid(i))
+        .unwrap()
+        .name
+        .as_deref()
+        .map(str::to_owned)
+}
+
+#[test]
+fn a_content_name_reads_text_inside_nameless_containers() {
+    // 0 listitem -> [1 generic -> [2 text "Alice", 3 generic -> 4 text "hello"], 5 text "10:42", 6 button "React"]
+    let mut e = tree_engine(
+        &[
+            "listitem", "generic", "text", "generic", "text", "text", "button",
+        ],
+        8,
+    );
+    for (i, t) in [(2, "Alice"), (4, "hello"), (5, "10:42"), (6, "React")] {
+        name(&mut e, i, 5, t);
+    }
+    e.set_children(nid(0), &[nid(1), nid(5), nid(6)]).unwrap();
+    e.set_children(nid(1), &[nid(2), nid(3)]).unwrap();
+    e.set_children(nid(3), &[nid(4)]).unwrap();
+    e.run(Budget::UNLIMITED);
+    assert_eq!(name_of(&e, 0).as_deref(), Some("Alice hello 10:42 React"));
+    // The containers themselves stay nameless: only their parent reads through them.
+    assert_eq!(name_of(&e, 1), None);
+    assert!(e.verify().is_ok());
+    // A change deep inside reaches the row, incrementally.
+    name(&mut e, 4, 9, "goodbye");
+    e.run(Budget::UNLIMITED);
+    assert_eq!(name_of(&e, 0).as_deref(), Some("Alice goodbye 10:42 React"));
+    assert!(e.verify().is_ok());
+    // New content appears under a nested container.
+    e.add_node(nid(7), None).unwrap();
+    e.apply([
+        Input::Life {
+            node: nid(7),
+            src: PrimarySlot::P0,
+            seq: 1,
+            alive: true,
+        },
+        Input::Obs {
+            node: nid(7),
+            src: PrimarySlot::P0,
+            seq: 2,
+            write: write_from_toy(Group::Role, &json!("text")),
+        },
+    ]);
+    name(&mut e, 7, 3, "edited");
+    e.set_children(nid(3), &[nid(4), nid(7)]).unwrap();
+    e.run(Budget::UNLIMITED);
+    assert_eq!(
+        name_of(&e, 0).as_deref(),
+        Some("Alice goodbye edited 10:42 React")
+    );
+    // Removing it takes it out again.
+    e.set_children(nid(3), &[nid(4)]).unwrap();
+    e.remove_subtree(nid(7)).unwrap();
+    e.run(Budget::UNLIMITED);
+    assert_eq!(name_of(&e, 0).as_deref(), Some("Alice goodbye 10:42 React"));
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn a_container_with_a_name_of_its_own_is_read_by_that_name_and_not_looked_into() {
+    // 0 button -> 1 generic "Group label" -> 2 text "inner"
+    let mut e = tree_engine(&["button", "generic", "text"], 8);
+    name(&mut e, 1, 5, "Group label");
+    name(&mut e, 2, 5, "inner");
+    e.set_children(nid(0), &[nid(1)]).unwrap();
+    e.set_children(nid(1), &[nid(2)]).unwrap();
+    e.run(Budget::UNLIMITED);
+    assert_eq!(name_of(&e, 0).as_deref(), Some("Group label"));
+    // The container loses its name: the text inside is read now.
+    e.apply([Input::Obs {
+        node: nid(1),
+        src: PrimarySlot::P0,
+        seq: 9,
+        write: Write::Absent(Group::Name),
+    }]);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(name_of(&e, 0).as_deref(), Some("inner"));
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn the_look_through_is_bounded_in_depth_and_off_at_depth_zero() {
+    // button -> 10 nested generics -> text
+    let mut roles = vec!["button"];
+    roles.extend(std::iter::repeat_n("generic", 10));
+    roles.push("text");
+    let last = roles.len() - 1;
+    let build = |depth: u8| {
+        let mut e = tree_engine(&roles, depth);
+        name(&mut e, last, 5, "deep");
+        for i in 0..last {
+            e.set_children(nid(i), &[nid(i + 1)]).unwrap();
+        }
+        e.run(Budget::UNLIMITED);
+        assert!(e.verify().is_ok());
+        name_of(&e, 0)
+    };
+    assert_eq!(build(0), None, "depth 0 reads direct children only");
+    assert_eq!(build(8), None, "ten wrappers are past the bound of eight");
+    assert_eq!(build(11).as_deref(), Some("deep"));
+}
+
+#[test]
+fn the_look_through_keeps_the_children_and_text_caps() {
+    // 0 button -> 1 generic -> 300 texts of 10 bytes: at most 256 are read, and 1 KiB of text.
+    let n = 300;
+    let mut roles = vec!["button", "generic"];
+    roles.extend(std::iter::repeat_n("text", n));
+    let mut e = tree_engine(&roles, 8);
+    let kids: Vec<NodeIdx> = (2..2 + n).map(nid).collect();
+    for i in 2..2 + n {
+        name(&mut e, i, 5, "0123456789");
+    }
+    e.set_children(nid(0), &[nid(1)]).unwrap();
+    e.set_children(nid(1), &kids).unwrap();
+    e.run(Budget::UNLIMITED);
+    let got = name_of(&e, 0).unwrap();
+    assert!(got.len() <= 1024, "{} bytes", got.len());
+    assert!(got.starts_with("0123456789 0123456789"));
+    assert!(e.verify().is_ok());
+}
+
+#[test]
+fn an_engine_content_name_of_a_container_gives_way_to_the_deeper_content_name_but_an_authored_one_does_not()
+ {
+    use gorca_fuse::Val;
+    use gorca_model::sem::NameFrom;
+    // 0 listitem (engine name "React" computed from content) -> 1 generic -> 2 text "Alice hello", 3 button "React"
+    let build = |from: NameFrom, engine_name: &str| {
+        let mut rules = toy_rules();
+        rules.content_depth = 8;
+        rules.content_over_engine = gorca_fuse::RoleSet::of(&[SemRole::ListItem]);
+        let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], rules);
+        profile.default_role = SemRole::Generic;
+        let mut e = Ivm::new(profile, NoQuirks, NoPatches);
+        for (i, r) in ["listitem", "generic", "text", "button"].iter().enumerate() {
+            e.add_node(nid(i), None).unwrap();
+            e.apply([
+                Input::Life {
+                    node: nid(i),
+                    src: PrimarySlot::P0,
+                    seq: 1,
+                    alive: true,
+                },
+                Input::Obs {
+                    node: nid(i),
+                    src: PrimarySlot::P0,
+                    seq: 2,
+                    write: write_from_toy(Group::Role, &json!(r)),
+                },
+            ]);
+        }
+        name(&mut e, 0, 5, engine_name);
+        e.apply([Input::Obs {
+            node: nid(0),
+            src: PrimarySlot::P0,
+            seq: 5,
+            write: Write::Val(Val::NameFrom(from)),
+        }]);
+        name(&mut e, 2, 5, "Alice hello");
+        name(&mut e, 3, 5, "React");
+        e.set_children(nid(0), &[nid(1), nid(3)]).unwrap();
+        e.set_children(nid(1), &[nid(2)]).unwrap();
+        e.run(Budget::UNLIMITED);
+        assert!(e.verify().is_ok());
+        e.entry_view(nid(0)).unwrap()
+    };
+    // The engine's own (shallow) content name is replaced; the entry says it was derived.
+    let e = build(NameFrom::Content, "React");
+    assert_eq!(e.name.as_deref(), Some("Alice hello React"));
+    assert_eq!(
+        e.prov.get(Group::Name),
+        Some(gorca_model::sem::ProvCode::Derived)
+    );
+    // An authored name stays.
+    let e = build(NameFrom::Author, "React");
+    assert_eq!(e.name.as_deref(), Some("React"));
+    // A content name that adds nothing (the engine's is as long or longer) stays.
+    let e = build(
+        NameFrom::Content,
+        "Alice hello and more text than the subtree has",
+    );
+    assert_eq!(
+        e.name.as_deref(),
+        Some("Alice hello and more text than the subtree has")
+    );
+}

@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use gorca_doc::web::{Cat, WebDoc, WebSpace};
 use gorca_input_api::{GrabSet, InputContext, ModeKind};
-use gorca_model::sem::{Popup, SemEntry, SemFlags};
+use gorca_model::sem::{Group, Popup, ProvCode, SemEntry, SemFlags};
 use gorca_model::{
     AppId, DocAction, DocId, DocNodeId, Lookup, NodeKey, Prio, Role, Segment, SegmentKind, StateSet,
 };
@@ -686,8 +686,11 @@ fn one_line_label(s: &str) -> Option<String> {
 /// The name the fused entry gives a snapshot, if it should replace the snapshot's own: the
 /// entry's name where the snapshot has none (S3's name from content, for the roles that need
 /// one; spoken as a one-line label), and the entry's name where the snapshot's is the same text
-/// with something in front of it (what the S-1 quirk rows strip: a CSS list marker, a counter).
-/// A different name is the snapshot's: it was read after the mirror and is the fresher.
+/// with something in front of it (what the S-1 quirk rows strip: a CSS list marker, a counter),
+/// and the entry's name where it was derived from content and contains the snapshot's (the
+/// engine named a container from the little of its subtree it saw: a message row from its one
+/// button). Any other different name is the snapshot's: it was read after the mirror and is the
+/// fresher.
 pub(crate) fn fused_name(snap: &gorca_model::NodeSnapshot, e: &SemEntry) -> Option<Arc<str>> {
     let fused = e.name.as_ref()?;
     match snap.name.as_deref() {
@@ -706,6 +709,12 @@ pub(crate) fn fused_name(snap: &gorca_model::NodeSnapshot, e: &SemEntry) -> Opti
                 && !crate::present::name_is_blank(Some(fused)) =>
         {
             Some(Arc::clone(fused))
+        }
+        Some(own)
+            if e.prov.get(Group::Name) == Some(ProvCode::Derived)
+                && gorca_fuse::name_extends(own, fused) =>
+        {
+            one_line_label(fused).map(Arc::from)
         }
         Some(_) | None => None,
     }

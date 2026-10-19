@@ -31,6 +31,16 @@ pub fn truncate_str(s: &str, max: usize) -> &str {
     s.get(..end).unwrap_or("")
 }
 
+/// True when `fused` is a name from content that contains everything of the engine's `own` name
+/// and is not the same text: the same words (the engine joins a row's cells without a separator,
+/// "SeatLeftRight", where S3 puts a space between them) plus whatever the engine did not see.
+/// Spaces are not compared.
+pub fn name_extends(own: &str, fused: &str) -> bool {
+    let squeeze = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+    let (o, f) = (squeeze(own), squeeze(fused));
+    !o.is_empty() && own != fused && fused.len() >= own.len() && f.contains(&o)
+}
+
 /// A per-source monotone sequence number (orders writes within one source only, Lemma 1).
 pub type Seq = u64;
 

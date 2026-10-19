@@ -471,21 +471,41 @@ fn resolve_in(
     }
 }
 
-/// The views of the first `cap` children, from a getter of their current values.
-fn views<'a>(
+/// The views of the first `cap` children, from a getter of their current values. With `depth > 0`
+/// a child that is alive and has no name of its own is replaced by its own children (and theirs,
+/// down to `depth` levels): the name from content of the parent then reads the text of nameless
+/// containers too (accname 2F). The output is still at most `cap` views; the flag says whether
+/// anything was left out.
+fn views<'a, 'n>(
     children: &[NodeIdx],
     cap: usize,
+    depth: u8,
+    kids_of: impl Fn(NodeIdx) -> &'n [NodeIdx],
     get: impl Fn(NodeIdx) -> (Option<S0View<'a>>, Option<&'a SemEntry>),
 ) -> (Vec<ChildView<'a>>, bool) {
-    let out = children
-        .iter()
-        .take(cap)
-        .map(|c| {
-            let (s0, fused) = get(*c);
-            ChildView { id: c.0, s0, fused }
-        })
-        .collect();
-    (out, children.len() > cap)
+    let mut out: Vec<ChildView<'a>> = Vec::new();
+    let mut more = false;
+    // Depth-first, document order; the stack holds the siblings still to visit at each level.
+    let mut stack: Vec<std::slice::Iter<'_, NodeIdx>> = vec![children.iter()];
+    'walk: while let Some(top) = stack.last_mut() {
+        let Some(&c) = top.next() else {
+            stack.pop();
+            continue;
+        };
+        let (s0, fused) = get(c);
+        let nameless = fused.is_some_and(|e| e.name.as_deref().is_none_or(str::is_empty));
+        let kids = kids_of(c);
+        if nameless && !kids.is_empty() && stack.len() <= usize::from(depth) {
+            stack.push(kids.iter());
+            continue;
+        }
+        if out.len() >= cap {
+            more = true;
+            break 'walk;
+        }
+        out.push(ChildView { id: c.0, s0, fused });
+    }
+    (out, more)
 }
 
 /// What the parent reads of a child's entry: the name group and liveness.
@@ -686,7 +706,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         }
         self.mark_dirty(node);
         if let Some(p) = parent {
-            self.mark_dirty(p);
+            self.mark_content_readers(p);
         }
         Ok(())
     }
@@ -766,7 +786,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                         kn.pos = u32::try_from(j).unwrap_or(u32::MAX);
                     }
                 }
-                self.mark_dirty(op);
+                self.mark_content_readers(op);
             }
             if let Some(Some(cn)) = self.nodes.get_mut(slot(c)) {
                 cn.parent = Some(parent);
@@ -779,7 +799,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         if let Some(Some(pn)) = self.nodes.get_mut(slot(parent)) {
             pn.children = list;
         }
-        self.mark_dirty(parent);
+        self.mark_content_readers(parent);
         Ok(())
     }
 
@@ -828,7 +848,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                     kn.pos = u32::try_from(j).unwrap_or(u32::MAX);
                 }
             }
-            self.mark_dirty(op);
+            self.mark_content_readers(op);
         }
         let mut pos = 0u32;
         if let Some(p) = parent
@@ -836,7 +856,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         {
             pos = u32::try_from(pn.children.len()).unwrap_or(u32::MAX);
             pn.children.push(node);
-            self.mark_dirty(p);
+            self.mark_content_readers(p);
         }
         if let Some(Some(nd)) = self.nodes.get_mut(slot(node)) {
             nd.parent = parent;
@@ -937,7 +957,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                     cn.pos = u32::try_from(i).unwrap_or(u32::MAX);
                 }
             }
-            self.mark_dirty(p);
+            self.mark_content_readers(p);
         }
         self.reindex();
         Ok(removed)
@@ -1056,7 +1076,13 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         // Class 0: what the focused node's name reads, breadth first, bounded.
         while let Some(n) = queue.pop_front() {
             work += 1;
-            if !self.reads_children(n) {
+            // A nameless container below a reader is read through (its children feed the name).
+            let transparent = Some(&n) != self.focus.first()
+                && self.profile.rules.content_depth > 0
+                && node_of(&self.nodes, n)
+                    .and_then(|nd| nd.published.as_deref())
+                    .is_none_or(|e| e.name.as_deref().is_none_or(str::is_empty));
+            if !self.reads_children(n) && !transparent {
                 continue;
             }
             if let Some(nd) = node_of(&self.nodes, n) {
@@ -1120,6 +1146,31 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     fn take_dirty(&mut self, key: DirtyKey) {
         self.dirty.take(key);
+    }
+
+    /// `p`'s children (or their names) changed: re-fuse `p`, and, because a name from content
+    /// looks through nameless containers, the content-named ancestors above `p` that can see
+    /// through to it (up to the profile's `content_depth` levels, stopping at the first
+    /// ancestor that has a name of its own).
+    fn mark_content_readers(&mut self, p: NodeIdx) {
+        self.mark_dirty(p);
+        let depth = self.profile.rules.content_depth;
+        let mut cur = p;
+        for _ in 0..depth {
+            let named = node_of(&self.nodes, cur)
+                .and_then(|n| n.published.as_deref())
+                .is_some_and(|e| e.name.as_deref().is_some_and(|s| !s.is_empty()));
+            if named {
+                break;
+            }
+            let Some(up) = node_of(&self.nodes, cur).and_then(|n| n.parent) else {
+                break;
+            };
+            if self.reads_children(up) {
+                self.mark_dirty(up);
+            }
+            cur = up;
+        }
     }
 
     /// Re-fuse `n` soon: priority nodes (and nodes already dirty) join the dirty set now; any other
@@ -1782,12 +1833,23 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                     || self.patches.writes().has(Group::Role)
                     || self.profile.rules.content_named.has(role);
                 let cap = self.profile.limits.max_children.max(1);
+                let depth = if self.profile.rules.content_named.has(role) {
+                    self.profile.rules.content_depth
+                } else {
+                    0
+                };
                 let (vs, more) = if needs_children {
-                    views(&node.children, cap, |c| {
-                        node_of(nodes, c).map_or((None, None), |cn| {
-                            (s0_view_of(nodes, c), cn.published.as_deref())
-                        })
-                    })
+                    views(
+                        &node.children,
+                        cap,
+                        depth,
+                        |c| node_of(nodes, c).map_or(&[][..], |cn| cn.children.as_slice()),
+                        |c| {
+                            node_of(nodes, c).map_or((None, None), |cn| {
+                                (s0_view_of(nodes, c), cn.published.as_deref())
+                            })
+                        },
+                    )
                 } else {
                     (Vec::new(), false)
                 };
@@ -1925,7 +1987,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             && let Some(p) = parent
             && (pos as usize) < max_children
         {
-            self.mark_dirty(p);
+            self.mark_content_readers(p);
         }
         // Relation edge: dependents read this node's text.
         if text_proj(old_pub.as_deref()) != text_proj(published_entry.as_deref()) {
@@ -2040,12 +2102,34 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             let (Some(Some(nd)), Some(Some(s0))) = (self.nodes.get(i), s0s.get(i)) else {
                 continue;
             };
-            let (vs, more) = views(&nd.children, cap, |c| {
-                (
-                    s0s.get(slot(c)).and_then(Option::as_ref).map(S0View::full),
-                    out.get(slot(c)).and_then(Option::as_ref),
-                )
-            });
+            let role = nd
+                .regs
+                .user_value(Group::Role)
+                .and_then(|(_, w)| w.slot().role())
+                .or_else(|| s0.role())
+                .unwrap_or(self.profile.default_role);
+            let depth = if self.profile.rules.content_named.has(role) {
+                self.profile.rules.content_depth
+            } else {
+                0
+            };
+            let (vs, more) = views(
+                &nd.children,
+                cap,
+                depth,
+                |c| {
+                    self.nodes
+                        .get(slot(c))
+                        .and_then(Option::as_ref)
+                        .map_or(&[][..], |cn| cn.children.as_slice())
+                },
+                |c| {
+                    (
+                        s0s.get(slot(c)).and_then(Option::as_ref).map(S0View::full),
+                        out.get(slot(c)).and_then(Option::as_ref),
+                    )
+                },
+            );
             let parent = nd
                 .parent
                 .and_then(|p| s0s.get(slot(p)))

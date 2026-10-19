@@ -545,6 +545,14 @@ enum Kid {
     Leaf(&'static str),
     /// A nameless generic wrapper around more content.
     Wrap(Vec<Kid>),
+    /// A node with a role, the name the engine gave it (and where that came from), and content.
+    Node(
+        SemRole,
+        Role,
+        Option<&'static str>,
+        gorca_model::sem::NameFrom,
+        Vec<Kid>,
+    ),
 }
 
 use gorca_model::sem::{Group, GroupMask, SemRole, SrcRecord};
@@ -599,6 +607,13 @@ fn syn_add(
                     Some(syn_rec(SemRole::Generic, None)),
                     None,
                 ));
+                syn_add(id, inner, next, nodes, lists);
+            }
+            Kid::Node(sem, legacy, name, from, inner) => {
+                let mut r = (*syn_rec(sem, name)).clone();
+                r.sem.name_from = from;
+                r.known.set(Group::NameFrom, true);
+                nodes.push(syn_node(id, legacy, Some(Arc::new(r)), None));
                 syn_add(id, inner, next, nodes, lists);
             }
         }
@@ -737,13 +752,9 @@ fn a_long_content_name_is_cut_like_the_old_label() {
     assert!(new.starts_with(old.trim_end()) || old.starts_with(new.trim_end()));
 }
 
-/// Known gap, kept visible: S3 reads the final names of the *direct* children, and a nameless
-/// wrapper has none, so a control the engine left nameless whose text sits in a wrapper (a `div`
-/// inside a `button`) takes no name from the entry, where the retired `subtree_label` read the
-/// whole subtree. Engines name such controls themselves (accname 2F); the case only arises when
-/// the engine deliberately leaves the name empty.
+/// S3 looks through nameless containers (accname 2F): text inside a wrapper names the control.
 #[test]
-fn a_nameless_wrapper_hides_its_text_from_the_content_name_known_gap() {
+fn a_nameless_wrapper_does_not_hide_its_text_from_the_content_name() {
     use gorca_model::sem::SemRole as S;
     let (old, new) = synthetic(
         S::Button,
@@ -751,8 +762,104 @@ fn a_nameless_wrapper_hides_its_text_from_the_content_name_known_gap() {
         vec![Kid::Wrap(vec![Kid::Run("Save")])],
     );
     assert_eq!(old.as_deref(), Some("Save"));
+    assert_eq!(new.as_deref(), Some("Save"));
+}
+
+/// The Signal message row of `tests/web/chr0/pages/signal-like.html` (study G1,
+/// docs/reports/signal-orca-vs-gorca.md): Blink names the focused row `module-message` from the
+/// one button it sees, "React to message"; the content row, the author, the text and the time sit
+/// in nameless containers. The fused entry names the row from all of it.
+#[test]
+fn the_signal_message_row_is_named_from_author_text_and_time_not_from_its_button_alone() {
+    use gorca_model::sem::NameFrom;
+    let row = || {
+        Kid::Node(
+            SemRole::Row,
+            Role::Row,
+            Some("React to message"),
+            NameFrom::Content,
+            vec![Kid::Wrap(vec![
+                Kid::Node(
+                    SemRole::Row,
+                    Role::Row,
+                    None,
+                    NameFrom::None,
+                    vec![
+                        Kid::Wrap(vec![Kid::Leaf("Contact 0")]),
+                        Kid::Wrap(vec![
+                            Kid::Wrap(vec![Kid::Leaf("Message number 398 body text")]),
+                            Kid::Wrap(vec![Kid::Leaf("10:38")]),
+                        ]),
+                    ],
+                ),
+                Kid::Node(
+                    SemRole::Button,
+                    Role::Button,
+                    Some("React to message"),
+                    NameFrom::Author,
+                    vec![],
+                ),
+            ])],
+        )
+    };
+    let mut next = 3u64;
+    let mut nodes = vec![syn_node(
+        1,
+        Role::DocumentWeb,
+        Some(syn_rec(SemRole::DocumentWeb, None)),
+        None,
+    )];
+    let mut lists = vec![(1u64, vec![2u64])];
+    // The row is node 2; its content follows.
+    let mut r = (*syn_rec(SemRole::Row, Some("React to message"))).clone();
+    r.sem.name_from = NameFrom::Content;
+    r.known.set(Group::NameFrom, true);
+    nodes.push(syn_node(2, Role::Row, Some(Arc::new(r)), None));
+    let Kid::Node(_, _, _, _, inner) = row() else {
+        panic!("a node")
+    };
+    syn_add(2, inner, &mut next, &mut nodes, &mut lists);
+    let setup = fuse_setup(&info(WebEngine::Blink, "Chromium")).expect("blink tables");
+    let mut stage = FuseStage::new(setup);
+    let mut batch = vec![
+        DocDelta::Reset {
+            root: SrcNodeId(1),
+            nav_id: 1,
+        },
+        DocDelta::Upsert(nodes),
+    ];
+    for (p, k) in lists {
+        batch.push(DocDelta::Children {
+            parent: SrcNodeId(p),
+            children: k.into_iter().map(SrcNodeId).collect(),
+        });
+    }
+    stage.apply(&batch);
+    while stage.pending() > 0 {
+        stage.step();
+    }
+    let e = stage.sem(SrcNodeId(2)).expect("the row is fused");
+    let name = e.name.as_deref().unwrap_or("");
     assert_eq!(
-        new, None,
-        "the day S3 recurses through wrappers this becomes Some(\"Save\")"
+        name,
+        "Contact 0 Message number 398 body text 10:38 React to message"
+    );
+    assert_eq!(
+        e.prov.get(Group::Name),
+        Some(gorca_model::sem::ProvCode::Derived)
+    );
+    // What the Reader speaks: the engine's shallow name gives way to the derived one.
+    let spoken = crate::browse::commands::fused_name(
+        &fake_snapshot(Role::Row, Some(Arc::from("React to message"))),
+        &e,
+    );
+    assert_eq!(
+        spoken.as_deref(),
+        Some("Contact 0 Message number 398 body text 10:38 React to message")
+    );
+    // The authored name of the button is read as it is.
+    assert_eq!(
+        stage.sem(SrcNodeId(2)).map(|e| e.sem.role),
+        Some(SemRole::Row)
     );
 }

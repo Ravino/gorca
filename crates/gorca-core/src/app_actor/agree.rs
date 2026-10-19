@@ -95,6 +95,14 @@ pub const DEVIATIONS: &[Deviation] = &[
                  step 2F), which replaced the Reader's `subtree_label` (M22a-C3)",
     },
     Deviation {
+        id: "content-over-engine",
+        group: Group::Name,
+        reason: "the engine named a row, cell or list item from the little of its subtree it saw \
+                 (Blink: a Signal message row from its one button, \"React to message\"); S3 reads \
+                 the whole subtree through nameless containers (accname 2F) and the longer name \
+                 replaces it (evidence: signal-like fixture, docs/reports/signal-orca-vs-gorca.md G1)",
+    },
+    Deviation {
         id: "aria-role-over-engine",
         group: Group::Role,
         reason: "the author's ARIA role token wins over the engine role (ADR-0022 2.1 engine-vs-ARIA \
@@ -155,6 +163,13 @@ fn applies(id: &str, c: &Ctx<'_>) -> bool {
                     c.entry.prov.get(Group::Name),
                     Some(ProvCode::Derived | ProvCode::DerivedTainted)
                 )
+        }
+        "content-over-engine" => {
+            matches!(c.entry.prov.get(Group::Name), Some(ProvCode::Derived))
+                && match (c.snap.name.as_deref(), c.entry.name.as_deref()) {
+                    (Some(l), Some(f)) => gorca_fuse::name_extends(l, f),
+                    _ => false,
+                }
         }
         "aria-role-over-engine" => c.rec.role_source == RoleSource::Token,
         "weak-role-refined" => weak(c.snap.role),

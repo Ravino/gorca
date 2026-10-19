@@ -971,9 +971,20 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
     let mut truncated = GroupMask::EMPTY;
 
     // S3 derived (a): name from content over the children's final names.
-    if fillable(&eff, &layer, Group::Name)
+    // An engine's own content name of a container may be shallower than the subtree: for the
+    // roles in `content_over_engine`, a name the engine computed from content gives way to the
+    // name from content when that adds text. An authored name never does.
+    let engine_content_name = role_in(profile.rules.content_over_engine)
+        && matches!(layer[ix(Group::Name)], Layer::Observed)
+        && matches!(
+            &eff[ix(Group::NameFrom)],
+            Slot::Val(Val::NameFrom(NameFrom::Content))
+        );
+    let current_name_len = eff[ix(Group::Name)].text().map_or(0, |t| t.len());
+    if (fillable(&eff, &layer, Group::Name) || engine_content_name)
         && role_in(profile.rules.content_named)
         && let Some(c) = name_from_content(nb.children, nb.more_children, &profile.limits)
+        && (!engine_content_name || c.name.len() > current_name_len)
     {
         truncated.set(Group::Name, c.truncated);
         if T::ON {
