@@ -1,0 +1,5 @@
+{
+  "meta": {"utc": "2026-10-19T18:19:21Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "13.32 16.61 16.65 2/1987 2595691", "git_rev": "b264e4b1", "git_dirty": "false", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "topology_arms": "lanes-rtx3", "topology_expected": "-", "label": "c3-base-1", "reader": "daemon:/var/tmp/c3-base-target/release/gorca", "backend": "voicego", "repeats": "3", "samples_per_series": "1200", "l2_trials": "400", "quick": "false", "loadavg_end": "13.32 16.61 16.65 1/1987 2595688", "reader_env": "GORCA_TOPOLOGY_REPORT=bench/results/e2e/c3-base-1/topology/topology.%p.json", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats", "reader_args": "", "ext_dir": "none", "extensions": "none", "note0": "K1 skipped: the reader did not register with the emulated keyboard monitor"},
+  "rows": [
+  ]
+}

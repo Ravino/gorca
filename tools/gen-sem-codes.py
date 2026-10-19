@@ -30,7 +30,14 @@ def flag_rows(path, name):
 
 
 reg = {}
-reg['groups'] = sorted(((k, v) for k, v in fx['group_codes'].items() if v < 0x8000), key=lambda x: x[1])
+# Groups: the oracle's, then the ones appended to the model after the corpus was generated (M22a-C3:
+# roledescription .. namefrom). Appended groups have no oracle rows; the model is their source.
+_oracle_groups = {k: v for k, v in fx['group_codes'].items() if v < 0x8000}
+_appended = [(k, v) for k, v in enum_rows(model + 'codes.rs', 'Group') if k not in _oracle_groups]
+for _k, _v in _appended:
+    if _v in _oracle_groups.values():
+        sys.exit(f'appended group {_k} reuses code {_v}')
+reg['groups'] = sorted(list(_oracle_groups.items()) + _appended, key=lambda x: x[1])
 reg['evidence'] = sorted(((k, v) for k, v in fx['group_codes'].items() if v >= 0x8000), key=lambda x: x[1])
 reg['prov'] = sorted(fx['prov_codes'].items(), key=lambda x: x[1])
 reg['conf'] = sorted(fx['conf_codes'].items(), key=lambda x: x[1])

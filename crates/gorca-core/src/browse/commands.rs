@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use gorca_doc::web::{Cat, WebDoc, WebSpace};
 use gorca_input_api::{GrabSet, InputContext, ModeKind};
+use gorca_model::sem::{Group, Popup, ProvCode, SemEntry, SemFlags};
 use gorca_model::{
     AppId, DocAction, DocId, DocNodeId, Lookup, NodeKey, Prio, Role, Segment, SegmentKind, StateSet,
 };
@@ -608,27 +609,6 @@ fn is_ancestor_or_self(d: &WebDoc, anc: DocNodeId, node: DocNodeId) -> bool {
     false
 }
 
-/// The visible text of a node's subtree as a one-line label (whitespace collapsed, icon glyphs
-/// dropped, capped), or `None` when it holds none: the name a control without an accessible
-/// name has in browse mode.
-fn subtree_label(d: &WebDoc, id: DocNodeId) -> Option<String> {
-    const CAP: u32 = 160;
-    let (a, b) = d.subtree_text_range(id)?;
-    if a >= b {
-        return None;
-    }
-    let mut raw = String::new();
-    d.read_text(a, b.min(a.saturating_add(CAP)), &mut raw);
-    let raw: String = raw
-        .chars()
-        .filter(|c| {
-            !gorca_model::text::is_icon_glyph(*c) && !gorca_model::text::is_object_marker(*c)
-        })
-        .collect();
-    let label = raw.split_whitespace().collect::<Vec<_>>().join(" ");
-    (!crate::present::name_is_blank(Some(&label))).then_some(label)
-}
-
 fn title_of(d: &WebDoc) -> Option<String> {
     d.root()
         .and_then(|r| d.node(r))
@@ -678,6 +658,114 @@ fn trim_items(mut items: Vec<Item>) -> Vec<Item> {
     }
     items.retain(|i| !i.text().is_empty());
     items
+}
+
+/// Longest label a nameless control takes from its content, in characters (a control is not read
+/// out as a paragraph).
+const LABEL_CAP: usize = 160;
+
+/// A name derived from content as a one-line label: whitespace collapsed, icon glyphs and object
+/// markers dropped, capped at [`LABEL_CAP`] characters. `None` when nothing speakable is left.
+fn one_line_label(s: &str) -> Option<String> {
+    let kept: String = s
+        .chars()
+        .filter(|c| {
+            !gorca_model::text::is_icon_glyph(*c) && !gorca_model::text::is_object_marker(*c)
+        })
+        .collect();
+    let label = kept
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(LABEL_CAP)
+        .collect::<String>();
+    (!crate::present::name_is_blank(Some(&label))).then_some(label)
+}
+
+/// The name the fused entry gives a snapshot, if it should replace the snapshot's own: the
+/// entry's name where the snapshot has none (S3's name from content, for the roles that need
+/// one; spoken as a one-line label), and the entry's name where the snapshot's is the same text
+/// with something in front of it (what the S-1 quirk rows strip: a CSS list marker, a counter),
+/// and the entry's name where it was derived from content and contains the snapshot's (the
+/// engine named a container from the little of its subtree it saw: a message row from its one
+/// button). Any other different name is the snapshot's: it was read after the mirror and is the
+/// fresher.
+pub(crate) fn fused_name(snap: &gorca_model::NodeSnapshot, e: &SemEntry) -> Option<Arc<str>> {
+    let fused = e.name.as_ref()?;
+    match snap.name.as_deref() {
+        own if crate::present::name_is_blank(own) => {
+            // A combo box or any control with a value would say its value as its name.
+            (crate::present::needs_name(snap.role)
+                && snap.role != Role::ComboBox
+                && snap.value.is_none())
+            .then(|| one_line_label(fused))
+            .flatten()
+            .map(Arc::from)
+        }
+        Some(own)
+            if own != &**fused
+                && own.ends_with(&**fused)
+                && !crate::present::name_is_blank(Some(fused)) =>
+        {
+            Some(Arc::clone(fused))
+        }
+        Some(own)
+            if e.prov.get(Group::Name) == Some(ProvCode::Derived)
+                && gorca_fuse::name_extends(own, fused) =>
+        {
+            one_line_label(fused).map(Arc::from)
+        }
+        Some(_) | None => None,
+    }
+}
+
+/// The overlay of one mirror node on a snapshot; `None` when it adds nothing.
+fn overlay_from_meta(
+    snap: &Arc<gorca_model::NodeSnapshot>,
+    meta: &gorca_doc::web::NodeMeta,
+) -> Option<Arc<gorca_model::NodeSnapshot>> {
+    let entry = meta.sem.as_deref();
+    let name = entry.and_then(|e| fused_name(snap, e));
+    let description = entry
+        .filter(|_| snap.description.is_none())
+        .and_then(|e| e.sem.text.as_deref())
+        .and_then(|t| t.description.clone());
+    let mut add = StateSet::empty();
+    if let Some(e) = entry {
+        if e.sem.flags.contains(SemFlags::READ_ONLY) {
+            add |= StateSet::READ_ONLY;
+        }
+        if e.sem.popup != Popup::No {
+            add |= StateSet::HAS_POPUP;
+        }
+    }
+    let carry_attrs = !snap.have.contains(gorca_model::PropMask::ATTRS) && !meta.attrs.is_empty();
+    if name.is_none() && description.is_none() && snap.states.contains(add) && !carry_attrs {
+        return None;
+    }
+    let mut c = (**snap).clone();
+    if let Some(n) = name {
+        c.name = Some(n);
+    }
+    if let Some(d) = description {
+        c.description = Some(d);
+    }
+    c.states |= add;
+    if carry_attrs {
+        // An error text the focus fetch just read is fresher than the mirror's.
+        let fetched = snap
+            .attrs
+            .iter()
+            .find(|(k, _)| *k == gorca_doc_source_api::web_attrs::ERROR_TEXT)
+            .cloned();
+        c.attrs.clone_from(&meta.attrs);
+        if let Some((k, t)) = fetched {
+            c.attrs.retain(|(a, _)| *a != k);
+            c.attrs.push((k, t));
+        }
+    }
+    Some(Arc::new(c))
 }
 
 impl Reader {
@@ -1203,9 +1291,16 @@ impl Reader {
         false
     }
 
-    /// M8b: the snapshot of a web node with what only the document mirror knows (the attribute
-    /// map with `xml-roles`, `current`, `haspopup`, `error-text`; the description; the states the
-    /// web source normalised). Any other snapshot comes back unchanged.
+    /// The snapshot of a web node with what the document's fused entry adds (M8b, M22a-C3): the
+    /// name (the S-1 quirk rows' list-marker strip, S3's name from content for a control the
+    /// engine left nameless), the description and the `READ_ONLY`/`HAS_POPUP` states. The entry is
+    /// read through the document mirror (`NodeMeta::sem`, fused by the document actor before the
+    /// batch is published); nothing is derived from the page text here. Any other snapshot comes
+    /// back unchanged.
+    ///
+    /// The attribute map still comes from the mirror for a snapshot that was fetched without
+    /// `ATTRS` (a state refresh): the presenter reads `xml-roles`, `tag`, `current`, `haspopup`
+    /// and `error-text` from it until M22b makes it read the entry.
     pub(crate) fn web_overlay(
         &self,
         snap: &Arc<gorca_model::NodeSnapshot>,
@@ -1220,55 +1315,7 @@ impl Reader {
             return Arc::clone(snap);
         };
         h.read
-            .with(|d| {
-                let v = d.node(id)?;
-                // Name parity with browse mode: a control the engine left without a name (or
-                // named by an icon glyph) takes the text the document holds for it, which is
-                // what a quick-nav move onto it reads.
-                // A combo box or any control with a value would say its value as its name.
-                let fill = (crate::present::needs_name(snap.role)
-                    && snap.role != Role::ComboBox
-                    && snap.value.is_none()
-                    && crate::present::name_is_blank(snap.name.as_deref()))
-                .then(|| subtree_label(d, id))
-                .flatten();
-                let meta = v.meta.filter(|m| !m.attrs.is_empty());
-                if meta.is_none() && fill.is_none() {
-                    return None;
-                }
-                let mut c = (**snap).clone();
-                if let Some(f) = fill {
-                    c.name = Some(Arc::from(f));
-                }
-                // No attributes to merge: only a filled name changes the snapshot.
-                let Some(m) = meta else {
-                    return Some(Arc::new(c));
-                };
-                // The engine's name of a list or tree item carries the list marker; the document
-                // mirror's does not (web source quirk row).
-                if matches!(v.role, Role::ListItem | Role::TreeItem)
-                    && let Some(n) = v.name.filter(|n| !n.is_empty())
-                {
-                    c.name = Some(Arc::from(n));
-                }
-                // An error text the focus fetch just read is fresher than the mirror's (and the
-                // only one for an invalid field past the source's per-fetch cap).
-                let fetched = snap
-                    .attrs
-                    .iter()
-                    .find(|(k, _)| *k == gorca_doc_source_api::web_attrs::ERROR_TEXT)
-                    .cloned();
-                c.attrs.clone_from(&m.attrs);
-                if let Some((k, t)) = fetched {
-                    c.attrs.retain(|(a, _)| *a != k);
-                    c.attrs.push((k, t));
-                }
-                if c.description.is_none() {
-                    c.description.clone_from(&m.description);
-                }
-                c.states |= m.states & (StateSet::READ_ONLY | StateSet::HAS_POPUP);
-                Some(Arc::new(c))
-            })
+            .with(|d| overlay_from_meta(snap, d.node(id)?.meta?))
             .unwrap_or_else(|| Arc::clone(snap))
     }
 
@@ -3391,3 +3438,155 @@ fn content_sig(d: &WebDoc, n: DocNodeId) -> Option<u64> {
 const TOGGLE_STATES: StateSet = StateSet::PRESSED
     .union(StateSet::CHECKED)
     .union(StateSet::EXPANDED);
+
+#[cfg(test)]
+mod overlay_tests {
+    //! The fused-entry overlay (M22a-C3): what a web node's document entry adds to the snapshot the
+    //! application connector read. Pure: a snapshot, a mirror node's meta, the result.
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use std::sync::Arc;
+    use std::time::Instant;
+
+    use gorca_doc::web::NodeMeta;
+    use gorca_model::sem::{Popup, SemEntry, SemFlags, SemText};
+    use gorca_model::{
+        AppId, AttrKey, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSem,
+        NodeSnapshot, PropMask, Role, StateSet, Value,
+    };
+
+    use super::{fused_name, overlay_from_meta};
+
+    fn snap(role: Role, name: Option<&str>) -> Arc<NodeSnapshot> {
+        Arc::new(NodeSnapshot {
+            key: NodeKey {
+                app: AppId {
+                    connector: ConnectorId(1),
+                    serial: 1,
+                },
+                local: LocalId(1),
+            },
+            role,
+            states: StateSet::ENABLED,
+            name: name.map(Arc::from),
+            description: None,
+            value: None,
+            parent: None,
+            children: ChildList::Unknown,
+            interfaces: Ifaces::empty(),
+            attrs: gorca_model::AttrMap::default(),
+            relations: gorca_model::Relations::default(),
+            bounds: None,
+            have: PropMask::PRESENT | PropMask::ATTRS,
+            confirmed_seq: 0,
+            fresh: Freshness::Fresh { at: Instant::now() },
+            sem: NodeSem::NONE,
+        })
+    }
+
+    fn entry(name: Option<&str>) -> Arc<SemEntry> {
+        Arc::new(SemEntry {
+            name: name.map(Arc::from),
+            ..SemEntry::default()
+        })
+    }
+
+    fn meta(e: Option<Arc<SemEntry>>) -> NodeMeta {
+        NodeMeta {
+            sem: e,
+            ..NodeMeta::default()
+        }
+    }
+
+    #[test]
+    fn a_nameless_control_takes_the_name_the_entry_derived_from_its_content() {
+        let s = snap(Role::Button, None);
+        let m = meta(Some(entry(Some("Save all"))));
+        let out = overlay_from_meta(&s, &m).unwrap();
+        assert_eq!(out.name.as_deref(), Some("Save all"));
+        // A name that is only an icon glyph counts as none, like the engine's own empty name.
+        let s = snap(Role::Link, Some("\u{e900}"));
+        let out = overlay_from_meta(&s, &m).unwrap();
+        assert_eq!(out.name.as_deref(), Some("Save all"));
+    }
+
+    #[test]
+    fn the_content_name_is_not_taken_by_roles_that_say_their_value_or_need_no_name() {
+        let m = meta(Some(entry(Some("Save"))));
+        // A combo box says its value; a control with a value likewise; a paragraph needs none.
+        assert!(overlay_from_meta(&snap(Role::ComboBox, None), &m).is_none());
+        let mut with_value = (*snap(Role::Button, None)).clone();
+        with_value.value = Some(Value::Text(Arc::from("3")));
+        assert!(overlay_from_meta(&Arc::new(with_value), &m).is_none());
+        assert!(overlay_from_meta(&snap(Role::Paragraph, None), &m).is_none());
+    }
+
+    #[test]
+    fn a_marker_the_quirk_rows_stripped_is_not_spoken_and_a_fresher_name_is_kept() {
+        let e = entry(Some("Alpha"));
+        let m = meta(Some(Arc::clone(&e)));
+        // The engine's name carries the CSS marker; the entry's does not.
+        let out = overlay_from_meta(&snap(Role::ListItem, Some("• Alpha")), &m).unwrap();
+        assert_eq!(out.name.as_deref(), Some("Alpha"));
+        let out = overlay_from_meta(&snap(Role::ListItem, Some("1. Alpha")), &m).unwrap();
+        assert_eq!(out.name.as_deref(), Some("Alpha"));
+        // Equal names: nothing to do. A different name was read after the mirror: it wins.
+        assert!(overlay_from_meta(&snap(Role::ListItem, Some("Alpha")), &m).is_none());
+        assert!(overlay_from_meta(&snap(Role::ListItem, Some("Beta")), &m).is_none());
+        // The entry's name must be what is left, not merely contained.
+        assert_eq!(
+            fused_name(&snap(Role::ListItem, Some("Alpha Beta")), &e),
+            None
+        );
+    }
+
+    #[test]
+    fn description_and_the_read_only_and_popup_states_come_from_the_entry() {
+        let mut e = SemEntry::default();
+        e.sem.flags = SemFlags::READ_ONLY;
+        e.sem.popup = Popup::Menu;
+        e.sem.text = Some(Arc::new(SemText {
+            description: Some(Arc::from("Opens a menu")),
+            ..SemText::default()
+        }));
+        let m = meta(Some(Arc::new(e)));
+        let out = overlay_from_meta(&snap(Role::Button, Some("File")), &m).unwrap();
+        assert_eq!(out.description.as_deref(), Some("Opens a menu"));
+        assert!(
+            out.states
+                .contains(StateSet::READ_ONLY | StateSet::HAS_POPUP)
+        );
+        assert!(out.states.contains(StateSet::ENABLED), "the rest is kept");
+        // The snapshot's own description is the fresher one.
+        let mut own = (*snap(Role::Button, Some("File"))).clone();
+        own.description = Some(Arc::from("Fresh"));
+        let out = overlay_from_meta(&Arc::new(own), &m).unwrap();
+        assert_eq!(out.description.as_deref(), Some("Fresh"));
+        // Nothing to add: no new snapshot.
+        let mut done = (*snap(Role::Button, Some("File"))).clone();
+        done.states |= StateSet::READ_ONLY | StateSet::HAS_POPUP;
+        done.description = Some(Arc::from("Opens a menu"));
+        assert!(overlay_from_meta(&Arc::new(done), &m).is_none());
+    }
+
+    #[test]
+    fn attributes_come_from_the_mirror_only_for_a_snapshot_fetched_without_them() {
+        let key = AttrKey(7);
+        let mut m = meta(None);
+        m.attrs = std::iter::once((key, Arc::<str>::from("switch"))).collect();
+        // Fetched with ATTRS: the snapshot's attributes are the truth, even when empty.
+        assert!(overlay_from_meta(&snap(Role::CheckBox, Some("Mute")), &m).is_none());
+        // A state refresh has none: the mirror's are used, a fetched error text stays.
+        let mut refreshed = (*snap(Role::CheckBox, Some("Mute"))).clone();
+        refreshed.have = PropMask::NAME | PropMask::STATES;
+        let out = overlay_from_meta(&Arc::new(refreshed), &m).unwrap();
+        assert_eq!(out.attrs.len(), 1);
+        assert_eq!(out.attrs[0].0, key);
+    }
+
+    #[test]
+    fn a_node_without_an_entry_is_left_to_the_snapshot() {
+        let m = meta(None);
+        assert!(overlay_from_meta(&snap(Role::Button, None), &m).is_none());
+    }
+}

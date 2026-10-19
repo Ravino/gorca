@@ -86,13 +86,21 @@ pub const DEVIATIONS: &[Deviation] = &[
         id: "gecko-list-marker",
         group: Group::Name,
         reason: "the engine's name of a list or menu item carries the CSS marker (\"• Alpha\") or the counter \
-                 of an ordered list (\"1. First\"); the S-1 quirk rows strip them (X1 does it in an extension today, C3 removes X1)",
+                 of an ordered list (\"1. First\"); the S-1 quirk rows strip them (the Reader's overlay takes the stripped name from the document entry; M22a-C3 removed the old role-gated branch)",
     },
     Deviation {
         id: "name-from-content",
         group: Group::Name,
         reason: "the legacy snapshot has no name; S3 derives one from the content (accname 1.2 \
-                 step 2F), which replaces `subtree_label` (X4) in C3",
+                 step 2F), which replaced the Reader's `subtree_label` (M22a-C3)",
+    },
+    Deviation {
+        id: "content-over-engine",
+        group: Group::Name,
+        reason: "the engine named a row, cell or list item from the little of its subtree it saw \
+                 (Blink: a Signal message row from its one button, \"React to message\"); S3 reads \
+                 the whole subtree through nameless containers (accname 2F) and the longer name \
+                 replaces it (evidence: signal-like fixture, docs/reports/signal-orca-vs-gorca.md G1)",
     },
     Deviation {
         id: "aria-role-over-engine",
@@ -155,6 +163,13 @@ fn applies(id: &str, c: &Ctx<'_>) -> bool {
                     c.entry.prov.get(Group::Name),
                     Some(ProvCode::Derived | ProvCode::DerivedTainted)
                 )
+        }
+        "content-over-engine" => {
+            matches!(c.entry.prov.get(Group::Name), Some(ProvCode::Derived))
+                && match (c.snap.name.as_deref(), c.entry.name.as_deref()) {
+                    (Some(l), Some(f)) => gorca_fuse::name_extends(l, f),
+                    _ => false,
+                }
         }
         "aria-role-over-engine" => c.rec.role_source == RoleSource::Token,
         "weak-role-refined" => weak(c.snap.role),

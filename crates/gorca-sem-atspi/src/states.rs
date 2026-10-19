@@ -3,6 +3,7 @@
 //! flags. Exclusive states (`EXPANDED|COLLAPSED`, `CHECKED|INDETERMINATE`) are canonicalised
 //! here, so a record never carries an impossible combination.
 
+use gorca_model::StateSet;
 use gorca_model::sem::{Avail, Check, Expand, Orientation, Press, Select, SemFlags, SemRole};
 
 /// `AtspiStateType` bit numbers (at-spi2-core 2.56, stable ABI; the state set is a 64-bit mask
@@ -70,6 +71,79 @@ impl StateBits {
     pub const fn has(self, state: u8) -> bool {
         state < 64 && self.0 & (1u64 << state) != 0
     }
+}
+
+/// Which flat state set [`state_set`] builds. The two differ in exactly two things, so the table
+/// is written once.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum StateMode {
+    /// A node of a native application (the app connector): a node without `SENSITIVE` is
+    /// `DISABLED` (Orca's rule), but only when the application reported a state set at all;
+    /// `READ_ONLY` and `VISITED` are not carried (nothing reads them for native widgets).
+    Native,
+    /// A node of a web document (the document source): `READ_ONLY` and `VISITED` are carried,
+    /// and `DISABLED` never is (the web path has no unavailable state; the model's `avail` is the
+    /// new information).
+    Web,
+}
+
+/// The flat [`StateSet`] of a raw AT-SPI state set (the presenter's and the document mirror's
+/// state words). The tri-state semantic groups are [`map_states`]; this is the one table behind
+/// the legacy flat form, shared by the connector and the document source.
+pub fn state_set(bits: StateBits, mode: StateMode) -> StateSet {
+    const COMMON: [(u8, StateSet); 22] = [
+        (bit::FOCUSED, StateSet::FOCUSED),
+        (bit::FOCUSABLE, StateSet::FOCUSABLE),
+        (bit::SELECTED, StateSet::SELECTED),
+        (bit::CHECKED, StateSet::CHECKED),
+        (bit::PRESSED, StateSet::PRESSED),
+        (bit::EXPANDED, StateSet::EXPANDED),
+        (bit::COLLAPSED, StateSet::COLLAPSED),
+        (bit::EDITABLE, StateSet::EDITABLE),
+        (bit::SHOWING, StateSet::SHOWING),
+        (bit::VISIBLE, StateSet::VISIBLE),
+        (bit::BUSY, StateSet::BUSY),
+        (bit::MODAL, StateSet::MODAL),
+        (bit::MULTI_LINE, StateSet::MULTILINE),
+        (bit::REQUIRED, StateSet::REQUIRED),
+        (bit::INVALID_ENTRY, StateSet::INVALID),
+        (bit::HAS_POPUP, StateSet::HAS_POPUP),
+        (bit::ACTIVE, StateSet::ACTIVE),
+        (bit::DEFUNCT, StateSet::DEFUNCT),
+        (bit::ENABLED, StateSet::ENABLED),
+        (bit::SELECTABLE, StateSet::SELECTABLE),
+        (bit::TRANSIENT, StateSet::TRANSIENT),
+        (bit::MANAGES_DESCENDANTS, StateSet::MANAGES_DESCENDANTS),
+    ];
+    let mut out = StateSet::empty();
+    for (b, f) in COMMON {
+        if bits.has(b) {
+            out |= f;
+        }
+    }
+    if bits.has(bit::INDETERMINATE) {
+        out |= StateSet::MIXED;
+    }
+    // Gecko and GTK never set `collapsed`: expandable and not expanded is collapsed.
+    if bits.has(bit::EXPANDABLE) && !bits.has(bit::EXPANDED) {
+        out |= StateSet::COLLAPSED;
+    }
+    match mode {
+        StateMode::Native => {
+            if bits.0 != 0 && !bits.has(bit::SENSITIVE) {
+                out |= StateSet::DISABLED;
+            }
+        }
+        StateMode::Web => {
+            if bits.has(bit::READ_ONLY) {
+                out |= StateSet::READ_ONLY;
+            }
+            if bits.has(bit::VISITED) {
+                out |= StateSet::VISITED;
+            }
+        }
+    }
+    out
 }
 
 /// How each AT-SPI state is used (the M-10 list for states).
@@ -434,6 +508,39 @@ mod tests {
 
     fn bits(list: &[u8]) -> StateBits {
         StateBits(list.iter().fold(0u64, |a, b| a | (1u64 << b)))
+    }
+
+    #[test]
+    fn the_flat_set_maps_the_shared_states_in_both_modes() {
+        for mode in [StateMode::Native, StateMode::Web] {
+            let s = state_set(bits(&[bit::SHOWING, bit::FOCUSABLE, bit::ENABLED]), mode);
+            assert!(s.contains(StateSet::SHOWING | StateSet::FOCUSABLE | StateSet::ENABLED));
+            assert!(!s.contains(StateSet::FOCUSED));
+            // INDETERMINATE is the mixed state.
+            assert!(state_set(bits(&[bit::INDETERMINATE]), mode).contains(StateSet::MIXED));
+            assert!(!state_set(bits(&[bit::ENABLED]), mode).contains(StateSet::MIXED));
+            // Expandable and not expanded is collapsed; expanded is not.
+            assert!(state_set(bits(&[bit::EXPANDABLE]), mode).contains(StateSet::COLLAPSED));
+            let e = state_set(bits(&[bit::EXPANDABLE, bit::EXPANDED]), mode);
+            assert!(e.contains(StateSet::EXPANDED) && !e.contains(StateSet::COLLAPSED));
+            assert_eq!(state_set(StateBits(0), mode), StateSet::empty());
+        }
+    }
+
+    #[test]
+    fn the_two_modes_differ_in_disabled_and_the_web_only_states() {
+        // Native: no SENSITIVE is DISABLED, but only for a reported (non-empty) set.
+        assert!(state_set(bits(&[bit::SHOWING]), StateMode::Native).contains(StateSet::DISABLED));
+        let ok = state_set(bits(&[bit::SHOWING, bit::SENSITIVE]), StateMode::Native);
+        assert!(!ok.contains(StateSet::DISABLED));
+        // Web: never DISABLED.
+        assert!(!state_set(bits(&[bit::SHOWING]), StateMode::Web).contains(StateSet::DISABLED));
+        // READ_ONLY and VISITED are web states only.
+        let ro = bits(&[bit::READ_ONLY, bit::VISITED]);
+        let web = state_set(ro, StateMode::Web);
+        assert!(web.contains(StateSet::READ_ONLY | StateSet::VISITED));
+        let native = state_set(ro, StateMode::Native);
+        assert!(!native.contains(StateSet::READ_ONLY) && !native.contains(StateSet::VISITED));
     }
 
     #[test]

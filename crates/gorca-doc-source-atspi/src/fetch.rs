@@ -501,7 +501,7 @@ async fn complete(
                 attrs.push((web_attrs::RAW_ROLE, Arc::from(rr.to_string().as_str())));
             }
             let states = match states_raw[i] {
-                Some(s) => opts.quirks.states(role, roles::map_states(s)),
+                Some(s) => opts.quirks.states(role, roles::map_web_states(s)),
                 None => roles::DEFAULT_PLAIN_STATES,
             };
             let authored = attrs

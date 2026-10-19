@@ -1100,7 +1100,7 @@ impl AtspiDocSource {
                     .config
                     .fetch
                     .quirks
-                    .states(role, roles::map_states(state)),
+                    .states(role, roles::map_web_states(state)),
                 name,
                 text,
                 attrs: amap,

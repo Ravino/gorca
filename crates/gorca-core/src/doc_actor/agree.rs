@@ -100,6 +100,9 @@ pub fn stats() -> AgreementStats {
 /// * `name`: a legacy name outside list and tree items keeps the CSS list marker the S-1 row
 ///   strips ("• New" on a `role=menuitem` list item); the row covers option and menu items
 ///   too, which is what Blink exports.
+/// * `name`, content over engine: a row, cell or list item whose engine name is a part of the
+///   longer name S3 derives by reading through nameless containers (a message row named by its
+///   one button, "React to message", against author, text, time and the button).
 /// * `level`: the legacy level is clamped to 1..=6 (heading levels); `aria-level` is not.
 /// * `live`: the legacy flag marks region roots and the status/log/marquee/timer tokens (also
 ///   `live=off`), and leaves `alert` to its role; the model also carries inherited container
@@ -250,7 +253,11 @@ pub fn compare(n: &SrcNode, flags: NodeFlags, level: u8, e: &SemEntry) -> Vec<As
         let fused = e.name.as_deref();
         let marker_kept = !matches!(n.role, Role::ListItem | Role::TreeItem)
             && fused.is_some_and(|f| marker_only(legacy, f));
-        if fused != Some(legacy) && !marker_kept {
+        // The engine's own content name of a container was shallower than the subtree: the
+        // longer name S3 derived replaces it (deviation `content-over-engine`).
+        let deeper = e.prov.get(Group::Name) == Some(gorca_model::sem::ProvCode::Derived)
+            && fused.is_some_and(|f| gorca_fuse::name_extends(legacy, f));
+        if fused != Some(legacy) && !marker_kept && !deeper {
             out.push(Aspect::Name);
         }
     }

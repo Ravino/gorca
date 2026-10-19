@@ -5,7 +5,6 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use atspi::State as Raw;
 use gorca_model::sem::SrcRecord;
 use gorca_model::{
     AttrKey, AttrMap, ChildList, Freshness, Ifaces, NodeKey, NodeSem, NodeSnapshot, PropMask,
@@ -45,53 +44,14 @@ pub fn state_bits(words: &[u32]) -> u64 {
     lo | (hi << 32)
 }
 
-fn has(bits: u64, s: Raw) -> bool {
-    bits & (s as u64) != 0
-}
-
-/// Connector-normalised states. `DISABLED` follows Orca: a node without `Sensitive` is
-/// unavailable, but only when the application reported a state set at all.
+/// Connector-normalised states: the shared flat mapping in its native-application form
+/// (`DISABLED` follows Orca: a node without `Sensitive` is unavailable, but only when the
+/// application reported a state set at all).
 pub fn states_from_raw(words: &[u32]) -> StateSet {
-    let bits = state_bits(words);
-    let mut out = StateSet::empty();
-    let table = [
-        (Raw::Focused, StateSet::FOCUSED),
-        (Raw::Focusable, StateSet::FOCUSABLE),
-        (Raw::Selected, StateSet::SELECTED),
-        (Raw::Checked, StateSet::CHECKED),
-        (Raw::Pressed, StateSet::PRESSED),
-        (Raw::Expanded, StateSet::EXPANDED),
-        (Raw::Collapsed, StateSet::COLLAPSED),
-        (Raw::Editable, StateSet::EDITABLE),
-        (Raw::Showing, StateSet::SHOWING),
-        (Raw::Visible, StateSet::VISIBLE),
-        (Raw::Busy, StateSet::BUSY),
-        (Raw::Modal, StateSet::MODAL),
-        (Raw::MultiLine, StateSet::MULTILINE),
-        (Raw::Required, StateSet::REQUIRED),
-        (Raw::InvalidEntry, StateSet::INVALID),
-        (Raw::HasPopup, StateSet::HAS_POPUP),
-        (Raw::Active, StateSet::ACTIVE),
-        (Raw::Defunct, StateSet::DEFUNCT),
-        (Raw::Enabled, StateSet::ENABLED),
-        (Raw::Selectable, StateSet::SELECTABLE),
-        (Raw::Transient, StateSet::TRANSIENT),
-        (Raw::ManagesDescendants, StateSet::MANAGES_DESCENDANTS),
-        (Raw::Indeterminate, StateSet::MIXED),
-    ];
-    for (raw, core) in table {
-        if has(bits, raw) {
-            out |= core;
-        }
-    }
-    // Gecko and GTK never set `collapsed`: expandable and not expanded is collapsed.
-    if has(bits, Raw::Expandable) && !has(bits, Raw::Expanded) {
-        out |= StateSet::COLLAPSED;
-    }
-    if bits != 0 && !has(bits, Raw::Sensitive) {
-        out |= StateSet::DISABLED;
-    }
-    out
+    gorca_sem_atspi::states::state_set(
+        StateBits(state_bits(words)),
+        gorca_sem_atspi::states::StateMode::Native,
+    )
 }
 
 /// Everything a focus presentation needs, as the connector learned it.
@@ -293,6 +253,7 @@ pub fn snapshot(key: NodeKey, raw: &RawNode, now: Instant) -> Arc<NodeSnapshot> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use atspi::State as Raw;
     use gorca_model::{AppId, ConnectorId, LocalId};
 
     #[test]

@@ -50,6 +50,15 @@ pub struct Rules {
     pub level_roles: RoleSet,
     /// Roles named from their content (S3 name from content).
     pub content_named: RoleSet,
+    /// How many levels of nameless containers S3 name from content looks through (accname 2F:
+    /// a child without a name of its own contributes its own content). 0 reads the final names
+    /// of the direct children only (the oracle corpus's rule).
+    pub content_depth: u8,
+    /// Container roles whose engine-computed name (`namefrom` = content) is replaced by the name
+    /// from content when that adds text: Blink names a row from the few children it sees (a
+    /// message row from its one button), where accname 2F reads the whole subtree. An authored
+    /// name (`aria-label`, `aria-labelledby`) is never replaced.
+    pub content_over_engine: RoleSet,
     /// Roles that a `title` evidence fact may name (S3).
     pub title_named: RoleSet,
 }
@@ -102,7 +111,10 @@ impl Rules {
                 R::TreeItem,
             ]),
             level_roles: RoleSet::of(&[R::Heading, R::ListItem, R::Row, R::TreeItem]),
+            content_depth: 8,
+            content_over_engine: RoleSet::of(&[R::Cell, R::GridCell, R::ListItem, R::Row]),
             content_named: RoleSet::of(&[
+                R::Article,
                 R::Button,
                 R::Cell,
                 R::Checkbox,
@@ -110,6 +122,7 @@ impl Rules {
                 R::GridCell,
                 R::Heading,
                 R::Link,
+                R::ListItem,
                 R::MenuItem,
                 R::MenuItemCheckbox,
                 R::MenuItemRadio,
