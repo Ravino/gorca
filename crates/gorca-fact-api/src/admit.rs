@@ -44,6 +44,11 @@ pub enum WideKey {
 
 impl Scope {
     /// Site if known, else tab if known, else document, else the app.
+    ///
+    /// Source-wide quarantine rationale: the per-scope quarantine already contains a misbehaving
+    /// source in that scope. The source-wide one must fire only on evidence across distinct
+    /// sites, tabs or apps, never on per-navigation ids a page controls. So `Doc` keys (only
+    /// possible for non-web scopes; web documents always carry a tab) never count toward it.
     pub const fn wide_key(&self) -> WideKey {
         match (self.site, self.tab, self.doc) {
             (Some(h), _, _) => WideKey::Site(self.app, h),
@@ -135,6 +140,10 @@ pub enum RejectReason {
     /// race window: rejected and counted, never stored. Benign up to a small rate, then a
     /// strike (`SourceEvent::DocRace`). A node of any other document is `ScopeMismatch`.
     DocChanged,
+    /// The pinned scope is a web document without a tab. The connection layer always fills the
+    /// tab for web documents, so this is a core wiring fault, not the source's: rejected and
+    /// logged, never a strike.
+    MissingTab,
     /// The class may not write this kind of group (for example Annotation facts are never fused).
     ClassNotAllowed,
     /// The group code is not registered.
@@ -165,9 +174,10 @@ impl RejectReason {
             RejectReason::RegisterCap => Severity::Overload,
             // Page-caused or timing races: a page can flip `type=password` between the
             // add-on's send and admission, so these never strike (review B-1).
-            RejectReason::ParkFull | RejectReason::PrivacyExcluded | RejectReason::DocChanged => {
-                Severity::Benign
-            }
+            RejectReason::ParkFull
+            | RejectReason::PrivacyExcluded
+            | RejectReason::DocChanged
+            | RejectReason::MissingTab => Severity::Benign,
         }
     }
 }
@@ -324,6 +334,11 @@ fn truncate(f: &mut Fact) -> u32 {
 ///
 /// The declared anchor kinds are `g.anchors` (computed from the descriptor).
 pub fn admit(f: &Fact, g: &SourceGrant, scope: &ScopeView<'_>) -> Admission {
+    // 0. A web document always has a tab (filled by the connection layer); without it the
+    // source-wide accounting could not tell tabs apart, so nothing is admitted.
+    if scope.pinned.doc.is_some() && scope.pinned.tab.is_none() {
+        return reject(RejectReason::MissingTab);
+    }
     // 1. Scope (FS-11, F19). A subject's scope is never taken from the fact. A node whose
     // scope is not known yet fails closed: it is parked, never admitted (re-run on retry).
     let mut scope_unknown = false;
@@ -489,7 +504,7 @@ mod tests {
             },
             doc: Some(7),
             site: Some(1),
-            tab: None,
+            tab: Some(1),
         };
         let spy = Spy {
             seen: std::cell::Cell::new(None),
@@ -532,7 +547,11 @@ mod tests {
         ] {
             assert_eq!(r.severity(), Severity::Violation);
         }
-        for r in [RejectReason::PrivacyExcluded, RejectReason::DocChanged] {
+        for r in [
+            RejectReason::PrivacyExcluded,
+            RejectReason::DocChanged,
+            RejectReason::MissingTab,
+        ] {
             assert_eq!(r.severity(), Severity::Benign, "{r:?}");
         }
         assert_eq!(RejectReason::RegisterCap.severity(), Severity::Overload);
