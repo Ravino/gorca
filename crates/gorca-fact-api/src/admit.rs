@@ -26,9 +26,14 @@ pub struct Scope {
 }
 
 impl Scope {
-    /// What the source-wide quarantine counts: the site within an app, not the document.
-    pub const fn site_key(&self) -> (AppId, Option<u64>) {
-        (self.app, self.site)
+    /// What the source-wide quarantine counts: the site within an app, not the document. A
+    /// scope without a site cannot be told apart from others by host, so it falls back to the
+    /// full scope (its document): strikes are never under-counted by collapsing scopes.
+    pub const fn site_key(&self) -> (AppId, Option<u64>, Option<u64>) {
+        match self.site {
+            Some(_) => (self.app, self.site, None),
+            None => (self.app, None, self.doc),
+        }
     }
 }
 
@@ -61,6 +66,9 @@ impl BindInfo {
 pub trait ScopeLookup {
     /// The scope a node of this app lives in, `None` when the node is not (yet) known.
     fn node_scope(&self, node: NodeKey) -> Option<Scope>;
+    /// True when `doc` is the pinned tab's **previous** document and the tab navigated within
+    /// the race window (about 2 s). Evidence of a benign navigation race, nothing else.
+    fn was_recent_doc(&self, doc: Option<u64>, pinned: Scope) -> bool;
     /// How well the subject is bound right now, and the current generation. `pinned` is the
     /// transport-pinned scope: an implementation must resolve anchors only inside it, so a
     /// per-app id index can never bind across tabs (review B-5).
@@ -106,8 +114,9 @@ pub enum Severity {
 pub enum RejectReason {
     /// FS-11 / F19: the target is outside the transport-pinned scope.
     ScopeMismatch,
-    /// Same app, but the node now lives in another document (a navigation race): rejected and
-    /// counted, never stored, but not the source's fault.
+    /// The node lives in the pinned tab's previous document and the tab navigated within the
+    /// race window: rejected and counted, never stored. Benign up to a small rate, then a
+    /// strike (`SourceEvent::DocRace`). A node of any other document is `ScopeMismatch`.
     DocChanged,
     /// The class may not write this kind of group (for example Annotation facts are never fused).
     ClassNotAllowed,
@@ -307,11 +316,14 @@ pub fn admit(f: &Fact, g: &SourceGrant, scope: &ScopeView<'_>) -> Admission {
         }
         match scope.lookup.node_scope(*n) {
             Some(s) if s != scope.pinned => {
-                return reject(if s.app == scope.pinned.app {
-                    RejectReason::DocChanged
-                } else {
-                    RejectReason::ScopeMismatch
-                });
+                return reject(
+                    if s.app == scope.pinned.app && scope.lookup.was_recent_doc(s.doc, scope.pinned)
+                    {
+                        RejectReason::DocChanged
+                    } else {
+                        RejectReason::ScopeMismatch
+                    },
+                );
             }
             Some(_) => {}
             None => scope_unknown = true,
@@ -432,6 +444,9 @@ mod tests {
     impl ScopeLookup for Spy {
         fn node_scope(&self, _: NodeKey) -> Option<Scope> {
             None
+        }
+        fn was_recent_doc(&self, _: Option<u64>, _: Scope) -> bool {
+            false
         }
         fn bind(&self, _: &Subject, pinned: Scope) -> BindInfo {
             self.seen.set(Some(pinned));
