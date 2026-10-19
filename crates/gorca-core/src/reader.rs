@@ -768,6 +768,7 @@ impl Reader {
                 }
                 self.apply_focus(FocusMsg::TimerElapsed { now }, &mut fx);
                 self.pass_timer(now, &mut fx);
+                self.pointer_timer(now, &mut fx);
                 self.review_timer(now, &mut fx);
                 self.web_timer(now, &mut fx);
                 self.text_timer(&mut fx);

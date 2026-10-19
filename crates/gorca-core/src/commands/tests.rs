@@ -15,6 +15,7 @@ use gorca_rt::EpochCell;
 
 use super::*;
 
+mod mouse;
 mod profiles;
 mod quick;
 use crate::directory::MirrorDirectory;

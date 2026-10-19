@@ -108,6 +108,24 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
     let web_escape = gorca_core::escape_grabs(&c.keymap, keysyms);
     let letters = gorca_core::letter_grabs(&c.keymap, keysyms);
     let (tab_next, tab_prev) = gorca_core::tab_grabs(&c.keymap, keysyms);
+    // Runtime-gated chords (pointer emulation, ADR-0025 RG-1): compiled here, added to the grab set by the
+    // Reader only while their gate is open.
+    let gated: Vec<gorca_core::GatedGrabs> = gorca_core::RuntimeGate::ALL
+        .iter()
+        .filter_map(|gate| {
+            let (chords, exact) = gorca_core::gated_chord_grabs(
+                &c.keymap,
+                gorca_input_api::ModeKind::Focus,
+                keysyms,
+                *gate,
+            );
+            (!chords.is_empty() || !exact.is_empty()).then_some(gorca_core::GatedGrabs {
+                gate: *gate,
+                chords,
+                exact,
+            })
+        })
+        .collect();
     let dropped =
         gorca_core::grab_collisions(&c.keymap, gorca_input_api::ModeKind::Browse, keysyms);
     if !dropped.is_empty() {
@@ -132,6 +150,7 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
             letters,
             tab_next,
             tab_prev,
+            gated,
             ..ModeKeys::default()
         },
         caps_lock_dropped: c.caps_lock_dropped,

@@ -191,6 +191,8 @@ pub enum ControlMsg {
     Mode(ModeMsg),
     Settings(SettingsMsg),
     Input(InputNotice),
+    /// Pointer availability and `mouse.enabled` (ADR-0025): moves the keypad-chord gate.
+    Pointer(super::pointer_gate::PointerMsg),
 }
 
 /// Voice parameters, 0 to 100 (ADR-0005 6.2). Backends map them to their own ranges.
@@ -368,12 +370,15 @@ pub(crate) struct CmdState {
     pub ambiguous_cues: u64,
     /// F0 quick wins: lock keys, speech history, sleep mode.
     pub quick: crate::quick::QuickState,
+    /// When the keypad mouse chords are grabbed (ADR-0025 RG-5).
+    pub pointer: super::pointer_gate::PointerGate,
 }
 
 impl CmdState {
     pub(crate) fn new() -> Self {
         let file = Settings::default();
         Self {
+            pointer: super::pointer_gate::PointerGate::new(),
             effective: Arc::new(file.clone()),
             file,
             file_hash: 0,

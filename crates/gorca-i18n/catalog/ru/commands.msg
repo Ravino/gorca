@@ -250,3 +250,15 @@ cmd-profiles-edit-target-cycle = выбрать, куда сохраняются
 cmd-profiles-announce = сообщить действующий профиль и куда идут изменения
 cmd-profiles-suspend = выключить или включить профили
 cmd-browse-save-mode-default = сохранить текущий режим по умолчанию для этого приложения или сайта
+
+# Эмуляция мыши (ADR-0025).
+cmd-mouse-left-click = щёлкнуть левой кнопкой мыши в позиции указателя
+cmd-mouse-right-click = щёлкнуть правой кнопкой мыши в позиции указателя
+cmd-mouse-middle-click = щёлкнуть средней кнопкой мыши в позиции указателя
+cmd-mouse-left-click-item = щёлкнуть левой кнопкой по элементу просмотра
+cmd-mouse-right-click-item = щёлкнуть правой кнопкой по элементу просмотра
+cmd-mouse-left-lock-toggle = зажать или отпустить левую кнопку мыши
+cmd-mouse-right-lock-toggle = зажать или отпустить правую кнопку мыши
+cmd-mouse-route-to-review = переместить мышь в позицию просмотра
+cmd-mouse-review-to-pointer = переместить курсор просмотра к мыши
+cmd-mouse-say-position = сообщить позицию мыши

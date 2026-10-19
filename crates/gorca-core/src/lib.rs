@@ -65,11 +65,12 @@ pub use builtin_ext::AppProfile;
 pub use builtin_ext::{AppPolicy, PolicyFacts, PolicyMoment, PolicyVerdict};
 pub use commands::{
     ATSPI_SOURCE, Availability, CapitalLevels, CmdSpec, CommandTable, Compiled, ConfigRequest,
-    ContextMask, ControlMsg, CoreCmd, ExplainReport, InputNotice, LoadCause, LoadedSettings,
-    LocalTime, Milestone, PASS_TIMEOUT, PlatformFacts, PrewarmEntries, PrewarmRequest,
-    ProfileFocus, ProfileSaveOutcome, ProfilesSaved, SaveKind, SaveProfiles, SaveResult, SegLine,
-    SettingsMsg, SourceDirectory, SourceEntry, SpeechCtl, SystemWallClock, VoiceLevels, WallClock,
-    browse_grabs, chord_grabs, command_id, compile, compile_with, escape_grabs, explain_utterance,
+    ContextMask, ControlMsg, CoreCmd, ExplainReport, GateOut, InputNotice, LoadCause,
+    LoadedSettings, LocalTime, Milestone, OPEN_AFTER, PASS_TIMEOUT, PlatformFacts, PointerGate,
+    PointerMsg, PrewarmEntries, PrewarmRequest, ProfileFocus, ProfileSaveOutcome, ProfilesSaved,
+    RuntimeGate, SaveKind, SaveProfiles, SaveResult, SegLine, SettingsMsg, SourceDirectory,
+    SourceEntry, SpeechCtl, SystemWallClock, VoiceLevels, WallClock, browse_grabs, chord_grabs,
+    command_id, compile, compile_with, escape_grabs, explain_utterance, gated_chord_grabs,
     gorca_modifiers, grab_collisions, lane_settings, letter_grabs, prewarm, set_explain_text,
     tab_grabs,
 };
@@ -91,7 +92,7 @@ pub use health::{
     AppHealth, HUNG_PROBE_MAX, HUNG_PROBE_MIN, HealthEffect, HealthMsg, HealthStepCtx,
     SLOW_RECOVERY, SLOW_WINDOW,
 };
-pub use mode::{BaseMode, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, WebCursor};
+pub use mode::{BaseMode, GatedGrabs, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, WebCursor};
 pub use present::log_states as snapshot_state_names;
 pub use present::value_text;
 pub use present::{
