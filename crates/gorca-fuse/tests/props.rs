@@ -1,26 +1,33 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Property tests F1-F6, F9 and F10 of `docs/reports/semantic-fusion-math.md` section 5 over seeded
-//! random workloads (trees of up to 400 nodes, two primaries, users, patches, quirk-free S0).
+//! Property tests F1-F6, F9-F13, F15 and F18 over seeded random workloads (trees of up to 400
+//! nodes, two primaries, Secondary and Inferred sources, users, patches, vis bumps, ticks, epochs
+//! and DOM-id moves). Facts are **raw** `FactIn`s stamped the way a writer stamps them (running
+//! index for `BindGen`, running `vis_rev`, the clock); candidates exist only through the side
+//! table's validity filter.
 //!
 //! `proptest` is not vendored in the project-local cargo home, so the generator is a small
-//! deterministic xorshift PRNG; every failure message carries the seed and trial. F7 (incremental
-//! equals from-scratch) is B2; F6's second half (provenance-only transitions are silent) needs the
-//! utterance model of M22b.
+//! deterministic xorshift PRNG; every failure message carries the seed. F7 (incremental equals
+//! from-scratch) is B2; F6's second half (provenance-only transitions are silent) needs the
+//! utterance model of M22b; F14 (revocation equals absence) is covered by the epoch cases of the
+//! oracle corpus and `revoked_source_equals_absent_source`; F16 and F19 are B3.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod support;
 
-use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use gorca_fuse::{
-    FactCand, Fused, Layer, NodeRegs, PrimarySlot, Profile, Slot, UserOp, Write,
-    invariant_violations,
+    AnchorId, AnchorIndex, FactIn, Grant, Layer, NodeIdx, Payload, PrimarySlot, Profile, Slot,
+    UserOp, Write, grant_class, invariant_violations,
 };
-use gorca_model::sem::{ConfClass, Group, GroupMask, ProvCode, SemEntry, TrustTier};
+use gorca_model::fact::{Basis, BindGen, EvidenceValue, SourceId};
+use gorca_model::sem::{
+    BindQuality, ConfClass, EvidenceKind, Group, GroupMask, ProvCode, SemEntry, SemRole, TrustTier,
+};
 use serde_json::{Value, json};
 use support::{
-    Case, OwnedCands, ToyPatch, World, evaluate_with, slot_from_toy, toy_from_entry, toy_rules,
-    toy_str, write_from_toy,
+    Case, NoQ, ToyIndex, ToyPatch, TreeOut, World, empty_world, evaluate_full, normalise_expected,
+    slot_json, toy_from_entry, toy_rules, toy_str, trails_json, write_from_toy,
 };
 
 struct Rng(u64);
@@ -89,6 +96,58 @@ fn rand_write(r: &mut Rng, g: Group) -> Write {
     write_from_toy(g, r.pick(&dom))
 }
 
+/// The static tables of the synthetic world: the same sources as the oracle corpus.
+fn synthetic_tables() -> Value {
+    json!({"sources": {
+        "atspi": [0, 0, "Primary", 1, null],
+        "newton": [1, 0, "Primary", 1, null],
+        "bus": [2, 0, "Secondary", 3, null],
+        "ocr": [3, 0, "Inferred", 2, 0],
+        "icon": [4, 0, "Inferred", 2, 1],
+        "ext.a": [5, 0, "Inferred", 3, 2],
+    }})
+}
+
+/// (slot, name, tier, semantic groups, evidence kinds) of the non-primary sources.
+type SrcRow = (
+    u32,
+    &'static str,
+    TrustTier,
+    &'static [Group],
+    &'static [EvidenceKind],
+);
+
+const SOURCES: &[SrcRow] = &[
+    (
+        2,
+        "bus",
+        TrustTier::T3Untrusted,
+        MODELLED,
+        &[EvidenceKind::HintTitleAttr, EvidenceKind::LayoutCssHidden],
+    ),
+    (
+        3,
+        "ocr",
+        TrustTier::T2FirstParty,
+        &[Group::Name],
+        &[EvidenceKind::VisualOcrText],
+    ),
+    (
+        4,
+        "icon",
+        TrustTier::T2FirstParty,
+        &[Group::Name, Group::Description],
+        &[],
+    ),
+    (
+        5,
+        "ext.a",
+        TrustTier::T3Untrusted,
+        &[Group::Name, Group::Description],
+        &[EvidenceKind::HintTitleAttr],
+    ),
+];
+
 #[derive(Clone, Debug)]
 enum Ev {
     Obs {
@@ -119,6 +178,22 @@ enum Ev {
         seq: u64,
         inst: bool,
     },
+    Fact(Box<FactIn>),
+    Attr {
+        x: usize,
+        seq: u64,
+        id: Option<String>,
+    },
+    Vis {
+        x: usize,
+        rev: u32,
+    },
+    Tick(u64),
+    Epoch {
+        src: &'static str,
+        n: u64,
+        state: &'static str,
+    },
 }
 
 fn apply(w: &mut World, ev: &Ev) -> bool {
@@ -137,70 +212,151 @@ fn apply(w: &mut World, ev: &Ev) -> bool {
                 }
             }
         }
-    }
-}
-
-/// Quirk-free evaluation: quirks are covered by the oracle test; here `FUSE` is checked against
-/// the raw registers.
-fn evaluate(case: &Case, w: &World, cands: &[OwnedCands]) -> Vec<Option<Fused>> {
-    evaluate_with(case, w, cands, &gorca_fuse::NoQuirks)
-}
-
-fn empty_world(n: usize) -> World {
-    World {
-        nodes: (0..n).map(|_| NodeRegs::default()).collect(),
-        patch: BTreeMap::new(),
+        Ev::Fact(f) => w.side.insert((**f).clone()).unwrap(),
+        Ev::Attr { x, seq, id } => {
+            let key =
+                |a: &(u64, Option<String>)| (a.0, a.1.clone().unwrap_or_else(|| "None".into()));
+            let new = (*seq, id.clone());
+            match w.attr.get(x) {
+                Some(cur) if key(&new) <= key(cur) => false,
+                _ => {
+                    w.attr.insert(*x, new);
+                    true
+                }
+            }
+        }
+        Ev::Vis { x, rev } => {
+            if *rev > w.vis[*x] {
+                w.vis[*x] = *rev;
+                true
+            } else {
+                false
+            }
+        }
+        Ev::Tick(t) => {
+            if *t > w.clock {
+                w.clock = *t;
+                true
+            } else {
+                false
+            }
+        }
+        Ev::Epoch { src, n, state } => {
+            let new = (*n, (*state).to_owned());
+            match w.epoch.get(*src) {
+                Some(cur) if new <= *cur => false,
+                _ => {
+                    w.epoch.insert((*src).to_owned(), new);
+                    true
+                }
+            }
+        }
     }
 }
 
 struct Workload {
     case: Case,
-    cands: Vec<OwnedCands>,
     events: Vec<Ev>,
-    next_seq: u64,
 }
 
-fn rand_cands(r: &mut Rng) -> OwnedCands {
-    let mk = |r: &mut Rng, g: Group, key: u32| -> FactCand {
-        let mut w = rand_write(r, g);
-        if let Write::Absent(_) = w {
-            w = write_from_toy(g, &toy_domain(g)[0]);
+impl Workload {
+    fn fresh_world(&self) -> World {
+        empty_world(self.case.parent.len(), &self.case.tables)
+    }
+
+    fn run(&self, order: &[usize]) -> World {
+        let mut w = self.fresh_world();
+        for &i in order {
+            apply(&mut w, &self.events[i]);
         }
-        FactCand {
-            write: w,
-            conf: *r.pick(&[ConfClass::High, ConfClass::Probable, ConfClass::Possible]),
-            tier: *r.pick(&[
-                TrustTier::T2FirstParty,
-                TrustTier::T3Untrusted,
-                TrustTier::T3Untrusted,
-            ]),
-            src_key: key,
-            seq: r.next() % 50,
+        w
+    }
+
+    fn canon(&self) -> Vec<usize> {
+        (0..self.events.len()).collect()
+    }
+
+    fn world(&self) -> World {
+        self.run(&self.canon())
+    }
+
+    fn world_where(&self, keep: impl Fn(&Ev) -> bool) -> World {
+        let mut w = self.fresh_world();
+        for e in self.events.iter().filter(|e| keep(e)) {
+            apply(&mut w, e);
         }
+        w
+    }
+}
+
+fn eval(wl: &Workload, w: &World) -> TreeOut {
+    evaluate_full(&wl.case, w, &NoQ, false)
+}
+
+fn eval_traced(wl: &Workload, w: &World) -> TreeOut {
+    evaluate_full(&wl.case, w, &NoQ, true)
+}
+
+fn rand_fact(r: &mut Rng, w: &World, profile: &Profile, n: usize, seq: u64) -> FactIn {
+    let (slot, _name, _tier, groups, evidence) = *r.pick(SOURCES);
+    let x = r.below(n);
+    let index = ToyIndex::new(profile, w);
+    let dom_ids: Vec<&String> = w.attr.values().filter_map(|(_, id)| id.as_ref()).collect();
+    let anchor = if r.chance(30) && !dom_ids.is_empty() {
+        AnchorId::Dom {
+            id: Arc::from(dom_ids[r.below(dom_ids.len())].as_str()),
+            count: if r.chance(80) { 1 } else { 2 },
+            frame: 0,
+            shadow: 0,
+        }
+    } else {
+        AnchorId::Node(NodeIdx(u32::try_from(x).unwrap()))
     };
-    let mut c = OwnedCands::default();
-    for _ in 0..r.below(3) {
-        let g = *r.pick(&[
-            Group::Live,
-            Group::Orientation,
-            Group::Description,
-            Group::Check,
-        ]);
-        c.secondary.push(mk(r, g, 2));
+    let res = index.resolve(&anchor);
+    let tx = res.node.map_or(x, |n| n.0 as usize);
+    let (group, payload) = if !evidence.is_empty() && r.chance(35) {
+        let k = *r.pick(evidence);
+        let p = if k == EvidenceKind::LayoutCssHidden {
+            Payload::Evidence(EvidenceValue::Flag(r.chance(50)))
+        } else {
+            let texts = ["Close", "Delete", "Search", "", "Menu"];
+            Payload::Evidence(EvidenceValue::Text(Arc::from(*r.pick(&texts))))
+        };
+        (k.group_code(), p)
+    } else {
+        let g = *r.pick(groups);
+        let p = if r.chance(5) {
+            Payload::Retract
+        } else {
+            Payload::Sem(rand_write(r, g))
+        };
+        (g.group_code(), p)
+    };
+    let p_milli = u16::try_from(r.below(400) + 600).unwrap();
+    let inferred = slot >= 3;
+    let basis = i64::from(w.vis[tx]) - i64::from(r.chance(10));
+    FactIn {
+        source: SourceId {
+            slot,
+            generation: 0,
+        },
+        anchor,
+        group,
+        seq,
+        payload,
+        p_milli,
+        basis: Basis::VisRev(u32::try_from(basis + 1).unwrap()),
+        bind_gen: res.generation,
+        admitted_at_ms: w.clock,
+        ttl_ms: if inferred || r.chance(30) {
+            Some(*r.pick(&[5_000u64, 60_000, 300_000]))
+        } else {
+            None
+        },
     }
-    for _ in 0..r.below(3) {
-        let key = u32::try_from(r.below(3)).unwrap();
-        c.title.push(mk(r, Group::Name, key));
-    }
-    for _ in 0..r.below(3) {
-        let g = *r.pick(&[Group::Name, Group::Description]);
-        let key = u32::try_from(r.below(3)).unwrap();
-        c.inferred.push(mk(r, g, key));
-    }
-    c
 }
 
-fn workload(seed: u64, n: usize, with_cands: bool) -> Workload {
+fn workload(seed: u64, n: usize, with_facts: bool) -> Workload {
     let mut r = Rng::new(seed);
     let parent: Vec<i64> = (0..n)
         .map(|x| {
@@ -212,7 +368,7 @@ fn workload(seed: u64, n: usize, with_cands: bool) -> Workload {
         })
         .collect();
     let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], toy_rules());
-    profile.default_role = gorca_model::sem::SemRole::Generic;
+    profile.default_role = SemRole::Generic;
     for g in MODELLED {
         if r.chance(40) {
             profile.set_pi(*g, &[PrimarySlot::P1, PrimarySlot::P0]);
@@ -246,61 +402,69 @@ fn workload(seed: u64, n: usize, with_cands: bool) -> Workload {
             }
         })
         .collect();
-    let cands = (0..n)
-        .map(|_| {
-            if with_cands {
-                rand_cands(&mut r)
-            } else {
-                OwnedCands::default()
-            }
-        })
-        .collect();
+    let mut case = Case::synthetic(format!("seed{seed}"), profile, parent, patches);
+    case.tables = synthetic_tables();
     let mut wl = Workload {
-        case: Case {
-            id: format!("seed{seed}"),
-            layout: "x32".into(),
-            cap: 32,
-            profile,
-            parent,
-            patches,
-            events: Vec::new(),
-            deliveries: Vec::new(),
-            expected: Vec::new(),
-            tables: Value::Null,
-        },
-        cands,
+        case,
         events: Vec::new(),
-        next_seq: 1,
     };
-    // Lifecycle first so most nodes are alive, then a mix of observations and overlays.
+    // A running world gives the writer-side stamps (binding generation, vis_rev, clock).
+    let mut run = wl.fresh_world();
+    let mut seq = 0u64;
+    let emit = |wl: &mut Workload, run: &mut World, ev: Ev| {
+        apply(run, &ev);
+        wl.events.push(ev);
+    };
     for x in 0..n {
-        let seq = wl.next_seq();
-        wl.events.push(Ev::Life {
-            src: PrimarySlot::P0,
-            x,
-            seq,
-            alive: true,
-        });
-        if r.chance(60) {
-            let seq = wl.next_seq();
-            wl.events.push(Ev::Life {
-                src: PrimarySlot::P1,
+        seq += 1;
+        emit(
+            &mut wl,
+            &mut run,
+            Ev::Life {
+                src: PrimarySlot::P0,
                 x,
                 seq,
                 alive: true,
-            });
+            },
+        );
+        if r.chance(60) {
+            seq += 1;
+            emit(
+                &mut wl,
+                &mut run,
+                Ev::Life {
+                    src: PrimarySlot::P1,
+                    x,
+                    seq,
+                    alive: true,
+                },
+            );
+        }
+        if r.chance(60) {
+            seq += 1;
+            let id = format!("id{}", r.below((n / 2).max(2)));
+            emit(
+                &mut wl,
+                &mut run,
+                Ev::Attr {
+                    x,
+                    seq,
+                    id: Some(id),
+                },
+            );
         }
     }
-    for _ in 0..n * 6 {
+    let ids = (n / 2).max(2);
+    for _ in 0..n * 7 {
         let x = r.below(n);
-        let seq = wl.next_seq();
+        seq += 1;
         let src = if r.chance(50) {
             PrimarySlot::P0
         } else {
             PrimarySlot::P1
         };
         let roll = r.below(100);
-        let ev = if roll < 62 {
+        let ev = if roll < 45 {
             let g = *r.pick(MODELLED);
             Ev::Obs {
                 src,
@@ -308,16 +472,16 @@ fn workload(seed: u64, n: usize, with_cands: bool) -> Workload {
                 seq,
                 w: rand_write(&mut r, g),
             }
-        } else if roll < 68 {
+        } else if roll < 50 {
             Ev::Inval { src, x, seq }
-        } else if roll < 74 {
+        } else if roll < 54 {
             Ev::Life {
                 src,
                 x,
                 seq,
                 alive: r.chance(80),
             }
-        } else if roll < 90 {
+        } else if roll < 60 {
             let g = *r.pick(MODELLED);
             let op = if r.chance(25) {
                 UserOp::Clear
@@ -325,42 +489,41 @@ fn workload(seed: u64, n: usize, with_cands: bool) -> Workload {
                 UserOp::Set(rand_write(&mut r, g))
             };
             Ev::User { x, g, seq, op }
-        } else if !wl.case.patches.is_empty() {
+        } else if roll < 62 && !wl.case.patches.is_empty() {
             let pid = r.pick(&wl.case.patches).pid.clone();
             Ev::Patch {
                 pid,
                 seq,
                 inst: r.chance(70),
             }
+        } else if roll < 66 {
+            let id = if r.chance(15) {
+                None
+            } else {
+                Some(format!("id{}", r.below(ids)))
+            };
+            Ev::Attr { x, seq, id }
+        } else if roll < 69 {
+            Ev::Vis {
+                x,
+                rev: run.vis[x] + 1,
+            }
+        } else if roll < 71 {
+            Ev::Tick(run.clock + *r.pick(&[1_000u64, 5_000, 30_000, 120_000]))
+        } else if roll < 72 {
+            Ev::Epoch {
+                src: r.pick(&["bus", "ocr", "icon", "ext.a"]),
+                n: seq,
+                state: r.pick(&["Active", "Throttled", "Detached", "Paused", "Revoked"]),
+            }
+        } else if with_facts {
+            Ev::Fact(Box::new(rand_fact(&mut r, &run, &wl.case.profile, n, seq)))
         } else {
             Ev::Inval { src, x, seq }
         };
-        wl.events.push(ev);
+        emit(&mut wl, &mut run, ev);
     }
     wl
-}
-
-impl Workload {
-    fn next_seq(&mut self) -> u64 {
-        let s = self.next_seq;
-        self.next_seq += 1;
-        s
-    }
-}
-
-fn run_all(wl: &Workload, order: &[usize]) -> (World, Vec<Option<Fused>>) {
-    let mut w = empty_world(wl.case.parent.len());
-    for &i in order {
-        apply(&mut w, &wl.events[i]);
-    }
-    let finals = evaluate(&wl.case, &w, &wl.cands);
-    (w, finals)
-}
-
-fn entries(f: &[Option<Fused>]) -> Vec<Option<SemEntry>> {
-    f.iter()
-        .map(|o| o.as_ref().map(|f| f.entry.clone()))
-        .collect()
 }
 
 fn shuffled(r: &mut Rng, n: usize, dups: bool) -> Vec<usize> {
@@ -385,43 +548,37 @@ fn trials() -> u64 {
         .unwrap_or(120)
 }
 
+fn size(seed: u64, m: u64) -> usize {
+    3 + usize::try_from(seed % m).unwrap()
+}
+
 // ---- F1 ---------------------------------------------------------------------------------------
 
 #[test]
-fn f1_order_independence_registers_and_entries() {
+fn f1_order_independence_registers_side_table_entries_and_trails() {
     for seed in 0..trials() {
-        let n = 3 + usize::try_from(seed % 38).unwrap();
-        let wl = workload(seed, n, true);
-        let canon: Vec<usize> = (0..wl.events.len()).collect();
-        let (w0, f0) = run_all(&wl, &canon);
+        let wl = workload(seed, size(seed, 38), true);
+        let w0 = wl.world();
+        let o0 = eval_traced(&wl, &w0);
+        let t0 = trails_json(&o0);
         let mut r = Rng::new(seed ^ 0xF1);
-        let rev: Vec<usize> = canon.iter().rev().copied().collect();
+        let rev: Vec<usize> = wl.canon().iter().rev().copied().collect();
         for (label, order) in [
             ("reversed", rev),
-            ("shuffled", shuffled(&mut r, canon.len(), false)),
-            ("shuffled+dups", shuffled(&mut r, canon.len(), true)),
+            ("shuffled", shuffled(&mut r, wl.events.len(), false)),
+            ("shuffled+dups", shuffled(&mut r, wl.events.len(), true)),
         ] {
-            let (w, f) = run_all(&wl, &order);
+            let w = wl.run(&order);
             assert_eq!(w.nodes, w0.nodes, "seed {seed} {label}: registers differ");
+            assert_eq!(w.patch, w0.patch, "seed {seed} {label}: patch registers");
             assert_eq!(
-                w.patch, w0.patch,
-                "seed {seed} {label}: patch registers differ"
+                w.side.dump(),
+                w0.side.dump(),
+                "seed {seed} {label}: side table"
             );
-            assert_eq!(
-                entries(&f),
-                entries(&f0),
-                "seed {seed} {label}: entries differ"
-            );
-            let layers = |f: &[Option<Fused>]| -> Vec<Option<Vec<Layer>>> {
-                f.iter()
-                    .map(|o| o.as_ref().map(|f| f.layer.to_vec()))
-                    .collect()
-            };
-            assert_eq!(
-                layers(&f),
-                layers(&f0),
-                "seed {seed} {label}: layers differ"
-            );
+            let o = eval_traced(&wl, &w);
+            assert_eq!(o.entries(), o0.entries(), "seed {seed} {label}: entries");
+            assert_eq!(trails_json(&o), t0, "seed {seed} {label}: explain trails");
         }
     }
 }
@@ -430,11 +587,10 @@ fn f1_order_independence_registers_and_entries() {
 fn f1_large_tree_400_nodes() {
     for seed in 1000..1004 {
         let wl = workload(seed, 400, true);
-        let canon: Vec<usize> = (0..wl.events.len()).collect();
-        let (_, f0) = run_all(&wl, &canon);
+        let o0 = eval(&wl, &wl.world());
         let mut r = Rng::new(seed);
-        let (_, f1) = run_all(&wl, &shuffled(&mut r, canon.len(), true));
-        assert_eq!(entries(&f1), entries(&f0), "seed {seed}");
+        let w = wl.run(&shuffled(&mut r, wl.events.len(), true));
+        assert_eq!(eval(&wl, &w).entries(), o0.entries(), "seed {seed}");
     }
 }
 
@@ -443,26 +599,20 @@ fn f1_large_tree_400_nodes() {
 #[test]
 fn f2_replaying_any_suffix_changes_nothing() {
     for seed in 0..trials() {
-        let n = 3 + usize::try_from(seed % 30).unwrap();
-        let wl = workload(seed + 5000, n, true);
-        let canon: Vec<usize> = (0..wl.events.len()).collect();
-        let (mut w, f0) = run_all(&wl, &canon);
-        let before = w.nodes.clone();
-        let mut r = Rng::new(seed);
-        let start = r.below(canon.len());
+        let wl = workload(seed + 5000, size(seed, 30), true);
+        let mut w = wl.world();
+        let f0 = eval(&wl, &w).entries();
+        let (before, side) = (w.nodes.clone(), w.side.dump());
+        let start = Rng::new(seed).below(wl.events.len());
         for ev in &wl.events[start..] {
-            let was = w.nodes.clone();
-            let changed = apply(&mut w, ev);
-            let now = w.nodes.clone();
             assert!(
-                !changed,
-                "seed {seed}: replay of {ev:?} changed a register (eq: {})",
-                was == now
+                !apply(&mut w, ev),
+                "seed {seed}: replay of {ev:?} changed a register"
             );
         }
         assert_eq!(w.nodes, before);
-        let f1 = evaluate(&wl.case, &w, &wl.cands);
-        assert_eq!(entries(&f1), entries(&f0), "seed {seed}");
+        assert_eq!(w.side.dump(), side);
+        assert_eq!(eval(&wl, &w).entries(), f0, "seed {seed}");
     }
 }
 
@@ -483,16 +633,29 @@ fn prov_matches_layer(layer: Layer, prov: ProvCode, masked: bool) -> bool {
     }
 }
 
+/// The finalised toy value of a slot (Absent -> the group default), for comparisons.
+fn toy_value(s: &Slot, g: Group) -> Value {
+    normalise_expected(
+        g,
+        &match s {
+            Slot::Absent => json!("-"),
+            Slot::Unknown => panic!("unknown"),
+            Slot::Val(_) => slot_json(g, s),
+        },
+    )
+}
+
 #[test]
 fn f3_provenance_is_complete_and_sound() {
+    let mut secondary = 0usize;
+    let mut inferred = 0usize;
     for seed in 0..trials() {
-        let n = 3 + usize::try_from(seed % 38).unwrap();
-        let wl = workload(seed + 9000, n, true);
-        let canon: Vec<usize> = (0..wl.events.len()).collect();
-        let (w, finals) = run_all(&wl, &canon);
-        for (x, f) in finals.iter().enumerate() {
-            let Some(f) = f else { continue };
-            let e = &f.entry;
+        let wl = workload(seed + 9000, size(seed, 38), true);
+        let w = wl.world();
+        let out = eval(&wl, &w);
+        for (x, o) in out.nodes.iter().enumerate() {
+            let Some(o) = o else { continue };
+            let (f, e) = (&o.fused, &o.fused.entry);
             for g in Group::ALL.iter().copied() {
                 let prov = e
                     .prov
@@ -501,43 +664,28 @@ fn f3_provenance_is_complete_and_sound() {
                 let masked = f.masked.has(g);
                 assert!(
                     prov_matches_layer(f.layer_of(g), prov, masked),
-                    "seed {seed} node {x} {g:?}: {prov:?} vs {:?} masked={masked}",
+                    "seed {seed} node {x} {g:?}: {prov:?} vs {:?}",
                     f.layer_of(g)
                 );
-                // Taint and hedge are zero exactly for the untainted provenances.
                 let tainted = matches!(
                     prov,
                     ProvCode::ObservedSecondary | ProvCode::Inferred | ProvCode::DerivedTainted
                 );
                 if tainted {
-                    assert!(
-                        e.taint.get(g) != 0,
-                        "seed {seed} node {x} {g:?}: tainted without a tier"
-                    );
-                    assert!(
-                        e.hedge.get(g) != 0 || prov == ProvCode::Inferred,
-                        "seed {seed} node {x} {g:?}"
-                    );
+                    assert!(e.taint.get(g) != 0, "seed {seed} node {x} {g:?}: no tier");
+                    // N-2: a tainted/non-primary winner is always hedged.
+                    assert!(e.hedge.get(g) != 0, "seed {seed} node {x} {g:?}: Asserted");
                 } else {
                     assert_eq!(e.hedge.get(g), 0, "seed {seed} node {x} {g:?}");
                     assert_eq!(e.taint.get(g), 0, "seed {seed} node {x} {g:?}");
                 }
-                // A non-default winner means the group is known.
                 if prov != ProvCode::Default {
                     assert!(e.known.has(g), "seed {seed} node {x} {g:?}");
                 }
-                // Soundness against the registers: a User winner has a live user register with
-                // that value; an Observed winner is the first primary in PI with a record.
                 match prov {
                     ProvCode::User => {
-                        let (_, wr) = w.nodes[x].user_value(g).unwrap_or_else(|| {
-                            panic!("seed {seed} node {x} {g:?}: User without register")
-                        });
-                        assert_eq!(
-                            toy_value(&wr.slot(), g),
-                            toy_from_entry(e, g),
-                            "seed {seed} node {x} {g:?}"
-                        );
+                        let (_, wr) = w.nodes[x].user_value(g).unwrap();
+                        assert_eq!(toy_value(&wr.slot(), g), toy_from_entry(e, g));
                     }
                     ProvCode::ObservedPrimary => {
                         let first = wl
@@ -545,54 +693,40 @@ fn f3_provenance_is_complete_and_sound() {
                             .profile
                             .pi(g)
                             .iter()
-                            .find_map(|p| w.nodes[x].src(*p).get(g));
-                        let r = first.unwrap_or_else(|| {
-                            panic!("seed {seed} node {x} {g:?}: observed without register")
-                        });
-                        assert_eq!(
-                            toy_value(&r.write.slot(), g),
-                            toy_from_entry(e, g),
+                            .find_map(|p| w.nodes[x].src(*p).get(g))
+                            .unwrap();
+                        assert_eq!(toy_value(&first.write.slot(), g), toy_from_entry(e, g));
+                    }
+                    ProvCode::ObservedSecondary => {
+                        secondary += 1;
+                        // Soundness: a Secondary wins only a statically inexpressible group
+                        // that no primary reported.
+                        assert!(
+                            wl.case.profile.inexpressible.has(g),
                             "seed {seed} node {x} {g:?}"
                         );
+                        assert!(
+                            wl.case
+                                .profile
+                                .pi(g)
+                                .iter()
+                                .all(|p| w.nodes[x].src(*p).get(g).is_none()),
+                            "seed {seed} node {x} {g:?}: primary known"
+                        );
                     }
+                    ProvCode::Inferred => inferred += 1,
                     _ => {}
                 }
             }
         }
     }
+    assert!(
+        secondary > 0 && inferred > 0,
+        "weak coverage {secondary} {inferred}"
+    );
 }
 
-/// The finalised toy value of a slot (Absent -> the group default), for comparisons.
-fn toy_value(s: &Slot, g: Group) -> Value {
-    support::normalise_expected(
-        g,
-        &match s {
-            Slot::Absent => json!("-"),
-            Slot::Unknown => panic!("unknown"),
-            Slot::Val(_) => slot_to_json(s, g),
-        },
-    )
-}
-
-fn slot_to_json(s: &Slot, g: Group) -> Value {
-    let t = toy_str(s);
-    if g == Group::Level {
-        json!(t.parse::<u64>().unwrap())
-    } else {
-        json!(t)
-    }
-}
-
-// ---- F4, F5, F6 -------------------------------------------------------------------------------
-
-fn base_world(seed: u64, n: usize) -> (Workload, World, Vec<Option<Fused>>) {
-    let mut wl = workload(seed, n, false);
-    // Overlay-free base: only primary observations decide the starting point.
-    wl.events.retain(|e| !matches!(e, Ev::User { .. }));
-    let canon: Vec<usize> = (0..wl.events.len()).collect();
-    let (w, f) = run_all(&wl, &canon);
-    (wl, w, f)
-}
+// ---- F4, F5, F6 ---------------------------------------------------------------------------------
 
 fn ancestors(parent: &[i64], mut x: usize) -> Vec<usize> {
     let mut out = Vec::new();
@@ -605,11 +739,10 @@ fn ancestors(parent: &[i64], mut x: usize) -> Vec<usize> {
 
 /// The comparable state of one entry with `skip` groups removed.
 fn project(e: &SemEntry, skip: GroupMask) -> Vec<String> {
-    Group::ALL
+    MODELLED
         .iter()
-        .filter(|g| !skip.has(**g))
         .copied()
-        .filter(|g| MODELLED.contains(g))
+        .filter(|g| !skip.has(*g))
         .map(|g| {
             format!(
                 "{g:?}:{}:{:?}:{}:{}:{}:{}:{}",
@@ -630,37 +763,42 @@ fn f4_f5_f6_override_dominance_locality_reversibility() {
     let mut dominated = 0usize;
     let mut masked_cases = 0usize;
     for seed in 0..trials() {
-        let n = 3 + usize::try_from(seed % 30).unwrap();
-        let (wl, mut w, base) = base_world(seed + 20_000, n);
+        let wl = workload(seed + 20_000, size(seed, 30), true);
+        let n = wl.case.parent.len();
+        let mut w = wl.world_where(|e| !matches!(e, Ev::User { .. }));
+        let base = eval(&wl, &w);
         let mut r = Rng::new(seed);
         let x = r.below(n);
-        if base[x].is_none() {
+        if base.nodes[x].is_none() {
             continue;
         }
         let g = *r.pick(MODELLED);
         let wr = rand_write(&mut r, g);
-        let seq = wl.next_seq + 10;
+        let seq = 1_000_000;
         w.nodes[x].apply_user(g, seq, UserOp::Set(wr.clone()));
-        let after = evaluate(&wl.case, &w, &wl.cands);
+        let after = eval(&wl, &w);
 
         // F4: the effective value is the override, or repair masked it and the entry says so.
-        let f = after[x].as_ref().unwrap();
-        let want = toy_value(&wr.slot(), g);
-        if f.masked.has(g) {
+        let f = after.nodes[x].as_ref().unwrap();
+        if f.fused.masked.has(g) {
             masked_cases += 1;
             assert_eq!(
-                f.entry.prov.get(g),
+                f.fused.entry.prov.get(g),
                 Some(ProvCode::Default),
-                "seed {seed}: masked group not reset"
+                "seed {seed}"
             );
         } else {
             dominated += 1;
             assert_eq!(
-                toy_from_entry(&f.entry, g),
-                want,
+                toy_from_entry(&f.fused.entry, g),
+                toy_value(&wr.slot(), g),
                 "seed {seed}: override lost"
             );
-            assert_eq!(f.entry.prov.get(g), Some(ProvCode::User), "seed {seed}");
+            assert_eq!(
+                f.fused.entry.prov.get(g),
+                Some(ProvCode::User),
+                "seed {seed}"
+            );
         }
 
         // F5: only D(x, g) changes. Role changes repair every group of x; name or role changes
@@ -672,11 +810,11 @@ fn f4_f5_f6_override_dominance_locality_reversibility() {
             GroupMask::EMPTY.with(g)
         };
         for y in 0..n {
-            let (Some(b), Some(a)) = (&base[y], &after[y]) else {
+            let (Some(b), Some(a)) = (&base.nodes[y], &after.nodes[y]) else {
                 assert_eq!(
-                    base[y].is_some(),
-                    after[y].is_some(),
-                    "seed {seed}: liveness changed at {y}"
+                    base.nodes[y].is_some(),
+                    after.nodes[y].is_some(),
+                    "seed {seed}"
                 );
                 continue;
             };
@@ -688,24 +826,23 @@ fn f4_f5_f6_override_dominance_locality_reversibility() {
                 GroupMask::EMPTY
             };
             assert_eq!(
-                project(&b.entry, skip),
-                project(&a.entry, skip),
+                project(&b.fused.entry, skip),
+                project(&a.fused.entry, skip),
                 "seed {seed}: override on ({x},{g:?}) leaked into node {y}"
             );
         }
 
         // F6: an override followed by Clear restores the previous state exactly.
         w.nodes[x].apply_user(g, seq + 1, UserOp::Clear);
-        let restored = evaluate(&wl.case, &w, &wl.cands);
         assert_eq!(
-            entries(&restored),
-            entries(&base),
+            eval(&wl, &w).entries(),
+            base.entries(),
             "seed {seed}: Clear did not restore ({x},{g:?})"
         );
     }
     assert!(
         dominated > 20 && masked_cases > 0,
-        "weak coverage: {dominated} dominant, {masked_cases} masked"
+        "{dominated} {masked_cases}"
     );
 }
 
@@ -713,18 +850,16 @@ fn f4_f5_f6_override_dominance_locality_reversibility() {
 
 #[test]
 fn f9_flags_follow_the_winner_and_priority_beats_freshness() {
-    let mut checked = 0usize;
-    let mut stale_seen = 0usize;
-    let mut fb_seen = 0usize;
+    let (mut checked, mut stale_seen, mut fb_seen) = (0usize, 0usize, 0usize);
     for seed in 0..trials() {
-        let n = 3 + usize::try_from(seed % 30).unwrap();
-        let wl = workload(seed + 40_000, n, true);
-        let canon: Vec<usize> = (0..wl.events.len()).collect();
-        let (w, finals) = run_all(&wl, &canon);
-        for (x, f) in finals.iter().enumerate() {
-            let Some(f) = f else { continue };
+        let wl = workload(seed + 40_000, size(seed, 30), true);
+        let w = wl.world();
+        let out = eval(&wl, &w);
+        for (x, o) in out.nodes.iter().enumerate() {
+            let Some(o) = o else { continue };
+            let (f, e) = (&o.fused, &o.fused.entry);
             for g in Group::ALL.iter().copied() {
-                let flagged = f.entry.stale.has(g) || f.entry.fallback.has(g);
+                let flagged = e.stale.has(g) || e.fallback.has(g);
                 if f.layer_of(g) != Layer::Observed || f.masked.has(g) {
                     assert!(
                         !flagged,
@@ -743,20 +878,11 @@ fn f9_flags_follow_the_winner_and_priority_beats_freshness() {
                     panic!("seed {seed} node {x} {g:?}: observed without a record")
                 };
                 let want_stale = w.nodes[x].src(p).is_stale(g);
-                let want_fb = pos > 0;
-                assert_eq!(
-                    f.entry.stale.has(g),
-                    want_stale,
-                    "seed {seed} node {x} {g:?}: stale"
-                );
-                assert_eq!(
-                    f.entry.fallback.has(g),
-                    want_fb,
-                    "seed {seed} node {x} {g:?}: fallback"
-                );
+                assert_eq!(e.stale.has(g), want_stale, "seed {seed} node {x} {g:?}");
+                assert_eq!(e.fallback.has(g), pos > 0, "seed {seed} node {x} {g:?}");
                 checked += 1;
                 stale_seen += usize::from(want_stale);
-                fb_seen += usize::from(want_fb);
+                fb_seen += usize::from(pos > 0);
             }
         }
     }
@@ -766,83 +892,468 @@ fn f9_flags_follow_the_winner_and_priority_beats_freshness() {
     );
 }
 
-#[test]
-fn f9_stale_primary_beats_a_fresh_secondary() {
-    // `live` is inexpressible, but the primary reported it (an old value, later invalidated):
-    // priority picks the primary, flagged stale; the secondary does not win.
-    let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], toy_rules());
-    profile.inexpressible = GroupMask::EMPTY.with(Group::Live);
-    let mut regs = NodeRegs::default();
-    regs.src_mut(PrimarySlot::P0).apply_life(1, true);
-    regs.src_mut(PrimarySlot::P0)
-        .apply_obs(2, write_from_toy(Group::Live, &json!("polite")));
-    regs.src_mut(PrimarySlot::P0).apply_inval(3);
-    let sec = [FactCand {
-        write: write_from_toy(Group::Live, &json!("assertive")),
-        conf: ConfClass::High,
-        tier: TrustTier::T3Untrusted,
-        src_key: 0,
-        seq: 99,
-    }];
-    let n = gorca_fuse::s0(&profile, &regs, &sec, &gorca_fuse::NoQuirks).unwrap();
-    let f = gorca_fuse::fuse_node(
-        &profile,
-        &regs,
-        &n,
-        &gorca_fuse::Neighbours::NONE,
-        &gorca_fuse::NodeCands {
-            secondary: &sec,
-            ..Default::default()
-        },
-        &gorca_fuse::NoPatches,
-        &mut gorca_fuse::Scratch::default(),
-    );
-    assert_eq!(toy_from_entry(&f.entry, Group::Live), json!("polite"));
-    assert!(f.entry.stale.has(Group::Live));
-    assert_eq!(
-        f.entry.prov.get(Group::Live),
-        Some(ProvCode::ObservedPrimary)
-    );
-}
-
 // ---- F10 --------------------------------------------------------------------------------------
 
 #[test]
 fn f10_invariants_hold_on_every_published_entry() {
     let mut nodes = 0usize;
     for seed in 0..trials() {
-        let n = 3 + usize::try_from(seed % 38).unwrap();
-        let wl = workload(seed + 60_000, n, true);
-        let canon: Vec<usize> = (0..wl.events.len()).collect();
-        let (_, finals) = run_all(&wl, &canon);
-        for (x, f) in finals.iter().enumerate() {
-            let Some(f) = f else { continue };
+        let wl = workload(seed + 60_000, size(seed, 38), true);
+        let out = eval(&wl, &wl.world());
+        for (x, o) in out.nodes.iter().enumerate() {
+            let Some(o) = o else { continue };
             nodes += 1;
-            let bad = invariant_violations(&wl.case.profile.rules, &f.entry);
-            assert!(
-                bad.is_empty(),
-                "seed {seed} node {x}: violations {bad:?} in {:?}",
-                f.entry.sem
-            );
-            // The published value of a masked group is the not-applicable default.
-            for g in Group::ALL.iter().copied().filter(|g| f.masked.has(*g)) {
-                assert_eq!(f.entry.prov.get(g), Some(ProvCode::Default));
+            let bad = invariant_violations(&wl.case.profile.rules, &o.fused.entry);
+            assert!(bad.is_empty(), "seed {seed} node {x}: {bad:?}");
+            for g in Group::ALL
+                .iter()
+                .copied()
+                .filter(|g| o.fused.masked.has(*g))
+            {
+                assert_eq!(o.fused.entry.prov.get(g), Some(ProvCode::Default));
             }
         }
     }
     assert!(nodes > 1000);
 }
 
-#[test]
-fn fuse_is_deterministic_and_pure() {
-    let wl = workload(77, 40, true);
-    let canon: Vec<usize> = (0..wl.events.len()).collect();
-    let (_, a) = run_all(&wl, &canon);
-    let (_, b) = run_all(&wl, &canon);
-    assert_eq!(entries(&a), entries(&b));
+// ---- F11 floor, F12 protection, F13 vis_rev, F15 ambiguity, F18 rebinding ----------------------
+
+fn fact_events(wl: &Workload) -> Vec<&FactIn> {
+    wl.events
+        .iter()
+        .filter_map(|e| match e {
+            Ev::Fact(f) => Some(&**f),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The cell a fact can influence: (node, group) when its anchor binds, `None` otherwise.
+fn fact_cell(wl: &Workload, w: &World, f: &FactIn) -> Option<(usize, Group)> {
+    let res = ToyIndex::new(&wl.case.profile, w).resolve(&f.anchor);
+    let x = res.node?.0 as usize;
+    let g = match f.group.classify() {
+        gorca_model::sem::GroupClass::Semantic(g) => g,
+        gorca_model::sem::GroupClass::Evidence(
+            EvidenceKind::HintTitleAttr | EvidenceKind::VisualOcrText,
+        ) => Group::Name,
+        _ => return None,
+    };
+    Some((x, g))
+}
+
+/// Entries of `a` and `b` agree everywhere except (optionally) the cell `(x, g)` and, when `g` is
+/// the name, the ancestors' derived names.
+fn assert_local(wl: &Workload, a: &TreeOut, b: &TreeOut, cell: Option<(usize, Group)>, ctx: &str) {
+    let n = wl.case.parent.len();
+    for y in 0..n {
+        let (Some(pa), Some(pb)) = (&a.nodes[y], &b.nodes[y]) else {
+            assert_eq!(a.nodes[y].is_some(), b.nodes[y].is_some(), "{ctx}");
+            continue;
+        };
+        let skip = match cell {
+            Some((x, g)) if y == x => GroupMask::EMPTY.with(g),
+            Some((x, Group::Name)) if ancestors(&wl.case.parent, x).contains(&y) => {
+                GroupMask::EMPTY.with(Group::Name)
+            }
+            _ => GroupMask::EMPTY,
+        };
+        assert_eq!(
+            project(&pa.fused.entry, skip),
+            project(&pb.fused.entry, skip),
+            "{ctx}: node {y}"
+        );
+    }
 }
 
 #[test]
-fn slot_roundtrip_helper_sanity() {
-    assert_eq!(slot_from_toy(Group::Live, &json!("off")), Slot::Absent);
+fn f11_a_fact_below_its_floor_never_wins_and_changes_only_its_own_cell() {
+    let mut tried = 0usize;
+    for seed in 0..trials() {
+        let wl = workload(seed + 70_000, size(seed, 30), true);
+        let facts = fact_events(&wl);
+        if facts.is_empty() {
+            continue;
+        }
+        let mut r = Rng::new(seed);
+        let f = (*r.pick(&facts)).clone();
+        let base = wl.world();
+        let cell = fact_cell(&wl, &base, &f);
+        let mut lowered = f.clone();
+        lowered.seq = u64::MAX / 2;
+        lowered.p_milli = 0;
+        lowered.payload = f.payload.clone();
+        let mut retracted = lowered.clone();
+        retracted.payload = Payload::Retract;
+        let (mut w1, mut w2) = (wl.world(), wl.world());
+        w1.side.insert(lowered).unwrap();
+        w2.side.insert(retracted).unwrap();
+        let (o0, o1, o2) = (eval(&wl, &base), eval(&wl, &w1), eval(&wl, &w2));
+        assert_eq!(
+            o1.entries(),
+            o2.entries(),
+            "seed {seed}: below-floor differs from retracted"
+        );
+        assert_local(&wl, &o0, &o1, cell, &format!("seed {seed} F11"));
+        tried += 1;
+    }
+    assert!(tried > 50);
+}
+
+fn is_protected(g: Group, e: &SemEntry) -> bool {
+    match e.prov.get(g) {
+        Some(ProvCode::User | ProvCode::Patch | ProvCode::Derived) => true,
+        // An empty primary name or description is fillable (A6), not protected.
+        Some(ProvCode::ObservedPrimary) => match g {
+            Group::Name => e.name.as_deref().is_some_and(|n| !n.is_empty()),
+            Group::Description => e.sem.description().is_some_and(|d| !d.is_empty()),
+            _ => true,
+        },
+        _ => false,
+    }
+}
+
+#[test]
+fn f12_non_primary_facts_never_change_a_protected_group() {
+    let (mut protected, mut changed_unprotected) = (0usize, 0usize);
+    for seed in 0..trials() {
+        let wl = workload(seed + 80_000, size(seed, 38), true);
+        let with = eval(&wl, &wl.world());
+        let without = eval(&wl, &wl.world_where(|e| !matches!(e, Ev::Fact(_))));
+        for (x, (a, b)) in without.nodes.iter().zip(&with.nodes).enumerate() {
+            let (Some(a), Some(b)) = (a, b) else { continue };
+            for g in Group::ALL.iter().copied() {
+                let (ea, eb) = (&a.fused.entry, &b.fused.entry);
+                if is_protected(g, ea) {
+                    protected += 1;
+                    if MODELLED.contains(&g) {
+                        let keep = GroupMask(u32::MAX).without(g);
+                        assert_eq!(
+                            project(ea, keep),
+                            project(eb, keep),
+                            "seed {seed} node {x} {g:?}: protected group changed"
+                        );
+                        let only = |e: &SemEntry| {
+                            (
+                                toy_from_entry(e, g),
+                                e.prov.get(g),
+                                e.hedge.get(g),
+                                e.taint.get(g),
+                            )
+                        };
+                        assert_eq!(only(ea), only(eb), "seed {seed} node {x} {g:?}");
+                    }
+                } else if MODELLED.contains(&g) && toy_from_entry(ea, g) != toy_from_entry(eb, g) {
+                    changed_unprotected += 1;
+                }
+                // No Secondary wins an expressible group.
+                if eb.prov.get(g) == Some(ProvCode::ObservedSecondary) {
+                    assert!(
+                        wl.case.profile.inexpressible.has(g),
+                        "seed {seed} node {x} {g:?}"
+                    );
+                }
+            }
+        }
+    }
+    assert!(
+        protected > 500 && changed_unprotected > 0,
+        "{protected} {changed_unprotected}"
+    );
+}
+
+#[test]
+fn f13_a_vis_bump_retires_inferred_facts_of_the_node() {
+    let mut inferred_before = 0usize;
+    for seed in 0..trials() {
+        let wl = workload(seed + 90_000, size(seed, 30), true);
+        let mut w = wl.world();
+        let before = eval(&wl, &w);
+        for (x, o) in before.nodes.iter().enumerate() {
+            let Some(o) = o else { continue };
+            if Group::ALL
+                .iter()
+                .any(|g| o.fused.entry.prov.get(*g) == Some(ProvCode::Inferred))
+            {
+                inferred_before += 1;
+                // Bump past every basis the writer could have stamped.
+                apply(&mut w, &Ev::Vis { x, rev: 1_000_000 });
+                let after = eval(&wl, &w);
+                let a = after.nodes[x].as_ref().unwrap();
+                for g in Group::ALL.iter().copied() {
+                    assert_ne!(
+                        a.fused.entry.prov.get(g),
+                        Some(ProvCode::Inferred),
+                        "seed {seed} node {x} {g:?}: a stale Inferred fact won"
+                    );
+                }
+                break;
+            }
+        }
+    }
+    assert!(inferred_before > 10, "weak coverage {inferred_before}");
+}
+
+#[test]
+fn f15_a_fact_bound_below_its_minimum_never_matters() {
+    // Facts whose current binding is weaker than their grant's minimum (an ambiguous DomId is
+    // Heuristic, never Unique) can be removed without changing any result.
+    let mut weak_total = 0usize;
+    for seed in 0..trials() {
+        let wl = workload(seed + 100_000, size(seed, 38), true);
+        let w = wl.world();
+        let index = ToyIndex::new(&wl.case.profile, &w);
+        let weak = |f: &FactIn| {
+            let q = index.resolve(&f.anchor).quality;
+            !q.at_least(Grant::standard().min_bind(grant_class(f.group)))
+                && q != BindQuality::Unbound
+        };
+        // An ambiguous DOM id is never `Unique`.
+        for f in fact_events(&wl) {
+            if let AnchorId::Dom { id, count, .. } = &f.anchor {
+                let res = index.resolve(&f.anchor);
+                let holders = w
+                    .attr
+                    .iter()
+                    .filter(|(x, (_, i))| {
+                        i.as_deref() == Some(&**id)
+                            && index
+                                .resolve(&AnchorId::Node(NodeIdx(u32::try_from(**x).unwrap())))
+                                .node
+                                .is_some()
+                    })
+                    .count();
+                if *count != 1 || holders > 1 {
+                    assert_ne!(res.quality, BindQuality::Unique, "seed {seed}: {id}");
+                }
+            }
+        }
+        let weak_facts: Vec<SideKeyLite> = fact_events(&wl)
+            .into_iter()
+            .filter(|f| weak(f))
+            .map(SideKeyLite::of)
+            .collect();
+        weak_total += weak_facts.len();
+        let pruned = wl.world_where(|e| match e {
+            Ev::Fact(f) => !weak_facts.contains(&SideKeyLite::of(f)),
+            _ => true,
+        });
+        assert_eq!(
+            eval(&wl, &w).entries(),
+            eval(&wl, &pruned).entries(),
+            "seed {seed}"
+        );
+    }
+    assert!(weak_total > 0, "no weakly bound fact generated");
+}
+
+#[derive(PartialEq, Eq)]
+struct SideKeyLite(SourceId, AnchorId, gorca_model::sem::GroupCode);
+
+impl SideKeyLite {
+    fn of(f: &FactIn) -> SideKeyLite {
+        SideKeyLite(f.source, f.anchor.clone(), f.group)
+    }
+}
+
+#[test]
+fn f18_after_a_rebind_no_old_generation_fact_wins() {
+    let mut tried = 0usize;
+    for seed in 0..trials() {
+        let wl = workload(seed + 110_000, size(seed, 30), true);
+        let n = wl.case.parent.len();
+        let mut r = Rng::new(seed);
+        let x = r.below(n);
+        let node_anchor = AnchorId::Node(NodeIdx(u32::try_from(x).unwrap()));
+        let src = wl.case.profile.pi(Group::Role)[0];
+        let bump = Ev::Life {
+            src,
+            x,
+            seq: 10_000_000,
+            alive: true,
+        };
+        let mut w = wl.world();
+        apply(&mut w, &bump);
+        let mut pruned = wl.world_where(|e| !matches!(e, Ev::Fact(f) if f.anchor == node_anchor));
+        apply(&mut pruned, &bump);
+        assert_eq!(
+            eval(&wl, &w).entries(),
+            eval(&wl, &pruned).entries(),
+            "seed {seed}: an old-generation fact on node {x} still mattered"
+        );
+        tried += 1;
+    }
+    assert!(tried > 50);
+}
+
+// ---- N-2, S4 ranking, revocation ------------------------------------------------------------------
+
+#[test]
+fn fuse_is_deterministic_and_pure() {
+    let wl = workload(77, 40, true);
+    let a = eval(&wl, &wl.world());
+    let b = eval(&wl, &wl.world());
+    assert_eq!(a.entries(), b.entries());
+}
+
+#[test]
+fn revoked_source_equals_absent_source() {
+    // F14 in miniature: masking a source gives the run without its facts.
+    let mut compared = 0usize;
+    for seed in 0..trials() {
+        let wl = workload(seed + 120_000, size(seed, 30), true);
+        let name = ["bus", "ocr", "icon", "ext.a"][usize::try_from(seed % 4).unwrap()];
+        let slot = SOURCES.iter().find(|s| s.1 == name).map(|s| s.0).unwrap();
+        let mut revoked = wl.world();
+        apply(
+            &mut revoked,
+            &Ev::Epoch {
+                src: name,
+                n: u64::MAX / 2,
+                state: "Revoked",
+            },
+        );
+        let absent = wl.world_where(|e| !matches!(e, Ev::Fact(f) if f.source.slot == slot));
+        assert_eq!(
+            eval(&wl, &revoked).entries(),
+            eval(&wl, &absent).entries(),
+            "seed {seed} {name}"
+        );
+        compared += 1;
+    }
+    assert!(compared > 50);
+}
+
+fn two_inferred_sources(slot_a: u32, slot_b: u32) -> (Workload, World) {
+    // Two Inferred sources with equal tier, kind order and class; only their stable names differ.
+    let tables = json!({"sources": {
+        "atspi": [0, 0, "Primary", 1, null],
+        "newton": [1, 0, "Primary", 1, null],
+        "alpha": [slot_a, 0, "Inferred", 2, 0],
+        "omega": [slot_b, 0, "Inferred", 2, 0],
+    }});
+    let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], toy_rules());
+    profile.default_role = SemRole::Generic;
+    let mut case = Case::synthetic("s4".into(), profile, vec![-1], Vec::new());
+    case.tables = tables;
+    let mut wl = Workload {
+        case,
+        events: Vec::new(),
+    };
+    wl.events.push(Ev::Life {
+        src: PrimarySlot::P0,
+        x: 0,
+        seq: 1,
+        alive: true,
+    });
+    for (slot, text) in [(slot_a, "FromAlpha"), (slot_b, "FromOmega")] {
+        wl.events.push(Ev::Fact(Box::new(FactIn {
+            source: SourceId {
+                slot,
+                generation: 0,
+            },
+            anchor: AnchorId::Node(NodeIdx(0)),
+            group: Group::Name.group_code(),
+            seq: 1,
+            payload: Payload::Sem(Write::Val(gorca_fuse::Val::Name(Arc::from(text)))),
+            p_milli: 990,
+            basis: Basis::VisRev(1),
+            bind_gen: BindGen(1),
+            admitted_at_ms: 0,
+            ttl_ms: Some(300_000),
+        })));
+    }
+    let w = wl.world();
+    (wl, w)
+}
+
+#[test]
+fn s4_ties_are_broken_by_stable_name_never_by_source_id() {
+    // The same two sources with their slots swapped (the allocation order differs) must rank the
+    // same way.
+    for (a, b) in [(7, 9), (9, 7), (1000, 2)] {
+        let (wl, w) = two_inferred_sources(a, b);
+        let out = eval(&wl, &w);
+        let e = &out.nodes[0].as_ref().unwrap().fused.entry;
+        assert_eq!(e.name.as_deref(), Some("FromAlpha"), "slots ({a}, {b})");
+        assert_eq!(e.prov.get(Group::Name), Some(ProvCode::Inferred));
+        assert!(e.hedge.get(Group::Name) != 0);
+    }
+}
+
+#[test]
+fn a_t3_fact_ranks_below_a_t2_fact_of_the_same_raw_class() {
+    // ext.a (T3) at p = 990 is capped to Probable at admission and ranks below ocr (T2, High).
+    let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], toy_rules());
+    profile.default_role = SemRole::Generic;
+    let mut case = Case::synthetic("t3".into(), profile, vec![-1], Vec::new());
+    case.tables = synthetic_tables();
+    let mut wl = Workload {
+        case,
+        events: Vec::new(),
+    };
+    wl.events.push(Ev::Life {
+        src: PrimarySlot::P0,
+        x: 0,
+        seq: 1,
+        alive: true,
+    });
+    let mk = |slot: u32, text: &str| FactIn {
+        source: SourceId {
+            slot,
+            generation: 0,
+        },
+        anchor: AnchorId::Node(NodeIdx(0)),
+        group: Group::Name.group_code(),
+        seq: 1,
+        payload: Payload::Sem(Write::Val(gorca_fuse::Val::Name(Arc::from(text)))),
+        p_milli: 990,
+        basis: Basis::VisRev(1),
+        bind_gen: BindGen(1),
+        admitted_at_ms: 0,
+        ttl_ms: Some(300_000),
+    };
+    wl.events.push(Ev::Fact(Box::new(mk(5, "ExtT3"))));
+    wl.events.push(Ev::Fact(Box::new(mk(3, "OcrT2"))));
+    let out = eval(&wl, &wl.world());
+    let e = &out.nodes[0].as_ref().unwrap().fused.entry;
+    assert_eq!(e.name.as_deref(), Some("OcrT2"));
+    assert_eq!(e.hedge.get(Group::Name), ConfClass::High.code());
+    let _ = toy_str(&Slot::Unknown);
+}
+
+#[test]
+fn an_inferred_fact_on_another_group_is_reported_not_applicable() {
+    // S4 fills only name and description; the trail must say so instead of omitting the fact.
+    let (mut wl, _) = two_inferred_sources(7, 9);
+    wl.events.clear();
+    wl.events.push(Ev::Life {
+        src: PrimarySlot::P0,
+        x: 0,
+        seq: 1,
+        alive: true,
+    });
+    wl.events.push(Ev::Fact(Box::new(FactIn {
+        source: SourceId {
+            slot: 7,
+            generation: 0,
+        },
+        anchor: AnchorId::Node(NodeIdx(0)),
+        group: Group::Check.group_code(),
+        seq: 1,
+        payload: Payload::Sem(write_from_toy(Group::Check, &json!("on"))),
+        p_milli: 990,
+        basis: Basis::VisRev(1),
+        bind_gen: BindGen(1),
+        admitted_at_ms: 0,
+        ttl_ms: Some(300_000),
+    })));
+    let out = eval_traced(&wl, &wl.world());
+    let ex = out.nodes[0].as_ref().unwrap().explain.as_ref().unwrap();
+    let trail = ex.trail(Group::Check);
+    assert!(trail.iter().any(|t| matches!(
+        t,
+        gorca_fuse::TrailEntry::Fact(f) if f.status == gorca_fuse::TrailStatus::NotApplicable
+    )));
 }

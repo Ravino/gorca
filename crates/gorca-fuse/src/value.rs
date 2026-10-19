@@ -53,7 +53,8 @@ pub enum Val {
     Level(u8),
     SetPos(SetPos),
     Grid(GridPos),
-    Live(Live),
+    /// `None` is an explicit "off" (a value), unlike `Absent`.
+    Live(Option<Live>),
     Orientation(Orientation),
     Sort(Sort),
 }
@@ -112,7 +113,8 @@ impl Val {
             Val::Flags(f) => Cow::Owned(f.bits().to_string()),
             Val::SetPos(p) => Cow::Owned(format!("{p:?}")),
             Val::Grid(g) => Cow::Owned(format!("{g:?}")),
-            Val::Live(l) => Cow::Owned(format!(
+            Val::Live(None) => Cow::Borrowed("off"),
+            Val::Live(Some(l)) => Cow::Owned(format!(
                 "{}.{}.{}.{}",
                 match l.politeness {
                     Politeness::Polite => "polite",
@@ -144,7 +146,7 @@ impl Val {
             Val::Level(v) => entry.sem.level = *v,
             Val::SetPos(v) => entry.sem.pos = Some(*v),
             Val::Grid(v) => entry.sem.grid = Some(*v),
-            Val::Live(v) => entry.sem.live = Some(*v),
+            Val::Live(v) => entry.sem.live = *v,
             Val::Orientation(v) => entry.sem.orientation = *v,
             Val::Sort(v) => entry.sem.sort = *v,
         }
