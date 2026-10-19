@@ -1,0 +1,13 @@
+# Product rows for web-capable applications (ADR-0016 section 2.7, owner decision DP-3).
+# Compiled into gorca-config. These rows apply in safe mode and under `profiles.suspend`
+# (the CHR-0 interim table did), so a code editor never gets a virtual buffer by accident.
+schema = 1
+
+[[profile]]
+id = "vscode"
+name = "Visual Studio Code"
+why = "an editor built from text widgets and its own key bindings; NVDA disables the buffer for it (appModules/code.py)"
+triggers = [{ app = { name = ["code", "visual studio code", "code - oss", "vscodium", "cursor"] } }]
+
+[profile.values]
+browse.enabled = false

@@ -218,6 +218,27 @@ pub struct SemText {
 }
 
 impl SemText {
+    /// Heap bytes of this block and every string it owns, `Arc` headers included (the mirror
+    /// budget charges semantic data by this, so a hostile page cannot hide text in it).
+    pub fn heap_bytes(&self) -> usize {
+        const HDR: usize = 2 * size_of::<usize>();
+        let strs = [
+            &self.description,
+            &self.role_description,
+            &self.error_text,
+            &self.placeholder,
+            &self.key_shortcuts,
+            &self.value_text,
+            &self.col_index_text,
+            &self.row_index_text,
+        ];
+        HDR + size_of::<SemText>()
+            + strs
+                .iter()
+                .map(|s| s.as_deref().map_or(0, |s| HDR + s.len()))
+                .sum::<usize>()
+    }
+
     /// True when every field is empty (the caller then stores `None` instead of an `Arc`).
     pub fn is_empty(&self) -> bool {
         self.description.is_none()

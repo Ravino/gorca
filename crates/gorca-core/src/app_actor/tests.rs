@@ -12,6 +12,8 @@ use gorca_model::{
 };
 use std::sync::Arc;
 
+mod fuse_tests;
+
 fn app() -> AppId {
     AppId {
         connector: ConnectorId(1),
@@ -66,6 +68,7 @@ fn snap(n: u64) -> Arc<NodeSnapshot> {
         have: gorca_model::PropMask::PRESENT,
         confirmed_seq: 0,
         fresh: Freshness::Fresh { at: Instant::now() },
+        sem: gorca_model::NodeSem::NONE,
     })
 }
 
@@ -226,6 +229,7 @@ fn shell_info() -> gorca_model::AppInfo {
         page_events_settle_ms: 0,
         web_engine: gorca_model::WebEngine::None,
         root: None,
+        sem_tables: None,
     }
 }
 
@@ -798,10 +802,10 @@ impl crate::AppExt for FakeApp {
         if let NodeEvent::Announcement { text, .. } = ev {
             match &**text {
                 "suppress" => crate::ExtVerdict::Suppress,
-                "rewrite" => crate::ExtVerdict::Rewrite(vec![gorca_model::Segment {
-                    text: Arc::from("said instead"),
-                    kind: gorca_model::SegmentKind::Text,
-                }]),
+                "rewrite" => crate::ExtVerdict::Rewrite(vec![gorca_model::Segment::new(
+                    Arc::from("said instead"),
+                    gorca_model::SegmentKind::Text,
+                )]),
                 "reevaluate" => crate::ExtVerdict::ReEvaluate,
                 _ => crate::ExtVerdict::Pass,
             }

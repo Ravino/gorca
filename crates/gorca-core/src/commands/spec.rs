@@ -265,7 +265,8 @@ mod tests {
         assert!(impl_names.contains(&"text.say_all"));
         assert!(impl_names.contains(&"info.selection"));
         assert!(impl_names.contains(&"info.formatting"));
-        assert_eq!(impl_names.len(), 184);
+        // `debug.explain_last` is implemented in dev builds only.
+        assert_eq!(impl_names.len(), 190 + usize::from(cfg!(debug_assertions)));
     }
 
     #[test]

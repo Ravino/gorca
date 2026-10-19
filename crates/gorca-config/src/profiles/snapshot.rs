@@ -106,6 +106,12 @@ impl Interner {
     }
 
     pub fn intern_pin(&self, p: PinSel) -> PinId {
+        {
+            let r = self.inner.read().unwrap_or_else(PoisonError::into_inner);
+            if let Some(i) = r.pin_ids.get(&p) {
+                return PinId(*i);
+            }
+        }
         let mut w = self.inner.write().unwrap_or_else(PoisonError::into_inner);
         if let Some(i) = w.pin_ids.get(&p) {
             return PinId(*i);

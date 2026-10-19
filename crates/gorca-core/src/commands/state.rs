@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use arc_swap::ArcSwap;
+use gorca_config::profiles::{BuiltLayers, Effective, ProfileKey, ProfileSnapshot, SavePlan};
 use gorca_config::{Overlay, Settings};
 use gorca_input_api::LaneLinks;
 use gorca_model::{NodeKey, Utterance};
@@ -44,6 +45,9 @@ pub struct LoadedSettings {
     /// Caps Lock was dropped as a gorca key: announce it once.
     pub caps_lock_dropped: bool,
     pub clock_24h: bool,
+    /// The compiled profiles and the layers under them (ADR-0016). `None`: this load has no
+    /// profile data (tests, a Reader without a profile directory): edits use the overlay.
+    pub profiles: Option<Arc<BuiltLayers>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -56,9 +60,109 @@ pub enum SaveResult {
     Failed,
 }
 
+/// What the focus looks like to the profile triggers, owned so it can cross to the config task.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ProfileFocus {
+    pub app: Option<Arc<str>>,
+    pub contexts: gorca_config::profiles::ContextSet,
+    /// Host of the focused document (never the whole address, PC-5).
+    pub host: Option<Arc<str>>,
+}
+
+impl ProfileFocus {
+    /// The trigger facts of this focus.
+    pub fn facts(&self) -> gorca_config::profiles::FocusFacts<'_> {
+        gorca_config::profiles::FocusFacts {
+            app: self
+                .app
+                .as_deref()
+                .map(|name| gorca_config::profiles::AppFacts {
+                    name,
+                    exe: None,
+                    desktop_id: None,
+                }),
+            window: None,
+            contexts: self.contexts,
+            site: self
+                .host
+                .as_deref()
+                .map(|host| gorca_config::profiles::SiteFacts { host, path: None }),
+        }
+    }
+}
+
+/// Which write a profile save asks for.
+#[derive(Clone, Debug)]
+pub enum SaveKind {
+    /// `settings.save`: every dirty delta to its own file (PE-5).
+    All,
+    /// `profiles.save_global` (PE-4): the touched keys of `profile_id` move to the global file.
+    Global {
+        profile_id: String,
+        focus: ProfileFocus,
+    },
+    /// Second press of `profiles.save_global`: these keys also leave every other profile.
+    Everywhere {
+        keys: Vec<gorca_config::profiles::KeyRef>,
+        except: String,
+    },
+}
+
+/// A request to write profile files, planned and performed by the config task.
+#[derive(Clone, Debug)]
+pub struct SaveProfiles {
+    /// Echoed in the answer: the Reader drops answers it no longer waits for (R-1).
+    pub id: u64,
+    /// The Reader's snapshot at the moment of the request.
+    pub snapshot: Arc<ProfileSnapshot>,
+    pub kind: SaveKind,
+}
+
+/// Fold the keys one step away from the focus, off the Reader (ADR-0016 SW-2).
+#[derive(Clone, Debug)]
+pub struct PrewarmRequest {
+    pub snapshot: Arc<ProfileSnapshot>,
+    pub focus: ProfileFocus,
+}
+
+/// Folded settings for keys the Reader may need next, tagged with the generation they were
+/// folded from; the Reader drops entries of an older generation.
+#[derive(Clone, Debug)]
+pub struct PrewarmEntries {
+    pub generation: u64,
+    pub entries: Vec<(ProfileKey, Arc<Effective>)>,
+}
+
+/// How far a profile save got.
+#[derive(Clone, Debug)]
+pub enum ProfileSaveOutcome {
+    /// The first `done` of `total` writes landed.
+    Written { done: usize, total: usize },
+    /// The plan was refused; nothing was written.
+    Refused(gorca_config::profiles::SaveRefusal),
+    /// The settings file is from a newer gorca (SV-3).
+    NewerSchema,
+    /// A write failed after `done` writes.
+    Failed { done: usize },
+}
+
+/// The config task's answer to a [`SaveProfiles`] request.
+#[derive(Clone, Debug)]
+pub struct ProfilesSaved {
+    /// The id of the request this answers.
+    pub id: u64,
+    pub plan: Option<Arc<SavePlan>>,
+    pub outcome: ProfileSaveOutcome,
+    pub kind: SaveKind,
+}
+
 #[derive(Clone, Debug)]
 pub enum SettingsMsg {
     Loaded(Arc<LoadedSettings>),
+    /// The result of a profile save; the Reader completes its snapshot with what was written.
+    ProfilesSaved(Arc<ProfilesSaved>),
+    /// Folded settings for the keys one step from the focus (SW-2).
+    Prewarm(Arc<PrewarmEntries>),
     /// The outcome of `settings.save`. On success the new file contents follow as `Loaded`
     /// with [`LoadCause::Saved`].
     SaveResult(SaveResult),
@@ -118,12 +222,16 @@ pub enum SpeechCtl {
 }
 
 /// Requests to the daemon's config task.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum ConfigRequest {
     /// Reload the file now; runtime changes are discarded.
     Reload,
     /// Merge these runtime changes into the file.
     Save(Overlay),
+    /// Write profile files (ADR-0016 PE-5, PE-4); the answer is [`SettingsMsg::ProfilesSaved`].
+    SaveProfiles(Box<SaveProfiles>),
+    /// Fold the keys one step from the focus (SW-2); the answer is [`SettingsMsg::Prewarm`].
+    Prewarm(Box<PrewarmRequest>),
 }
 
 /// The voice parameter the ring currently selects.
@@ -226,6 +334,10 @@ pub(crate) struct CmdState {
     pub overlay: Overlay,
     pub effective: Arc<Settings>,
     pub published: Option<Arc<ArcSwap<Settings>>>,
+    /// The profile stack (ADR-0016), once the config task delivered one.
+    pub profiles: Option<super::profiles::ProfileRuntime>,
+    /// Where the runtime publishes its snapshot (tests leave it unset).
+    pub profile_cell: Option<Arc<gorca_config::profiles::ProfileCell>>,
     pub problems: Vec<Arc<str>>,
     pub problems_hash: u64,
     pub newer_schema: bool,
@@ -234,6 +346,9 @@ pub(crate) struct CmdState {
     pub speech_on: bool,
     pub paused: bool,
     pub last_spoken: Option<Utterance>,
+    /// The node in focus when `last_spoken` was remembered: what `debug.explain_last` reads the
+    /// fused entry of.
+    pub last_spoken_node: Option<gorca_model::NodeKey>,
     pub pending: Option<PendingInfo>,
     /// The last window title that was read, with the application it belongs to: the answer
     /// when a later read finds no window at all (a chain with a gap, a fetch that failed).
@@ -264,6 +379,8 @@ impl CmdState {
             file_hash: 0,
             overlay: Overlay::default(),
             published: None,
+            profiles: None,
+            profile_cell: None,
             problems: Vec::new(),
             problems_hash: 0,
             newer_schema: false,
@@ -272,6 +389,7 @@ impl CmdState {
             speech_on: true,
             paused: false,
             last_spoken: None,
+            last_spoken_node: None,
             pending: None,
             last_title: None,
             pass_deadline: None,
@@ -317,7 +435,10 @@ impl CmdState {
 
     /// Recompute the effective snapshot and publish it (one `Arc` allocation per change).
     pub(crate) fn republish(&mut self) {
-        self.effective = Arc::new(self.overlay.apply(&self.file));
+        self.effective = match &mut self.profiles {
+            Some(rt) => rt.settings(),
+            None => Arc::new(self.overlay.apply(&self.file)),
+        };
         if let Some(p) = &self.published {
             p.store(Arc::clone(&self.effective));
         }

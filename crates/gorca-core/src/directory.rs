@@ -41,6 +41,8 @@ pub struct MirrorDirectory {
     pids: ArcSwap<HashMap<AppId, u32>>,
     /// Applications whose presentation goes through the installed `AppPolicy`.
     policy: ArcSwap<HashSet<AppId>>,
+    /// The application name each connection reported (profile triggers, ADR-0016 TR-1).
+    names: ArcSwap<HashMap<AppId, Arc<str>>>,
 }
 
 impl MirrorDirectory {
@@ -146,6 +148,23 @@ impl MirrorDirectory {
         });
     }
 
+    /// Record the name `app` reported at registration (`None` clears it).
+    pub fn set_app_name(&self, app: AppId, name: Option<&Arc<str>>) {
+        self.names.rcu(|cur| {
+            let mut next = HashMap::clone(cur);
+            match name {
+                Some(n) => next.insert(app, Arc::clone(n)),
+                None => next.remove(&app),
+            };
+            next
+        });
+    }
+
+    /// The name `app` reported, wait-free.
+    pub fn app_name(&self, app: AppId) -> Option<Arc<str>> {
+        self.names.load().get(&app).cloned()
+    }
+
     /// Mark whether `app` is presented through the installed policy.
     pub fn set_policy(&self, app: AppId, on: bool) {
         self.policy.rcu(|cur| {
@@ -173,6 +192,7 @@ impl MirrorDirectory {
 
     pub fn remove(&self, app: AppId) {
         self.set_pid(app, None);
+        self.set_app_name(app, None);
         self.set_policy(app, false);
         if !self.text_window_follows(app) {
             self.set_text_unit(app, TextUnit::Scalar);
@@ -280,6 +300,7 @@ mod tests {
             have: gorca_model::PropMask::PRESENT,
             confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
+            sem: gorca_model::NodeSem::NONE,
         })
     }
 

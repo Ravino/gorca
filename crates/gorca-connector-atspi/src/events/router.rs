@@ -618,6 +618,7 @@ impl AtspiRouter {
             page_events_settle_ms: 0,
             web_engine: gorca_model::WebEngine::None,
             root: None,
+            sem_tables: None,
         };
         let deadline = Deadline::after(&self.clock, ANNOUNCE_WAIT);
         let announced = self

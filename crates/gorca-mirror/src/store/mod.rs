@@ -24,9 +24,10 @@ use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::Instant;
 
 use arc_swap::ArcSwap;
+use gorca_model::sem::{SemEntry, SemText, SrcRecord};
 use gorca_model::{
-    AppId, ChildList, Freshness, FreshnessEvent, Lookup, NodeKey, NodeSnapshot, NodeView, PropMask,
-    SnapshotBatch, Value,
+    AppId, ChildList, Freshness, FreshnessEvent, Lookup, NodeKey, NodeSem, NodeSnapshot, NodeView,
+    PropMask, SnapshotBatch, Value,
 };
 
 use crate::limits::{
@@ -179,6 +180,7 @@ impl Hasher for KeyHasher {
 /// Deterministic size of a snapshot for the byte counters: a function of the snapshot only, so
 /// the counter can be recomputed from the structure (MA-1).
 pub fn node_bytes(n: &NodeSnapshot) -> u64 {
+    const HDR: usize = 2 * std::mem::size_of::<usize>();
     let mut b = std::mem::size_of::<NodeSnapshot>() + INDEX_OVERHEAD;
     b += n.name.as_deref().map_or(0, str::len);
     b += n.description.as_deref().map_or(0, str::len);
@@ -192,6 +194,25 @@ pub fn node_bytes(n: &NodeSnapshot) -> u64 {
         b += v.len() + std::mem::size_of::<(gorca_model::AttrKey, Arc<str>)>();
     }
     b += n.relations.len() * std::mem::size_of::<NodeKey>();
+    // The dual-carried semantics (M22a-C1b), real heap: each `Arc` header (two counters), the
+    // value, its name unless it is the snapshot's own allocation, and every string of its text.
+    let own_name = |name: &Option<Arc<str>>| match (name, &n.name) {
+        (Some(a), Some(b)) if Arc::ptr_eq(a, b) => 0,
+        (Some(a), _) => HDR + a.len(),
+        (None, _) => 0,
+    };
+    if let Some(r) = &n.sem.rec {
+        b += HDR
+            + std::mem::size_of::<SrcRecord>()
+            + own_name(&r.name)
+            + r.sem.text.as_deref().map_or(0, SemText::heap_bytes);
+    }
+    if let Some(e) = &n.sem.entry {
+        b += HDR
+            + std::mem::size_of::<SemEntry>()
+            + own_name(&e.name)
+            + e.sem.text.as_deref().map_or(0, SemText::heap_bytes);
+    }
     b as u64
 }
 
@@ -1035,6 +1056,59 @@ impl MirrorWriter {
             n,
             start.saturating_sub(self.shared.bytes.load(Ordering::Relaxed)),
         )
+    }
+
+    /// Attach the fused entry made from `rec` to the live snapshot of `k` that carries exactly
+    /// that record (pointer identity: an entry fused from a record that a newer reply has since
+    /// replaced must not be attached to the newer content). The snapshot's record is dropped (the
+    /// entry is the fused form of it). Returns whether the entry was attached; `false` for a node
+    /// that is gone, replaced, or when the all-apps budget has no room for the difference.
+    pub fn attach_sem(&mut self, k: NodeKey, rec: &Arc<SrcRecord>, entry: Arc<SemEntry>) -> bool {
+        if !self.owns(k) {
+            return false;
+        }
+        let Some(Entry::Live {
+            snap,
+            inv_seq,
+            inv_mask,
+        }) = self.peek(k)
+        else {
+            return false;
+        };
+        if !snap.sem.rec.as_ref().is_some_and(|r| Arc::ptr_eq(r, rec)) {
+            return false;
+        }
+        let mut n = (*snap).clone();
+        n.sem = NodeSem {
+            rec: None,
+            entry: Some(entry),
+        };
+        let (old_bytes, new_bytes) = (node_bytes(&snap), node_bytes(&n));
+        if new_bytes > old_bytes {
+            self.pinned = Some(k);
+            let ok = self.reserve(new_bytes - old_bytes, false);
+            self.pinned = None;
+            if !ok {
+                return false;
+            }
+        } else if let Some(b) = &self.budget {
+            b.release(old_bytes - new_bytes);
+        }
+        let n = Arc::new(n);
+        self.counters_sub(&snap);
+        self.counters_add(&n);
+        self.put(
+            k,
+            Entry::Live {
+                snap: n,
+                inv_seq,
+                inv_mask,
+            },
+        );
+        // No revision bump: the content a reader sees (legacy fields, freshness) is unchanged, so
+        // a review model built at the current revision stays valid.
+        self.debug_check();
+        true
     }
 
     /// Mark fields of `k` untrustworthy. Returns whether a live node was marked.

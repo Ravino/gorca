@@ -488,6 +488,10 @@ const FOCUS_KEYS: &[(&str, &[&str])] = &[
 const VENDOR_KEYS: &[usize] = &[2, 3, 4, 5];
 const NAMES: &[&str] = &["abc", "abcd", "xyz", "Abc"];
 const PATTERNS: &[&str] = &["abc", "abc*", "ab*", "xyz", "*"];
+const TITLE_PATTERNS: &[&str] = &["doc*", "*.md", "*", "readme"];
+const HOST_PATTERNS: &[&str] = &["x.org", "*.org", "y*"];
+const TITLES: &[&str] = &["doc.md", "docs", "readme", "other"];
+const HOSTS: &[&str] = &["x.org", "y.org", "yes.example"];
 
 struct Gen {
     users: Vec<(String, String)>,
@@ -499,11 +503,22 @@ fn gen_triggers(r: &mut Rng) -> String {
     let n = 1 + r.below(2);
     let mut v = Vec::new();
     for _ in 0..n {
-        if r.chance(65) {
+        let roll = r.below(100);
+        if roll < 65 {
             // `*` alone has too few literals for add-ons but is fine for users and the product.
             v.push(format!(
                 "{{ app = {{ name = [\"{}\"] }} }}",
                 r.pick(PATTERNS)
+            ));
+        } else if roll < 76 {
+            v.push(format!(
+                "{{ window = {{ title = \"{}\" }} }}",
+                r.pick(TITLE_PATTERNS)
+            ));
+        } else if roll < 86 {
+            v.push(format!(
+                "{{ site = {{ host = \"{}\" }} }}",
+                r.pick(HOST_PATTERNS)
             ));
         } else {
             v.push(format!(
@@ -636,6 +651,28 @@ fn build_from(g: &Gen) -> ProfileSnapshot {
 fn oracle(s: &ProfileSnapshot, facts: &FocusFacts<'_>) -> BTreeMap<String, Value> {
     let name = facts.app.as_ref().map_or("", |a| a.name);
     let lname = name.to_ascii_lowercase();
+    // `*`-only glob by hand (ASCII case-insensitive): every piece between stars must occur in
+    // order, the first one anchored at the start and the last at the end.
+    let hand = |pat: &str, text: &str| -> Option<usize> {
+        let (pat, text) = (pat.to_ascii_lowercase(), text.to_ascii_lowercase());
+        let pieces: Vec<&str> = pat.split('*').collect();
+        let mut at = 0usize;
+        for (i, piece) in pieces.iter().enumerate() {
+            if i == 0 {
+                if !text.starts_with(piece) {
+                    return None;
+                }
+                at = piece.len();
+            } else if i == pieces.len() - 1 {
+                if text.len() < at + piece.len() || !text.ends_with(piece) {
+                    return None;
+                }
+            } else {
+                at += text[at..].find(piece)? + piece.len();
+            }
+        }
+        Some(pieces[0].len())
+    };
     // Matching, by hand: patterns are `lit`, `lit*` or `*`.
     let m = |p: &Profile| -> Option<(u8, usize)> {
         let mut best: Option<(u8, usize)> = None;
@@ -654,7 +691,14 @@ fn oracle(s: &ProfileSnapshot, facts: &FocusFacts<'_>) -> BTreeMap<String, Value
                     ok.then_some((1u8, lit.len()))
                 }
                 Trigger::Context { ctx } => facts.contexts.contains(*ctx).then_some((0u8, 0usize)),
-                Trigger::Window { .. } | Trigger::Site { .. } => None,
+                Trigger::Window { title, .. } => facts
+                    .window
+                    .and_then(|w| hand(title.as_str(), w.title))
+                    .map(|p| (2u8, p)),
+                Trigger::Site { host, .. } => facts
+                    .site
+                    .and_then(|st| hand(host.as_str(), st.host))
+                    .map(|p| (3u8, p)),
             };
             if let Some(h) = hit {
                 best = Some(best.map_or(h, |b| b.max(h)));
@@ -704,7 +748,13 @@ fn oracle(s: &ProfileSnapshot, facts: &FocusFacts<'_>) -> BTreeMap<String, Value
     let mut layers: Vec<BTreeMap<KeyId, Value>> = Vec::new();
     if mode == ProfileMode::Active {
         for (_, _, _, p) in users.iter().rev() {
-            if !s.is_enabled(p) {
+            let on = s
+                .deltas
+                .profiles
+                .get(&p.id)
+                .and_then(|d| d.enabled)
+                .unwrap_or(p.enabled);
+            if !on {
                 continue;
             }
             if let Some(d) = s.deltas.profiles.get(&p.id) {
@@ -739,9 +789,20 @@ fn oracle(s: &ProfileSnapshot, facts: &FocusFacts<'_>) -> BTreeMap<String, Value
             }
             ProfileSource::User => false,
         };
+        let rows_key = k("profiles.rows");
+        let listed = match s
+            .deltas
+            .base
+            .core
+            .get(rows_key)
+            .or_else(|| s.base.user.file.get(rows_key))
+        {
+            Some(Value::Map(m)) => m.get(&p.id).copied(),
+            _ => None,
+        };
         let on = match &p.source {
-            ProfileSource::ThirdParty { .. } => s.rows_map().get(&p.id).copied().unwrap_or(false),
-            _ => s.rows_map().get(&p.id).copied().unwrap_or(p.enabled),
+            ProfileSource::ThirdParty { .. } => listed.unwrap_or(false),
+            _ => listed.unwrap_or(p.enabled),
         };
         if allowed && on {
             layers.push(p.values.iter().map(|(k, v)| (k, v.clone())).collect());
@@ -766,14 +827,23 @@ fn random_facts<'a>(r: &mut Rng, name: &'a str) -> FocusFacts<'a> {
     if r.chance(40) {
         ctx = ctx.with(FocusContext::Menu);
     }
+    let window = r.chance(50).then(|| WindowFacts {
+        title: r.pick(TITLES),
+        kind: WindowKind::Normal,
+    });
+    let site = r.chance(40).then(|| SiteFacts {
+        host: r.pick(HOSTS),
+        path: None,
+    });
     FocusFacts {
         app: Some(AppFacts {
             name,
             exe: None,
             desktop_id: None,
         }),
+        window,
         contexts: ctx,
-        ..FocusFacts::default()
+        site,
     }
 }
 
@@ -815,6 +885,16 @@ fn the_fold_equals_the_specification_oracle() {
             0 => s = s.with_mode(ProfileMode::Suspended),
             1 => s = s.with_mode(ProfileMode::Disabled),
             _ => {}
+        }
+        // Unsaved `enabled` toggles of user profiles and rows.
+        let ids: Vec<String> = s.set.iter().map(|(_, p)| p.id.clone()).collect();
+        for _ in 0..r.below(3) {
+            if ids.is_empty() {
+                break;
+            }
+            if let Some(next) = s.toggle_enabled(&r.pick(&ids).clone()) {
+                s = next;
+            }
         }
         if r.chance(25) {
             let name = *r.pick(NAMES);

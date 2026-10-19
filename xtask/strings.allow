@@ -10,6 +10,9 @@
 # Known gap, tracked for M14: settings and keymap diagnostics (compile.rs, config_task.rs) are read
 # out by settings.report_problems in English; they quote paths and values. The rest below is not
 # speech: log text, internal ids, match patterns, protocol names.
+crates/gorca-core/src/app_actor/agree.rs | *
+crates/gorca-core/src/app_actor/fuse.rs | *
+crates/gorca-core/src/commands/diag.rs | *
 crates/gorca-core/src/browse/latency.rs | *
 crates/gorca-core/src/present/log.rs | *
 crates/gorca-core/src/present/window/m4b_rereview_probes.rs | *
@@ -82,6 +85,14 @@ crates/gorca-daemon/src/config_task.rs | settings file is bad; keeping the last 
 crates/gorca-daemon/src/config_task.rs | no settings file path is known\n
 crates/gorca-daemon/src/config_task.rs | no problems
 crates/gorca-daemon/src/config_task.rs | no file, using the defaults
+# Profile diagnostics and I/O errors of the config task: the same known gap as the settings
+# diagnostics above (M14); none is a catalog message.
+crates/gorca-daemon/src/config_task.rs | the profiles directory could not be read: {e}
+crates/gorca-daemon/src/config_task.rs | reading the profiles directory failed or took too long
+crates/gorca-daemon/src/config_task.rs | profiles: {d}
+crates/gorca-daemon/src/config_task.rs | profile {stem}: {d}
+crates/gorca-daemon/src/config_task.rs | no settings file path
+crates/gorca-daemon/src/config_task.rs | invalid profile id
 crates/gorca-daemon/src/input.rs | input lane statistics
 crates/gorca-daemon/src/lib.rs | GORCA_LOG
 crates/gorca-daemon/src/lib.rs | installing tracing subscriber: {e}

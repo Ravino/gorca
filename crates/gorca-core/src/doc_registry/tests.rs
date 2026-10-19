@@ -42,6 +42,7 @@ fn info() -> AppInfo {
         page_events_settle_ms: 0,
         web_engine: gorca_model::WebEngine::None,
         root: None,
+        sem_tables: None,
     }
 }
 
@@ -97,6 +98,9 @@ fn rig(factory: FakeDocFactory) -> Rig {
         docs: Arc::clone(&docs),
         notices: ntx,
         counters: Arc::new(DocCounters::default()),
+        profiles: Arc::new(gorca_config::profiles::ProfileCell::new(
+            gorca_config::profiles::initial_snapshot(),
+        )),
     };
     let task = tokio::spawn(run_hub(cfg, rx, shutdown.clone()));
     Rig {

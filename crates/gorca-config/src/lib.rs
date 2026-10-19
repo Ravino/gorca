@@ -10,7 +10,6 @@
 //! - [`ResolvedKeymap`] holds chords and command **names** per context, layered as built-in
 //!   preset, then the user file (KC-1 to KC-6). Mapping names to commands is `gorca-core`'s job.
 
-pub mod app_modes;
 mod diag;
 pub mod glob;
 mod keymap;
@@ -29,8 +28,8 @@ pub use presets::Presets;
 pub use save::{SaveError, save};
 pub use settings::{
     Apply, Backend, BoundaryMode, Caps, Confirmations, EchoSettings, EditingSettings,
-    InterruptPolicy, KeyScope, KeyboardSettings, Layout, Overlay, Preset, ProfilesSettings, Punct,
-    SCHEMA, SETTINGS, SettingDef, SettingType, Settings, SpeechSettings, TextSettings, Verbosity,
-    VerbositySettings, WordLevel, defaults_toml, defaults_toml_commented, resolve_language,
-    sections,
+    InterruptPolicy, KeyScope, KeyboardSettings, Layout, ModeDefault, Overlay, Preset,
+    ProfilesSettings, Punct, SCHEMA, SETTINGS, SettingDef, SettingType, Settings, SpeechSettings,
+    TextSettings, Verbosity, VerbositySettings, WordLevel, defaults_toml, defaults_toml_commented,
+    resolve_language, sections,
 };

@@ -395,10 +395,10 @@ impl Reader {
                 let mut u = s.utterance.clone();
                 let word = t_in(lang(self), M::HistorySecret);
                 u.segments.clear();
-                u.segments.push(gorca_model::Segment {
-                    text: Arc::from(word),
-                    kind: SegmentKind::Said,
-                });
+                u.segments.push(gorca_model::Segment::new(
+                    Arc::from(word),
+                    SegmentKind::Said,
+                ));
                 u.lang = None;
                 self.cmd.quick.history.push(u);
             } else {

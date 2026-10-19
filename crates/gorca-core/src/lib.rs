@@ -49,6 +49,11 @@ mod statemodel;
 mod terminal;
 mod text;
 
+pub use app_actor::agree::{
+    DEVIATIONS, Deviation, Mismatch, Report as AgreementReport, agreement_counters,
+    check as check_agreement, legacy_family,
+};
+pub use app_actor::fuse::{FuseStats, FuseStatsView, fuse_snapshots, writes_of};
 pub use app_actor::{
     AppActor, AppRoute, FILL_QUEUE, FillMsg, ReaderLinks, TextLink, WebLink, health_view,
 };
@@ -59,11 +64,14 @@ pub use browse::{
 pub use builtin_ext::AppProfile;
 pub use builtin_ext::{AppPolicy, PolicyFacts, PolicyMoment, PolicyVerdict};
 pub use commands::{
-    Availability, CapitalLevels, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask,
-    ControlMsg, CoreCmd, InputNotice, LoadCause, LoadedSettings, LocalTime, Milestone,
-    PASS_TIMEOUT, PlatformFacts, SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels,
-    WallClock, browse_grabs, chord_grabs, command_id, compile, compile_with, escape_grabs,
-    gorca_modifiers, grab_collisions, lane_settings, letter_grabs, tab_grabs,
+    ATSPI_SOURCE, Availability, CapitalLevels, CmdSpec, CommandTable, Compiled, ConfigRequest,
+    ContextMask, ControlMsg, CoreCmd, ExplainReport, InputNotice, LoadCause, LoadedSettings,
+    LocalTime, Milestone, PASS_TIMEOUT, PlatformFacts, PrewarmEntries, PrewarmRequest,
+    ProfileFocus, ProfileSaveOutcome, ProfilesSaved, SaveKind, SaveProfiles, SaveResult, SegLine,
+    SettingsMsg, SourceDirectory, SourceEntry, SpeechCtl, SystemWallClock, VoiceLevels, WallClock,
+    browse_grabs, chord_grabs, command_id, compile, compile_with, escape_grabs, explain_utterance,
+    gorca_modifiers, grab_collisions, lane_settings, letter_grabs, prewarm, set_explain_text,
+    tab_grabs,
 };
 pub use directory::{MirrorDirectory, Owner};
 pub use doc_actor::agree::{

@@ -30,10 +30,7 @@ fn tmp(name: &str) -> PathBuf {
 fn utt(id: u64, epoch: Epoch, text: &str) -> Utterance {
     Utterance {
         id: UttId(id),
-        segments: smallvec![Segment {
-            text: Arc::from(text),
-            kind: SegmentKind::Text
-        }],
+        segments: smallvec![Segment::new(Arc::from(text), SegmentKind::Text)],
         lang: None,
         epoch,
         prio: Prio::Interrupt,

@@ -158,6 +158,7 @@ mod tests {
             page_events_settle_ms: 0,
             web_engine: gorca_model::WebEngine::None,
             root: None,
+            sem_tables: None,
         }
     }
 

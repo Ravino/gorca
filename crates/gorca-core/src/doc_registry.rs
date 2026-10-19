@@ -195,6 +195,8 @@ pub struct HubCfg {
     pub docs: Arc<DocDirectory>,
     pub notices: mpsc::Sender<DocNotice>,
     pub counters: Arc<DocCounters>,
+    /// The published profile snapshot: `browse.enabled` per application (ADR-0016 section 2.9).
+    pub profiles: Arc<gorca_config::profiles::ProfileCell>,
 }
 
 struct Hub {
@@ -502,15 +504,24 @@ impl Hub {
         }
     }
 
+    /// `browse.enabled` for the application, from the published profile snapshot. The product
+    /// row (safe mode and suspend included) and the user's profiles decide.
+    fn browse_enabled(&self, app_name: &str) -> bool {
+        let app = gorca_config::profiles::AppFacts {
+            name: app_name,
+            exe: None,
+            desktop_id: None,
+        };
+        self.cfg.profiles.load().resolve_app(&app).browse_enabled()
+    }
+
     fn on_msg(&mut self, msg: HubMsg, now: Instant) {
         match msg {
             HubMsg::Appeared { app, info } => {
                 // The first-party mode rows (DP-3): an application whose row says no buffer is
                 // not hosted as a web application, so no document is mirrored and browse mode
                 // never starts there. Everything else is browse mode with automatic focus mode.
-                let web = self.cfg.factory.is_web(&info)
-                    && gorca_config::app_modes::browse_default(&info.app_name)
-                        != gorca_config::app_modes::BrowseDefault::Off;
+                let web = self.cfg.factory.is_web(&info) && self.browse_enabled(&info.app_name);
                 let needs = self.cfg.factory.needs_warm(&info);
                 let ready = self.apps.get(&app).is_some_and(|a| a.ready);
                 let mut st = AppWeb::new(*info, web, needs, now);

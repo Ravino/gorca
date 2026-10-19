@@ -44,7 +44,7 @@ use tokio::task::JoinSet;
 
 use crate::app_actor::{AppActor, FILL_QUEUE, FillMsg, ReaderLinks, TextLink, WebLink};
 use crate::browse::commands::WebEffect;
-use crate::commands::{ConfigRequest, SpeechCtl};
+use crate::commands::{ConfigRequest, SourceDirectory, SpeechCtl};
 use crate::directory::MirrorDirectory;
 use crate::doc_actor::{DocCounters, DocCtl, DocDirectory, DocNotice, SelOutcome, WebJoin};
 use crate::doc_registry::{HubCfg, HubMsg, HubTx, hub_channel, run_hub};
@@ -230,7 +230,10 @@ const MAX_FETCHES_IN_FLIGHT: usize = 64;
 const HEALTH_TICK: Duration = Duration::from_millis(250);
 const HEALTH_QUEUE: usize = 32;
 const REGISTRAR_QUEUE: usize = 64;
-const CONFIG_QUEUE: usize = 8;
+const CONFIG_QUEUE: usize = 16;
+/// Prewarm requests leave this many slots free for the requests that matter (a save is never
+/// dropped for a prewarm, R-5).
+const CONFIG_RESERVED: usize = 8;
 
 struct Shared {
     epoch: Arc<EpochCell>,
@@ -248,6 +251,9 @@ struct Shared {
     links: Arc<LaneLinks>,
     /// Effective settings, written by the Reader.
     settings: Arc<ArcSwap<Settings>>,
+    /// The published profile snapshot (ADR-0016 SS-1): the Reader writes it, the document
+    /// registry and the other resolvers read it.
+    profiles: Arc<gorca_config::profiles::ProfileCell>,
     /// The grab set (with its lookup context) the keyboard source should apply; latest wins.
     grabs: Arc<watch::Sender<GrabSet>>,
     config: mpsc::Sender<ConfigRequest>,
@@ -257,6 +263,7 @@ struct Shared {
     mirror_budget: Arc<MirrorBudget>,
     global_rate: Arc<GlobalRate>,
     present_log: Option<Arc<PresentLog>>,
+    sources: Arc<SourceDirectory>,
     web: WebShared,
     /// Text events the app actors could not queue for the Reader (ADR-0007 EV-5).
     text_dropped: Arc<AtomicU64>,
@@ -326,6 +333,9 @@ impl Core {
                 next_req: Arc::new(AtomicU64::new(1)),
                 links: LaneLinks::new(),
                 settings: Arc::new(ArcSwap::from_pointee(Settings::default())),
+                profiles: Arc::new(gorca_config::profiles::ProfileCell::new(
+                    gorca_config::profiles::initial_snapshot(),
+                )),
                 grabs: Arc::new(grabs),
                 config,
                 policy: Arc::new(|| Box::new(NullPolicy)),
@@ -333,6 +343,7 @@ impl Core {
                 mirror_budget: MirrorBudget::global(),
                 global_rate: GlobalRate::new(FILL_RATE_GLOBAL),
                 present_log: None,
+                sources: Arc::new(SourceDirectory::new()),
                 web: WebShared {
                     join: Arc::new(WebJoin::new()),
                     docs: Arc::new(DocDirectory::new()),
@@ -460,6 +471,15 @@ impl Core {
         self
     }
 
+    /// Register the fact sources the daemon wired (named by `debug.explain_last`).
+    #[must_use]
+    pub fn with_sources(mut self, sources: SourceDirectory) -> Self {
+        if let Some(sh) = Arc::get_mut(&mut self.shared) {
+            sh.sources = Arc::new(sources);
+        }
+        self
+    }
+
     /// The process-wide epoch cell (written by the input lane and the Reader).
     pub fn epoch(&self) -> Arc<EpochCell> {
         Arc::clone(&self.shared.epoch)
@@ -491,6 +511,11 @@ impl Core {
     /// The effective settings (file plus runtime changes); the Reader is the only writer.
     pub fn settings_cell(&self) -> Arc<ArcSwap<Settings>> {
         Arc::clone(&self.shared.settings)
+    }
+
+    /// The published profile snapshot; the Reader is the only writer.
+    pub fn profile_cell(&self) -> Arc<gorca_config::profiles::ProfileCell> {
+        Arc::clone(&self.shared.profiles)
     }
 
     /// The grab set the keyboard source should apply, with its lookup context. Latest wins.
@@ -549,6 +574,7 @@ impl Core {
                 docs: Arc::clone(&shared.web.docs),
                 notices: shared.senders.docs.clone(),
                 counters: Arc::clone(&shared.web.counters),
+                profiles: Arc::clone(&shared.profiles),
             };
             tasks.spawn("doc-registry", run_hub(cfg, rx, tasks.token()));
         }
@@ -1051,12 +1077,14 @@ async fn reader_loop(
     .with_focused(Arc::clone(&shared.focused))
     .with_links(Arc::clone(&shared.links))
     .with_settings_cell(Arc::clone(&shared.settings))
+    .with_profile_cell(Arc::clone(&shared.profiles))
     .with_web(Arc::clone(&shared.web.docs), Arc::clone(&shared.web.join))
     .with_text_dropped(Arc::clone(&shared.text_dropped))
     .with_lazy_attrs(shared.lazy_attrs);
     if let Some(log) = &shared.present_log {
         reader = reader.with_present_log(Arc::clone(log));
     }
+    reader = reader.with_sources(Arc::clone(&shared.sources));
     if let Some(src) = &shared.ext {
         reader = reader.with_ext(Arc::clone(src));
     }
@@ -1171,11 +1199,7 @@ async fn reader_loop(
                     shared.grabs.send_replace(set);
                 }
                 ReaderEffect::SpeechCtl(ctl) => shared.speech.control(ctl),
-                ReaderEffect::Config(req) => {
-                    if shared.config.try_send(req).is_err() {
-                        tracing::warn!("config request queue full; dropped a request");
-                    }
-                }
+                ReaderEffect::Config(req) => send_config(shared, req),
                 ReaderEffect::Web(w) => exec_web(shared, w),
                 ReaderEffect::SayAllChunk { intent, first } => {
                     bump(&shared.stats.utterances);
@@ -1201,6 +1225,32 @@ async fn reader_loop(
 /// The app side of a desktop effect (windows, notifications; M4b): a task bounded by request
 /// deadlines whose outcome goes to the Reader on the background lane. An app that is gone, hung
 /// or refusing answers with nothing, so the Reader keeps what it has (I-4).
+/// Queue a request for the config task. A prewarm is dropped first (the Reader folds on a
+/// miss); a save that cannot be queued is answered as failed, so the Reader never waits for it.
+fn send_config(shared: &Shared, req: ConfigRequest) {
+    if matches!(req, ConfigRequest::Prewarm(_)) && shared.config.capacity() <= CONFIG_RESERVED {
+        return;
+    }
+    let failed_save = match &req {
+        ConfigRequest::SaveProfiles(r) => Some((r.id, r.kind.clone())),
+        ConfigRequest::Reload | ConfigRequest::Save(_) | ConfigRequest::Prewarm(_) => None,
+    };
+    if shared.config.try_send(req).is_err() {
+        tracing::warn!("config request queue full; dropped a request");
+        if let Some((id, kind)) = failed_save {
+            let answer = crate::ProfilesSaved {
+                id,
+                plan: None,
+                outcome: crate::ProfileSaveOutcome::Failed { done: 0 },
+                kind,
+            };
+            let _ = shared.senders.control.try_send(crate::ControlMsg::Settings(
+                crate::SettingsMsg::ProfilesSaved(Arc::new(answer)),
+            ));
+        }
+    }
+}
+
 fn spawn_desktop(set: &mut JoinSet<()>, shared: &Arc<Shared>, d: crate::present::DesktopEffect) {
     use crate::present::{DesktopEffect, fetch_level, fetch_window};
     use crate::reader::BackgroundMsg;

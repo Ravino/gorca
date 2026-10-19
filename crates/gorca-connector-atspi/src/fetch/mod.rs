@@ -416,6 +416,7 @@ fn announce_info(
             app: port.app,
             local: gorca_dbus::drain::local_id(ROOT_PATH),
         }),
+        sem_tables: crate::sem_profile::tables_for(toolkit, app_name, class.web_engine()),
     };
     // Informational: a full control queue is not worth retrying.
     let _ = port.lifecycle(AppLifecycle::Appeared(info));

@@ -283,10 +283,7 @@ mod tests {
 
     #[test]
     fn a_description_is_set_off_by_its_kind_and_content_is_never_mistaken_for_it() {
-        let seg = |t: &str, kind| Segment {
-            text: Arc::from(t),
-            kind,
-        };
+        let seg = |t: &str, kind| Segment::new(Arc::from(t), kind);
         let u = Utterance {
             id: UttId(1),
             segments: smallvec![
@@ -312,10 +309,7 @@ mod tests {
 
     #[test]
     fn segments_are_joined_and_empty_ones_skipped() {
-        let seg = |t: &str, kind| Segment {
-            text: Arc::from(t),
-            kind,
-        };
+        let seg = |t: &str, kind| Segment::new(Arc::from(t), kind);
         let u = Utterance {
             id: UttId(1),
             segments: smallvec![
@@ -385,10 +379,7 @@ mod tests {
     fn capital_utt() -> Utterance {
         Utterance {
             id: UttId(1),
-            segments: smallvec![Segment {
-                text: Arc::from("A"),
-                kind: SegmentKind::Capital,
-            }],
+            segments: smallvec![Segment::new(Arc::from("A"), SegmentKind::Capital)],
             lang: None,
             epoch: Epoch(1),
             prio: Prio::Text,

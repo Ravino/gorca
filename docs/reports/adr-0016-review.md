@@ -219,3 +219,59 @@ ADR erratum list for the architect:
 4. `ProfileSnapshot.disabled: HashSet` is replaced by per-profile `enabled` deltas plus the `profiles.rows` delta.
 5. UB-1 says "file + delta" is skipped when default-equal; implemented for file entries only.
 6. Save-to-global needs the focus facts (F-1); PE-4 should say a key that a row would take over stays in the profile.
+
+## M14a-core P4–P6 code review r1 (2026-10-19, b48d3b50)
+
+**Verdict: MERGE AFTER FIXES** (R-1..R-3 before merge; R-4..R-9 may follow).
+
+Gates: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -D warnings` clean, workspace tests all
+pass except `gorca-ext-host` `a_command_that_loops_is_cut_at_20_ms` (load avg 19; the crate is untouched by the
+branch; passes alone). Main = merge base 85f5bdde; `git merge-tree` against the C2 branch (a95d316c) is clean
+(overlap only in lib.rs, doc_registry/tests.rs, decisions.md, strings.allow). Probes were temporary tests in
+`gorca-config/src/profiles/tests.rs`, release build, removed afterwards.
+
+### Findings (ranked)
+
+- **R-1 Medium-High — a save's completion applies what is in memory now, not what was written**
+  (`gorca-config/src/profiles/edit.rs` `complete`, `Effect::SaveBase`/`SaveProfile` copy the *current* deltas;
+  `gorca-core/src/commands/profiles.rs` `profiles_toggle_enabled` has no `busy` check; `profiles_saved` accepts
+  late replies after `SAVE_TIMEOUT` or a reload). Probe: global delta rate 70 → `plan_save` → user toggles the
+  product row during the save → `complete`: plan text is `rate = 70` only, yet the delta is cleared and
+  `profiles.rows = {gorca/pf = false}` is marked as in the file. The toggle is lost on restart, silently. Fix:
+  effects carry the written values (as `GlobalCopy` does); tag requests with an id and drop stale replies;
+  refuse toggles while a save is in flight.
+- **R-2 Medium — `browse.save_mode_default` is user-visibly broken.** It is bound in all four presets, says
+  "focus saved as the default", and `docs/config-reference.md` documents `mode_default` as "the mode a web page
+  starts in", but nothing reads the key (§10 notes only). Fix: mark the command not implemented / unbind it and
+  annotate the config reference until `WebPolicy::initial` lands, or land the latch in this slice.
+- **R-3 Medium — a slow or failed profiles-directory read wipes profiles and their unsaved edits**
+  (`config_task.rs` `read_profiles` returns empty on error or after `READ_DEADLINE` = 1 s; `attach_profiles` →
+  `ProfileLoader::reload(&[])` discards every last-good parse; the Reader's `reload` then drops the deltas of
+  vanished profiles). A home on NFS/FUSE or one stalled read costs the user's session edits. Fix: on a read error
+  keep the previous loader state and set (diagnostic only).
+- **R-4 Medium-Low — hostile entries in `profiles/`** (`read_profile_dir`): `File::open` follows symlinks and
+  blocks on a FIFO before the `is_file` check; each reload then leaks a blocked `spawn_blocking` thread and hits
+  R-3. Fix: `DirEntry::file_type()` (no follow) and `O_NOFOLLOW | O_NONBLOCK`.
+- **R-5 Low-Medium — save requests can be dropped**: `Prewarm` and `SaveProfiles` share `CONFIG_QUEUE = 8` with
+  `try_send`; a multi-second save (2 s write deadlines) plus focus changes fills it, the save is dropped with a log
+  line, edits are refused for 10 s and no outcome is spoken. Fix: coalesced (watch) channel for prewarm; on a
+  dropped save clear `saving` and say "not saved".
+- **R-6 Low** — create vs replace is inferred from `expect_hash == fnv1a("")`: an existing empty profile file with
+  edits is treated as a create, `O_EXCL` fails, and every save reports "changed on disk". Use an explicit
+  `Expect::Absent` (P3 F-4 follow-up).
+- **R-7 Low** — `browse.enabled` is classified `App`; ADR §2.3 lists it as `Doc` (site-level focus-only). Record in
+  §10 or change.
+- **R-8 Low** — own mode is learn mode only (TR-4 also lists Chooser, Prompt); `Suspended{Both}` +
+  `profiles.suspend` publishes `mode = Active` at once although ADR says it takes effect when the own mode ends.
+- **R-9 Low** — ru `profile-already-global`: "1 настройка уже общие" (agreement).
+
+### Verified
+
+Key path: `profiles_after` is one `ArcSwap` load, a hash lookup and an `Inputs` compare per message; typing never
+folds. Cold focus into a never-seen app with 200 profiles × 4 triggers: key + fold p50 12 µs, p99 13 µs, max 24 µs
+(release, load ~15) — far under the 200 µs budget. Edit commands fold 3–4 times inline (within the P3 5 ms budget).
+`EffectiveCache` is tied to `generation` (F-6 fixed). New chords collide with nothing in the four presets (all
+contexts). P6 parity: initial snapshot carries the product row, parity holds in safe mode, suspend and with
+unrelated user files; doc registry latches `browse.enabled` at `Appeared`. Create uses `create_new` (`O_EXCL`,
+no symlink follow); replace re-checks the hash then renames (small unavoidable TOCTOU window). en/ru catalogues
+complete; person-level (privacy) keys go global.
