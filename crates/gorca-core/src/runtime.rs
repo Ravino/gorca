@@ -1656,9 +1656,36 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
             set.spawn(async move {
                 use gorca_output_api::{PointerAvail, PointerError};
                 let result = async {
-                    let sink = sink.ok_or(PointerError::Unavailable(PointerAvail::Absent))?;
                     let io = io.ok_or(PointerError::NoLocation)?;
-                    let target = build::locate(&io, req.node, req.offset).await?;
+                    // Item clicks: the application's own action first (Orca's order); no pointer is needed for it.
+                    if let Some(item) = req.item {
+                        let action = match item {
+                            crate::ItemAction::Click => {
+                                gorca_connector_api::ActionReq::Click { node: req.node }
+                            }
+                            crate::ItemAction::ContextMenu => {
+                                gorca_connector_api::ActionReq::ContextMenu { node: req.node }
+                            }
+                        };
+                        if build::try_item_action(&io, action).await? {
+                            return Ok(crate::PointerDone::Acted);
+                        }
+                    }
+                    let sink = sink.ok_or(PointerError::Unavailable(PointerAvail::Absent))?;
+                    // An item outside the window has no location: scroll it into view once and look again.
+                    let target = match build::locate(&io, req.node, req.offset).await {
+                        Err(PointerError::NoLocation) if req.item.is_some() => {
+                            let scroll =
+                                gorca_connector_api::ActionReq::ScrollTo { node: req.node };
+                            if build::try_item_action(&io, scroll).await? {
+                                tokio::time::sleep(Duration::from_millis(60)).await;
+                                build::locate(&io, req.node, req.offset).await?
+                            } else {
+                                return Err(PointerError::NoLocation);
+                            }
+                        }
+                        other => other?,
+                    };
                     let d = gorca_rt::Deadline(Instant::now() + POINTER_CALL);
                     let opts = gorca_output_api::ClickOpts {
                         if_covered: req.if_covered,
@@ -1806,6 +1833,8 @@ fn action_node(a: &gorca_connector_api::ActionReq) -> NodeKey {
         | ActionReq::SetCaret { node, .. }
         | ActionReq::Select { node }
         | ActionReq::ScrollTo { node }
+        | ActionReq::Click { node }
+        | ActionReq::ContextMenu { node }
         | ActionReq::SetValue { node, .. } => *node,
     }
 }

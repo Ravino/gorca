@@ -190,7 +190,12 @@ async fn serve(
                                 .get(&node.local.0)
                                 .map(|n| BackendReply::Node(snapshot(NodeKey { app, local: node.local }, n)))
                                 .ok_or(BackendError::Gone),
-                            BackendOp::Probe => Ok(BackendReply::ActionDone),
+                            // Item clicks: a left click has an action, a context menu has none (so the pointer is used).
+                            BackendOp::Probe
+                            | BackendOp::Action(
+                                gorca_connector_api::ActionReq::Click { .. }
+                                | gorca_connector_api::ActionReq::ScrollTo { .. },
+                            ) => Ok(BackendReply::ActionDone),
                             // The resolver's answer is made from the node: the point's x is the node id, so a
                             // test can tell which node was located.
                             BackendOp::Locate { node, offset } => {

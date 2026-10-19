@@ -33,7 +33,7 @@ pub use diag::{
 pub use handlers::PASS_TIMEOUT;
 pub use pointer_gate::{GateOut, OPEN_AFTER, PointerGate, PointerMsg};
 pub use pointer_req::{
-    AtAct, PointerAtReq, PointerDone, PointerOp, PointerReply, PointerReq, PtrReqId,
+    AtAct, ItemAction, PointerAtReq, PointerDone, PointerOp, PointerReply, PointerReq, PtrReqId,
 };
 pub use profiles::prewarm;
 pub use spec::{Availability, CmdSpec, CommandTable, ContextMask, Milestone, RuntimeGate};

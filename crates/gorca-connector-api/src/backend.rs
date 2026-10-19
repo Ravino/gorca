@@ -89,12 +89,36 @@ pub enum BackendOp {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ActionReq {
-    DoDefault { node: NodeKey },
-    Focus { node: NodeKey },
-    SetCaret { node: NodeKey, offset: u32 },
-    Select { node: NodeKey },
-    ScrollTo { node: NodeKey },
-    SetValue { node: NodeKey, value: Value },
+    DoDefault {
+        node: NodeKey,
+    },
+    Focus {
+        node: NodeKey,
+    },
+    SetCaret {
+        node: NodeKey,
+        offset: u32,
+    },
+    Select {
+        node: NodeKey,
+    },
+    /// Scroll `node` into view (`Component.ScrollTo`), once, before a pointer click on an off-screen item.
+    ScrollTo {
+        node: NodeKey,
+    },
+    /// Click `node` through its own accessibility action (AT-SPI names `click press jump open activate`, Orca's
+    /// order): no pointer, no coordinates. `NotSupported` when the node has none of them.
+    Click {
+        node: NodeKey,
+    },
+    /// Open the context menu of `node` through its action (`show-context-menu`, `menu`). `NotSupported` when none.
+    ContextMenu {
+        node: NodeKey,
+    },
+    SetValue {
+        node: NodeKey,
+        value: Value,
+    },
 }
 
 /// Collection query (AT-SPI `GetMatches` and equivalents).

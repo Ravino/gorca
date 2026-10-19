@@ -20,7 +20,7 @@ use gorca_output_api::{Button, ButtonAct, OutcomeKind, PointerAvail, PointerErro
 use super::holds::{Hold, HoldCmd, HoldEvent, ReleaseWhy};
 use super::pointer_gate::{GateOut, PointerMsg};
 use super::pointer_req::{
-    AtAct, PointerAtReq, PointerDone, PointerOp, PointerReply, PointerReq, PtrReqId,
+    AtAct, ItemAction, PointerAtReq, PointerDone, PointerOp, PointerReply, PointerReq, PtrReqId,
 };
 use crate::focus::FocusState;
 use crate::mode::Mode;
@@ -82,6 +82,8 @@ pub(crate) enum Pending {
     },
     /// Route the pointer to the review position.
     Route,
+    /// An item click (action first, then the pointer) with this button.
+    Item(Button),
     /// A best-effort release (emulation switched off): nobody waits for it.
     Quiet,
 }
@@ -189,7 +191,10 @@ impl Reader {
     // ---- commands -------------------------------------------------------------------
 
     pub(crate) fn mouse_command(&mut self, c: MouseCmd, repeat: u8, fx: &mut ReaderEffects) {
-        if let Some(text) = self.mouse_unavailable_text() {
+        // The item clicks try the application's own action first, which needs no pointer: they say why the mouse
+        // is not available only when the action path has nothing to do and the pointer is needed.
+        let item_click = matches!(c, MouseCmd::LeftClickItem | MouseCmd::RightClickItem);
+        if !item_click && let Some(text) = self.mouse_unavailable_text() {
             self.say(&text, fx);
             return;
         }
@@ -210,9 +215,9 @@ impl Reader {
             }
             // The resolver (review position, item extents, window matching) arrives with MO-5.
             MouseCmd::RouteToReview => self.mouse_route(fx),
-            MouseCmd::ReviewToPointer | MouseCmd::LeftClickItem | MouseCmd::RightClickItem => {
-                self.say(t(M::MouseNoLocation), fx);
-            }
+            MouseCmd::LeftClickItem => self.mouse_item_click(Button::Left, fx),
+            MouseCmd::RightClickItem => self.mouse_item_click(Button::Right, fx),
+            MouseCmd::ReviewToPointer => self.say(t(M::MouseNoLocation), fx),
         }
     }
 
@@ -250,6 +255,46 @@ impl Reader {
         }
     }
 
+    /// Orca: click the review item. `mouse.item_click = action_first` (default) asks the application's own click
+    /// (left) or context-menu (right) action first and uses the pointer only when it has none; `pointer` always
+    /// uses the pointer. Spoken after the outcome (ADR-0025 EX-4).
+    fn mouse_item_click(&mut self, b: Button, fx: &mut ReaderEffects) {
+        use gorca_config::{IfCoveredPolicy, ItemClick};
+        let Some((node, offset)) = self.review_target() else {
+            self.say(t(M::MouseNoLocation), fx);
+            return;
+        };
+        let (policy, covered) = {
+            let m = &self.cmd.effective.mouse;
+            (m.item_click, m.if_covered)
+        };
+        let item = match (policy, b) {
+            (ItemClick::Pointer, _) | (ItemClick::ActionFirst, Button::Middle) => None,
+            (ItemClick::ActionFirst, Button::Right) => Some(ItemAction::ContextMenu),
+            (ItemClick::ActionFirst, Button::Left) => Some(ItemAction::Click),
+        };
+        if item.is_none()
+            && let Some(text) = self.mouse_unavailable_text()
+        {
+            self.say(&text, fx);
+            return;
+        }
+        let id = self.next_ptr_id();
+        self.cmd.ptr_pending.insert(id, Pending::Item(b));
+        fx.push(ReaderEffect::PointerAt(PointerAtReq {
+            id,
+            node,
+            // The action path ignores the character; the pointer path aims at it.
+            offset,
+            act: AtAct::Click(b),
+            if_covered: match covered {
+                IfCoveredPolicy::Refuse => IfCovered::Refuse,
+                IfCoveredPolicy::Click => IfCovered::Proceed,
+            },
+            item,
+        }));
+    }
+
     /// NVDA: move the mouse to the navigator (the review position, else the focused object).
     fn mouse_route(&mut self, fx: &mut ReaderEffects) {
         let Some((node, offset)) = self.review_target() else {
@@ -265,6 +310,7 @@ impl Reader {
             act: AtAct::Move,
             // Moving onto something that is covered is harmless; the reply says so.
             if_covered: IfCovered::Proceed,
+            item: None,
         }));
     }
 
@@ -327,15 +373,29 @@ impl Reader {
             Pending::Quiet => {}
             Pending::Click(b) => self.click_reply(b, &r, fx),
             Pending::Hold(b) => self.hold_reply(b, &r, now, fx),
+            Pending::Item(b) => match r.result {
+                // Done by the application's own action, or by the pointer.
+                Ok(PointerDone::Acted) => self.say(item_text(b), fx),
+                Ok(PointerDone::Outcome(o)) => match o.kind {
+                    OutcomeKind::Done => self.say(item_text(b), fx),
+                    OutcomeKind::Expired => self.say(t(M::MouseNotResponding), fx),
+                    OutcomeKind::RefusedOccluded => self.say(t(M::MouseCoveredShell), fx),
+                    OutcomeKind::RefusedOutside => self.say(t(M::MouseNoLocation), fx),
+                },
+                Ok(PointerDone::Released(_) | PointerDone::Pos(_)) => {}
+                Err(e) => self.say_pointer_error(&e, fx),
+            },
             Pending::Route => match r.result {
                 Ok(PointerDone::Outcome(o)) => {
                     // Moved (Proceed): say so, and that something covers the spot if it does.
-                    self.say(t(M::MouseMoved), fx);
+                    if self.cmd.effective.mouse.announce_move {
+                        self.say(t(M::MouseMoved), fx);
+                    }
                     if o.occluded {
                         self.say_queued(t(M::MouseCoveredShell), fx);
                     }
                 }
-                Ok(PointerDone::Released(_) | PointerDone::Pos(_)) => {}
+                Ok(PointerDone::Released(_) | PointerDone::Pos(_) | PointerDone::Acted) => {}
                 Err(e) => self.say_pointer_error(&e, fx),
             },
             Pending::Position { screen } => match r.result {
@@ -357,7 +417,7 @@ impl Reader {
                     };
                     self.say(&text, fx);
                 }
-                Ok(PointerDone::Outcome(_) | PointerDone::Released(_)) => {}
+                Ok(PointerDone::Outcome(_) | PointerDone::Released(_) | PointerDone::Acted) => {}
                 Err(e) => self.say_pointer_error(&e, fx),
             },
         }
@@ -374,7 +434,7 @@ impl Reader {
                     self.say(t(M::MouseCoveredShell), fx);
                 }
             },
-            Ok(PointerDone::Released(_) | PointerDone::Pos(_)) => {}
+            Ok(PointerDone::Released(_) | PointerDone::Pos(_) | PointerDone::Acted) => {}
             Err(e) => self.say_pointer_error(e, fx),
         }
     }
@@ -384,7 +444,7 @@ impl Reader {
             Ok(done) => {
                 let held = match done {
                     PointerDone::Outcome(o) => o.holds(b),
-                    PointerDone::Released(_) | PointerDone::Pos(_) => false,
+                    PointerDone::Released(_) | PointerDone::Pos(_) | PointerDone::Acted => false,
                 };
                 let ev = self
                     .cmd
@@ -452,6 +512,15 @@ impl Reader {
 #[allow(clippy::cast_possible_truncation)] // clamped to +-1e6 first
 fn px(v: f64) -> i32 {
     v.round().clamp(-1.0e6, 1.0e6) as i32
+}
+
+/// What an item click says once it is done.
+fn item_text(b: Button) -> &'static str {
+    match b {
+        Button::Right => t(M::MouseRightClick),
+        Button::Left => t(M::MouseLeftClick),
+        Button::Middle => t(M::MouseMiddleClick),
+    }
 }
 
 fn lock_text(b: Button, locked: bool) -> &'static str {

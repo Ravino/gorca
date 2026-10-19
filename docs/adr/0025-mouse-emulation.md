@@ -675,6 +675,29 @@ MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its ow
   `ToplevelHint` + point), `route_to_review` and the item clicks (MO-5a (b), MO-5b).
 
 
+### 15.2 MO-5b (item clicks) and resolver visibility fixes (L-1..L-3)
+
+- **Item clicks** (`mouse.left_click_item`, `mouse.right_click_item`, unbound by default): Orca's order. The application's own action first
+  (`ActionReq::Click`: first of `click`, `press`, `jump`, `open`, `activate`; `ActionReq::ContextMenu`: `show-context-menu`, `menu`), found by
+  `Action.GetName(i)` (not `NActions`). No action, or the application refused it: locate the node and click it with the pointer
+  (`if_covered` decides a covered target). An item the resolver cannot place gets one `Component.ScrollTo(ANYWHERE)` and a second locate,
+  then "No location". Speech follows the outcome ("Left click", "Right click", "Covered", "No location", "Window not visible").
+  The action path needs no pointer service. Settings: `mouse.item_click` (`action_first` | `pointer`), `mouse.if_covered` (`refuse` | `click`),
+  `mouse.announce_move`.
+- **Gecko quirk (action names)**: a Firefox button can answer `NActions = 0` and empty `GetName(i)` at some moments while `DoAction(0)` presses it
+  (and `GetName(0)` is "press" at others). A click, never a context menu, therefore falls back to action 0 when the interface answers but
+  gives no name. The first `DoAction` after accessibility start-up is occasionally dropped by Gecko without an error; the end-to-end test
+  retries it (an item click has no reliable confirmation from the application).
+- **Resolver visibility (review L-1..L-3)**: the node must be `SHOWING`; its rectangle is clipped to the toplevel and to every scrolling
+  ancestor (scroll pane, viewport, document, inline frame) on the way up, which also clips Chromium/Electron device-pixel rectangles (the
+  ancestors are in the children's space, so no scale is needed; the logical toplevel is not used for them); the application's own hit test
+  (`Component.GetAccessibleAtPoint`, repeated on every answer because GTK3 answers one level) must end on the node, inside it, or on an ancestor
+  of it (Gecko and GTK3 tell nothing more precise at times), never on another branch. Chromium/Electron are exempt (quirk `blink-hit-test`):
+  their answer is an unrelated page node. A text offset with an empty character rectangle (end of line, empty line) aims at its line's
+  rectangle, then at the previous character, and is "No location" otherwise; only an empty text uses the node's extents. Decision for scrolled
+  out items: "No location" from the resolver, then one `ScrollTo` and a second locate for item clicks only (the user asked to act on that item);
+  route to review never scrolls.
+
 ## 16. Backends (owner direction 2026-10-19: pointer support is a core API with pluggable backends)
 
 The core (Reader, commands, the connector-side resolver) depends only on `gorca-output-api::{PointerSink, PointerAvail, PointerError,

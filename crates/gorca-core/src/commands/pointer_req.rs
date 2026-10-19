@@ -38,6 +38,15 @@ pub enum AtAct {
     Click(Button),
 }
 
+/// Which accessibility action an item click tries before the pointer (ADR-0025 2.6, Orca's order).
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ItemAction {
+    /// `click press jump open activate`.
+    Click,
+    /// `show-context-menu menu`.
+    ContextMenu,
+}
+
 /// A node (or one character of its text) to put the pointer on. The runtime asks the node's app for
 /// the target (`BackendOp::Locate`) and then the pointer sink; both calls carry deadlines and the
 /// answer is a [`PointerReply`].
@@ -49,12 +58,17 @@ pub struct PointerAtReq {
     pub offset: Option<u32>,
     pub act: AtAct,
     pub if_covered: IfCovered,
+    /// Item clicks: try this action in the node's own application first; only when it has none, use the
+    /// pointer (`mouse.item_click = action_first`). `None`: the pointer only.
+    pub item: Option<ItemAction>,
 }
 
 /// A successful pointer call.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PointerDone {
     Outcome(PointerOutcome),
+    /// The click was done by the application's own action: no pointer was involved.
+    Acted,
     Released(u32),
     Pos(PointerPos),
 }
