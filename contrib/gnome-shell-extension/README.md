@@ -8,6 +8,11 @@ GNOME Shell 48 extension giving gorca in-memory screen crops and window geometry
     # read DBUS_SESSION_BUS_ADDRESS from the new gnome-shell's /proc/<pid>/environ, then call the interface
 Set `GORCA_TRACE=1` for per-call timing in the shell log. Kill only the gnome-shell whose environ contains your workdir.
 
+## Pointer tests (helper v2, private shell)
+    contrib/gnome-shell-extension/test-pointer.sh [WORKDIR] [--slow]    # starts test-rig.sh, runs testclients/test_pointer.py (caller A) and test_roles.py (callers B, C)
+`test-rig.sh` writes an allow-list for three private python binaries (`WORKDIR/py-a|b|c`, same cgroup as the rig, no systemd); `run-as.sh WORKDIR a|b|c SCRIPT` runs a script as one of them. Teardown: `tools/platform-probes/mouse-emulation/teardown.sh WORKDIR` (recorded PIDs and the rig process group only).
+Spikes: `testclients/spike_*.py` (see ADR-0025 section 14).
+
 ## Install for the real session (this user only)
     contrib/gnome-shell-extension/dev.sh install      # copies to ~/.local/share/gnome-shell/extensions/
     # GNOME Shell scans extensions ONLY at startup: log out and in once.
