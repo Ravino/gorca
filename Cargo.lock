@@ -1319,6 +1319,7 @@ version = "0.0.0"
 dependencies = [
  "gorca-model",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
