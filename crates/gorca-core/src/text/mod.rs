@@ -734,6 +734,8 @@ impl Reader {
             TextMsg::Edit { node, delta } => {
                 if self.term_is(node) {
                     self.term_edit(delta, fx);
+                } else if self.text_active() && self.leaf_replaced(node, &delta, fx) {
+                    // handled as the deletion it is
                 } else if self.text_active() && self.text_accepts(node, None, fx) {
                     let edit = match delta {
                         TextDelta::Insert { offset, len, text } => Edit::Insert {
@@ -759,6 +761,54 @@ impl Reader {
             TextMsg::Fetched { req, epoch, result } => self.on_text_fetched(req, epoch, result, fx),
             TextMsg::Progress(p) => self.say_all_progress(p, fx),
         }
+    }
+
+    /// A rich editable that rebuilds its text node on every edit (Lexical, Draft, Quill; Signal's
+    /// composer) announces the replacement as one insert of the whole text at 0 on a node the
+    /// mirror has never seen, and sends no delete: the text the machine last read, minus a run,
+    /// is what a Backspace or Delete took out. The tracking moves to the new node and the
+    /// removal is fed to the machine as the delete it is. False when the event is anything else.
+    fn leaf_replaced(&mut self, node: NodeKey, delta: &TextDelta, fx: &mut ReaderEffects) -> bool {
+        let TextDelta::Insert {
+            offset: 0, text, ..
+        } = delta
+        else {
+            return false;
+        };
+        let Some(t) = self.text.caret.tracked() else {
+            return false;
+        };
+        if !t.kind.editable
+            || !t.hosts
+            || t.node == node
+            || node == t.root
+            || node.app != t.root.app
+        {
+            return false;
+        }
+        let root = t.root;
+        let Some(new) = decode(text.as_ref()) else {
+            return false;
+        };
+        let Some((offset, len, removed)) = self.text.caret.leaf_removal(&new) else {
+            return false;
+        };
+        if self.text_ancestry(root, node) == Ancestry::Outside {
+            return false;
+        }
+        self.text.stats.retargets += 1;
+        self.text_step(In::Retarget { node, at: None }, fx);
+        self.text_step(
+            In::Edit(Edit::Delete {
+                offset,
+                len,
+                text: Some(removed),
+            }),
+            fx,
+        );
+        let now = self.now;
+        self.text.caret.leaf_erased(offset, now);
+        true
     }
 
     /// An editable root is tracked, has not yet learned whether it hosts paragraphs, and

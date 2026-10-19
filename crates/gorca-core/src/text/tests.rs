@@ -2088,6 +2088,55 @@ fn a_contenteditable_paragraph_takes_over_the_caret() {
     assert_eq!(g.r.text_counters().retargets, 1);
 }
 
+/// Signal-style composers rebuild the text node on every edit: Backspace arrives as one insert of
+/// the whole shorter text on a node the mirror never saw, and no delete.
+#[test]
+fn backspace_in_an_editor_that_rebuilds_its_text_node_is_spoken() {
+    let mut g = gecko_rig();
+    let (p, q) = (leaf(96), leaf(97));
+    g.rich(p, "hello, world");
+    // The caret goes to the end of the text (a move the machine reads and presents).
+    g.advance(1000);
+    let _ = g.key(BACKSPACE, 0, NONE);
+    let fx = g.insert_on(q, 0, 11, "hello, worl");
+    assert_eq!(spoken(&fx), ["d"], "the removed character: {fx:?}");
+    // The caret event of the new node is the erase's echo, not a move to speak.
+    let fx = g.caret_on(q, 11);
+    assert!(spoken(&fx).is_empty(), "no second speech: {fx:?}");
+    assert_eq!(g.r.text.caret.tracked().map(|t| t.node), Some(q));
+}
+
+#[test]
+fn the_rebuilt_node_is_diffed_even_when_the_editors_root_churned_in_between() {
+    let mut g = gecko_rig();
+    let (p, q) = (leaf(96), leaf(97));
+    g.rich(p, "hello, world");
+    g.advance(1000);
+    let _ = g.key(BACKSPACE, 0, NONE);
+    // The root's own embedded-object churn comes first and moves the tracking to the root.
+    let _ = g.delete_on(node(), 0, 1, "\u{FFFC}");
+    let _ = g.insert_on(node(), 0, 1, "\u{FFFC}");
+    let fx = g.insert_on(q, 0, 11, "hello, worl");
+    let said = spoken(&fx);
+    assert!(
+        said.iter().any(|s| s == "d"),
+        "the removed character: {fx:?}"
+    );
+    let fx = g.caret_on(q, 11);
+    assert!(spoken(&fx).is_empty(), "no second speech: {fx:?}");
+}
+
+#[test]
+fn a_whole_text_insert_that_is_not_a_removal_of_the_last_text_is_not_ours() {
+    let mut g = gecko_rig();
+    let (p, clock) = (leaf(96), leaf(98));
+    g.rich(p, "hello, world");
+    g.advance(1000);
+    let fx = g.insert_on(clock, 0, 5, "12:01");
+    assert!(spoken(&fx).is_empty(), "{fx:?}");
+    assert_eq!(g.r.text.caret.tracked().map(|t| t.node), Some(p));
+}
+
 #[test]
 fn a_caret_into_the_next_paragraph_is_spoken_as_the_key_moved_it() {
     let mut g = gecko_rig();

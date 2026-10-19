@@ -209,7 +209,13 @@ impl Ft {
         label: &str,
         role: &str,
     ) -> Result<Self> {
-        let mut f = Self::open(host, reader, flavor, "edit.html", "Edit Matrix", CFG_QUIET)?;
+        let composer = label.starts_with("Composer");
+        let (page, title) = if composer {
+            ("composer.html", "Composer Matrix")
+        } else {
+            ("edit.html", "Edit Matrix")
+        };
+        let mut f = Self::open(host, reader, flavor, page, title, CFG_QUIET)?;
         f.enter_role(role, label)?;
         Ok(f)
     }

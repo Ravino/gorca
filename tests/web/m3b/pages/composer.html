@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Composer Matrix</title>
+<style>
+body{font:16px sans-serif}
+.ed{border:1px solid #888;min-height:5em;width:24em;white-space:pre-wrap;padding:4px}
+.ed p{margin:0}
+</style>
+</head>
+<body>
+<h1>Composer matrix</h1>
+<!-- Two rich-text composers that re-render their spans on every edit, the way Signal Desktop's
+     (Lexical / Draft / Quill family) do. Both keep the text in a model and rebuild the DOM.
+     A: "controlled" - beforeinput is cancelled, the model changes, the DOM is rebuilt and the
+        caret restored (Lexical's default path).
+     B: "native then re-render" - the browser edits first, the input handler re-renders the
+        paragraph with fresh text nodes (Draft / Quill normalisation). -->
+<p id="la">Composer A</p>
+<div id="A" class="ed" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="la"></div>
+<p id="lb">Composer B</p>
+<div id="B" class="ed" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="lb"></div>
+<p><button id="b1">After</button></p>
+<script>
+function textOf(root){return root.innerText.replace(/\n$/,'');}
+function caretOf(root){
+  const s=getSelection(); if(!s.rangeCount) return 0;
+  const r=document.createRange(); r.selectNodeContents(root);
+  r.setEnd(s.anchorNode,s.anchorOffset); return r.toString().length;
+}
+function selOf(root){
+  const s=getSelection(); if(!s.rangeCount) return [0,0];
+  const a=document.createRange(); a.selectNodeContents(root); a.setEnd(s.getRangeAt(0).startContainer,s.getRangeAt(0).startOffset);
+  const b=document.createRange(); b.selectNodeContents(root); b.setEnd(s.getRangeAt(0).endContainer,s.getRangeAt(0).endOffset);
+  return [a.toString().length,b.toString().length];
+}
+function render(root,text,caret){
+  // one <p> per line, one <span> text leaf per word (a rich editor's formatting nodes)
+  root.replaceChildren();
+  const lines=text.split('\n');
+  for(const ln of lines){
+    const p=document.createElement('p');
+    const words=ln.split(/(?<= )/);
+    if(!ln.length){p.appendChild(document.createElement('br'));}
+    for(const w of words){const sp=document.createElement('span');sp.setAttribute('data-text','true');sp.textContent=w;p.appendChild(sp);}
+    root.appendChild(p);
+  }
+  // restore the caret
+  let left=caret; const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+  let n,last=null;
+  while((n=walker.nextNode())){
+    last=n;
+    if(left<=n.data.length){const r=document.createRange();r.setStart(n,left);r.collapse(true);const s=getSelection();s.removeAllRanges();s.addRange(r);return;}
+    left-=n.data.length+0; // paragraph breaks count as one char in the model below
+    left-=0;
+  }
+  const r=document.createRange(); if(last){r.setStart(last,last.data.length);} else {r.setStart(root,0);} r.collapse(true);
+  const s=getSelection();s.removeAllRanges();s.addRange(r);
+}
+const A=document.getElementById('A'), B=document.getElementById('B');
+// A: controlled
+A.addEventListener('beforeinput',e=>{
+  const t=e.inputType; const txt=textOf(A); let [s0,s1]=selOf(A);
+  let ins=null;
+  if(t==='insertText'){ins=e.data;}
+  else if(t==='insertParagraph'||t==='insertLineBreak'){ins='\n';}
+  else if(t==='deleteContentBackward'){ if(s0===s1&&s0>0) s0--; ins='';}
+  else if(t==='deleteContentForward'){ if(s0===s1&&s1<txt.length) s1++; ins='';}
+  else if(t==='deleteWordBackward'){ if(s0===s1){const m=txt.slice(0,s0).match(/\S*\s*$/); s0-=m?m[0].length:0;} ins='';}
+  else return;
+  e.preventDefault();
+  const nt=txt.slice(0,s0)+ins+txt.slice(s1);
+  render(A,nt,s0+ins.length);
+});
+// B: native edit, then rebuild
+B.addEventListener('input',()=>{
+  const txt=textOf(B), c=caretOf(B);
+  requestAnimationFrame(()=>render(B,txt,c));
+});
+</script>
+</body>
+</html>

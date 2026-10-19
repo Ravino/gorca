@@ -31,7 +31,7 @@ use super::scenarios::{RunOut, Size};
 /// The scenario ids of this module.
 pub const IDS: &[&str] = &[
     "ED-G3E", "ED-G3T", "ED-G4E", "ED-G4T", "ED-GEDIT", "ED-TEDIT", "ED-FFIN", "ED-FFTA",
-    "ED-FFCE", "ED-CHIN", "ED-CHTA", "ED-CHCE", "ED-TERM",
+    "ED-FFCE", "ED-CHIN", "ED-CHTA", "ED-CHCE", "ED-CHLA", "ED-CHLB", "ED-TERM",
 ];
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -52,6 +52,10 @@ pub enum WebField {
     Input,
     Textarea,
     Editable,
+    /// A rich-text composer that re-renders its spans on each edit (Signal-like); page
+    /// `composer.html`. A: controlled (beforeinput cancelled), B: native edit then rebuild.
+    ComposerA,
+    ComposerB,
 }
 
 impl Target {
@@ -66,6 +70,8 @@ impl Target {
             "ED-FFIN" | "ED-CHIN" => Self::Web(WebField::Input),
             "ED-FFTA" | "ED-CHTA" => Self::Web(WebField::Textarea),
             "ED-FFCE" | "ED-CHCE" => Self::Web(WebField::Editable),
+            "ED-CHLA" => Self::Web(WebField::ComposerA),
+            "ED-CHLB" => Self::Web(WebField::ComposerB),
             "ED-TERM" => Self::Terminal,
             _ => return None,
         })
@@ -75,7 +81,10 @@ impl Target {
     pub fn multiline(self) -> bool {
         match self {
             Self::Gtk3Entry | Self::Gtk4Entry | Self::Terminal => false,
-            Self::Web(f) => f != WebField::Input,
+            Self::Web(f) => !matches!(
+                f,
+                WebField::Input | WebField::ComposerA | WebField::ComposerB
+            ),
             Self::Gtk3Text | Self::Gtk4Text | Self::Gedit | Self::TextEditor => true,
         }
     }
@@ -83,6 +92,7 @@ impl Target {
     /// Does Ctrl+Shift+arrows / Shift+arrows select (a terminal's readline does not)?
     pub fn selects(self) -> bool {
         self != Self::Terminal
+            && !matches!(self, Self::Web(WebField::ComposerA | WebField::ComposerB))
     }
 
     fn is_app(self) -> bool {
@@ -779,6 +789,8 @@ pub fn run(
                 WebField::Input => ("Line", "entry"),
                 WebField::Textarea => ("Notes", "entry"),
                 WebField::Editable => ("Editor", "entry"),
+                WebField::ComposerA => ("Composer A", "entry"),
+                WebField::ComposerB => ("Composer B", "entry"),
             };
             let f = super::webtext::Ft::open_edit(host, reader, flavor, label, role)?;
             let mut d = WebDrv { f };

@@ -119,7 +119,10 @@ fn has_redo_key(t: Target) -> bool {
 }
 
 fn editable(t: Target) -> bool {
-    t == Target::Web(WebField::Editable)
+    matches!(
+        t,
+        Target::Web(WebField::Editable | WebField::ComposerA | WebField::ComposerB)
+    )
 }
 
 /// The expectation of `step` for `t`, `None` when the step is recorded and not judged.
