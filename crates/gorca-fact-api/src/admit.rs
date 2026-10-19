@@ -23,16 +23,19 @@ pub struct Scope {
     /// The site (document host hash) of a web document. The source-wide quarantine counts
     /// distinct sites, not tabs or reloads (review B-1).
     pub site: Option<u64>,
+    /// The browser tab, derived by the core from the connection (never declared by the
+    /// source). Stable across reloads and navigations of one tab, unlike `doc`.
+    pub tab: Option<u64>,
 }
 
 impl Scope {
-    /// What the source-wide quarantine counts: the site within an app, not the document. A
-    /// scope without a site cannot be told apart from others by host, so it falls back to the
-    /// full scope (its document): strikes are never under-counted by collapsing scopes.
+    /// What the source-wide quarantine counts: the site within an app, not the document. Without
+    /// a site the key falls back to the tab (stable across reloads), never to the per-navigation
+    /// document id, so a site-less page reloading itself stays one key.
     pub const fn site_key(&self) -> (AppId, Option<u64>, Option<u64>) {
         match self.site {
             Some(_) => (self.app, self.site, None),
-            None => (self.app, None, self.doc),
+            None => (self.app, None, self.tab),
         }
     }
 }
@@ -472,6 +475,7 @@ mod tests {
             },
             doc: Some(7),
             site: Some(1),
+            tab: None,
         };
         let spy = Spy {
             seen: std::cell::Cell::new(None),

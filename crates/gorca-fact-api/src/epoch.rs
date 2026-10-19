@@ -90,6 +90,7 @@ mod tests {
             },
             doc: None,
             site: None,
+            tab: None,
         };
         let mut b = EpochBook::new();
         let m1 = b.bump(src, sc(1), MaskKind::Mask);
