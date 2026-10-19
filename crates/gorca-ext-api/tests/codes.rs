@@ -16,6 +16,20 @@ fn model_rows(name: &str) -> Vec<Row> {
         "source_class" => model::source_classes(),
         "tier" => model::trust_tiers(),
         "role" => model::roles(),
+        "check" => model::check(),
+        "press" => model::press(),
+        "expand" => model::expand(),
+        "select" => model::select(),
+        "current" => model::current(),
+        "invalid" => model::invalid(),
+        "popup" => model::popup(),
+        "avail" => model::avail(),
+        "name_from" => model::name_from(),
+        "orientation" => model::orientation(),
+        "sort" => model::sort(),
+        "pos_src" => model::pos_src(),
+        "sem_flags" => model::sem_flags(),
+        "relevant" => model::relevant(),
         other => panic!("registry `{other}` has no model counterpart"),
     }
 }
@@ -37,7 +51,7 @@ fn snapshot() -> Vec<(String, String, u32)> {
 
 #[test]
 fn copy_equals_the_model_registries() {
-    assert_eq!(REGISTRIES.len(), 8);
+    assert_eq!(REGISTRIES.len(), 22);
     for (name, rows) in REGISTRIES {
         assert_eq!(*rows, model_rows(name).as_slice(), "registry `{name}`");
     }
@@ -85,5 +99,43 @@ fn codes_and_names_are_unique_within_a_registry() {
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), rows.len(), "duplicate name in `{name}`");
+    }
+}
+
+/// Run `git` in the repository; `None` when git or the ref is unavailable (source tarball,
+/// shallow clone), in which case the in-tree tests above remain the check.
+fn git(args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(args)
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+#[test]
+fn snapshot_only_grows_relative_to_main() {
+    for base_ref in ["main", "origin/main"] {
+        let Some(base) = git(&["merge-base", "HEAD", base_ref]) else {
+            continue;
+        };
+        let spec = format!("{}:crates/gorca-ext-api/codes.snapshot", base.trim());
+        let Some(old) = git(&["show", &spec]) else {
+            // The snapshot did not exist at the merge base: nothing to protect yet.
+            return;
+        };
+        let now = include_str!("../codes.snapshot");
+        for l in old
+            .lines()
+            .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        {
+            assert!(
+                now.lines().any(|n| n == l),
+                "snapshot row `{l}` exists on {base_ref} but was changed or removed here"
+            );
+        }
+        return;
     }
 }

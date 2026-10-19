@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Name <-> code registries of the semantic model: a **generated copy** of the tables in
 //! `gorca-model::sem::registry` (the source of truth). This crate cannot depend on `gorca-model`;
-//! the equality test below (dev-dependency) and the checked-in append-only snapshot
+//! the equality test (dev-dependency) and the checked-in append-only snapshot
 //! `codes.snapshot` keep the two in step. Codes are never reused or renumbered; a new entry is an
-//! append to the model, to these tables and to the snapshot.
+//! append to the model, to these tables and to the snapshot (`tools/gen-sem-codes.py`).
 
 /// One registry row: registry name and wire code.
 pub type Row = (&'static str, u32);
@@ -165,7 +165,103 @@ pub const ROLES: &[Row] = &[
     ("window", 79),
     ("popover", 80),
     ("statictext", 81),
+    ("comment", 82),
+    ("suggestion", 83),
+    ("details", 84),
+    ("summary", 85),
+    ("descriptionlist", 86),
+    ("time", 87),
+    ("iframe", 88),
+    ("emphasis", 89),
+    ("strong", 90),
+    ("subscript", 91),
+    ("superscript", 92),
+    ("presentation", 93),
 ];
+
+/// `aria-checked` states.
+pub const CHECK: &[Row] = &[("na", 0), ("off", 1), ("on", 2), ("mixed", 3)];
+
+/// `aria-pressed` states.
+pub const PRESS: &[Row] = &[("na", 0), ("off", 1), ("on", 2), ("mixed", 3)];
+
+/// `aria-expanded` states.
+pub const EXPAND: &[Row] = &[("na", 0), ("collapsed", 1), ("expanded", 2)];
+
+/// `aria-selected` states.
+pub const SELECT: &[Row] = &[("na", 0), ("off", 1), ("on", 2)];
+
+/// `aria-current` values.
+pub const CURRENT: &[Row] = &[
+    ("no", 0),
+    ("true", 1),
+    ("page", 2),
+    ("step", 3),
+    ("location", 4),
+    ("date", 5),
+    ("time", 6),
+];
+
+/// `aria-invalid` values.
+pub const INVALID: &[Row] = &[("no", 0), ("true", 1), ("grammar", 2), ("spelling", 3)];
+
+/// `aria-haspopup` values.
+pub const POPUP: &[Row] = &[
+    ("no", 0),
+    ("menu", 1),
+    ("listbox", 2),
+    ("tree", 3),
+    ("grid", 4),
+    ("dialog", 5),
+];
+
+/// Availability values.
+pub const AVAIL: &[Row] = &[("na", 0), ("enabled", 1), ("disabled", 2)];
+
+/// Name sources.
+pub const NAME_FROM: &[Row] = &[
+    ("none", 0),
+    ("content", 1),
+    ("author", 2),
+    ("placeholder", 3),
+];
+
+/// Orientation values.
+pub const ORIENTATION: &[Row] = &[("na", 0), ("horizontal", 1), ("vertical", 2)];
+
+/// Sort values.
+pub const SORT: &[Row] = &[
+    ("none", 0),
+    ("ascending", 1),
+    ("descending", 2),
+    ("other", 3),
+];
+
+/// Set-position sources.
+pub const POS_SRC: &[Row] = &[("author", 0), ("engine", 1), ("computed", 2)];
+
+/// `SemFlags` bit values (code = bit mask).
+pub const SEM_FLAGS: &[Row] = &[
+    ("REQUIRED", 1),
+    ("READ_ONLY", 2),
+    ("BUSY", 4),
+    ("MODAL", 8),
+    ("MULTISELECTABLE", 16),
+    ("MULTILINE", 32),
+    ("VISITED", 64),
+    ("FOCUSABLE", 128),
+    ("EDITABLE", 256),
+    ("HAS_DETAILS", 512),
+    ("HAS_ERROR_MESSAGE", 1024),
+    ("ACTIVE_DESCENDANT_HOST", 2048),
+    ("ATOMIC_PRESENTATION", 4096),
+    ("LAYOUT_TABLE", 8192),
+    ("SELECTION_FOLLOWS_FOCUS", 16384),
+    ("SYNTHETIC", 32768),
+];
+
+/// `Relevant` bit values.
+pub const RELEVANT: &[Row] = &[("ADDITIONS", 1), ("REMOVALS", 2), ("TEXT", 4)];
 
 /// Every registry as `(registry, rows)`, in snapshot order.
 pub const REGISTRIES: &[(&str, &[Row])] = &[
@@ -177,4 +273,18 @@ pub const REGISTRIES: &[(&str, &[Row])] = &[
     ("source_class", SOURCE_CLASSES),
     ("tier", TRUST_TIERS),
     ("role", ROLES),
+    ("check", CHECK),
+    ("press", PRESS),
+    ("expand", EXPAND),
+    ("select", SELECT),
+    ("current", CURRENT),
+    ("invalid", INVALID),
+    ("popup", POPUP),
+    ("avail", AVAIL),
+    ("name_from", NAME_FROM),
+    ("orientation", ORIENTATION),
+    ("sort", SORT),
+    ("pos_src", POS_SRC),
+    ("sem_flags", SEM_FLAGS),
+    ("relevant", RELEVANT),
 ];

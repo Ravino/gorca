@@ -4,6 +4,10 @@
 
 use super::codes::{BindQuality, ConfClass, EvidenceKind, Group, ProvCode, SourceClass, TrustTier};
 use super::role::SemRole;
+use super::states::{
+    Avail, Check, Current, Expand, Invalid, NameFrom, Orientation, Popup, PosSrc, Press, Relevant,
+    Select, SemFlags, Sort,
+};
 
 /// One registry row: registry name and code.
 pub type Row = (&'static str, u32);
@@ -69,5 +73,59 @@ pub fn roles() -> Vec<Row> {
     SemRole::ALL
         .iter()
         .map(|r| (r.name(), u32::from(r.code())))
+        .collect()
+}
+
+macro_rules! rows_of {
+    ($($(#[$m:meta])* $fn_name:ident => $ty:ty),+ $(,)?) => {
+        $(
+            $(#[$m])*
+            pub fn $fn_name() -> Vec<Row> {
+                <$ty>::ALL.iter().map(|v| (v.name(), u32::from(v.code()))).collect()
+            }
+        )+
+    };
+}
+
+rows_of! {
+    /// `aria-checked` states.
+    check => Check,
+    /// `aria-pressed` states.
+    press => Press,
+    /// `aria-expanded` states.
+    expand => Expand,
+    /// `aria-selected` states.
+    select => Select,
+    /// `aria-current` values.
+    current => Current,
+    /// `aria-invalid` values.
+    invalid => Invalid,
+    /// `aria-haspopup` values.
+    popup => Popup,
+    /// Availability values.
+    avail => Avail,
+    /// Name sources.
+    name_from => NameFrom,
+    /// Orientation values.
+    orientation => Orientation,
+    /// Sort values.
+    sort => Sort,
+    /// Set-position sources.
+    pos_src => PosSrc,
+}
+
+/// `SemFlags` bit values (the name is the flag name, the code is the bit mask).
+pub fn sem_flags() -> Vec<Row> {
+    SemFlags::all()
+        .iter_names()
+        .map(|(n, f)| (n, f.bits()))
+        .collect()
+}
+
+/// `Relevant` bit values.
+pub fn relevant() -> Vec<Row> {
+    Relevant::all()
+        .iter_names()
+        .map(|(n, f)| (n, u32::from(f.bits())))
         .collect()
 }

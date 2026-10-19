@@ -188,6 +188,11 @@ impl ConfClass {
         }
     }
 
+    /// True when `self` is strictly more certain than `other` (code 0 = most certain).
+    pub const fn is_stronger_than(self, other: ConfClass) -> bool {
+        self.code() < other.code()
+    }
+
     /// The weaker (less certain) of two classes.
     #[must_use]
     pub const fn weaker(self, other: ConfClass) -> ConfClass {
@@ -210,6 +215,13 @@ coded_enum! {
     }
 }
 
+impl BindQuality {
+    /// True when the binding is at least as good as `min` (higher code = better binding).
+    pub const fn at_least(self, min: BindQuality) -> bool {
+        self.code() >= min.code()
+    }
+}
+
 coded_enum! {
     /// Source class, stored as a `u8` code.
     pub enum SourceClass: u8 {
@@ -228,6 +240,23 @@ coded_enum! {
         T1Platform = 1 => "T1",
         T2FirstParty = 2 => "T2",
         T3Untrusted = 3 => "T3",
+    }
+}
+
+impl TrustTier {
+    /// True when `self` is strictly more trusted than `other` (code 0 = most trusted).
+    pub const fn is_more_trusted_than(self, other: TrustTier) -> bool {
+        self.code() < other.code()
+    }
+
+    /// The less trusted of two tiers: the taint of a value derived from both.
+    #[must_use]
+    pub const fn least_trusted(self, other: TrustTier) -> TrustTier {
+        if self.code() >= other.code() {
+            self
+        } else {
+            other
+        }
     }
 }
 
@@ -413,6 +442,19 @@ mod tests {
             ConfClass::High.weaker(ConfClass::Probable),
             ConfClass::Probable
         );
+    }
+
+    #[test]
+    fn ordering_directions_are_explicit() {
+        assert!(ConfClass::High.is_stronger_than(ConfClass::Possible));
+        assert!(!ConfClass::Possible.is_stronger_than(ConfClass::High));
+        assert!(TrustTier::T0Core.is_more_trusted_than(TrustTier::T3Untrusted));
+        assert_eq!(
+            TrustTier::T1Platform.least_trusted(TrustTier::T3Untrusted),
+            TrustTier::T3Untrusted
+        );
+        assert!(BindQuality::Exact.at_least(BindQuality::Unique));
+        assert!(!BindQuality::Heuristic.at_least(BindQuality::Unique));
     }
 
     #[test]

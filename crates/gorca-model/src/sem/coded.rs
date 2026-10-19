@@ -4,6 +4,9 @@
 //! Every registry type of the semantic model (groups, roles, provenance, confidence classes,
 //! tri-states, source classes) is generated from one table, so the code, the name, the
 //! decoder and the `ALL` list cannot drift apart. The first variant is the `Default`.
+//!
+//! No `Ord`: a code order means "stronger" in one registry and "weaker" in another, so ordered
+//! types provide explicit helpers instead (`ConfClass::weaker`, `BindQuality::at_least`, ...).
 
 macro_rules! coded_enum {
     (
@@ -14,7 +17,7 @@ macro_rules! coded_enum {
     ) => {
         $(#[$meta])*
         #[repr($repr)]
-        #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+        #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
         $vis enum $name {
             $( $(#[$vmeta])* $var = $code ),+
         }

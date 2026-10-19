@@ -198,26 +198,45 @@ impl PropValue {
         })
     }
 
-    /// True when the value's shape matches the registered group code (admission "well formed").
+    /// True when the value's shape matches the registered group code (admission "well formed"):
+    /// a semantic value must belong to exactly that group, an evidence payload must have the
+    /// shape its kind requires (text, box or flag).
     pub const fn matches(&self, code: GroupCode) -> bool {
-        match (code.classify(), self.group()) {
-            (GroupClass::Semantic(want), Some(have)) => want.code() == have.code(),
-            (GroupClass::Evidence(_), None) => true,
-            (GroupClass::Semantic(_), None)
-            | (GroupClass::Evidence(_), Some(_))
-            | (GroupClass::Unregistered(_), _) => false,
+        match (code.classify(), self) {
+            (GroupClass::Semantic(want), v) => match v.group() {
+                Some(have) => want.code() == have.code(),
+                None => false,
+            },
+            (GroupClass::Evidence(kind), PropValue::Evidence(v)) => v.fits(kind),
+            (GroupClass::Evidence(_) | GroupClass::Unregistered(_), _) => false,
         }
     }
+}
 
-    /// Evidence kind shape check helper: text-valued evidence kinds.
-    pub const fn evidence_is_text_kind(kind: EvidenceKind) -> bool {
-        match kind {
-            EvidenceKind::HintIconClass
-            | EvidenceKind::HintSrcName
-            | EvidenceKind::HintTitleAttr
-            | EvidenceKind::VisualOcrText
-            | EvidenceKind::VisualLabelGuess => true,
-            EvidenceKind::LayoutBox | EvidenceKind::LayoutCssHidden => false,
+impl EvidenceValue {
+    /// True when this payload has the shape `kind` requires.
+    pub const fn fits(&self, kind: EvidenceKind) -> bool {
+        match (kind, self) {
+            (
+                EvidenceKind::HintIconClass
+                | EvidenceKind::HintSrcName
+                | EvidenceKind::HintTitleAttr
+                | EvidenceKind::VisualOcrText
+                | EvidenceKind::VisualLabelGuess,
+                EvidenceValue::Text(_),
+            )
+            | (EvidenceKind::LayoutBox, EvidenceValue::Box(_))
+            | (EvidenceKind::LayoutCssHidden, EvidenceValue::Flag(_)) => true,
+            (
+                EvidenceKind::HintIconClass
+                | EvidenceKind::HintSrcName
+                | EvidenceKind::HintTitleAttr
+                | EvidenceKind::VisualOcrText
+                | EvidenceKind::VisualLabelGuess
+                | EvidenceKind::LayoutBox
+                | EvidenceKind::LayoutCssHidden,
+                EvidenceValue::Text(_) | EvidenceValue::Box(_) | EvidenceValue::Flag(_),
+            ) => false,
         }
     }
 }
@@ -242,6 +261,17 @@ pub struct Fact {
     pub conf: Confidence,
     pub basis: Basis,
     pub ttl_ms: Option<u32>,
+}
+
+impl Fact {
+    /// Shape check before admission looks at grants: the group code is registered and the value
+    /// (when there is one) belongs to it. `Absent` and `Retract` carry no payload.
+    pub const fn is_well_formed(&self) -> bool {
+        match &self.value {
+            FactValue::Absent | FactValue::Retract => self.group.is_registered(),
+            FactValue::Value(v) => v.matches(self.group),
+        }
+    }
 }
 
 /// Convenience: a non-zero set size.
@@ -327,6 +357,59 @@ mod tests {
         assert!(ev.matches(EvidenceKind::LayoutCssHidden.group_code()));
         assert!(!ev.matches(Group::Name.group_code()));
         assert!(!ev.matches(GroupCode(0x8123)));
+    }
+
+    fn fact(group: GroupCode, value: FactValue) -> Fact {
+        Fact {
+            subject: Subject::Node(node()),
+            group,
+            value,
+            seq: SrcSeq(1),
+            conf: Confidence::ASSERTED,
+            basis: Basis::None,
+            ttl_ms: None,
+        }
+    }
+
+    #[test]
+    fn evidence_payload_must_fit_its_kind() {
+        let text = || PropValue::Evidence(EvidenceValue::Text(Arc::from("Close")));
+        let flag = || PropValue::Evidence(EvidenceValue::Flag(true));
+        let boxed = || PropValue::Evidence(EvidenceValue::Box(Rect::default()));
+        for k in EvidenceKind::ALL {
+            let (good, bad): (PropValue, [PropValue; 2]) = match k {
+                EvidenceKind::LayoutBox => (boxed(), [text(), flag()]),
+                EvidenceKind::LayoutCssHidden => (flag(), [text(), boxed()]),
+                EvidenceKind::HintIconClass
+                | EvidenceKind::HintSrcName
+                | EvidenceKind::HintTitleAttr
+                | EvidenceKind::VisualOcrText
+                | EvidenceKind::VisualLabelGuess => (text(), [flag(), boxed()]),
+            };
+            assert!(good.matches(k.group_code()), "{k:?}");
+            for b in bad {
+                assert!(!b.matches(k.group_code()), "{k:?} accepted a wrong shape");
+            }
+        }
+    }
+
+    #[test]
+    fn malformed_facts_are_rejected() {
+        let name = || FactValue::Value(PropValue::Name(Arc::from("x")));
+        assert!(fact(Group::Name.group_code(), name()).is_well_formed());
+        // Value of another group.
+        assert!(!fact(Group::Description.group_code(), name()).is_well_formed());
+        // Semantic value under an evidence code and vice versa.
+        assert!(!fact(EvidenceKind::HintTitleAttr.group_code(), name()).is_well_formed());
+        let flag = FactValue::Value(PropValue::Evidence(EvidenceValue::Flag(true)));
+        assert!(!fact(EvidenceKind::HintTitleAttr.group_code(), flag.clone()).is_well_formed());
+        assert!(!fact(Group::Name.group_code(), flag.clone()).is_well_formed());
+        assert!(fact(EvidenceKind::LayoutCssHidden.group_code(), flag).is_well_formed());
+        // Unregistered codes, with or without payload.
+        assert!(!fact(GroupCode(99), name()).is_well_formed());
+        assert!(!fact(GroupCode(0x8100), FactValue::Retract).is_well_formed());
+        assert!(fact(Group::Name.group_code(), FactValue::Absent).is_well_formed());
+        assert!(fact(Group::Name.group_code(), FactValue::Retract).is_well_formed());
     }
 
     #[test]

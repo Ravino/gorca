@@ -4,7 +4,8 @@
 use super::coded::coded_enum;
 
 coded_enum! {
-    /// ARIA 1.2 + graphics-aria + the DPUB subset NVDA speaks, plus native-only roles.
+    /// ARIA 1.2 core roles, the ADR-0022 r2 additions and native-only roles. The DPUB and
+    /// graphics-aria subsets are appended later (B4 coverage work).
     ///
     /// Append-only `u16` codes: a code is never reused or renumbered (it is a WIT code at the
     /// extension boundary, ADR-0019 V-3). `Unknown` (0) is "not observed or not mapped".
@@ -91,6 +92,18 @@ coded_enum! {
         Window = 79 => "window",
         Popover = 80 => "popover",
         StaticText = 81 => "statictext",
+        Comment = 82 => "comment",
+        Suggestion = 83 => "suggestion",
+        Details = 84 => "details",
+        Summary = 85 => "summary",
+        DescriptionList = 86 => "descriptionlist",
+        Time = 87 => "time",
+        Iframe = 88 => "iframe",
+        Emphasis = 89 => "emphasis",
+        Strong = 90 => "strong",
+        Subscript = 91 => "subscript",
+        Superscript = 92 => "superscript",
+        Presentation = 93 => "presentation",
     }
 }
 
