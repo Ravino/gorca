@@ -285,6 +285,27 @@ pub fn rttime_limit() -> io::Result<(u64, u64)> {
     }
 }
 
+/// Set the soft `RLIMIT_RTPRIO` (the highest priority [`set_fifo`] may ask for without
+/// `CAP_SYS_NICE`), keeping the hard limit. Lowering is always permitted; `0` makes every
+/// [`set_fifo`] fail with `EPERM` unless the process holds `CAP_SYS_NICE`.
+pub fn set_rtprio_soft_limit(soft: u64) -> io::Result<()> {
+    let mut lim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: `lim` is a live local the kernel writes.
+    if unsafe { libc::getrlimit(libc::RLIMIT_RTPRIO, &raw mut lim) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    lim.rlim_cur = soft;
+    // SAFETY: `lim` is a live local; the kernel only reads it.
+    if unsafe { libc::setrlimit(libc::RLIMIT_RTPRIO, &raw const lim) } == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
 /// The limits last set by [`set_rttime_limit`], so the `SIGXCPU` handler can re-arm them.
 static RTTIME_SOFT: AtomicU64 = AtomicU64::new(0);
 static RTTIME_HARD: AtomicU64 = AtomicU64::new(0);
