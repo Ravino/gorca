@@ -1,7 +1,7 @@
 # ADR-0025: Mouse emulation (pointer routing, clicks, drag lock) through the gorca-helper virtual pointer
 
 Status: **Accepted** (r2, 2026-10-19; r1 Proposed 5c517151). Owner: architect. Review: `docs/reports/adr-0025-review.md`
-(r1 ACCEPT-WITH-CHANGES, C-1..C-9 integrated, mapping in §13). QM-1 (Orca laptop chord) is pending the owner.
+(r1 ACCEPT-WITH-CHANGES, C-1..C-9 integrated, mapping in §13). QM-1 resolved by the owner: NVDA mouse bindings in all presets (§3).
 Study and probes: `docs/reports/mouse-emulation-design.md`, `tools/platform-probes/mouse-emulation/`.
 Owner decisions (fixed): `docs/decisions.md` row 2026-10-19 "Owner: mouse emulation via the gorca-helper virtual
 pointer (A) ...". Relates to: ADR-0001 R3 (results as messages, deadlines), ADR-0005 (closed command set, KM-1,
@@ -61,13 +61,13 @@ is 0,0, ADR-0006 facts), and the only source of a Wayland window's global origin
 2. Pointer access is a **capability** `pointer` in the helper allow-list, **opt-in**, written by the owner; gorca
    never writes the allow-list.
 3. Both command families ship: NVDA **click at pointer** and Orca **click review item** (action first, then route +
-   click). NVDA presets bind the first, Orca presets the second; every command is bindable in every preset.
+   click). All presets bind the first (NVDA chords, owner QM-1); the second ships unbound; every command is bindable in every preset.
 4. Non-gorca keypad chords are grabbed **only with Num Lock off and only while the pointer gate is open** (helper
    v2 + `pointer` cap + `mouse.enabled`). Gate changes reuse the existing coalesced `SetKeyGrabs` path on the same
    connection, rate-limited, never a reconnect and never Grab/UngrabKeyboard.
 5. No refusal during Shell modal grabs (owner); the occlusion check in the helper handles Overview and dialogs.
 6. Drag lock auto-releases after **120 s** (gorca, announced); the helper's backstop is 125 s.
-7. Orca laptop left click moves to **gorca+Shift+7**; `gorca+7` stays `review.focus_follows_toggle` (owner).
+7. All four presets use NVDA's mouse chords (owner, QM-1); `gorca+7` stays `review.focus_follows_toggle`; item-click commands ship unbound.
 8. Pointer I/O never runs on the key→speech path; every call has a deadline and its result comes back as a message.
 
 ### 2.2 Helper API v2 (`org.gorca.ShellHelper`, version 2)
@@ -119,8 +119,8 @@ would get a new interface name (`org.gorca.ShellHelper2`), never a reused one.
 Helper-side rules (all handlers are a few Clutter calls plus validation, never a loop or a wait on the main loop):
 
 - **H-1 Rate limit.** Own token bucket for `pointer` methods: 20 tokens/s, burst 40; a call costs 1, a `count = 2`
-  click costs 2. `GetPointer` uses the v1 bucket (100/s).
-- **H-1a Denied callers (C-6, also fixes v1).** A per-sender bucket (10 calls/s, burst 20) runs **before**
+  click costs 2. `GetPointer` shares the pointer bucket (reviewer F, 2026-10-19).
+- **H-1a Denied callers (C-6, also fixes v1).** One global bucket shared by all non-allow-listed senders (10 calls/s, burst 20) runs **before**
   `_authorize`; over it the call fails `rate:` with no `/proc` or config work. A negative authorization is cached per
   sender until the sender vanishes or the config stamp changes, and `DENIED` is logged at most once per (sender,
   stamp). Total sender-cache size stays bounded (v1: 256).
@@ -197,10 +197,11 @@ window is on (a 2x laptop plus a 1x external screen: ratio 2 on both).
 | GTK4 Wayland | `WINDOW` relative to the GtkWindow = Meta frame | frame + WINDOW |
 | GTK3 Wayland | `WINDOW` = `SCREEN`, relative to the buffer incl. CSD shadow | buffer + WINDOW |
 | Firefox Wayland | toplevel (0,0) = Meta frame | frame + extent |
-| Chromium / Electron Wayland | toplevel logical, children in device px | frame + child / scale (quirk row `child_space = DevicePixels`, toolkit Chromium; Electron unverified, spike S-2) |
+| Chromium / Electron Wayland | toplevel logical, children in device px | frame + child / scale (quirk row `child_space = DevicePixels`, toolkit Chromium and Electron, verified S-2/S-4 at 1.25 and 2) |
 | XWayland (global X scale, C-5) | X root space; toplevel `WINDOW` origin includes the SSD title bar | frame + (WINDOW - toplevel origin) / `x-scale` |
 | St (Shell) | stage | `PointTarget::Stage` |
-| Qt | unverified | spike S-3; until then `NoLocation` is acceptable, action-first still works |
+| Popups (xdg_popup: menus, popovers, context menus; Meta window type 9 `DROPDOWN_MENU`, `transient-for` = parent, S-1) | GTK4 popover: `WINDOW` relative to the **parent toplevel** (not the popup); GTK3 `Gtk.Menu`: popup is its own AT-SPI window, `WINDOW` relative to the popup **buffer** (incl. shadow); Firefox: extent relative to the toplevel frame; Chromium/Electron: popup `WINDOW` = popup buffer (shadow inset) = toplevel `SCREEN` | GTK4: toplevel frame + WINDOW; GTK3: popup buffer + WINDOW; Firefox: toplevel frame + extent; Chromium/Electron: toplevel frame + SCREEN / scale (= popup buffer + WINDOW / scale). Pass `window` = the parent: the popup family rule admits the point |
+| Qt | not testable here (no Qt toolkit installed, S-3 open) | until verified `NoLocation` is acceptable, action-first still works |
 
 Window matching (sink, pure function, table-tested):
 
@@ -406,22 +407,25 @@ pub trait PointerSink: Send + Sync {
 
 | Command | nvda-desktop | nvda-laptop | orca-desktop | orca-laptop |
 |---|---|---|---|---|
-| `mouse.left_click` | `kp_divide` | `gorca+bracketleft` | - | - |
-| `mouse.right_click` | `kp_multiply` | `gorca+bracketright` | - | - |
-| `mouse.left_click_item` | - | - | `kp_divide` | **`gorca+shift+7`** (new) |
-| `mouse.right_click_item` | - | - | `kp_multiply` | `gorca+8` |
-| `mouse.left_lock_toggle` | `shift+kp_divide` | `gorca+ctrl+bracketleft` | `shift+kp_divide` | `gorca+ctrl+7` |
-| `mouse.right_lock_toggle` | `shift+kp_multiply` | `gorca+ctrl+bracketright` | `shift+kp_multiply` | `gorca+ctrl+8` |
-| `mouse.route_to_review` | `gorca+kp_divide` | `gorca+shift+m` | `gorca+kp_divide` | `gorca+9` |
-| `mouse.review_to_pointer` | `gorca+kp_multiply` | `gorca+shift+n` | `gorca+kp_multiply` | `gorca+ctrl+9` |
-| `mouse.say_position` | `gorca+shift+kp_divide` | `gorca+ctrl+shift+m` | `gorca+shift+kp_divide` | `gorca+shift+9` |
+| `mouse.left_click` | `kp_divide` | `gorca+bracketleft` | `kp_divide` | `gorca+bracketleft` |
+| `mouse.right_click` | `kp_multiply` | `gorca+bracketright` | `kp_multiply` | `gorca+bracketright` |
+| `mouse.left_click_item`, `mouse.right_click_item` | unbound | unbound | unbound | unbound |
+| `mouse.left_lock_toggle` | `shift+kp_divide` | `gorca+ctrl+bracketleft` | `shift+kp_divide` | `gorca+ctrl+bracketleft` |
+| `mouse.right_lock_toggle` | `shift+kp_multiply` | `gorca+ctrl+bracketright` | `shift+kp_multiply` | `gorca+ctrl+bracketright` |
+| `mouse.route_to_review` | `gorca+kp_divide` | `gorca+shift+m` | `gorca+kp_divide` | `gorca+shift+m` |
+| `mouse.review_to_pointer` | `gorca+kp_multiply` | `gorca+shift+n` | `gorca+kp_multiply` | `gorca+shift+n` |
+| `mouse.say_position` | `gorca+shift+kp_divide` | `gorca+ctrl+shift+m` | `gorca+shift+kp_divide` | `gorca+ctrl+shift+m` |
 | `mouse.middle_click` | unbound | unbound | unbound | unbound |
 
-- Every chord above was checked free in every context of its preset (`global`, `browse`) by loading the four TOMLs;
-  `shift+m`/`shift+n` exist only as non-gorca browse quick-nav, a different chord. `gorca+7` stays
-  `review.focus_follows_toggle` in all presets (owner). Orca laptop `gorca+shift+7` keeps the 7-8-9 muscle memory
-  with one extra modifier; `gorca+ctrl+7/8` follow NVDA's "Ctrl = lock" on laptops. Orca has no lock or
-  "navigator to mouse" commands; gorca adds them on free chords.
+- **Owner decision QM-1 (2026-10-19): NVDA's mouse bindings in all four presets, including the Orca ones**
+  (`refs/nvda/source/globalCommands.py` ~331-360): the keys click at the pointer. The Orca-style item commands
+  (`mouse.left_click_item`, `mouse.right_click_item`) ship unbound in every preset and are bindable by the user.
+- Conflict check (2026-10-19, `crates/gorca-config/presets/*.toml`): `gorca+bracketleft/right` and
+  `gorca+ctrl+bracketleft/right` are unused in all four presets (`nvda-laptop` has `gorca+shift+bracketleft/right` =
+  `object.prev/next_in_flow`, a different chord); `gorca+shift+m`, `gorca+shift+n` and `gorca+ctrl+shift+m` are unused
+  (`shift+m`/`shift+n` exist only as non-gorca browse quick-nav, a different chord); `kp_divide`/`kp_multiply` and
+  their shift/gorca variants are unused. `gorca+7` stays `review.focus_follows_toggle` as before
+  (`review.focus_follows_toggle`, owner). MO-4 adds the automated preset test over all four TOMLs.
 - Gated (RG-1) non-gorca chords: `kp_divide`, `kp_multiply`, `shift+kp_divide`, `shift+kp_multiply` (desktop presets
   only). Laptop presets have no gated grab.
 - MO-4 adds a preset test: no duplicate resolved chord per (preset, context), every `mouse.*` chord free of the
@@ -592,7 +596,7 @@ anyway (cost of B drops to one slice); (b) a GNOME release breaks the extension 
 | MO-3 | Core gating: `RuntimeGate` in `CmdSpec`, gated grab split, `Mode::grab_set(keys, gates)`, RG-5 hysteresis, RG-6/RG-7; SetKeyGrabs-count tests | rust-engineer | MO-2 |
 | MO-4 | Commands click at pointer (L/R/M), locks + `HoldState` + 120 s, `say_position`; NVDA preset rows; strings en/ru; preset conflict test | rust-engineer | MO-3 |
 | MO-5a | `PointerResolver` + window matcher (table tests from study §3, global `x-scale`), `route_to_review` | rust-engineer | MO-1b, MO-4 |
-| MO-5b | `ActionReq::Click/ContextMenu`, item clicks (action first, `ScrollTo` once, pointer path), `mouse.item_click`/`if_covered`; Orca preset rows | rust-engineer | MO-5a |
+| MO-5b | `ActionReq::Click/ContextMenu`, item clicks (action first, `ScrollTo` once, pointer path), `mouse.item_click`/`if_covered`; commands unbound by default | rust-engineer | MO-5a |
 | MO-6 | `review_to_pointer` (inverse mapping, `GetAccessibleAtPoint` descent) | rust-engineer | MO-5a |
 | MO-7 | End-to-end matrix, C-9 rows 5, 8, 9, gates M-2..M-9 in the private rig | test-engineer + perf-engineer | MO-5b, MO-6 |
 
@@ -600,8 +604,7 @@ MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its ow
 
 ## 12. Open questions
 
-- **QM-1** Orca laptop left click chord: `gorca+shift+7` (recommended) or `gorca+0`. **Pending the owner**; MO-5b
-  binds whichever is confirmed.
+- **QM-1** RESOLVED (owner, 2026-10-19): NVDA mouse bindings in all presets; item-click commands unbound by default (§3).
 - **QM-2** Item clicks default `action_first` (Orca parity); should the NVDA presets' `gorca+kp_enter`
   (`review.activate`) and Orca item click stay distinct when both exist? (Recommended: yes, activate = default action
   only, item click = click semantics.)
@@ -622,3 +625,16 @@ MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its ow
 | C-9 tests | §6 "Review r1 rows" (nine rows) |
 | Study correction | `docs/reports/mouse-emulation-design.md` §3 (popups have Meta windows) |
 | Note: QueryPointer in mutter main | §8 revisit trigger (c) |
+
+## 14. MO-0 spike results (2026-10-19, private headless shell 48.7, helper v2, host load average 14-15, no CPU governor tuning)
+
+| Id | Question | Result |
+|---|---|---|
+| S-1 | Does `get_window_actors()` list popup windows in 48.7? Popup coordinates? | **Yes.** GTK4 popover, GTK3 `Gtk.Menu`, Firefox and Chromium context menus are Meta windows of type 9 (`DROPDOWN_MENU`) with `transient-for` = the parent window id (`GetWindows` v2). Real clicks through `PointerClickAt(window = parent, origin = stage)` activated "Item A" (GTK4: toplevel frame + `WINDOW`; GTK3: popup buffer + `WINDOW`), Firefox "Select All" (toplevel frame + extent; popup frame + extent and `SCREEN` as stage both hit a different item, "Save Page As"), Chromium "Reload" (popup buffer + `WINDOW` = toplevel frame + `SCREEN`). The window guard and family rule admitted every one of them; the pick reported the popup id. A GTK4 `MenuButton` sits below a 39 px default titlebar: tests must take the point from AT-SPI, not guess. A popover grab swallows the next click anywhere (it dismisses the popover), which is the correct app behaviour and is why a stale click after a popup opens is "lost". |
+| S-2 | Electron | Same as Chromium: AT-SPI children in device px; verified at scale 1.25 and 2 (`divisor = monitor scale` clicked the page button, divisor 1 was `refused-outside`). Electron has no default context menu, so no popup test. |
+| S-3 | Qt | **Not run**: no Qt toolkit (PyQt/PySide, `libqt5gui`/`libqt6gui`) is installed and the task did not install packages. Still open. |
+| S-4 | Scales 1.25 and 2 | Chromium and Electron: children in device px, divisor = monitor scale (1.25: 380.0,348.4 fired; 2: 380.0,349.0 fired). Firefox: **logical** px at both scales (divisor 1 fired; its extent is -1,-1 until the page is laid out, retry until width > 0). GTK3 under XWayland: helper `x-scale` = 2.0 at monitor scale 1.25 and at 2.0, equal to the measured AT-SPI/frame ratio (500/250); the ratio is the same for a window on the 1.0 monitor (C-5 verified); `ClickAt(frame, 120, 150)` landed at X (240, 262) = 2x minus the 38 px SSD title bar. Debian's 48.7 gschema has no `xwayland-scaling-factor` key (only mutter main), the helper treats it as unset. |
+| S-5 | Left-handed virtual device | Mutter does **not** swap buttons for a virtual device. With `left-handed = true`: logical left (1) was delivered as 3, logical right (3) as 1, and `logical = false` delivered the button unswapped. The setting is read through `Gio.Settings` and a change made in the private keyfile was picked up without a restart; a held button keeps the physical button chosen at press time. |
+| S-6 | Pick-based occlusion cost | `get_actor_at_pos(REACTIVE)` plus the owner walk: p50 99 us, p99 351 us, max 3.0 ms (600 calls, 6 app windows). Whole handler (validation, family, pick, injection, audit) with `GORCA_TRACE`: PointerMove p50 0.37-0.49 ms p99 3.3-4.0 ms, PointerClickAt p50 0.44-0.83 ms p99 1.1-4.8 ms, GetPointer p50 0.3 ms p99 2.7-3.2 ms; client round trip p50 2.5-2.7 ms (load 14.5). M-7 (p99 <= 1 ms) is **not met under this load** with tracing on; re-measure on a quiet host. The pick API exists in 48.7 so the stacking fallback is unused. Overview, notification banners, attached `NORMAL`-type windows over a parent and other app windows all pick as non-family (`refused-occluded`). |
+
+**M-7 re-measure (2026-10-19 19:31, after review fixes F-1..F-3).** Host load average 8.8-9.9 (not quiet; CPU PSI some avg10 2%), RT kernel, no governor change, `GORCA_TRACE=1`, 6 app windows, 300 calls each at 60 ms spacing, handler time inside the Shell: PointerMove p50 0.27 ms p99 0.96 ms (max 1.6), PointerClickAt p50 0.32 ms p99 1.04 ms (max 1.3), GetPointer p50 0.22 ms p99 0.70 ms. M-7 (p99 <= 1 ms) is met within noise for move/get and at the limit for click; the first measurement (load 14.5, pick logged inside the handler) gave p99 3-5 ms and is kept above as the loaded number. `bench_pointer.py` reproduces it.
