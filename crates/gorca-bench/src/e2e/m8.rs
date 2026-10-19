@@ -675,6 +675,17 @@ pub fn run(
     if !gate_open(host, sc.id, &mut out)? {
         return Ok((out, Vec::new()));
     }
+    // The scenario types real arrow keys into a Chromium-engine page (forced focus mode, DP-3);
+    // Firefox has its own sticky-mode behaviour and is covered by M8-MSG.
+    if sc.id == "M8-MSGK"
+        && !super::chromium_selected()
+        && std::env::var_os("GORCA_M8_MSGK_ANY").is_none()
+    {
+        out.notes
+            .push(format!("{} SKIPPED: a Chromium-only scenario", sc.id));
+        out.x("skipped", 1.0, "flag");
+        return Ok((out, Vec::new()));
+    }
     let url = page_url(host, sc.page)?;
     let (mut w, doc) = Web::start(host, reader, flavor, &[url], sc.title)?;
     w.prime(&doc)?;

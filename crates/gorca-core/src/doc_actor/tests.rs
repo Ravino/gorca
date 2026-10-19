@@ -677,7 +677,8 @@ mod fused {
         assert_eq!(sem_name(&r, 14).as_deref(), Some("Docs"));
         let t = r.handle.timeline.load(Ordering::Acquire);
         assert_eq!(t, 1, "one batch was applied");
-        // Issued after the batch: it wins and the document tells the Reader.
+        // Issued after the batch: it wins. A fused entry is no content change: the Reader is not
+        // told, the mirror just carries the new entry.
         r.handle
             .ctl
             .send(DocCtl::Fact {
@@ -687,11 +688,14 @@ mod fused {
             })
             .await
             .unwrap();
-        assert!(matches!(
-            next_notice(&mut r).await,
-            DocNotice::Changed { .. }
-        ));
+        for _ in 0..100 {
+            if sem_name(&r, 14).as_deref() == Some("Fresh") {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
         assert_eq!(sem_name(&r, 14).as_deref(), Some("Fresh"));
+        assert!(r.notices.try_recv().is_err(), "no content changed");
         // A later batch rewrites the node; a fact issued before that batch is older than it.
         r.script
             .batches

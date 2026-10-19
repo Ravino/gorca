@@ -26,12 +26,16 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use gorca_doc_source_api::FuseSetup;
 use gorca_doc_source_api::limits::{MAX_CHILDREN, MAX_DOC_NODES};
 use gorca_fuse::{Budget, Input, Ivm, NoPatches, NodeIdx, PrimarySlot, QuirkSet, Val, Write};
 use gorca_model::sem::{Group, SemEntry, SemRole, SrcRecord};
 use gorca_model::{DocDelta, SrcNode, SrcNodeId};
+
+/// Work one run of the engine may do before the actor goes back to its queues.
+const BATCH_BUDGET: Duration = Duration::from_millis(2);
 
 /// The AT-SPI primary's register slot.
 const ATSPI: PrimarySlot = PrimarySlot::P0;
@@ -312,6 +316,17 @@ impl FuseStage {
     ) -> Option<Vec<SrcNodeId>> {
         let n = self.ids.get(&src).copied()?;
         self.stats.applies += 1;
+        // The focus chain (the fetched node and its ancestors, nearest first) fuses first.
+        let mut chain = vec![n];
+        let mut cur = n;
+        while let Some(p) = self.ivm.parent(cur) {
+            chain.push(p);
+            cur = p;
+            if chain.len() > 64 {
+                break;
+            }
+        }
+        self.ivm.set_focus_chain(&chain);
         self.write(n, rec, 2 * issued_at + 1);
         Some(self.run())
     }
@@ -322,8 +337,21 @@ impl FuseStage {
             .is_some_and(|r| *r == n)
     }
 
+    /// Fusions still owed after a budgeted run (dirty nodes and background dependents).
+    pub fn pending(&self) -> usize {
+        self.ivm.pending()
+    }
+
+    /// Continue the fusion the last run left (one more budget); returns the entries that changed.
+    pub fn step(&mut self) -> Vec<SrcNodeId> {
+        self.run()
+    }
+
+    /// One bounded run: the focus chain and the visible window first (the engine's priority
+    /// classes), at most [`BATCH_BUDGET`] of work (ADR-0022: the writer's interactive messages
+    /// never wait for a whole page to fuse). What is left stays dirty for [`FuseStage::step`].
     fn run(&mut self) -> Vec<SrcNodeId> {
-        let rep = self.ivm.run(Budget::UNLIMITED);
+        let rep = self.ivm.run(Budget::until(Instant::now() + BATCH_BUDGET));
         self.stats.fusions += rep.fuse_calls as u64;
         rep.published
             .iter()
@@ -655,8 +683,17 @@ mod tests {
         batch.extend(lists);
         let mut s = FuseStage::new(setup());
         let t = std::time::Instant::now();
-        let changed = s.apply(&batch);
+        let mut changed = s.apply(&batch);
+        let first = t.elapsed();
+        while s.pending() > 0 {
+            changed.extend(s.step());
+        }
         let took = t.elapsed();
+        eprintln!("first run {first:?}");
+        assert!(
+            first < Duration::from_millis(500),
+            "the first run is bounded: {first:?}"
+        );
         eprintln!(
             "fuse stage: {} nodes in {:?} ({:.2} us/node, debug build)",
             s.len(),

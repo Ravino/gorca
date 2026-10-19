@@ -94,4 +94,13 @@ export GORCA_E2E_READER_LOG=$ROOT/bench/results/e2e/$LABEL/reader-$(date -u +%Y%
 tests/harness/run-isolated.sh target/release/e2e-m8 run --label "$LABEL" \
   --reader "daemon:${M8_READER_BIN:-$ROOT/target/release/gorca},--impersonate-orca" \
   --reader-env GORCA_M7=1 --reader-env GORCA_M8=1 --reader-env NO_COLOR=1 --reader-env RUST_LOG=${M7_RUST_LOG:-warn,gorca_phase=info} "$@"
-exit $?
+rc=$?
+# Dual-carry agreement gate (M22a): the doc actor warns once per legacy-vs-fused disagreement
+# (capped) and summarises at retire (phase="agree"). Any disagreement fails the run.
+if [ -f "$GORCA_E2E_READER_LOG" ]; then
+  bad=$(grep -c "legacy and fused values disagree" "$GORCA_E2E_READER_LOG")
+  summary=$(grep 'phase="agree"' "$GORCA_E2E_READER_LOG" | tail -1 | grep -o 'checked=[0-9]* disagreements=[0-9]*')
+  echo "== agreement gate: ${summary:-no fusion summary logged}; disagreement warnings: $bad"
+  if [ "$bad" != 0 ]; then rc=1; fi
+fi
+exit $rc

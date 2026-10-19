@@ -407,11 +407,23 @@ impl Actor {
         let t_apply = Instant::now();
         // Fusion first: the translator builds the back copy with the fused entries in place, so
         // the publish below is the one atomic swap of content and semantics (SM-8).
+        let sem_only = batch.is_empty();
         let mut changed = std::mem::take(&mut self.pending_changed);
         if let Some(f) = self.fuse.as_mut()
             && !batch.is_empty()
         {
+            let t_fuse = Instant::now();
             changed.extend(f.apply(&batch));
+            let took = t_fuse.elapsed();
+            if took >= Duration::from_millis(1) {
+                tracing::info!(
+                    target: "gorca_phase",
+                    phase = "fuse",
+                    wall_ms = took.as_secs_f64() * 1000.0,
+                    nodes = f.len(),
+                    pending = f.pending(),
+                );
+            }
             self.timeline
                 .store(f.timeline(), std::sync::atomic::Ordering::Release);
         }
@@ -425,6 +437,17 @@ impl Actor {
         {
             Ok(out) => {
                 let published = self.writer.publish();
+                let flush_ms = t_apply.elapsed().as_secs_f64() * 1000.0;
+                if flush_ms >= 3.0 {
+                    tracing::info!(
+                        target: "gorca_phase",
+                        phase = "flush",
+                        wall_ms = flush_ms,
+                        sem_only,
+                        changed = changed.len(),
+                        nodes = self.writer.doc().len(),
+                    );
+                }
                 if !self.announced && published {
                     tracing::info!(
                         target: "gorca_phase",
@@ -438,7 +461,7 @@ impl Actor {
                         .publishes
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
-                if published && self.awake {
+                if published && self.awake && !sem_only {
                     if out.reset {
                         self.live.reset();
                     }
@@ -456,7 +479,9 @@ impl Actor {
                     self.join.remove(k, self.spec_doc);
                     self.keys.remove(&k);
                 }
-                if published {
+                // A publish that only carries fused entries is no content change: the Reader is
+                // not told.
+                if published && !sem_only {
                     let notice = if self.announced {
                         DocNotice::Changed {
                             doc: self.spec_doc,
@@ -484,6 +509,21 @@ impl Actor {
                 false
             }
         }
+    }
+
+    /// Continue a fusion the last run left unfinished: one more budget, then the entries that
+    /// changed are patched into the mirror and published (the Reader is not told).
+    fn fuse_tick(&mut self) {
+        let Some(f) = self.fuse.as_mut() else { return };
+        let changed = f.step();
+        self.pending_changed.extend(changed);
+        if !self.pending_changed.is_empty() {
+            self.flush();
+        }
+    }
+
+    fn fuse_pending(&self) -> bool {
+        self.fuse.as_ref().is_some_and(|f| f.pending() > 0)
     }
 
     /// A fact about one of this document's nodes (a focus fetch the app actor forwarded).
@@ -722,6 +762,16 @@ impl Actor {
 
 const MAX_PENDING_NOTICES: usize = 8;
 
+/// Ready shortly when the fusion stage still owes work; never ready otherwise. Interactive
+/// messages are served between the slices (the select is biased towards them).
+async fn fuse_wait(pending: bool) {
+    if pending {
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    } else {
+        std::future::pending::<()>().await;
+    }
+}
+
 /// Sleep until the tracker's next deadline; never ready when it has none.
 async fn live_wait(deadline: Option<Instant>) {
     match deadline {
@@ -940,6 +990,7 @@ async fn run(
                     a.repair_request(next, now, &mut repair_rx);
                 }
             }
+            () = fuse_wait(a.fuse_pending()) => a.fuse_tick(),
             _ = notice_tick.tick() => {
                 a.retry_notice();
                 let code = repair_flag.swap(0, std::sync::atomic::Ordering::AcqRel);
@@ -955,7 +1006,8 @@ async fn run(
         // The CI counter of the dual-carry period (process-wide totals, see `agree`).
         let agree = agree::stats();
         tracing::info!(
-            target: "gorca_agree",
+            target: "gorca_phase",
+            phase = "agree",
             doc = doc.0,
             profile = f.profile_name(),
             nodes = f.len(),

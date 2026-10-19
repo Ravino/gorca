@@ -171,7 +171,7 @@ fn role_agrees(legacy: Role, sem: SemRole) -> Option<bool> {
 fn note(n: &SrcNode, a: Aspect, e: &SemEntry) {
     MISMATCH[a.ix()].fetch_add(1, Ordering::Relaxed);
     if LOGGED.fetch_add(1, Ordering::Relaxed) < LOG_CAP {
-        tracing::debug!(
+        tracing::warn!(
             target: "gorca_agree",
             aspect = a.label(),
             legacy_role = ?n.role,
@@ -281,7 +281,7 @@ pub fn compare(n: &SrcNode, flags: NodeFlags, level: u8, e: &SemEntry) -> Vec<As
 pub(super) fn flag(a: Aspect, role: Role, detail: &str) {
     MISMATCH[a.ix()].fetch_add(1, Ordering::Relaxed);
     if LOGGED.fetch_add(1, Ordering::Relaxed) < LOG_CAP {
-        tracing::debug!(
+        tracing::warn!(
             target: "gorca_agree",
             aspect = a.label(),
             legacy_role = ?role,
