@@ -153,7 +153,7 @@ pub fn attr_key(name: &str) -> Option<AttrKey> {
 }
 
 /// The kept attributes of one `GetAttributes` reply: unknown names dropped, values clipped,
-/// the first occurrence of a key wins, at most [`MAX_ATTRS`].
+/// the first occurrence of a key wins, at most [`MAX_ATTRS`], sorted by key.
 pub fn keep_attrs<'a>(
     pairs: impl IntoIterator<Item = (&'a str, &'a str)>,
 ) -> Vec<(AttrKey, String)> {
@@ -168,6 +168,9 @@ pub fn keep_attrs<'a>(
             out.push((key, clip(v, MAX_ATTR_VALUE_BYTES).to_owned()));
         }
     }
+    // The wire order of a dictionary is the sender's (hash) order: sort, so that two fetches of
+    // one node compare equal.
+    out.sort_by_key(|(k, _)| *k);
     out
 }
 

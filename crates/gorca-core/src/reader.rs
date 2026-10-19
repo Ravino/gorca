@@ -383,6 +383,8 @@ impl ReaderInbox {
 
 #[derive(Debug)]
 pub struct Reader {
+    /// M-6b fallback (`CoreConfig::lazy_attrs`): the focus fetch leaves `ATTRS` out.
+    pub(crate) lazy_attrs: bool,
     pub(crate) focus: FocusState,
     pub(crate) mode: Mode,
     pub(crate) keys: ModeKeys,
@@ -483,6 +485,7 @@ impl Reader {
     pub fn new(epoch: Arc<EpochCell>, dir: Arc<MirrorDirectory>, keys: ModeKeys) -> Self {
         Self {
             focus: FocusState::NoFocus,
+            lazy_attrs: false,
             mode: Mode::Focus,
             keys,
             epoch,
@@ -519,6 +522,13 @@ impl Reader {
             app_policy: None,
             term_provider: None,
         }
+    }
+
+    /// Set once at construction from `CoreConfig::lazy_attrs`.
+    #[must_use]
+    pub fn with_lazy_attrs(mut self, lazy: bool) -> Self {
+        self.lazy_attrs = lazy;
+        self
     }
 
     /// Terminals without an extension of their own are tracked with `provider`'s sessions.
@@ -2365,7 +2375,7 @@ mod tests {
             .invalidate(key(2), PropMask::STATES, Instant::now());
         let fx = focus_on(&mut f, 1, Instant::now());
         assert_eq!(effects_of(&fx), ["fetch-focus", "demand"]);
-        let fx = focus_on(&mut f, 2, Instant::now() + Duration::from_secs(2));
+        let fx = focus_on(&mut f, 2, Instant::now() + Duration::from_secs(1));
         assert_eq!(effects_of(&fx), ["speak", "settled", "fetch-rv1", "demand"]);
         assert!(matches!(
             fx.last(),

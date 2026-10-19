@@ -91,6 +91,8 @@ pub struct CoreConfig {
     /// stops with [`CoreError::ReaderLaneDied`] (the process then exits non-zero and the service
     /// manager restarts it). A reader that is silently gone is worse than a restart.
     pub max_reader_restarts: usize,
+    /// M-6b fallback: the cold focus fetch leaves `ATTRS` out (`GORCA_LAZY_ATTRS=1`).
+    pub lazy_attrs: bool,
 }
 
 impl Default for CoreConfig {
@@ -99,6 +101,7 @@ impl Default for CoreConfig {
             shutdown_grace: Duration::from_secs(2),
             slot_budget: GLOBAL_SLOT_BUDGET,
             max_reader_restarts: MAX_READER_RESTARTS,
+            lazy_attrs: false,
         }
     }
 }
@@ -257,6 +260,7 @@ struct Shared {
     web: WebShared,
     /// Text events the app actors could not queue for the Reader (ADR-0007 EV-5).
     text_dropped: Arc<AtomicU64>,
+    lazy_attrs: bool,
     /// The extension host (ADR-0001 section 10), when the daemon wires one.
     ext: Option<Arc<dyn crate::ExtSource>>,
     /// The application policy the Reader consults (ADR-0008 W3), if the daemon installed one.
@@ -306,6 +310,7 @@ impl Core {
         let (grabs, _) = watch::channel(GrabSet::default());
         let (config, config_rx) = mpsc::channel(CONFIG_QUEUE);
         let (hub, hub_rx) = hub_channel();
+        let lazy_attrs = cfg.lazy_attrs;
         Self {
             cfg,
             shared: Arc::new(Shared {
@@ -336,6 +341,7 @@ impl Core {
                     counters: Arc::new(DocCounters::default()),
                 },
                 text_dropped: Arc::new(AtomicU64::new(0)),
+                lazy_attrs,
                 ext: None,
                 app_policy: None,
                 term_provider: None,
@@ -1046,7 +1052,8 @@ async fn reader_loop(
     .with_links(Arc::clone(&shared.links))
     .with_settings_cell(Arc::clone(&shared.settings))
     .with_web(Arc::clone(&shared.web.docs), Arc::clone(&shared.web.join))
-    .with_text_dropped(Arc::clone(&shared.text_dropped));
+    .with_text_dropped(Arc::clone(&shared.text_dropped))
+    .with_lazy_attrs(shared.lazy_attrs);
     if let Some(log) = &shared.present_log {
         reader = reader.with_present_log(Arc::clone(log));
     }

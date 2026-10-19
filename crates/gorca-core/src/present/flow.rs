@@ -120,7 +120,7 @@ pub struct Presented {
 /// attribute facts, one more call pipelined in the same batch, guarded by M-6b). Asking for
 /// `DESCRIPTION` would add a call to the cold path for nothing.
 ///
-/// The M-6b fallback switch is [`focus_fields`].
+/// The M-6b fallback switch is [`focus_fields_for`].
 pub const FOCUS_FIELDS: PropMask = PropMask::PRESENT
     .difference(PropMask::DESCRIPTION)
     .union(PropMask::ATTRS);
@@ -128,18 +128,10 @@ pub const FOCUS_FIELDS: PropMask = PropMask::PRESENT
 /// [`FOCUS_FIELDS`] without `ATTRS`: what the cold focus fetch asked for before M22a.
 pub const FOCUS_FIELDS_LAZY: PropMask = PropMask::PRESENT.difference(PropMask::DESCRIPTION);
 
-static LAZY_ATTRS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// M-6b fallback switch: when set, the focus fetch leaves `ATTRS` out (they are read after the
-/// first speech by the paths that need them). Set from `GORCA_LAZY_ATTRS=1` by the daemon, or
-/// by a test.
-pub fn set_lazy_attrs(lazy: bool) {
-    LAZY_ATTRS.store(lazy, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// The focus fetch mask in force: [`FOCUS_FIELDS`], or [`FOCUS_FIELDS_LAZY`] under the switch.
-pub fn focus_fields() -> PropMask {
-    if LAZY_ATTRS.load(std::sync::atomic::Ordering::Relaxed) {
+/// The focus fetch mask for a switch position: [`FOCUS_FIELDS`], or [`FOCUS_FIELDS_LAZY`] when
+/// the M-6b fallback is on. Pure; the Reader holds the position (`CoreConfig::lazy_attrs`).
+pub const fn focus_fields_for(lazy: bool) -> PropMask {
+    if lazy {
         FOCUS_FIELDS_LAZY
     } else {
         FOCUS_FIELDS
@@ -149,8 +141,8 @@ pub fn focus_fields() -> PropMask {
 /// What a focus presentation needs from a snapshot (B-1 5.2): `FOCUS_FIELDS`, minus `VALUE` when the
 /// node is known to have neither a Value nor a Text interface, plus `RELATIONS` when it has no
 /// name (a label may name it).
-pub fn focus_need(n: &NodeSnapshot) -> PropMask {
-    let mut need = focus_fields();
+pub fn focus_need(n: &NodeSnapshot, lazy_attrs: bool) -> PropMask {
+    let mut need = focus_fields_for(lazy_attrs);
     if !n.interfaces.is_empty() && !n.interfaces.intersects(Ifaces::VALUE | Ifaces::TEXT) {
         need.remove(PropMask::VALUE);
     }
@@ -494,7 +486,7 @@ impl Reader {
     fn begin_present(&mut self, node: NodeKey, epoch: Epoch, fx: &mut ReaderEffects) {
         match self.dir.view(node) {
             gorca_model::Lookup::Hit(v) => {
-                let need = focus_need(&v.snap);
+                let need = focus_need(&v.snap, self.lazy_attrs);
                 let missing = need & !v.snap.have;
                 let stale = v.stale & need;
                 let outcome = if missing.is_empty() && stale.is_empty() {
@@ -507,7 +499,7 @@ impl Reader {
                 if (missing | stale).intersects(PropMask::NAME | PropMask::ROLE) {
                     fx.push(Self::fetch_effect(
                         node,
-                        focus_fields(),
+                        focus_fields_for(self.lazy_attrs),
                         epoch,
                         FetchKind::Focus,
                     ));
@@ -547,7 +539,7 @@ impl Reader {
                 }
                 fx.push(Self::fetch_effect(
                     node,
-                    focus_fields(),
+                    focus_fields_for(self.lazy_attrs),
                     epoch,
                     FetchKind::Focus,
                 ));
@@ -561,7 +553,7 @@ impl Reader {
                 // The key may come back (a reorder re-adds the same path): ask once (5.5).
                 fx.push(Self::fetch_effect(
                     node,
-                    focus_fields(),
+                    focus_fields_for(self.lazy_attrs),
                     epoch,
                     FetchKind::Focus,
                 ));
@@ -600,7 +592,7 @@ impl Reader {
             self.counters.revalidations += 1;
             fx.push(Self::fetch_effect(
                 v.snap.key,
-                focus_need(&v.snap),
+                focus_need(&v.snap, self.lazy_attrs),
                 self.epoch.current(),
                 FetchKind::Revalidate,
             ));
@@ -816,7 +808,7 @@ impl Reader {
                     self.focus_retried = Some(r.node);
                     fx.push(Self::fetch_effect(
                         r.node,
-                        focus_fields(),
+                        focus_fields_for(self.lazy_attrs),
                         r.epoch,
                         FetchKind::Focus,
                     ));
@@ -968,7 +960,7 @@ impl Reader {
             self.focus_backoff = Some(FocusBackoff { due: None, ..b });
             fx.push(Self::fetch_effect(
                 b.node,
-                focus_fields(),
+                focus_fields_for(self.lazy_attrs),
                 b.epoch,
                 FetchKind::Focus,
             ));
@@ -1083,7 +1075,7 @@ impl Reader {
                     self.revalidate_retried = Some(r.node);
                     fx.push(Self::fetch_effect(
                         r.node,
-                        focus_fields(),
+                        focus_fields_for(self.lazy_attrs),
                         r.epoch,
                         FetchKind::Revalidate,
                     ));

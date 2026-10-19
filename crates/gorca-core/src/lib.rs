@@ -91,8 +91,8 @@ pub use present::{
 pub use present::{
     FOCUS_FIELDS, FOCUS_FIELDS_LAZY, NoLabels, NodeLabel, PresentContext, PresentJob, PresentKind,
     PresentLog, PresentRecord, PresentSource, Presented, Presenter, PresenterRegistry, RAPID_FOCUS,
-    REFINE_WINDOW, STORM_HOLD, SpeechIntent, focus_fields, focus_need, key_echo_text,
-    present_focus, present_selected_item, set_lazy_attrs,
+    REFINE_WINDOW, STORM_HOLD, SpeechIntent, focus_fields_for, focus_need, key_echo_text,
+    present_focus, present_selected_item,
 };
 pub use quick::{
     BATTERY_DEADLINE, BatteryState, HISTORY_CAP, PowerInfo, PowerSource, install_power_source,

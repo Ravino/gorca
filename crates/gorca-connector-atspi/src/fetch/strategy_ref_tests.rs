@@ -146,6 +146,30 @@ fn fetch_asks_for_attributes_only_when_wanted() {
     });
 }
 
+/// U-1: a slow `GetAttributes` never delays the fetch beyond the grace; the node comes back
+/// without `ATTRS` in `have` (so it stays partial and is revalidated).
+#[test]
+fn a_slow_attributes_call_does_not_delay_the_fetch() {
+    run(async {
+        let Some(mut r) = rig(TREE).await else { return };
+        r.app
+            .cmd(r#""cmd":"hang","mode":"delay","ms":100,"methods":["GetAttributes"]"#)
+            .expect("configure the delay");
+        let n = resolved(&r.cx, 5);
+        let t = std::time::Instant::now();
+        let raw = strategy::fetch(&r.cx, &n, PropMask::PRESENT | PropMask::ATTRS, dl())
+            .await
+            .unwrap();
+        let took = t.elapsed();
+        assert!(
+            took < Duration::from_millis(60),
+            "the fetch waited for the slow call: {took:?}"
+        );
+        assert!(!raw.have.contains(PropMask::ATTRS));
+        assert_eq!(raw.name.as_deref(), Some("node-5"));
+    });
+}
+
 #[test]
 fn child_snapshots_returns_the_range_with_parent_links_and_records_paths() {
     run(async {
