@@ -113,6 +113,7 @@ async fn main() {
                                 ChildSpace::Toplevel
                             },
                             pid_is_proxy: false,
+                            active: f.get(10) == Some(&"active"),
                         };
                         let t = PointTarget::Window { top, x, y };
                         if op == "movewin" {

@@ -265,6 +265,12 @@ impl PointerSink for ShellHelperClient {
     fn availability(&self) -> watch::Receiver<PointerAvail> {
         self.avail.clone()
     }
+
+    fn permission_hint(&self) -> Option<Arc<str>> {
+        Some(Arc::from(
+            "Allow pointer in ~/.config/gorca/shell-helper.json",
+        ))
+    }
 }
 
 type Flight = JoinHandle<Result<Reply, PointerError>>;
@@ -560,6 +566,7 @@ impl Actor {
                     PointerError::Timeout
                         | PointerError::NotResponding
                         | PointerError::NoLocation
+                        | PointerError::NotVisible
                         | PointerError::Unavailable(_)
                 );
                 if silent {
@@ -637,7 +644,13 @@ async fn resolve_window(
         crate::matcher::decode_monitors(&rows(conn, dest, deadline, "GetMonitors").await?);
     crate::matcher::resolve(hint, p, &windows, &monitors).map_err(|e| {
         tracing::debug!(error = %e, "pointer: window target not resolved");
-        PointerError::NoLocation
+        match e {
+            crate::matcher::MatchError::NotVisible => PointerError::NotVisible,
+            crate::matcher::MatchError::NoCandidate
+            | crate::matcher::MatchError::Ambiguous
+            | crate::matcher::MatchError::NoMonitor
+            | crate::matcher::MatchError::BadHint => PointerError::NoLocation,
+        }
     })
 }
 
@@ -658,6 +671,7 @@ fn probe_failure(e: &DbusError) -> ProbeResult {
                 | PointerError::NoWindow
                 | PointerError::BadArgs(_)
                 | PointerError::NoLocation
+                | PointerError::NotVisible
                 | PointerError::Timeout
                 | PointerError::NotResponding
                 | PointerError::Unavailable(_)
@@ -683,6 +697,7 @@ fn classify(res: &Result<Reply, PointerError>) -> AvailEvent {
             | PointerError::NoWindow
             | PointerError::BadArgs(_)
             | PointerError::NoLocation
+            | PointerError::NotVisible
             | PointerError::NotResponding
             | PointerError::Unavailable(_)
             | PointerError::Failed(_),

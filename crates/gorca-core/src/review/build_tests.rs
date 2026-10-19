@@ -252,6 +252,7 @@ fn answer(s: &Script, op: &BackendOp) -> Option<Result<BackendReply, BackendErro
         | BackendOp::Siblings { .. }
         | BackendOp::CacheDump { .. }
         | BackendOp::Text(_)
+        | BackendOp::Locate { .. }
         | BackendOp::HitTest { .. } => Some(Err(BackendError::NotSupported)),
     }
 }

@@ -72,6 +72,9 @@ pub struct ToplevelHint {
     /// title and exact size with a single candidate. `false` (the default) never matches other processes'
     /// windows: a hostile application must not receive clicks meant for another one.
     pub pid_is_proxy: bool,
+    /// The AT-SPI toplevel carries the `ACTIVE` state, i.e. it is the window the user is working in. Only then
+    /// may a sink prefer the focused window among identical ones; otherwise identical windows are "no location".
+    pub active: bool,
 }
 
 /// Where to put the pointer.
@@ -226,6 +229,9 @@ pub enum PointerError {
     /// The target has no usable location (matching failed, off-screen, no extents).
     #[error("no location")]
     NoLocation,
+    /// The target's window exists but is not shown (minimized, another workspace): nothing is picked instead.
+    #[error("the window is not visible")]
+    NotVisible,
     /// The helper did not answer within the call deadline.
     #[error("the helper did not answer in time")]
     Timeout,
@@ -271,6 +277,12 @@ pub trait PointerSink: Send + Sync {
 
     /// The availability watch; the latest value is always current, changes wake the Reader.
     fn availability(&self) -> watch::Receiver<PointerAvail>;
+
+    /// What the user must do to get pointer permission (spoken after "permission is not granted"), for
+    /// example the file a GNOME helper reads its allow-list from. `None`: the backend has nothing to add.
+    fn permission_hint(&self) -> Option<Arc<str>> {
+        None
+    }
 }
 
 #[cfg(test)]

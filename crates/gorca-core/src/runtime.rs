@@ -1021,6 +1021,7 @@ async fn do_fetch(shared: Arc<Shared>, job: FetchJob) {
         | BackendReply::Unit(_)
         | BackendReply::Selections(_)
         | BackendReply::Format(_)
+        | BackendReply::Target(_)
         | BackendReply::Window(_) => {
             Err(BackendError::Protocol("unexpected reply kind".to_owned()))
         }
@@ -1253,7 +1254,8 @@ async fn reader_loop(
                 | ReaderEffect::ReviewBuild(_)
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
-                | ReaderEffect::ReviewAct { .. }) => spawn_review(&mut review_tasks, shared, e),
+                | ReaderEffect::ReviewAct { .. }
+                | ReaderEffect::PointerAt(_)) => spawn_review(&mut review_tasks, shared, e),
                 ReaderEffect::Desktop(d) => spawn_desktop(&mut desktop_tasks, shared, d),
             }
         }
@@ -1424,6 +1426,9 @@ async fn forward_pointer_availability(
     control: mpsc::Sender<crate::ControlMsg>,
 ) {
     let mut rx = sink.availability();
+    if let Some(h) = sink.permission_hint() {
+        let _ = control.send(crate::ControlMsg::PointerHint(h)).await;
+    }
     loop {
         let a = *rx.borrow_and_update();
         let msg = crate::ControlMsg::Pointer(crate::PointerMsg::Avail(a));
@@ -1500,6 +1505,7 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         ReaderEffect::ReviewRevalidate { app, .. } => *app,
         ReaderEffect::ReviewStatusBar { root, .. } => root.app,
         ReaderEffect::ReviewAct { act, .. } => action_node(act).app,
+        ReaderEffect::PointerAt(r) => r.node.app,
         ReaderEffect::Speak(_)
         | ReaderEffect::Cue(_)
         | ReaderEffect::Fetch { .. }
@@ -1642,6 +1648,37 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
                 send(ReviewMsg::ActionDone { req, result });
             });
         }
+        ReaderEffect::PointerAt(req) => {
+            // Locate in the app (Interactive budget), then one call to the pointer sink (150 ms); the answer is
+            // a message, never a wait on the key path (EX-1).
+            let sink = shared.pointer.clone();
+            let control = shared.senders.control.clone();
+            set.spawn(async move {
+                use gorca_output_api::{PointerAvail, PointerError};
+                let result = async {
+                    let sink = sink.ok_or(PointerError::Unavailable(PointerAvail::Absent))?;
+                    let io = io.ok_or(PointerError::NoLocation)?;
+                    let target = build::locate(&io, req.node, req.offset).await?;
+                    let d = gorca_rt::Deadline(Instant::now() + POINTER_CALL);
+                    let opts = gorca_output_api::ClickOpts {
+                        if_covered: req.if_covered,
+                        ..gorca_output_api::ClickOpts::default()
+                    };
+                    match req.act {
+                        crate::AtAct::Move => sink.move_to(target, opts, d).await,
+                        crate::AtAct::Click(b) => sink.click_at(target, b, opts, d).await,
+                    }
+                    .map(crate::PointerDone::Outcome)
+                }
+                .await;
+                let _ = control
+                    .send(crate::ControlMsg::PointerReply(crate::PointerReply {
+                        id: req.id,
+                        result,
+                    }))
+                    .await;
+            });
+        }
         ReaderEffect::Speak(_)
         | ReaderEffect::Cue(_)
         | ReaderEffect::Fetch { .. }
@@ -1753,6 +1790,7 @@ fn spawn_text(
             | BackendReply::TextAttributes(_)
             | BackendReply::Hit(_)
             | BackendReply::Matches(_)
+            | BackendReply::Target(_)
             | BackendReply::Lines(_) => {
                 Err(BackendError::Protocol("unexpected reply kind".to_owned()))
             }

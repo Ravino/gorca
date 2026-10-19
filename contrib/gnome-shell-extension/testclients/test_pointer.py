@@ -303,6 +303,7 @@ def main():
             assert e.msg.startswith('rate:'), e
             fail += 1
     R.check('T12 80 rapid moves: burst ~40 then rate: errors', 38 <= ok <= 50 and fail >= 30, f'ok={ok} rate-limited={fail}')
+    R.check('T12 R-1 PointerRelease is not charged to the (empty) pointer bucket', err(release)[0] is None)
     time.sleep(1.1)
     ok2 = 0
     for i in range(40):

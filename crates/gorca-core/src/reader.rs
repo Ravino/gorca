@@ -213,6 +213,9 @@ pub enum ReaderEffect {
     SetGrabSet(GrabSet),
     /// A request to the pointer sink (ADR-0025 EX-1); the answer comes back as `ControlMsg::PointerReply`.
     Pointer(crate::commands::PointerReq),
+    /// Put the pointer on a node (or a character of it): locate it in its app, then ask the pointer sink
+    /// (ADR-0025 2.4). The answer comes back as `ControlMsg::PointerReply`.
+    PointerAt(crate::commands::PointerAtReq),
     /// Ordered with utterances: applied by the speech lane before the next one.
     SpeechCtl(SpeechCtl),
     /// A request for the daemon's config task.
@@ -878,6 +881,7 @@ mod tests {
                 | ReaderEffect::ArmTimer(_)
                 | ReaderEffect::SetGrabSet(_)
                 | ReaderEffect::Pointer(_)
+                | ReaderEffect::PointerAt(_)
                 | ReaderEffect::SpeechCtl(_)
                 | ReaderEffect::Config(_)
                 | ReaderEffect::ReviewNav { .. }
@@ -2074,6 +2078,7 @@ mod tests {
                 ReaderEffect::ArmTimer(_) => "timer",
                 ReaderEffect::SetGrabSet(_) => "grab",
                 ReaderEffect::Pointer(_) => "pointer",
+                ReaderEffect::PointerAt(_) => "pointer-at",
                 ReaderEffect::SpeechCtl(_) => "ctl",
                 ReaderEffect::Config(_) => "config",
                 ReaderEffect::ReviewNav { .. } => "review-nav",
@@ -2102,6 +2107,7 @@ mod tests {
                 | ReaderEffect::ArmTimer(_)
                 | ReaderEffect::SetGrabSet(_)
                 | ReaderEffect::Pointer(_)
+                | ReaderEffect::PointerAt(_)
                 | ReaderEffect::SpeechCtl(_)
                 | ReaderEffect::Config(_)
                 | ReaderEffect::ReviewNav { .. }

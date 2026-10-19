@@ -674,3 +674,58 @@ MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its ow
   Firefox, Chromium, Electron at monitor scale 1, 1.25 and 2 (21/21). Not yet: the connector-side `PointerResolver` (node and text offset to
   `ToplevelHint` + point), `route_to_review` and the item clicks (MO-5a (b), MO-5b).
 
+
+## 16. Backends (owner direction 2026-10-19: pointer support is a core API with pluggable backends)
+
+The core (Reader, commands, the connector-side resolver) depends only on `gorca-output-api::{PointerSink, PointerAvail, PointerError,
+PointerOutcome, PointerPos, PointTarget, ToplevelHint, ChildSpace, Button, ButtonAct, ClickOpts}` and on the connector operation
+`BackendOp::Locate`. Nothing GNOME- or Mutter-specific crosses that boundary: Meta windows, the frame/buffer rectangles, XWayland's
+`x-scale`, the helper's capabilities and allow-list, the unique-name pinning and the helper's wire format all live in
+`gorca-shell-helper` (and the `gorca-helper@gorca` extension). A backend for MATE, Cinnamon, X11 (XTest), libei or Newton is one more
+crate implementing `PointerSink`; the core, the commands and the resolver do not change.
+
+Contract of a backend (what `PointerSink` implementations must guarantee):
+
+1. **Availability** (`availability()`): a `watch` of [`PointerAvail`]. Map the backend's own states onto it: `Absent` (no service),
+   `Squatted` (the service is not who it must be), `Denied`, `TooOld`, `NoCap` (allowed but without pointer permission),
+   `Unresponsive` (three deadline misses; the gate stays open, C-3) and `Ready`. Changes must be pushed, not polled by the core.
+   `permission_hint()` may add what the user must do to get permission.
+2. **Never block, always a deadline.** Every method takes a `Deadline` and returns by then; a hung service degrades only pointer emulation.
+   Requests are queued boundedly; while one is overdue nothing else is dispatched (EX-3).
+3. **Nothing is injected after the deadline.** The backend passes the deadline to its service so that a call the service runs late does
+   nothing (`outcome = Expired`), and reports it.
+4. **Targets.** `PointTarget::Stage` is a point in the compositor's logical space. `PointTarget::Window` is a point in a toplevel's own
+   AT-SPI coordinate space plus the toplevel's pid, title, origin, size and `ChildSpace`; the backend maps it to its windowing system
+   (this is WM-1..4 for GNOME: no fallback to other processes' windows, exact title/size/one candidate for a verified proxy pid, ambiguity
+   is "No location", never a guess). Anything it cannot map uniquely is `PointerError::NoLocation`.
+5. **Guards.** A click lands inside the target window or not at all (`RefusedOutside`); a covered point is `RefusedOccluded` unless the
+   caller asked `IfCovered::Proceed`; a stage target never lands inside an application window; nothing is injected while the session is
+   locked (`Locked`).
+6. **Buttons.** `Button` is logical (the backend swaps for a left-handed user). `press`/`release` are confirmed by the `held` mask of the
+   reply. One holder at a time (`Busy` for others). `release_all` releases what this client holds; a held button is released when the
+   client shuts down, vanishes, loses permission, or after at most 125 s (gorca releases at 120 s).
+7. **Safety of the channel.** The backend verifies that it talks to the real service (no name squatting), rate limits, validates
+   coordinates, and never injects without a user command (MI-1).
+8. **Errors** are the neutral `PointerError` variants (`Locked`, `Busy`, `RateLimited`, `NoWindow`, `NoLocation`, `Timeout`,
+   `NotResponding`, `Denied`, `Unavailable`, `BadArgs`, `Failed`), each of which the Reader turns into one spoken sentence.
+
+The connector side is symmetric: `BackendOp::Locate { node, offset }` answers with a `PointTarget` built from the toolkit's own extents
+(AT-SPI today, `gorca-connector-atspi`; AccessKit bounds for Newton) and never contains compositor coordinates.
+
+### 15.1 MO-5a part 2 (resolver, route to review) and review fixes
+
+- **Resolver** (`gorca-connector-atspi`, `fetch/locate.rs`, `BackendOp::Locate { node, offset }` -> `BackendReply::Target(PointTarget)`): the
+  character's rectangle (`Text.GetRangeExtents`, with the toolkit's coordinate quirk) or the node's extents, the toplevel (first ancestor that
+  is a frame/window/dialog; ancestors in other bus names are never followed), its title, extents and `ACTIVE` state, the registration's pid, and
+  the Chromium/Electron device-pixel quirk (`Toolkit::children_in_device_pixels`). The point is the centre of the visible part (clipped to the
+  toplevel; outside it is "no location"). `locate_object` runs the same code for tools. Verified end to end by `MODE=test_resolver
+  contrib/gnome-shell-extension/test-mapping.sh SCALE` (the real resolver on GTK4, GTK3, GTK3/XWayland, Firefox, Chromium, Electron at scale 1,
+  1.25 and 2: 21/21 with the window matcher and the real helper).
+- **`mouse.route_to_review`**: the review position (a text zone gives the character, an object its centre; outside review the focused object)
+  is located in its app and the pointer sink moves there (`ReaderEffect::PointerAt`, `if_covered = Proceed`, "Mouse moved" and "Covered" on
+  the answer). Runtime path tested with a scripted app and a mock sink (`tests/pointer.rs`).
+- **Matcher review fixes** (reviewer W-1, W-2): no fallback to other processes; the target's own window being minimized or on another
+  workspace is `PointerError::NotVisible` ("Window not visible"), never a substitute; focus breaks a tie between identical windows only when
+  the AT-SPI toplevel is `ACTIVE` (`ToplevelHint::active`), else "No location". Helper (R-1): `PointerRelease` is charged to the general bucket
+  only. Messages are backend-neutral ("the pointer service"); the permission hint comes from `PointerSink::permission_hint`.
+

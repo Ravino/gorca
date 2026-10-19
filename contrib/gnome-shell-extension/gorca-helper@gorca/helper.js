@@ -658,11 +658,12 @@ export class ShellHelperService {
     // Any allow-listed caller may release what it holds, even after its pointer cap was removed: letting go of a
     // button is always safe, and a held button must never outlive the permission to hold it.
     async PointerReleaseAsync(_params, invocation) {
+        // Charged to the general bucket only (never the 20/s pointer bucket): letting go must always work, and a
+        // caller that holds nothing pays no more than any other cheap call.
         await this._guard(invocation, null, ctx => {
-            this._pointerRate(1);
             const n = this._holder === ctx.sender ? this._releaseHolds('PointerRelease') : 0;
             return new GLib.Variant('(u)', [n]);
-        }, {ptr: true});
+        });
     }
 
     // ---- pointer implementation ---------------------------------------------------

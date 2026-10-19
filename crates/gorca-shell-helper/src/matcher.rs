@@ -59,6 +59,9 @@ pub struct MonitorRow {
 pub enum MatchError {
     #[error("no window matches the toplevel")]
     NoCandidate,
+    /// The toplevel's window exists but is minimized or on another workspace.
+    #[error("the toplevel's window is not visible")]
+    NotVisible,
     #[error("several windows match the toplevel and nothing tells them apart")]
     Ambiguous,
     #[error("the window's monitor is unknown")]
@@ -85,16 +88,15 @@ pub fn resolve(
         return Err(MatchError::BadHint);
     }
     let x_scale = monitors.first().map_or(1.0, |m| m.x_scale.max(1.0));
-    // WM-1: visible windows of the toplevel's process. NO fallback to other processes' windows: when the
-    // process has none, the answer is "no location" (a hostile application could place a window of the same
-    // size and title to receive a click meant for another application). The one exception is a
-    // connector-verified proxy pid (`pid_is_proxy`, Flatpak): then every visible window is a candidate, but
-    // only on an exact title, an exact size and as the single candidate.
-    let usable = |w: &&WindowRow| w.visible && !w.minimized;
+    // WM-1: the windows of the toplevel's process, visible or not. NO fallback to other processes' windows (a
+    // hostile application could place a window of the same size and title to receive a click meant for another
+    // application), and a target whose own window is minimized or on another workspace is "not visible", never
+    // replaced by another window. The one exception to the pid is a connector-verified proxy pid
+    // (`pid_is_proxy`, Flatpak): then every window is a candidate, but only on an exact title, an exact size
+    // and as the single candidate.
     let exact = hint.pid_is_proxy;
     let cands: Vec<&WindowRow> = windows
         .iter()
-        .filter(usable)
         .filter(|w| exact || w.pid == hint.pid)
         .filter(|w| !exact || w.title == *hint.title)
         .collect();
@@ -113,11 +115,20 @@ pub fn resolve(
             matched.push((w, Origin::Buffer, ratio));
         }
     }
+    if matched.is_empty() {
+        return Err(MatchError::NoCandidate);
+    }
+    // Only windows that are shown can be clicked; if the process has matching windows but none is shown, say so.
+    matched.retain(|(w, _, _)| w.visible && !w.minimized);
+    if matched.is_empty() {
+        return Err(MatchError::NotVisible);
+    }
     if exact && matched.len() > 1 {
         return Err(MatchError::Ambiguous);
     }
-    // WM-3: equal title, then the focused window. Still ambiguous: no guess (two windows of the same size
-    // that nothing tells apart are genuinely ambiguous).
+    // WM-3: equal title, then the focused window ONLY if the AT-SPI toplevel is the active one (`hint.active`):
+    // the focus tells nothing about which of two identical windows the connector described. Still ambiguous: no
+    // guess (two windows of the same size that nothing tells apart are genuinely ambiguous).
     let chosen = match matched.as_slice() {
         [] => return Err(MatchError::NoCandidate),
         [one] => *one,
@@ -135,7 +146,11 @@ pub fn resolve(
             if let [one] = pool.as_slice() {
                 *one
             } else {
-                let focused: Vec<_> = pool.iter().copied().filter(|(w, _, _)| w.focused).collect();
+                let focused: Vec<_> = pool
+                    .iter()
+                    .copied()
+                    .filter(|(w, _, _)| hint.active && w.focused)
+                    .collect();
                 if let [one] = focused.as_slice() {
                     *one
                 } else {
@@ -274,6 +289,7 @@ mod tests {
             atspi_size: size,
             child_space: cs,
             pid_is_proxy: false,
+            active: false,
         }
     }
 
@@ -412,37 +428,27 @@ mod tests {
         hidden.minimized = true;
         let other = win(2, 999, "T", rect(0, 0, 500, 400), rect(0, 0, 500, 400));
         let h = hint(100, "T", (0, 0), (500, 400), ChildSpace::Toplevel);
-        // The process has no visible window: a same-titled, same-sized window of ANOTHER process must not
-        // receive the click.
+        let m = mons(1.0, 1.0);
+        // The process's own window is not shown: "not visible", and a same-titled, same-sized window of
+        // ANOTHER process is never a substitute.
         assert_eq!(
-            resolve(
-                &h,
-                (1.0, 1.0),
-                &[hidden.clone(), other.clone()],
-                &mons(1.0, 1.0)
-            ),
-            Err(MatchError::NoCandidate)
+            resolve(&h, (1.0, 1.0), &[hidden.clone(), other.clone()], &m),
+            Err(MatchError::NotVisible)
         );
         assert_eq!(
-            resolve(
-                &h,
-                (1.0, 1.0),
-                std::slice::from_ref(&other),
-                &mons(1.0, 1.0)
-            ),
+            resolve(&h, (1.0, 1.0), &[hidden.clone()], &m),
+            Err(MatchError::NotVisible)
+        );
+        // The process has no window at all: no candidate.
+        assert_eq!(
+            resolve(&h, (1.0, 1.0), std::slice::from_ref(&other), &m),
             Err(MatchError::NoCandidate)
         );
-        // with a visible window of the pid, the other process is never considered
+        // With a visible window of the pid, the other process is never considered.
         let mine = win(3, 100, "T", rect(0, 0, 500, 400), rect(0, 0, 500, 400));
         assert_eq!(
-            resolve(&h, (1.0, 1.0), &[other, mine], &mons(1.0, 1.0))
-                .unwrap()
-                .window,
+            resolve(&h, (1.0, 1.0), &[other, mine], &m).unwrap().window,
             3
-        );
-        assert_eq!(
-            resolve(&h, (1.0, 1.0), &[hidden], &mons(1.0, 1.0)),
-            Err(MatchError::NoCandidate)
         );
     }
 
@@ -499,48 +505,40 @@ mod tests {
         let a = win(1, 1, "A", rect(0, 0, 500, 400), rect(0, 0, 500, 400));
         let mut b = win(2, 1, "B", rect(10, 10, 500, 400), rect(10, 10, 500, 400));
         let h = |t: &str| hint(1, t, (0, 0), (500, 400), ChildSpace::Toplevel);
+        let m = mons(1.0, 1.0);
         assert_eq!(
-            resolve(
-                &h("B"),
-                (1.0, 1.0),
-                &[a.clone(), b.clone()],
-                &mons(1.0, 1.0)
-            )
-            .unwrap()
-            .window,
+            resolve(&h("B"), (1.0, 1.0), &[a.clone(), b.clone()], &m)
+                .unwrap()
+                .window,
             2
         );
         assert_eq!(
-            resolve(
-                &h("A"),
-                (1.0, 1.0),
-                &[a.clone(), b.clone()],
-                &mons(1.0, 1.0)
-            )
-            .unwrap()
-            .window,
+            resolve(&h("A"), (1.0, 1.0), &[a.clone(), b.clone()], &m)
+                .unwrap()
+                .window,
             1
         );
-        // equal titles: the focused one
+        // equal titles: the focused one, but only for an ACTIVE toplevel
         let mut a2 = a.clone();
         a2.title = "same".to_owned();
         b.title = "same".to_owned();
         b.focused = true;
+        let mut active = h("same");
+        active.active = true;
         assert_eq!(
-            resolve(
-                &h("same"),
-                (1.0, 1.0),
-                &[a2.clone(), b.clone()],
-                &mons(1.0, 1.0)
-            )
-            .unwrap()
-            .window,
+            resolve(&active, (1.0, 1.0), &[a2.clone(), b.clone()], &m)
+                .unwrap()
+                .window,
             2
+        );
+        assert_eq!(
+            resolve(&h("same"), (1.0, 1.0), &[a2.clone(), b.clone()], &m),
+            Err(MatchError::Ambiguous)
         );
         // nothing tells them apart: no guess
         b.focused = false;
         assert_eq!(
-            resolve(&h("same"), (1.0, 1.0), &[a2, b], &mons(1.0, 1.0)),
+            resolve(&active, (1.0, 1.0), &[a2, b], &m),
             Err(MatchError::Ambiguous)
         );
     }
@@ -594,5 +592,66 @@ mod tests {
         m.insert("scale".into(), ov(1.5_f64.into()));
         let d = decode_monitors(&[m]);
         assert_eq!((d[0].scale, d[0].x_scale), (1.5, 1.0));
+    }
+
+    fn big(w: i32, h: i32) -> IRect {
+        rect(0, 0, w, h)
+    }
+
+    fn row(id: u64, pid: u32, title: &str, visible: bool, focused: bool) -> WindowRow {
+        let mut w = win(id, pid, title, big(1280, 770), big(1280, 770));
+        w.visible = visible;
+        w.focused = focused;
+        w
+    }
+
+    /// Reviewer probe W-1: the target's maximized window is on another workspace (not visible) and a visible
+    /// window of ANOTHER application has the same size. Nothing may be clicked.
+    #[test]
+    fn a_target_on_another_workspace_is_not_visible_and_never_replaced_by_a_foreign_window() {
+        let wins = [
+            row(1, 100, "Editor", false, false),
+            row(2, 200, "Bank", true, true),
+        ];
+        let got = resolve(
+            &hint(100, "Editor", (0, 0), (1280, 770), ChildSpace::Toplevel),
+            (10.0, 10.0),
+            &wins,
+            &mons(1.0, 1.0),
+        );
+        assert_eq!(got, Err(MatchError::NotVisible));
+        // a minimized one likewise
+        let mut min = row(1, 100, "Editor", true, false);
+        min.minimized = true;
+        let got = resolve(
+            &hint(100, "Editor", (0, 0), (1280, 770), ChildSpace::Toplevel),
+            (10.0, 10.0),
+            &[min, row(2, 200, "Bank", true, true)],
+            &mons(1.0, 1.0),
+        );
+        assert_eq!(got, Err(MatchError::NotVisible));
+    }
+
+    /// Reviewer W-2: two identical windows of one app; the focus only decides when the AT-SPI toplevel is the
+    /// active one.
+    #[test]
+    fn identical_windows_are_told_apart_by_focus_only_for_an_active_toplevel() {
+        let wins = [
+            row(1, 100, "Terminal", true, false),
+            row(2, 100, "Terminal", true, true),
+        ];
+        let mut h = hint(100, "Terminal", (0, 0), (1280, 770), ChildSpace::Toplevel);
+        assert_eq!(
+            resolve(&h, (10.0, 10.0), &wins, &mons(1.0, 1.0)),
+            Err(MatchError::Ambiguous),
+            "an inactive toplevel may be either window"
+        );
+        h.active = true;
+        assert_eq!(
+            resolve(&h, (10.0, 10.0), &wins, &mons(1.0, 1.0))
+                .unwrap()
+                .window,
+            2
+        );
     }
 }

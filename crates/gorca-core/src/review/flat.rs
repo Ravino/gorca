@@ -34,7 +34,7 @@ pub struct FlatOut {
     pub boundary: bool,
 }
 
-fn zone_at(model: &LineModel, line: u32, zone: u16) -> Option<(u32, &Zone)> {
+pub(crate) fn zone_at(model: &LineModel, line: u32, zone: u16) -> Option<(u32, &Zone)> {
     let l = model.lines.get(line as usize)?;
     let g = l.zones.start.checked_add(u32::from(zone))?;
     if g >= l.zones.end {

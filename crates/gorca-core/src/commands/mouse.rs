@@ -19,11 +19,15 @@ use gorca_output_api::{Button, ButtonAct, OutcomeKind, PointerAvail, PointerErro
 
 use super::holds::{Hold, HoldCmd, HoldEvent, ReleaseWhy};
 use super::pointer_gate::{GateOut, PointerMsg};
-use super::pointer_req::{PointerDone, PointerOp, PointerReply, PointerReq, PtrReqId};
+use super::pointer_req::{
+    AtAct, PointerAtReq, PointerDone, PointerOp, PointerReply, PointerReq, PtrReqId,
+};
+use crate::focus::FocusState;
+use crate::mode::Mode;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
+use gorca_model::NodeKey;
+use gorca_output_api::IfCovered;
 
-/// The file the "allow pointer" message names (the owner's allow-list, MI-9: gorca never writes it).
-const ALLOW_LIST_FILE: &str = "~/.config/gorca/shell-helper.json";
 /// Replies still awaited; bounded so a lost reply cannot grow the table.
 const MAX_PENDING: usize = 32;
 
@@ -76,6 +80,8 @@ pub(crate) enum Pending {
     Position {
         screen: bool,
     },
+    /// Route the pointer to the review position.
+    Route,
     /// A best-effort release (emulation switched off): nobody waits for it.
     Quiet,
 }
@@ -166,9 +172,18 @@ impl Reader {
                 Some(t(M::MouseUnavailableHelper).to_owned())
             }
             PointerAvail::TooOld { .. } => Some(t(M::MouseUnavailableOld).to_owned()),
-            PointerAvail::NoCap => Some(msg!(MouseUnavailableCap, file = ALLOW_LIST_FILE)),
+            PointerAvail::NoCap => Some(self.no_cap_text()),
             PointerAvail::Denied => Some(t(M::MouseUnavailableDenied).to_owned()),
         }
+    }
+
+    fn no_cap_text(&self) -> String {
+        msg!(
+            MouseUnavailableCap,
+            hint = self.cmd.pointer_hint.as_deref().unwrap_or("")
+        )
+        .trim_end()
+        .to_owned()
     }
 
     // ---- commands -------------------------------------------------------------------
@@ -194,10 +209,10 @@ impl Reader {
                 );
             }
             // The resolver (review position, item extents, window matching) arrives with MO-5.
-            MouseCmd::RouteToReview
-            | MouseCmd::ReviewToPointer
-            | MouseCmd::LeftClickItem
-            | MouseCmd::RightClickItem => self.say(t(M::MouseNoLocation), fx),
+            MouseCmd::RouteToReview => self.mouse_route(fx),
+            MouseCmd::ReviewToPointer | MouseCmd::LeftClickItem | MouseCmd::RightClickItem => {
+                self.say(t(M::MouseNoLocation), fx);
+            }
         }
     }
 
@@ -235,6 +250,49 @@ impl Reader {
         }
     }
 
+    /// NVDA: move the mouse to the navigator (the review position, else the focused object).
+    fn mouse_route(&mut self, fx: &mut ReaderEffects) {
+        let Some((node, offset)) = self.review_target() else {
+            self.say(t(M::MouseNoLocation), fx);
+            return;
+        };
+        let id = self.next_ptr_id();
+        self.cmd.ptr_pending.insert(id, Pending::Route);
+        fx.push(ReaderEffect::PointerAt(PointerAtReq {
+            id,
+            node,
+            offset,
+            act: AtAct::Move,
+            // Moving onto something that is covered is harmless; the reply says so.
+            if_covered: IfCovered::Proceed,
+        }));
+    }
+
+    /// The node (and character offset) the review position stands for: in review mode the cursor's
+    /// zone (a text line gives the character, an object its centre), else the focused object.
+    pub(crate) fn review_target(&self) -> Option<(NodeKey, Option<u32>)> {
+        use crate::review::cursor::ReviewPos;
+        use crate::review::model::ZoneKind;
+        if let Mode::Review { cursor, .. } = self.mode {
+            return match cursor.pos {
+                ReviewPos::Object { .. } | ReviewPos::Screen(None) => Some((cursor.nav, None)),
+                ReviewPos::Screen(Some(p)) => {
+                    let m = self.review.cur.as_ref().filter(|m| m.id == p.model)?;
+                    let (_, z) = crate::review::flat::zone_at(m, p.line, p.zone)?;
+                    let off = match &z.kind {
+                        ZoneKind::Text { src } => Some(src.start.saturating_add(p.offset)),
+                        ZoneKind::Object | ZoneKind::Name => None,
+                    };
+                    Some((z.node, off))
+                }
+            };
+        }
+        match self.focus {
+            FocusState::Focused { node, .. } => Some((node, None)),
+            FocusState::NoFocus | FocusState::Settling { .. } | FocusState::Orphaned { .. } => None,
+        }
+    }
+
     fn next_ptr_id(&mut self) -> PtrReqId {
         self.cmd.ptr_next += 1;
         PtrReqId(self.cmd.ptr_next)
@@ -269,6 +327,17 @@ impl Reader {
             Pending::Quiet => {}
             Pending::Click(b) => self.click_reply(b, &r, fx),
             Pending::Hold(b) => self.hold_reply(b, &r, now, fx),
+            Pending::Route => match r.result {
+                Ok(PointerDone::Outcome(o)) => {
+                    // Moved (Proceed): say so, and that something covers the spot if it does.
+                    self.say(t(M::MouseMoved), fx);
+                    if o.occluded {
+                        self.say_queued(t(M::MouseCoveredShell), fx);
+                    }
+                }
+                Ok(PointerDone::Released(_) | PointerDone::Pos(_)) => {}
+                Err(e) => self.say_pointer_error(&e, fx),
+            },
             Pending::Position { screen } => match r.result {
                 Ok(PointerDone::Pos(p)) => {
                     let text = if screen || p.window == 0 {
@@ -357,6 +426,7 @@ impl Reader {
             PointerError::Locked => t(M::MouseLockedSession).to_owned(),
             PointerError::Busy | PointerError::RateLimited => t(M::MouseBusy).to_owned(),
             PointerError::NoWindow | PointerError::NoLocation => t(M::MouseNoLocation).to_owned(),
+            PointerError::NotVisible => t(M::MouseWindowHidden).to_owned(),
             PointerError::Unavailable(a) => match a {
                 PointerAvail::Unresponsive | PointerAvail::Ready { .. } => {
                     t(M::MouseNotResponding).to_owned()
@@ -365,7 +435,7 @@ impl Reader {
                     t(M::MouseUnavailableHelper).to_owned()
                 }
                 PointerAvail::TooOld { .. } => t(M::MouseUnavailableOld).to_owned(),
-                PointerAvail::NoCap => msg!(MouseUnavailableCap, file = ALLOW_LIST_FILE),
+                PointerAvail::NoCap => self.no_cap_text(),
                 PointerAvail::Denied => t(M::MouseUnavailableDenied).to_owned(),
             },
             PointerError::Denied => t(M::MouseUnavailableDenied).to_owned(),

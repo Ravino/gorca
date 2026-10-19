@@ -1119,6 +1119,7 @@ version = "0.0.0"
 dependencies = [
  "gorca-ingress",
  "gorca-model",
+ "gorca-output-api",
  "gorca-rt",
  "thiserror",
  "tokio",
@@ -1137,6 +1138,7 @@ dependencies = [
  "gorca-fuse",
  "gorca-ingress",
  "gorca-model",
+ "gorca-output-api",
  "gorca-rt",
  "gorca-sem-atspi",
  "gorca-testkit",
@@ -1522,6 +1524,7 @@ dependencies = [
  "gorca-fact-api",
  "gorca-ingress",
  "gorca-model",
+ "gorca-output-api",
  "gorca-rt",
  "libc",
  "serde",
