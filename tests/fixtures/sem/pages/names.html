@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SEM names</title></head>
+<body>
+<main id="main">
+<h1>Accessible name and description sources</h1>
+<span id="nm-lbl-a">Alpha</span><span id="nm-lbl-b">Beta</span>
+<button id="nm-content">Content name</button>
+<button id="nm-content-img"><img alt="Img alt" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">text</button>
+<button id="nm-aria-label" aria-label="Aria label wins">Content ignored</button>
+<button id="nm-labelledby" aria-labelledby="nm-lbl-a nm-lbl-b">Content ignored too</button>
+<button id="nm-labelledby-self" aria-labelledby="nm-labelledby-self nm-lbl-a" aria-label="Self">Body</button>
+<button id="nm-title" title="Title only"></button>
+<button id="nm-title-and-content" title="Title tooltip">Visible text</button>
+<button id="nm-empty"></button>
+<button id="nm-nested"><span>Nested <b>bold</b> <i>italic</i></span></button>
+<button id="nm-hidden-child">Shown<span hidden> hidden</span><span aria-hidden="true"> ariahidden</span></button>
+<input id="nm-input-button" type="button" value="Input value">
+<input id="nm-input-submit-empty" type="submit">
+<a id="nm-link-content" href="#main">Link <em>content</em></a>
+<a id="nm-link-title" href="#main" title="Link title"></a>
+<img id="nm-img-alt" alt="Alt name" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+<img id="nm-img-title" title="Title name" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+<img id="nm-img-labelled" aria-label="Label beats alt" alt="alt" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+<table id="nm-table"><caption id="nm-table-cap">Caption name</caption><tr><td>x</td></tr></table>
+<table id="nm-table-label" aria-label="Aria table name"><tr><td>x</td></tr></table>
+<section id="nm-region" aria-labelledby="nm-region-h"><h2 id="nm-region-h">Region heading</h2></section>
+<div id="nm-div-title" title="Div title">generic with title</div>
+<div id="nm-group-title" role="group" title="Group title"></div>
+<h2 id="nm-heading-content">Heading <span>content</span></h2>
+<h2 id="nm-heading-label" aria-label="Heading label">Visible heading</h2>
+<label for="nm-in-1">Label one</label><input id="nm-in-1" type="text" aria-label="Aria beats label">
+<label for="nm-in-2">Label A</label><label for="nm-in-2">Label B</label><input id="nm-in-2" type="text">
+<label id="nm-lbl-wrap">Wrap <input id="nm-in-wrap" type="text" value="inner value"> tail</label>
+<input id="nm-in-title" type="text" title="Input title">
+<input id="nm-in-ph" type="text" placeholder="Placeholder name">
+<input id="nm-in-title-ph" type="text" title="Title name" placeholder="Placeholder desc">
+<input id="nm-in-describedby-title" type="text" aria-label="Has both" title="Title as description">
+<select id="nm-select-label" aria-label="Select"><option>One</option></select>
+<span id="nm-span-label" aria-label="Aria label on span (prohibited on generic)">span text</span>
+<div id="nm-rolegroup-label" role="group" aria-labelledby="nm-lbl-a">group</div>
+<p id="nm-p-label" aria-label="p label">paragraph</p>
+<div id="nm-desc-chain" role="group" aria-label="Chain" aria-describedby="nm-lbl-a nm-lbl-b">chain</div>
+<button id="nm-desc-title" aria-label="Has aria label" title="Title becomes description">B</button>
+<button id="nm-desc-ariadesc" aria-description="Aria description">Desc</button>
+<button id="nm-cycle-a" aria-labelledby="nm-cycle-b">A</button><button id="nm-cycle-b" aria-labelledby="nm-cycle-a">B</button>
+<svg id="nm-svg" role="img" width="10" height="10"><title>SVG title name</title></svg>
+<fieldset id="nm-fieldset"><legend>Legend name</legend></fieldset>
+<details id="nm-details"><summary id="nm-summary">Summary name</summary>body</details>
+<progress id="nm-progress" value="1" max="2" title="Progress title"></progress>
+<div id="nm-tooltip-name" role="button" tabindex="0">Name<span role="tooltip">tip inside</span></div>
+<div id="nm-whitespace" role="button" tabindex="0">   spaced    out   </div>
+<div id="nm-long-name" role="button" tabindex="0" aria-label="A very long label that goes on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on end"></div>
+</main>
+</body></html>

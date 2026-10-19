@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SEM forms</title></head>
+<body>
+<main id="main">
+<h1>Forms and names</h1>
+<form id="form-named" aria-label="Contact">
+  <!-- text inputs, name sources -->
+  <label for="tx-label">First name</label><input id="tx-label" type="text" value="Ada">
+  <input id="tx-arialabel" type="text" aria-label="Last name">
+  <span id="lbl-by">Email address</span><input id="tx-labelledby" type="email" aria-labelledby="lbl-by">
+  <input id="tx-title" type="text" title="Nickname">
+  <input id="tx-placeholder" type="text" placeholder="Search terms">
+  <input id="tx-placeholder-label" type="text" placeholder="Hint only" aria-label="Real name">
+  <label>Wrapped label <input id="tx-wrap" type="text"></label>
+  <input id="tx-noname" type="text">
+  <input id="tx-required" type="text" required aria-label="Required field">
+  <input id="tx-aria-required" type="text" aria-required="true" aria-label="Aria required">
+  <input id="tx-readonly" type="text" readonly value="Locked" aria-label="Read only">
+  <input id="tx-disabled" type="text" disabled value="Off" aria-label="Disabled field">
+  <input id="tx-aria-readonly" type="text" aria-readonly="true" aria-label="Aria readonly">
+  <input id="tx-invalid" type="text" aria-invalid="true" aria-label="Invalid true">
+  <input id="tx-invalid-spelling" type="text" aria-invalid="spelling" aria-label="Invalid spelling">
+  <input id="tx-invalid-grammar" type="text" aria-invalid="grammar" aria-label="Invalid grammar">
+  <input id="tx-errormsg" type="text" aria-invalid="true" aria-errormessage="err-1" aria-label="With error message">
+  <span id="err-1">Must be a number</span>
+  <input id="tx-describedby" type="text" aria-label="With description" aria-describedby="desc-1">
+  <span id="desc-1">Use your legal name</span>
+  <input id="tx-aria-description" type="text" aria-label="aria-description" aria-description="Static description">
+  <input id="tx-password" type="password" aria-label="Password">
+  <input id="tx-search" type="search" aria-label="Search native">
+  <div id="tx-searchbox-aria" role="searchbox" contenteditable="true" aria-label="Searchbox aria"></div>
+  <div id="tx-textbox-aria" role="textbox" contenteditable="true" aria-label="Textbox aria"></div>
+  <div id="tx-textbox-multiline" role="textbox" aria-multiline="true" contenteditable="true" aria-label="Multiline aria"></div>
+  <textarea id="tx-textarea" aria-label="Notes">Hello</textarea>
+  <input id="tx-tel" type="tel" aria-label="Phone">
+  <input id="tx-url" type="url" aria-label="Website">
+
+  <!-- APG: combobox (editable with list popup), listbox -->
+  <label for="cbx-aria">State</label>
+  <input id="cbx-aria" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cbx-list" aria-haspopup="listbox">
+  <ul id="cbx-list" role="listbox" aria-label="States" hidden>
+    <li id="cbx-opt-1" role="option">Alabama</li>
+    <li id="cbx-opt-2" role="option">Alaska</li>
+  </ul>
+  <input id="cbx-aria-expanded" type="text" role="combobox" aria-autocomplete="both" aria-expanded="true" aria-controls="lb-single" aria-activedescendant="lb-1" aria-label="Expanded combo">
+  <label for="sel-native">Fruit</label>
+  <select id="sel-native"><option id="sel-opt-1" value="a">Apple</option><option id="sel-opt-2" value="b" selected>Banana</option><option id="sel-opt-3" disabled>Cherry</option></select>
+  <select id="sel-multi" multiple aria-label="Colors"><option id="smo-1" selected>Red</option><option id="smo-2">Green</option></select>
+  <input id="dl-input" list="dl-1" aria-label="Datalist input"><datalist id="dl-1"><option value="One"><option value="Two"></datalist>
+
+  <ul id="lb-single" role="listbox" aria-label="Single listbox">
+    <li id="lb-1" role="option" aria-selected="true">Alpha</li>
+    <li id="lb-2" role="option" aria-selected="false">Beta</li>
+    <li id="lb-3" role="option" aria-disabled="true">Gamma</li>
+  </ul>
+  <ul id="lb-multi" role="listbox" aria-multiselectable="true" aria-label="Multi listbox" aria-orientation="horizontal">
+    <li id="lbm-1" role="option" aria-selected="true">One</li>
+    <li id="lbm-2" role="option" aria-selected="true">Two</li>
+    <li id="lbm-3" role="option" aria-selected="false">Three</li>
+  </ul>
+  <ul id="lb-checked" role="listbox" aria-label="Checkable options">
+    <li id="lbc-1" role="option" aria-checked="true">Checked option</li>
+    <li id="lbc-2" role="option" aria-checked="false">Unchecked option</li>
+  </ul>
+  <div id="lb-grouped" role="listbox" aria-label="Grouped">
+    <div id="lbg-group" role="group" aria-label="Fruits"><div id="lbg-1" role="option">Pear</div><div id="lbg-2" role="option">Plum</div></div>
+  </div>
+
+  <!-- fieldset / group -->
+  <fieldset id="fs-1"><legend id="fs-legend">Delivery</legend><input id="fs-in" type="text" aria-label="Street"></fieldset>
+  <fieldset id="fs-disabled" disabled><legend>Disabled set</legend><input id="fs-disabled-in" type="text" aria-label="Inside disabled fieldset"></fieldset>
+  <div id="grp-aria" role="group" aria-label="Aria group"><button id="grp-btn">Inside</button></div>
+  <output id="out-1" for="tx-label">42</output>
+  <button id="submit-1" type="submit">Submit</button>
+  <button id="btn-describedby" aria-describedby="desc-1">With described-by</button>
+</form>
+
+<form id="form-unnamed"><input id="form-unnamed-in" type="text" aria-label="In unnamed form"></form>
+<div id="search-region" role="search" aria-label="Site search"><input id="search-in" type="search" aria-label="Query"></div>
+</main>
+</body></html>

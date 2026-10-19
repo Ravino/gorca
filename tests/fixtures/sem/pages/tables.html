@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SEM tables</title></head>
+<body>
+<main id="main">
+<h1>Tables and grids</h1>
+
+<!-- APG: table (native) -->
+<table id="tbl-native">
+  <caption id="tbl-caption">Quarterly sales</caption>
+  <thead><tr id="tbl-hrow"><th id="tbl-th-region" scope="col">Region</th><th id="tbl-th-q1" scope="col" aria-sort="ascending">Q1</th><th id="tbl-th-q2" scope="col" aria-sort="descending">Q2</th><th id="tbl-th-q3" scope="col" aria-sort="other">Q3</th></tr></thead>
+  <tbody>
+    <tr id="tbl-r1"><th id="tbl-rh1" scope="row">North</th><td id="tbl-c11">10</td><td id="tbl-c12">12</td><td id="tbl-c13" colspan="1">9</td></tr>
+    <tr id="tbl-r2"><th id="tbl-rh2" scope="row">South</th><td id="tbl-c21" colspan="2">spans two</td><td id="tbl-c23" rowspan="2">spans rows</td></tr>
+    <tr id="tbl-r3"><th id="tbl-rh3" scope="row">West</th><td id="tbl-c31">1</td><td id="tbl-c32">2</td></tr>
+  </tbody>
+  <tfoot><tr id="tbl-foot"><td id="tbl-foot-c" colspan="4">Totals</td></tr></tfoot>
+</table>
+
+<!-- layout table -->
+<table id="tbl-layout" role="presentation"><tr><td id="tbl-layout-c">Layout cell</td></tr></table>
+<table id="tbl-layout-none" role="none"><tr><td>Layout none</td></tr></table>
+
+<!-- ARIA table with indices / counts -->
+<div id="atbl" role="table" aria-label="Aria table" aria-rowcount="100" aria-colcount="5">
+  <div id="atbl-rg" role="rowgroup">
+    <div id="atbl-hr" role="row" aria-rowindex="1">
+      <span id="atbl-ch1" role="columnheader" aria-colindex="1" aria-sort="none">Name</span>
+      <span id="atbl-ch2" role="columnheader" aria-colindex="3">Qty</span>
+    </div>
+  </div>
+  <div id="atbl-rg2" role="rowgroup">
+    <div id="atbl-r50" role="row" aria-rowindex="50">
+      <span id="atbl-rhd" role="rowheader" aria-colindex="1">Widget</span>
+      <span id="atbl-cell" role="cell" aria-colindex="3" aria-colspan="2">7</span>
+    </div>
+  </div>
+</div>
+
+<!-- APG: grid (data grid) -->
+<div id="grid-1" role="grid" aria-label="Grid" aria-rowcount="3" aria-colcount="3" aria-multiselectable="true" aria-readonly="false">
+  <div id="grid-r1" role="row" aria-rowindex="1">
+    <span id="grid-h1" role="columnheader" aria-colindex="1" aria-sort="ascending">Name</span>
+    <span id="grid-h2" role="columnheader" aria-colindex="2">Role</span>
+    <span id="grid-h3" role="columnheader" aria-colindex="3">Team</span>
+  </div>
+  <div id="grid-r2" role="row" aria-rowindex="2" aria-selected="true">
+    <span id="grid-c21" role="gridcell" aria-colindex="1" aria-selected="true" tabindex="0">Ann</span>
+    <span id="grid-c22" role="gridcell" aria-colindex="2" aria-selected="false">Dev</span>
+    <span id="grid-c23" role="gridcell" aria-colindex="3" aria-readonly="true">A</span>
+  </div>
+  <div id="grid-r3" role="row" aria-rowindex="3">
+    <span id="grid-c31" role="rowheader" aria-colindex="1">Bob</span>
+    <span id="grid-c32" role="gridcell" aria-colindex="2" aria-disabled="true">QA</span>
+    <span id="grid-c33" role="gridcell" aria-colindex="3" aria-colindextext="Column C" aria-rowindextext="Row three">B</span>
+  </div>
+</div>
+
+<!-- APG: treegrid -->
+<table id="tg-1" role="treegrid" aria-label="Inbox">
+  <thead><tr><th id="tg-h1">Subject</th><th id="tg-h2">From</th></tr></thead>
+  <tbody>
+    <tr id="tg-r1" aria-level="1" aria-posinset="1" aria-setsize="2" aria-expanded="true"><td id="tg-c11">Thread</td><td>Ann</td></tr>
+    <tr id="tg-r2" aria-level="2" aria-posinset="1" aria-setsize="1"><td id="tg-c21">Reply</td><td>Bob</td></tr>
+    <tr id="tg-r3" aria-level="1" aria-posinset="2" aria-setsize="2" aria-expanded="false"><td id="tg-c31">Other</td><td>Cy</td></tr>
+  </tbody>
+</table>
+
+<!-- definition list, list as table-like -->
+<dl id="dl-1"><dt id="dl-t1">Term</dt><dd id="dl-d1">Definition</dd></dl>
+</main>
+</body></html>

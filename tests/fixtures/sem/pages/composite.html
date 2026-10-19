@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SEM composite</title></head>
+<body>
+<main id="main">
+<h1>Composite widgets</h1>
+
+<!-- APG: tabs -->
+<div id="tabs-1">
+  <div id="tablist-1" role="tablist" aria-label="Entertainment" aria-orientation="horizontal">
+    <button id="tab-1" role="tab" aria-selected="true" aria-controls="panel-1">Nils</button>
+    <button id="tab-2" role="tab" aria-selected="false" aria-controls="panel-2" tabindex="-1">Agnes</button>
+    <button id="tab-3" role="tab" aria-selected="false" aria-controls="panel-3" tabindex="-1" aria-disabled="true">Complex</button>
+  </div>
+  <div id="panel-1" role="tabpanel" aria-labelledby="tab-1"><p>Panel one</p></div>
+  <div id="panel-2" role="tabpanel" aria-labelledby="tab-2" hidden><p>Panel two</p></div>
+  <div id="panel-3" role="tabpanel" aria-labelledby="tab-3" hidden><p>Panel three</p></div>
+</div>
+
+<!-- APG: menu button + menu, menubar -->
+<button id="mb-btn" aria-haspopup="true" aria-expanded="true" aria-controls="mb-menu">Actions</button>
+<ul id="mb-menu" role="menu" aria-label="Actions menu">
+  <li id="mi-1" role="menuitem">New</li>
+  <li id="mi-2" role="menuitem" aria-disabled="true">Open</li>
+  <li id="mi-sub" role="menuitem" aria-haspopup="true" aria-expanded="false">Recent</li>
+  <li id="mi-sep" role="separator"></li>
+  <li id="mic-1" role="menuitemcheckbox" aria-checked="true">Word wrap</li>
+  <li id="mic-2" role="menuitemcheckbox" aria-checked="false">Line numbers</li>
+  <li id="mic-3" role="menuitemcheckbox" aria-checked="mixed">Both</li>
+  <li id="mir-1" role="menuitemradio" aria-checked="true">Small</li>
+  <li id="mir-2" role="menuitemradio" aria-checked="false">Large</li>
+  <li id="mi-keys" role="menuitem" aria-keyshortcuts="Control+S">Save</li>
+</ul>
+<ul id="menubar-1" role="menubar" aria-label="Main menu">
+  <li id="mbar-1" role="menuitem" aria-haspopup="true" aria-expanded="false">File</li>
+  <li id="mbar-2" role="menuitem" aria-haspopup="true">Edit</li>
+</ul>
+
+<!-- APG: toolbar -->
+<div id="toolbar-1" role="toolbar" aria-label="Formatting" aria-orientation="horizontal">
+  <button id="tb-bold" aria-pressed="false">Bold</button>
+  <button id="tb-italic" aria-pressed="true">Italic</button>
+  <span id="tb-sep" role="separator" aria-orientation="vertical"></span>
+  <button id="tb-link">Link</button>
+</div>
+
+<!-- APG: tree view -->
+<ul id="tree-1" role="tree" aria-label="Files" aria-multiselectable="false">
+  <li id="ti-1" role="treeitem" aria-expanded="true" aria-selected="false" aria-level="1" aria-posinset="1" aria-setsize="2">Docs
+    <ul role="group">
+      <li id="ti-1-1" role="treeitem" aria-level="2" aria-posinset="1" aria-setsize="2" aria-selected="true">a.txt</li>
+      <li id="ti-1-2" role="treeitem" aria-level="2" aria-posinset="2" aria-setsize="2" aria-selected="false">b.txt</li>
+    </ul></li>
+  <li id="ti-2" role="treeitem" aria-expanded="false" aria-level="1" aria-posinset="2" aria-setsize="2">Pictures
+    <ul role="group"><li id="ti-2-1" role="treeitem" aria-level="2">p.png</li></ul></li>
+</ul>
+<ul id="tree-implicit" role="tree" aria-label="Implicit levels">
+  <li id="tim-1" role="treeitem" aria-expanded="true">Root
+    <ul role="group"><li id="tim-2" role="treeitem" aria-expanded="false">Child
+      <ul role="group"><li id="tim-3" role="treeitem">Grandchild</li></ul></li></ul></li>
+</ul>
+
+<!-- APG: accordion (disclosure buttons in headings) -->
+<div id="acc-1">
+  <h3 id="acc-h1"><button id="acc-b1" aria-expanded="true" aria-controls="acc-p1">Personal</button></h3>
+  <div id="acc-p1" role="region" aria-labelledby="acc-b1"><p>Personal text</p></div>
+  <h3 id="acc-h2"><button id="acc-b2" aria-expanded="false" aria-controls="acc-p2" aria-disabled="true">Billing</button></h3>
+  <div id="acc-p2" role="region" aria-labelledby="acc-b2" hidden><p>Billing text</p></div>
+</div>
+
+<!-- APG: carousel -->
+<section id="car-1" aria-roledescription="carousel" aria-label="Highlights">
+  <div id="car-live" aria-live="off" aria-atomic="false">
+    <div id="car-s1" role="group" aria-roledescription="slide" aria-label="1 of 3">Slide one</div>
+  </div>
+  <div id="car-tabs" role="tablist" aria-label="Slides"><button id="car-t1" role="tab" aria-selected="true">1</button></div>
+</section>
+
+<!-- APG: dialog (modal), alertdialog -->
+<div id="dlg-1" role="dialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-desc">
+  <h2 id="dlg-title">Add Delivery Address</h2><p id="dlg-desc">Fill the form</p><button id="dlg-ok">OK</button>
+</div>
+<div id="adlg-1" role="alertdialog" aria-label="Confirm delete" aria-describedby="adlg-desc"><p id="adlg-desc">Really delete?</p><button id="adlg-yes">Yes</button></div>
+<dialog id="dlg-native" open aria-label="Native dialog"><p>Native dialog text</p></dialog>
+
+<!-- APG: feed -->
+<div id="feed-1" role="feed" aria-label="News" aria-busy="false">
+  <article id="art-1" aria-labelledby="art-1-h" aria-posinset="1" aria-setsize="3"><h3 id="art-1-h">First story</h3><p>Body</p></article>
+  <article id="art-2" aria-labelledby="art-2-h" aria-posinset="2" aria-setsize="3"><h3 id="art-2-h">Second story</h3><p>Body</p></article>
+</div>
+
+<!-- listbox / radiogroup with roving focus handled in widgets.html; extra composite roles -->
+<div id="log-1" role="log" aria-label="Chat log"><p>Hello</p></div>
+<div id="marquee-1" role="marquee" aria-label="Ticker">Stocks</div>
+<div id="timer-1" role="timer" aria-label="Countdown">10:00</div>
+<div id="app-1" role="application" aria-label="Game board">Application</div>
+<div id="dir-1" role="directory">Directory-ish</div>
+<div id="toolt-nested" role="tooltip" aria-hidden="false">Tooltip text</div>
+</main>
+</body></html>
