@@ -11,6 +11,7 @@ publish.workspace = true
 gorca-model = { workspace = true }
 gorca-ingress = { workspace = true }
 gorca-mirror = { workspace = true }
+gorca-fuse = { workspace = true }
 # End-to-end latency harness (src/e2e): reuses the B-2 harness wire codec, stats and report rows.
 gorca-bench-b2 = { workspace = true }
 gorca-dbus = { workspace = true }
@@ -39,6 +40,14 @@ path = "src/bin/hog.rs"
 
 [[bench]]
 name = "ingress_mirror"
+harness = false
+
+[[bench]]
+name = "sem_repr"
+harness = false
+
+[[bench]]
+name = "fuse"
 harness = false
 
 [lints]
