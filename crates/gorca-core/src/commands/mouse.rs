@@ -315,7 +315,8 @@ impl Reader {
     }
 
     /// The node (and character offset) the review position stands for: in review mode the cursor's
-    /// zone (a text line gives the character, an object its centre), else the focused object.
+    /// zone (a text line gives the character, an object its centre), in browse mode the browse cursor's
+    /// node, else the focused object.
     pub(crate) fn review_target(&self) -> Option<(NodeKey, Option<u32>)> {
         use crate::review::cursor::ReviewPos;
         use crate::review::model::ZoneKind;
@@ -332,6 +333,11 @@ impl Reader {
                     Some((z.node, off))
                 }
             };
+        }
+        if matches!(self.mode, Mode::Browse { .. }) {
+            // The virtual cursor, never the focus: in a browser the focus is the document or a
+            // stale control. No answer is a refusal, not a click on the document centre.
+            return self.web_cursor_key().map(|k| (k, None));
         }
         match self.focus {
             FocusState::Focused { node, .. } => Some((node, None)),

@@ -830,6 +830,30 @@ impl Reader {
     }
 
     /// The browse state machine, for tests and the debug probe.
+    /// The transport key of the node under the browse cursor (the nearest node at or above it that
+    /// the source knows), for pointer routing. A read of the published mirror snapshot: no wait, no
+    /// IPC. `None` when the cursor is not in a document, or no node on the way up has a key.
+    pub(crate) fn web_cursor_key(&self) -> Option<NodeKey> {
+        let b = self.web.as_ref()?;
+        let WebMode::Browse { doc, cur, .. } = b.mode else {
+            return None;
+        };
+        let h = b.docs.get(doc)?;
+        let local = h.read.with(|d| {
+            let mut n = Some(cur.node);
+            // The depth bound keeps a corrupt parent chain from looping.
+            for _ in 0..64 {
+                let id = n?;
+                if let Some(l) = d.node(id).and_then(|v| v.meta).and_then(|m| m.local) {
+                    return Some(l);
+                }
+                n = d.parent(id);
+            }
+            None
+        })?;
+        Some(NodeKey { app: h.app, local })
+    }
+
     pub fn web_mode(&self) -> WebMode {
         self.web.as_ref().map_or(WebMode::Inactive, |w| w.mode)
     }

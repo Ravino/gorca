@@ -3736,3 +3736,40 @@ fn an_announcement_expires() {
     let fx = r.key(CoreCmd::BrowseActivate);
     assert!(!click_of(&fx), "a late refresh is a new change");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Pointer routing follows the browse cursor, never the focus
+
+#[test]
+fn browse_review_target_is_the_cursor_node_not_the_focus() {
+    let mut r = rig();
+    r.focus(1002);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    assert!(matches!(r.reader.mode(), Mode::Browse { .. }));
+    // The focus stays on the heading; the cursor moved to the paragraph line with the link.
+    let (node, off) = r.reader.review_target().expect("a target in browse mode");
+    assert_eq!(off, None);
+    assert_ne!(node, nk(1002), "the focus node is not the review target");
+    assert!([1004, 1006].contains(&node.local.0), "got {node:?}");
+}
+
+#[test]
+fn focus_mode_review_target_is_the_focus_node() {
+    let mut r = rig();
+    r.focus(1014);
+    assert!(matches!(r.reader.mode(), Mode::Focus));
+    assert_eq!(r.reader.review_target(), Some((nk(1014), None)));
+}
+
+#[test]
+fn browse_review_target_is_none_when_the_lookup_fails() {
+    let mut r = rig();
+    r.focus(1006);
+    assert!(r.reader.review_target().is_some());
+    // The document is gone from the directory: no fallback to the focus node.
+    if let Some(b) = r.reader.web.as_ref() {
+        b.docs.remove(DocId(1));
+    }
+    assert!(matches!(r.reader.mode(), Mode::Browse { .. }));
+    assert_eq!(r.reader.review_target(), None);
+}
