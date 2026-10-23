@@ -1,6 +1,6 @@
 # ADR-0027: Runtime CPU feature dispatch
 
-Status: **Proposed** (r1, 2026-10-24). Owner: architect. Implementer: asm-simd-engineer. Gate: perf-engineer.
+Status: **Proposed** (r2, 2026-10-24; r1 2026-10-24). Changelog: §14. r2 applies `docs/reports/adr-0027-review.md`. Owner: architect. Implementer: asm-simd-engineer. Gate: perf-engineer.
 Owner decision (fixed): `docs/decisions.md`, row 2026-10-24 "Owner: hardware-aware Rust". If the CPU has a
 useful extension gorca uses it; otherwise a portable path runs and gorca logs **one informational line
 per missing feature at start-up, as a fact, not an error**. The owner wants the hardware used fully as
@@ -60,8 +60,12 @@ chosen **at run time**, once, and the choice must be observable, testable and sa
 - **CD-1 Resolve once.** CPU features are detected exactly once per process, in `gorca_cpu::init()`, which
   the daemon calls right after the logger is up. Every dispatched kernel is a function pointer in a
   `&'static Kernels` table (`OnceLock`). No `is_*_feature_detected!` call exists outside `gorca-cpu`.
-  Calling a kernel before `init()` is allowed (the table is created lazily by the same code); `init()`
-  only adds the log lines.
+  **`init(disable)` is the first statement of `main`** (r2, review M-1): the disable list
+  (`GORCA_CPU_DISABLE` and `--cpu-disable`) is taken from the environment and a minimal argv scan that
+  runs no kernel, and no kernel may run before `init()` returns (argument and config parsing included).
+  The lazy table exists only for tests and tools; if a kernel resolved the table before `init()`
+  and `init()` is then given a different list, it returns an error and logs one INFO line saying the list
+  was ignored. A test enforces the ordering (§6.1).
 - **CD-2 Dispatch at kernel granularity, never inside a loop.** A dispatched kernel processes at least
   one cache line of work or at least ~100 ns. Below a per-kernel length threshold (`MIN_LEN`, set by the
   benchmark) the caller uses the portable function inline and takes no indirect call. An indirect call
@@ -89,6 +93,10 @@ chosen **at run time**, once, and the choice must be observable, testable and sa
 2. **Multiversioned plain Rust**: the same safe scalar-looking function compiled several times with
    `#[target_feature(enable = "avx2,bmi2")]` (or `"neon"`-class on aarch64) so LLVM autovectorises it.
    No intrinsics, no hand-written loads. Cheapest to write and review; wins for simple map/reduce loops.
+   The shared scalar body is marked **`#[inline(always)]`** (r2, review H-2): `#[inline]` is a hint, and a
+   body LLVM keeps out of line is compiled once for the SSE2 baseline, so the "AVX2" impl would be the same
+   scalar code plus a trampoline while the log line advertises a speed-up. Each tier-2 impl must **prove it
+   vectorised** in CI (§6.3).
 3. **Hand-written `core::arch` intrinsics**, only by the asm-simd-engineer, only for a kernel that the
    profile proves hot and where tier 2 measurably misses the target by the gate of §5.
 4. **`std::simd`** is out until it is stable on the pinned toolchain (§1.1). When it stabilises, tier 2.5
@@ -135,9 +143,31 @@ Resolution rule per kernel: take the first `Impl` whose `requires` are all detec
 else `portable`. Detection is by individual feature (not by "level"), so a CPU with AVX2 but without
 BMI2 (some VMs mask features) simply selects the next implementation.
 
-`Cap<F>` is the type-state proof: the unsafe `#[target_feature]` call is made only inside a safe wrapper
-that takes `Cap<F>`, so the invariant "this function runs only when the feature is present" is carried by
-a type that can be built only by the detection code. Callers outside `gorca-cpu` never see `unsafe`.
+**One macro generates the three things that must agree (r2, review H-1).** Since target_feature 1.1 (stable
+1.86) a safe `#[target_feature]` fn cannot be coerced to a safe `fn` pointer (only to `unsafe fn`), and a
+ZST `Cap<F>` cannot be captured into a `fn` pointer. So `Cap<F>` does **not** carry the soundness
+invariant at the table edge and is no longer claimed to; it stays only as the argument of the
+macro-generated constructors. The invariant is "the installed trampoline's feature list equals the
+`#[target_feature(enable)]` list", and it is made structural:
+
+```rust
+// One token list drives the attribute, the mask and the trampoline.
+kernel_impl!(text_common_prefix, avx2_bmi2, [avx2, bmi2] => |a: &[u8], b: &[u8]| -> usize { body!(a, b) });
+// expands to:
+//   #[target_feature(enable = "avx2,bmi2")] unsafe fn text_common_prefix_avx2_bmi2_body(a, b) -> usize { .. }  // private
+//   fn text_common_prefix_avx2_bmi2(a: &[u8], b: &[u8]) -> usize {
+//       // SAFETY: installed only when `Impl.requires` (the same token list) is detected and not disabled
+//       unsafe { text_common_prefix_avx2_bmi2_body(a, b) } }
+//   Impl { name: "avx2_bmi2", requires: &[Feature::Avx2, Feature::Bmi2], f: text_common_prefix_avx2_bmi2 }
+```
+
+No `#[target_feature]` fn is written by hand, none is `pub`, and none is reachable through a safe fn
+pointer except through the macro's trampoline. Failure this removes: `enable = "avx2,bmi2"` with
+`requires: &[Avx2]` on a VM that masks BMI2 would install the impl and SIGILL, which crash isolation
+cannot catch. **Resolver test (mandatory, CD-T5):** for every kernel, iterate over **all 2^k masks** of
+the features it uses (k is small, at most ~6) and assert `installed.requires ⊆ mask \ disabled`, that the
+portable fn is chosen when no impl fits, and that every registered impl appears in the iteration.
+Callers outside `gorca-cpu` never see `unsafe`.
 
 ### 2.4 Rust mechanics that apply (and traps)
 
@@ -147,8 +177,13 @@ a type that can be built only by the detection code. Callers outside `gorca-cpu`
   stabilised rules on the pinned 1.99 before writing the first kernel.
 - Do not pass SIMD-typed arguments or return values across a boundary where the two sides disagree on
   target features (ABI mismatch); kernels take and return slices and integers.
-- Mark kernels `#[inline]` only inside the same feature context; the dispatch edge is `#[inline(never)]`
-  so LLVM does not inline an AVX2 body into non-AVX2 code (it refuses, but the intent is explicit).
+- `#[inline(always)]` is **not allowed on a `#[target_feature]` fn** (rustc rejects the combination), but
+  it is allowed and required on the shared tier-2 body that the feature-enabled fn calls, so the body is
+  inlined into the feature context and compiled there. The dispatch edge (trampoline) is
+  `#[inline(never)]`.
+- Rules recorded from the 1.86/1.87 release notes (rust-src is not installed in `.toolchain`, so CD-0
+  still runs a probe on 1.99.1, QC-4): no coercion of a safe `#[target_feature]` fn to a safe `fn` pointer;
+  a call from a context without the features is `unsafe`.
 - `cfg!(target_feature = "avx2")` (compile-time) is used only to **skip** dispatch when a build already
   guarantees the feature (§3); never as the detection mechanism.
 - On aarch64, NEON/ASIMD is part of the baseline: tier-2 and tier-3 kernels may use it unconditionally,
@@ -186,10 +221,12 @@ a type that can be built only by the detection code. Callers outside `gorca-cpu`
 | x86_64 optional | **x86-64-v3 package variant** (`-C target-cpu=x86-64-v3`) behind a separate package/profile, **not built in Phase 3**, reconsidered when CD-B1 (below) shows a measurable gain | in a v3 build `gorca_cpu` still runs detection (a v3 binary on a v2 CPU would fault before `main`; the package declares the requirement); dispatch for features the build already guarantees compiles to a direct call via `cfg!(target_feature)` |
 | aarch64 | default target (NEON baseline) | optional features dispatched as above |
 
-- **Why v1, not v2.** The gain of v2 over v1 for *non-dispatched* code is small in a screen reader
+- **Why v1, not v2 (QC-1 decided, r2).** The gain of v2 over v1 for *non-dispatched* code is small in a screen reader
   (parsing and message passing, not numeric loops), and everything we vectorise by hand is dispatched
   anyway. v1 keeps Debian 13 and Arch stock binaries valid on every amd64 CPU, which is the distribution
-  promise. SSE4.2/POPCNT/SSSE3 are therefore *dispatch candidates*, not baseline.
+  promise. v2 would exclude Core 2, AMD K8/K10 (Phenom II has no SSSE3/SSE4.1), first-generation Atom and
+  VMs on the default `qemu64` model, all plausible on the old or donated hardware that many blind users
+  rely on; a SIGILL before `main` in a screen reader means no speech and no way to read the error. SSE4.2/POPCNT/SSSE3 are therefore *dispatch candidates*, not baseline.
 - **`target-cpu=native` is forbidden in release and CI artefacts.** A lint in CI greps `.cargo/config.toml`,
   `RUSTFLAGS` in workflows and the Debian rules for `target-cpu=native` / `target-feature=+avx` and fails.
   A developer may use it locally in an uncommitted environment.
@@ -243,6 +280,9 @@ Rules:
 
 A hot loop becomes a dispatched kernel only if all hold. Candidates below are **not** commitments.
 
+0. **A profiling slice comes before any kernel slice (CD-P, r2, review M-4).** `docs/reports/` holds no
+   gorca-side CPU profile today. Slice CD-2 may not name kernels until the perf-engineer's profile of the
+   PX-7 storm, typing echo and browse-mode build shows them hot.
 1. **Profile first.** The loop shows up in a perf-engineer profile with ≥ 1 % of gorca-side CPU in a named
    scenario (event storm, typing echo, browse mode build) or on the critical path of a latency budget.
 2. **Tier 1 first.** An existing dispatching crate does not already give the result (`memchr`, `simdutf8`).
@@ -251,7 +291,8 @@ A hot loop becomes a dispatched kernel only if all hold. Candidates below are **
 4. **Gate.** Gain ≥ 2x on the kernel's median at its realistic input size, CD-5 holds on the shortest
    input, and the end-to-end scenario improves or is neutral (kernel wins that do not move the scenario
    are not merged, except to honour the owner's directive when the kernel is cheap and fully covered by
-   the §6 tests: this exception is listed explicitly in the PR).
+   the §6 tests: this exception is listed explicitly in the PR, and **applies to tiers 1-2 only**: no hand
+   intrinsics and no `unsafe` beyond the macro trampoline).
 5. **Fuzz target and test registered** (§6) before merge.
 
 Honest note: typing echo diffs are tens of bytes and their cost is microseconds against a 15 ms budget; a
@@ -263,7 +304,7 @@ the owner's directive, not the p99. Each candidate states which of the two it se
 | Candidate | Where | Likely tier | Serves | Note |
 |---|---|---|---|---|
 | Common prefix/suffix of two byte strings (leaf diff for typing echo, text diff first pass) | `gorca-text`, ADR-0007 | 1 (`memchr`-style mismatch scan) or 2 | echo CPU, storm | the diff is usually "one inserted/deleted run": prefix/suffix scan dominates; Myers/other diff only on the middle |
-| UTF-8 validation of D-Bus/AT-SPI strings | `gorca-dbus`, `gorca-connector-atspi` | **1** (`simdutf8`) | storm throughput | check whether zbus already validates; do not validate twice |
+| UTF-8 validation of D-Bus/AT-SPI strings | `gorca-dbus`, `gorca-connector-atspi` | **1** (`simdutf8`) | storm throughput | zbus already validates strings while deserialising, so a call of ours would be a second pass, not a replacement; candidate only for a path that bypasses zbus validation |
 | UTF-8 to UTF-16 index/offset conversion (Chromium/Firefox offsets are UTF-16 units, AT-SPI offsets are chars, ADR-0007 raw offsets) | `gorca-text`, `gorca-doc-source-atspi` | 1 (`simdutf` binding) if licensing/FFI fits, else 2-3 | browse mode build, long text | mostly ASCII text: an ASCII fast path (all bytes < 0x80, 32 B at a time) is the first win |
 | 128 B `SemEntry` equality / dirty-mask compare | `gorca-fuse` (ADR-0024: 128 B entries) | 2 (4 x 32 B compare) | publish dedupe, storm | `memcmp` may already be optimal; measure `==` on the packed struct first |
 | Event-code filtering of an ingress batch (drop/keep by event kind, superseded detection) | `gorca-ingress`, ADR-0004 | 2 | storm throughput | likely memory-bound; may show no gain; candidate only |
@@ -297,17 +338,34 @@ Firefox browse-mode corpora.
   a diagnostic, not a setting: it is not stored in profiles and does not appear in the settings UI. An
   unknown name is reported once at `INFO` and ignored (a typo must not silently run SIMD in a "portable"
   test: the CI job also asserts the resulting `active()` report).
-- **CI matrix** (test-engineer), every job runs the full `cargo test`:
-  1. default (best available on the runner);
+- **Ordering test (r2, review M-1).** An integration test runs the daemon entry with `--cpu-disable avx2` and
+  with `GORCA_CPU_DISABLE=avx2`, and asserts that `active()` shows the AVX2 impls off in both; a second
+  test installs a kernel-call probe and asserts that `init()` runs before the first kernel call in `main`
+  (argument and config parsing run no kernel). The flag path is asserted, not only the env path.
+- **CI matrix** (test-engineer), every job runs the full `cargo test`; each job **pins the expected
+  `active()` report** (a "best available" job on a varying runner would make the assertion vacuous):
+  1. native default on the reference runner (expected report pinned per runner label);
   2. `GORCA_CPU_DISABLE=all` (portable only);
   3. one job per feature step on x86 (`avx2` off; `avx2,bmi2,sse4.2` off) so intermediate
      implementations are exercised;
   4. the `active()` report is asserted in each job, so a job that did not run the path it names fails.
-- **Coverage of paths the runners lack.** The dev host has AVX2 but not AVX-512 (§1.1). Missing CPU
-  models are run under emulation: `qemu-x86_64` user-mode with `-cpu Nehalem` (SSE4.2 only), `-cpu
-  Haswell` (AVX2), `-cpu max` (AVX-512), or Intel SDE; aarch64 under `qemu-aarch64` with `-cpu
-  cortex-a72` / `max` for the optional features. Emulated runs are for equivalence tests only; the
-  benchmarks are never run under emulation.
+- **Coverage of paths the runners lack: Intel SDE (r2, review M-2).** The dev host has AVX2 but not
+  AVX-512 (§1.1). Intel SDE runs the equivalence tests and the whole-suite `active()` check on emulated
+  CPUs: `-nhm` (Nehalem, SSE4.2 only, the "below requirement" job), `-hsw` (Haswell, AVX2), `-skx` and
+  `-icx` (AVX-512). The "unsupported instruction guard" is: the full test suite under SDE `-nhm`
+  finishes with no SIGILL and `active()` is portable for every AVX kernel. **valgrind is not used**:
+  it has no `-cpu` option, does not emulate a weaker CPU and does not support AVX-512. qemu-user is not
+  relied on (not installed, and AVX-512 under TCG `max` is unconfirmed); aarch64 optional features may use
+  `qemu-aarch64` if it is installed, and the ADR does not claim more. Emulated runs are for equivalence
+  tests only; benchmarks are never run under emulation.
+
+### 6.3 Proof that tier 2 vectorised (r2, review H-2)
+
+CI builds the release artefact and checks, per tier-2 impl, with `objdump -d` (or `cargo asm`) on the
+impl's symbol, that at least one `ymm` instruction (AVX2) or the feature's characteristic vector
+instruction is present; alternatively CD-B2 must show a speed-up at or above the admission gate on the
+runner for that impl. The performance guard that fails only when an impl is slower than portable is not
+sufficient. An impl that fails both checks is removed from the table.
 
 ### 6.2 Equivalence testing and fuzzing
 
@@ -322,8 +380,9 @@ Firefox browse-mode corpora.
   stored in the repo's `fuzz/` tree; a crash is a regression test forever.
 - **Miri** runs the portable path always and the SIMD paths where Miri implements the intrinsics (partial);
   it is a complement, not the proof.
-- **Unsupported-instruction guard.** A test runs each `Impl` through `valgrind --tool=none` or SDE with
-  `-cpu` set *below* its requirement and asserts the process was never able to select it (guards `Cap`).
+- **Unsupported-instruction guard.** The full suite under Intel SDE `-nhm` (and the other SDE models of
+  §6.1) finishes with no SIGILL and selects the portable path for every AVX kernel; plus the 2^k resolver
+  test (CD-T5). Not valgrind (r2).
 - **Log tests.** Snapshot tests of the exact log lines (§4) for: all present (no line), one missing, many
   missing, disabled by env, no hint measured, unknown name in the list; assertion that `init()` called
   twice logs nothing the second time.
@@ -355,7 +414,7 @@ Consequences and decisions:
 - **CD-W1 Cache key.** The `.cwasm` cache key (ADR-0019 §2.5, ADR-0026 pre-load) is
   `package sha256 + engine.precompile_compatibility_hash()` and not "wasmtime version + engine config" by
   hand. This makes a CPU change (disk or home directory moved to another machine, a VM live-migrated to a
-  different host CPU, `GORCA_CPU_DISABLE`, a microcode/hypervisor change that masks features) an ordinary
+  different host CPU, `GORCA_CPU_DISABLE=all` (only that value reaches the plugin engine, CD-W4), a microcode/hypervisor change that masks features) an ordinary
   **cache miss**, never a failed load. ADR-0026 §2.4 (Pool) is amended accordingly in r3.
 - **CD-W2 A failed deserialize is a miss, not a plugin fault.** `Component::deserialize` returning the
   ISA-mismatch error (or any error on a cache file) deletes the cache entry, increments a counter and
@@ -366,18 +425,21 @@ Consequences and decisions:
   be compiled on the build machine's CPU (or for a fixed baseline) and either fail (§7 above) or leave
   speed on the table.
 - **CD-W4 No hand-tuning of Cranelift flags by default.** We keep host inference. The one exception: with
-  `GORCA_CPU_DISABLE=all` the plugin engine is configured with the Cranelift baseline flags
-  (`cranelift_flag_set`, `unsafe` in wasmtime's API) in one audited function in `gorca-ext-host`, so the
-  portable CI job also exercises portable guest code and its distinct cache key (§6.1). This is the only
-  `unsafe` wasmtime configuration we add; it requires correct knowledge of flag names (tested by
-  compiling a probe component with it).
+  `GORCA_CPU_DISABLE=all` the plugin engine is built with **`Config::target(<host triple>)`**, which is
+  safe (config.rs:404) and yields the plain CPU baseline: host feature inference happens only when no
+  triple is given (`wasmtime-internal-cranelift-49.0.3/src/isa_builder.rs:30-35`, `infer_native_flags`
+  iff `!triple_specified`). **No `unsafe` and no `cranelift_flag_set`** (unsafe, config.rs:1668;
+  switching inferred flags off one by one is the error-prone path). The portable CI job thus exercises
+  baseline guest code with a distinct cache key (§6.1). Only `=all` reaches the plugin engine; a partial
+  disable list changes the Rust kernels only and does not alter the `.cwasm` key (CD-W1).
 - **CD-W5 Fuel calibration is CPU-dependent.** κ_int/κ_bg (ADR-0026 §2.5.1) are measured per core class
   and CPU model; a new CPU fingerprint (the same ISA flag set that is in the cache key plus the CPU model
   string) invalidates the calibration table and the daemon recalibrates in the background, using the
   conservative default until done. WQ-2 already measures P/E cores; this adds "per CPU fingerprint".
-- Wasm SIMD in plugin guests is not part of the 0.10 design (unverified in `Config`; check at M18a-2). If it
-  is enabled, Cranelift needs SSE4.1-class features for parts of wasm SIMD lowering on x86 and the baseline
-  flags of CD-W4 must include them: reopen then.
+- **Wasm SIMD is on by default** in the pinned wasmtime 49.0.3 (`Config::wasm_simd`, config.rs ~L1100: "This
+  is `true` by default"; the x86_64 baseline for Cranelift SIMD is SSE2), and `gorca-ext-host/src/wasm.rs`
+  does not disable it. The 0.10 engine either disables it explicitly or states that it is on; the baseline
+  flags of CD-W4 must then include what wasm SIMD lowering needs (decided at M18a-2).
 
 ## 8. The `unsafe` policy and the reviewer checklist
 
@@ -386,14 +448,15 @@ Consequences and decisions:
   module-level `#![allow(unsafe_code)]` with a one-line reason. A CI check fails if any other file gains
   `allow(unsafe_code)` outside the allow-list (`gorca-input-xkb`, `gorca-cpu/src/arch/`). Every other
   crate uses only the safe `Kernels` fields.
-- **CD-10 Every `unsafe` block has a `// SAFETY:` comment** naming the proof: the `Cap<F>` parameter (feature
+- **CD-10 Every `unsafe` block has a `// SAFETY:` comment** naming the proof: the macro trampoline's `requires` list (feature
   present), the bounds argument (index arithmetic in terms of `len`), and alignment (we use unaligned
   loads only, `loadu`/`ld1`, so no alignment precondition).
 - **Reviewer checklist** (the reviewer agent applies it to every PR touching `gorca-cpu` and records the
   result in the review file):
   1. Is every `#[target_feature]` function private, and is each call to it inside a safe wrapper taking
-     `Cap<F>` for exactly the features in `enable = "..."`? (feature list in the attribute equals the
-     `requires` of the registry entry.)
+     macro-generated trampoline, with `enable` and `requires` generated from one token list
+     (`kernel_impl!`, §2.3)? No hand-written `#[target_feature]` fn, none `pub`, none reachable through a
+     safe fn pointer except the trampoline.
   2. No direct use of `is_*_feature_detected!` outside `gorca-cpu`; no `cfg!(target_feature)` used as
      detection.
   3. Bounds: all loads/stores are covered by a proof from `len`; the tail (< vector width) is handled by
@@ -407,6 +470,7 @@ Consequences and decisions:
   8. The speed-up hint exists or the clause is omitted (never invented).
   9. Disable switch honoured: the kernel is reachable only through the table.
   10. A kernel that adds an AVX-512 impl cites the §2.6 evidence.
+  11. Evidence that each tier-2 impl vectorised (§6.3), and the impl is covered by the 2^k resolver test (CD-T5).
 - The `unsafe` count per crate is tracked in `docs/reports` at each milestone exit (like the plugin
   runtime's "integration code size and `unsafe` count" criterion).
 
@@ -440,12 +504,15 @@ Consequences and decisions:
 
 | Id | Metric | Gate |
 |---|---|---|
-| CD-B0 | dispatch overhead (indirect call + length check) with an empty kernel | ≤ 3 ns p99 |
+| CD-B0 | dispatch overhead (indirect call + length check) measured **through the trampoline** into a non-inlinable `#[target_feature]` fn, not an empty `fn` | ≤ 3 ns p99 |
 | CD-B1 | default build vs `-C target-cpu=x86-64-v3` on PX-7 storm and keypress-to-speech | report; open the v3 variant ticket only at ≥ 5 % p99 or ≥ 10 % throughput |
 | CD-B2 | each admitted kernel, per input-size class and alignment | ≥ 2x median vs portable at realistic size; CD-5 (≤ +5 % p99 on shortest input) |
 | CD-B3 | end-to-end scenario per admitted kernel (event storm, typing echo, browse build) | improved or neutral; kernel not merged otherwise (§5 item 4) |
 | CD-T1 | equivalence: every impl vs portable | 0 mismatches in proptest (≥ 10^5 cases per kernel per CI run) and fuzz (≥ 10 min per kernel nightly), ASan clean |
 | CD-T2 | whole test suite with `GORCA_CPU_DISABLE=all` | 100 % pass |
+| CD-T5 | resolver test over all 2^k feature masks per kernel | `installed.requires ⊆ mask \ disabled` for every mask; portable chosen when none fits; 0 SIGILL |
+| CD-T6 | `--cpu-disable` / env ordering test (§6.1) and Intel SDE jobs (`-nhm`, `-hsw`, `-skx`, `-icx`) | pass; `-nhm` full suite 0 SIGILL |
+| CD-T7 | tier-2 vectorisation proof (§6.3) | every tier-2 impl passes the asm check or the CD-B2 gate |
 | CD-T3 | log lines | snapshot-tested; exactly one per missing feature; none when nothing is missing |
 | CD-T4 | `hints.toml` freshness | every hint within 30 % of the latest reference-machine bench |
 | CD-W | `.cwasm` produced with `has_avx2` loaded under `-cpu Nehalem` emulation | deserialize error handled as a miss, plugin recompiled, 0 strikes |
@@ -454,21 +521,39 @@ Consequences and decisions:
 
 | Slice | Content | Owner |
 |---|---|---|
-| CD-0 | `gorca-cpu` crate: `Feature`, `Cap`, registry, `init()`, env switch, log line, `active()`, snapshot tests; no kernels | asm-simd-engineer |
+| CD-0 | `gorca-cpu` crate: `Feature`, `kernel_impl!` macro, registry, 2^k resolver test, `init()` first in `main` with ordering test, `init()`, env switch, log line, `active()`, snapshot tests; no kernels | asm-simd-engineer |
 | CD-1 | comparison of hand table vs `multiversion` for one tier-2 kernel; CD-B0; CI matrix (§6.1) and lints (`target-cpu=native`, `allow(unsafe_code)` allow-list) | asm-simd-engineer, test-engineer |
-| CD-2 | first kernels admitted through §5 from the profile (text prefix/suffix, ASCII fast path of UTF-16 offsets), `bench/cpu/`, `hints.toml`, fuzz targets | asm-simd-engineer, perf-engineer |
+| CD-P | **profile first (r2):** perf-engineer profiles PX-7 storm, typing echo and browse-mode build and publishes the hot loops in `docs/reports/`; no kernel is named before it | perf-engineer |
+| CD-2 | kernels admitted through §5 **from the CD-P profile only** (the §5.1 list is a hypothesis, not a plan), `bench/cpu/`, `hints.toml`, fuzz targets | asm-simd-engineer, perf-engineer |
 | CD-W | cache key = compatibility hash, miss-not-fault rule, CPU-fingerprint calibration (lands with M18a-2) | wasm-engineer |
 | CD-B1 | v3 vs default measurement | perf-engineer |
 
 ## 13. Open questions
 
-- **QC-1 (owner)** Is x86-64-v1 the right shipped baseline, or does the owner want v2 given that no
-  supported CPU (Debian 13 amd64 users on current hardware) lacks SSE4.2? Recommended: v1 plus dispatch,
-  v3 variant only if CD-B1 justifies it.
-- **QC-2 (owner)** Is `GORCA_CPU_DISABLE` as a diagnostic (env and daemon flag, no settings key) acceptable?
+- **QC-1 (decided, r2; the owner may still override)** Shipped baseline is **x86-64-v1** plus dispatch,
+  recommended by the orchestrator and the reviewer (§3.1 "Why v1"). A v3 variant only if CD-B1 justifies it.
+- **QC-2 (accepted, r2, conditional on the `init()`-first fix, §2.1 CD-1)** `GORCA_CPU_DISABLE` as a
+  diagnostic (env and daemon flag, no settings key). Unknown names are reported; the disable list is
+  printed in the `active()` dump and the crash report.
 - **QC-3** Whether to depend on `simdutf` (C++ through FFI, large) for UTF-16 conversion, or write the ASCII
   fast path plus tier-2/3 ourselves: decided by the §5.3 bake-off when the profile shows the need.
 - **QC-4** The exact stabilised rules of `target_feature` 1.1 and safe intrinsics on 1.99.1: verify in CD-0
   before the first kernel (not re-verified here beyond the `std::simd` probe).
-- **QC-5** The locked wasmtime is 49.x while `refs/wasmtime` is 51.0.0-dev: re-read `engine.rs` and
-  `code_builder.rs` on the locked version in CD-W.
+- **QC-5 (closed for the two facts, r2)** On the locked wasmtime 49.0.3 `check_compatible_with_isa_flag`
+  (engine.rs:547) and `precompile_compatibility_hash` (engine.rs:886, hashes `compiler.isa_flags()`,
+  code_builder.rs:854) were verified by the review: a CPU change is a cache miss and a mismatched
+  artefact is rejected, not executed.
+
+## 14. Changelog
+
+**r2 (2026-10-24)** — applies `docs/reports/adr-0027-review.md`. Policy unchanged.
+
+| Finding | Change |
+|---|---|
+| H-1 | `kernel_impl!` generates the `#[target_feature]` fn, the `requires` mask and the trampoline from one token list; `Cap` no longer claimed as the invariant; 2^k feature-mask resolver test (CD-T5); rustc rules recorded in §2.4; checklist updated |
+| H-2 | shared tier-2 body `#[inline(always)]`; vectorisation proof in CI (§6.3, CD-T7) |
+| M-1 | `init(disable)` is the first statement of `main`; ordering test; flag path asserted (§2.1, §6.1) |
+| M-2 | Intel SDE replaces valgrind/qemu for AVX-512 and below-requirement runs; CI jobs pin the expected `active()` |
+| M-3 | WASM: `Config::target(host)` baseline with no `unsafe`; `.cwasm` key stays `precompile_compatibility_hash`; Wasm SIMD is on by default; only `=all` reaches the plugin engine; QC-5 closed for the verified facts |
+| M-4 | profiling slice CD-P before any kernel slice; CD-2 names no kernels until profiled; owner-directive exception limited to tiers 1-2; zbus already validates UTF-8 |
+| QC-1, QC-2 | QC-1 decided: x86-64-v1 (owner may override); QC-2 accepted, conditional on M-1 |
