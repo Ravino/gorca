@@ -23,11 +23,18 @@ pub fn scan(rel: &str, text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut in_ir_table = false;
     let mut in_ir_own_features = false;
+    // The IR crate may enable `host` on itself for its own tests: dev-dependencies never reach dependents.
+    let own = rel == format!("crates/{IR}/Cargo.toml");
+    let mut in_own_dev_deps = false;
     for (i, raw) in text.lines().enumerate() {
         let line = raw.split('#').next().unwrap_or("").trim();
         if line.starts_with('[') {
             in_ir_table = line.contains(IR);
-            in_ir_own_features = rel == format!("crates/{IR}/Cargo.toml") && line == "[features]";
+            in_ir_own_features = own && line == "[features]";
+            in_own_dev_deps = own && line == "[dev-dependencies]";
+            continue;
+        }
+        if in_own_dev_deps {
             continue;
         }
         let bad = (line.contains(IR) && has_host(line))
@@ -115,6 +122,15 @@ mod tests {
         assert_eq!(scan("crates/gorca-present-ir/Cargo.toml", own).len(), 1);
         let ok = "[features]\nhost = []\n";
         assert!(scan("crates/gorca-present-ir/Cargo.toml", ok).is_empty());
+    }
+
+    #[test]
+    fn the_ir_crate_may_enable_host_for_its_own_tests() {
+        let own = "[features]\nhost = []\n\n[dev-dependencies]\ngorca-present-ir = { path = \".\", features = [\"host\"] }\n";
+        assert!(scan("crates/gorca-present-ir/Cargo.toml", own).is_empty());
+        let other =
+            "[dev-dependencies]\ngorca-present-ir = { workspace = true, features = [\"host\"] }\n";
+        assert_eq!(scan("crates/gorca-x/Cargo.toml", other).len(), 1);
     }
 
     #[test]
