@@ -1,7 +1,8 @@
 # ADR-0026: WASM plugin model on the fused semantic model (M18a)
 
-Status: **Proposed** (r3, 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
-r3 follows the owner decision of 2026-10-24 (canonical actor model: plugins are actors, **B' is the design
+Status: **Proposed** (r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
+r4 applies the r3 review (`docs/reports/adr-0026-review.md`, section r3): deadline from the turn start, timer slack,
+wait mechanism, one wait per keypress path, tighter benign gates. r3 follows the owner decision of 2026-10-24 (canonical actor model: plugins are actors, **B' is the design
 target**, §2.4.6, §5) and records QP-1..QP-5 as confirmed (§6).
 Refines: ADR-0019 (extension platform: lifecycle, versioning V-1..V-8, packaging). ADR-0019 stays the
 umbrella for packaging, lifecycle states and versioning; this ADR **supersedes** its §2.2 world table,
@@ -345,22 +346,55 @@ enum PluginReply {
   guest call is CPU-bound and only fuel stops it). Size `T = max(2, cores - 2)`, to be set by the
   M18a-0 numbers; an actor prefers the thread it last ran on (warm cache) and the pool prefers idle
   threads. R-lane work keeps its existing ext worker.
-- **Interactive handoff.** On a focus change the writer (1) recomputes S0 and bumps `T`, (2) builds one
-  `FrozenRows` per plugin batch (the batch rows plus the immutable snapshot of S0 reachable within the
-  import bounds, taken **after** step 1 so the token's `t` is the snapshot turn), (3) sends
-  `Derive{interactive}` to every plugin actor in the focus chain at once (parallel), (4) waits for the
-  replies on **one shared deadline `D = send time + 0.3 ms`** (a futex/park with timeout, spinning
-  first for about 10 µs), (5) fuses and publishes with the facts that arrived and the rest missing,
-  (6) late `Done` messages are admitted in the writer's later turns and trigger the LB-4 refine. The
-  wait is the **only** blocking call in a writer and is bounded by B-2 by construction (an explicit,
-  documented exception to "actors never block": a timer-wheel await has about 1 ms granularity and
-  cannot express 0.3 ms). The wake cost (about 5-20 µs, to be measured) is charged inside the 0.3 ms.
+- **Interactive handoff.** On a focus change the writer (0) reads the clock: **`t0` = start of the writer
+  turn, and the deadline is `D = t0 + 0.3 ms`** (r4; it is not measured from the send), (1) recomputes S0
+  and bumps `T`, (2) builds one `FrozenRows` per plugin batch (the batch rows plus the immutable snapshot
+  of S0 reachable within the import bounds, taken **after** step 1 so the token's `t` is the snapshot
+  turn; eager only: the WQ-6 lazy variant is rejected because the plugin thread would read writer state
+  concurrently, which breaks PF-1/PF-2 and I-P8), (3) sends `Derive{interactive}` to every plugin actor
+  in the focus chain at once (parallel), (4) waits for the replies until `D` (mechanism below), (5) fuses
+  and publishes with the facts that arrived and the rest missing, (6) late `Done` messages are admitted in
+  the writer's later turns and trigger the LB-4 refine. Snapshot, send and fuse are charged **inside** the
+  0.3 ms: if the snapshot alone exhausts it, the wait is zero and the writer publishes without facts.
+  The wait is the **only** blocking call in a writer and is bounded by B-2 by construction (an explicit,
+  documented exception to "actors never block": `tokio::time` has about 1 ms granularity and cannot
+  express 0.3 ms). The wake cost (about 5-20 µs, to be measured) is charged inside the 0.3 ms.
+- **Wait mechanism (normative, r4).** Never a blocking receive on a tokio channel (`blocking_recv`
+  panics inside a runtime, and a park stalls the worker together with the tasks in its local queue).
+  Per handoff the writer owns an **atomic countdown (initial value = number of plugin actors asked) and a
+  futex word** (`futex_wait` with an absolute `CLOCK_MONOTONIC` deadline `D`, after spinning for about
+  10 µs); each plugin actor decrements the counter after it has posted its `PluginReply` to the writer's
+  mailbox and wakes the futex at zero. The writer returns early at zero, otherwise at `D`, then drains
+  the mailbox (replies are always delivered through the mailbox; the counter only ends the wait). The
+  writer's worker thread is blocked for at most `D`. The alternative with the same bound that blocks no
+  worker, an async `select` over (countdown notify | `timerfd` deadline through `AsyncFd`, microsecond
+  resolution), is measured against the futex in M18a-0 (WQ-6) and replaces it if it meets the gates;
+  `tokio::time` is not used for `D`.
+- **Timer slack (normative, r4).** A timed futex or `timerfd` wait on a SCHED_OTHER thread is subject to the
+  thread's timer slack, 50 µs by default (`/proc/self/timerslack_ns` = 50000 on the dev host), which alone
+  would make "p99 <= 0.31 ms" fail for an adversarial plugin that always runs out the clock. Every
+  thread that can run a bounded wait (writer worker threads, and the plugin pool threads that wake the
+  futex) calls `prctl(PR_SET_TIMERSLACK, 1)` at start (1 ns; the value 0 means "reset to default"). If a
+  tokio worker cannot be configured per thread, the runtime's `on_thread_start` hook does it. M18a-0
+  measures **late wakeups** (actual wake minus `D`, p50/p99/max, benign and loaded host) with and
+  without the slack setting (WQ-6).
+- **One bounded wait per keypress path (normative, r4).** A keypress path waits for plugins at most once:
+  when both the app actor (K1) and the document actor (K2, Firefox) have a focus change for the same
+  keypress, only the writer that owns the utterance waits, on the shared deadline `D` computed from the
+  turn start of the **first** writer in the path; the other writer sends its `Derive` and publishes
+  without waiting (late facts follow under LB-4). The total plugin stall of a keypress is therefore
+  at most 0.3 ms, not 2·D. A flapping-focus app cannot make its writer wait on every turn: a writer
+  takes an interactive wait at most once per `N` ms (default 20, to be set in M18a-0), otherwise its
+  focus handoffs run as background class.
 - **Background slice.** No wait at all: `Derive{interactive: false}` is sent and the reply is admitted
   when it arrives. This is the only path for batches over 16 nodes and for attach/removed.
 - **Backpressure and coalescing.** At most one job running and one pending dirty set per plugin actor
   (latest cause wins per node, §2.4.1). If a new interactive batch finds the actor busy (previous job
   not finished), the writer does **not** wait for that plugin: it merges the nodes into the pending set
   (they run next, background class), counts `pa_busy`, and publishes without its facts (fail-open).
+  An interactive job pre-empts a running **background** job of the same actor: the writer sends `Cancel`
+  and re-queues the background nodes, so a long background batch never turns every focus change into
+  `pa_busy`.
   A superseded running job is sent `Cancel`: the next import traps with `Cancelled` (free in the strike
   rules); a pure-compute loop is stopped by fuel as before.
 - **Fuel grants under parallelism.** Grants stay as in §2.4.2 (progressive filling with `P = κ_int·(B -
@@ -402,7 +436,7 @@ enum PluginReply {
 | PF-5 taint-clean derivation | taint bits are computed by the host while serving imports on the actor (from the provenance on the frozen rows) and travel in `Done`; the guest cannot set them; admission re-checks tier against taint on the writer | T3 taint test with deferred admission |
 | PF-6 total S1 rank | CR-2 ranks by (tier, specificity, id, anchor key), never by arrival order, and `FUSE` is a pure function of the admitted set, so a late arrival cannot change the winner, only when it appears | permutation test: all arrival orders of 3 plugins' replies give the same fused entry |
 | PF-7 token fixes the basis | exactly the case it was written for (§2.6.1): `t` is the snapshot turn, `g` the `BindGen` at the snapshot; stale iff some `n ∈ R, c ∈ M` has `stamp > t` or the `BindGen` changed; `slot_epoch` additionally rejects replies of a dead incarnation | MQ-2 replay corpus with randomized delivery delay: 0 false accepts |
-| PF-8 interactive budget | the writer's added delay is at most `D` (0.3 ms) by the bounded wait; per-plugin grants are the serial-equivalent progressive filling (§2.4.2) until MQ-4 | PX-4 A1-A6 on B', stall max reported |
+| PF-8 interactive budget | the writer's added delay, measured **from the start of the writer turn** (snapshot, send, wait and fuse included), is at most `D` (0.3 ms) by the bounded wait with timer slack 1 ns, and one wait per keypress path; per-plugin grants are the serial-equivalent progressive filling (§2.4.2) until MQ-4 | PX-4 A1-A6 on B', stall max reported |
 
 Determinism (§2.4.5) is unchanged: once primary inputs are quiescent, every reply is admitted or
 rejected by the token, the re-derivations caused by rejections run on the final S0, and the final
@@ -748,7 +782,7 @@ Gate before M18a-0: **M22b1 merged** (presenter reads only fused entries) and th
 | PX-3 | memory per idle instance pair | ≤ 64 KiB + guest state; 50 plugins × 2 lanes ≤ 120 MB RSS worst case |
 | PX-4 | fault injection, adversarial set (below), arm chosen in M18a-0 | compute-bound runaway: writer turn delayed ≤ grant + 50 µs p99. Memory/lifting adversaries (A1–A5): every overrun recorded; plugin demoted after the first overrun and `Backoff` after 3 in 60 s; writer stall max per occurrence reported and ≤ the M18a-0 frozen bound. A6: Σ ≤ B + n·c_max at ρ ≈ 1. A7–A13: the stated rule holds |
 | PX-5 | fuel-only vs fuel + epoch on the plugin corpus | fuel-only ≥ 20 % faster on compute-bound hooks, no escape in fault injection that epoch would have caught |
-| PX-6 | keypress → speech p99 with P-2 + 9 dummy matching plugins (Signal fixture) | Δp99 ≤ 0.3 ms vs no plugins; facts at first utterance ≥ 99 % of focus moves **overall and ≥ 95 % for every plugin** (review M-4) |
+| PX-6 | keypress → speech p99 with P-2 + 9 dummy matching plugins (Signal fixture) | Δp99 ≤ 0.3 ms vs no plugins; facts at first utterance ≥ 99 % of focus moves **overall and ≥ 95 % for every plugin** (review M-4); under B' the benign fixture on a quiet host requires ≥ 99 % overall and ≥ 97 % per plugin (r4) |
 | PX-7 | 10k ev/s storm (50k for L3-50k), 3 plugins watching 50 % of nodes | ingress lag unchanged; per-event fusion+plugin p99 ≤ 10 µs; drops counted, writer never blocked |
 | PX-8 | quick nav by plugin category on 3000-chat Telegram mock | ≤ 5 ms key → speech (W1), no guest call per key |
 | PX-9 | revision-token bookkeeping | stamp update ≤ 20 ns per changed class; admission check ≤ 1 µs for \|R\| = 256; 0 false accepts on the MQ-2 replay corpus |
@@ -824,9 +858,12 @@ its own target every call (self-trigger); A13 a loop of `subtree(max)` imports.
     keypress → speech vs no plugins; (4) PX-7 background throughput; (5) writer-integration code size
     and `unsafe` count; (6) **B' only**: reply delay distribution (queued, exec), `pa_busy` rate,
     pool-size sensitivity (T = 2, 4, cores - 2), and the arrival-order test of PF-6.
-  - **Confirmation rule (r3).** B' is **confirmed** iff: stall max ≤ 0.35 ms and p99 ≤ 0.31 ms per
-    focus change (benign and adversarial, with demotion active), benign Δp99 ≤ 0.3 ms, facts at first
-    utterance ≥ 97 % overall and ≥ 90 % for every plugin, PX-7 ingress lag unchanged, and 0 false
+  - **Confirmation rule (r4).** B' is **confirmed** iff: stall, **measured from the start of the writer
+    turn**, max ≤ 0.35 ms (quiet-host gate; loaded-host max is reported separately, it is dominated by
+    preemption) and p99 ≤ 0.31 ms per focus change (benign and adversarial, with demotion active, timer
+    slack 1 ns), at most one wait per keypress path, benign Δp99 ≤ 0.3 ms, facts at first utterance on
+    the **benign** fixture (P-2 + dummies, quiet host) ≥ 99 % overall and ≥ 97 % for every plugin (on the
+    adversarial mix ≥ 97 % overall and ≥ 90 % per plugin), PX-7 ingress lag unchanged, and 0 false
     accepts in the randomized-delay MQ-2 replay. A's numbers are reported for the record and **do not by
     themselves overturn B'** (A being faster on a gate B' also passes is not a reason to switch).
   - **If B' is not confirmed** the reviewer reports which gate failed and why; the fallback needs a new
@@ -863,10 +900,10 @@ WASM engineer (M18a-0 unless noted):
 - **WQ-4** (M18a-2) `memory_growing` denial: clean trap path and rebuild cost with 16 MiB touched.
 - **WQ-5** (M18a-2) RSS of a W/R instance pair of one component (shared code); resident code after
   buffer deserialize under memory pressure; whether `mlock` is needed.
-- **WQ-6** (M18a-0, r3) B' mechanics: wake latency p50/p99/max of the writer → plugin actor → reply
-  round trip (spin vs park, pool size T, P/E cores, loaded host); cost of building `FrozenRows` per
-  focus change (eager snapshot vs a lazy variant where an import that reads a node with `stamp > t`
-  flags the call stale); the parallel grant rule per MQ-4.
+- **WQ-6** (M18a-0, r3/r4) B' mechanics: wake latency p50/p99/max of the writer → plugin actor → reply
+  round trip (futex vs `timerfd`/`AsyncFd`, spin vs park, pool size T, P/E cores, loaded host); late
+  wakeups with `PR_SET_TIMERSLACK` 1 ns versus the default; cost of building `FrozenRows` per focus
+  change (eager only; the lazy variant is rejected in r4); the parallel grant rule per MQ-4.
 
 ## 7. Invariants (summary)
 
@@ -874,8 +911,9 @@ WASM engineer (M18a-0 unless noted):
 - I-P2 Plugin facts never enter S0; admission never triggers `derive`.
 - I-P3 Every guest call has a fuel grant and a wall measurement; no file read, deserialize or compile
   runs on a writer turn.
-- I-P8 (r3) The only blocking call a writer makes for a plugin is the interactive wait, bounded by the
-  shared deadline `D` = B-2 = 0.3 ms; plugin results are messages; a reply is admitted only after the
+- I-P8 (r3, r4) The only blocking call a writer makes for a plugin is the interactive wait (atomic
+  countdown + futex, timer slack 1 ns, never a tokio blocking receive), bounded by the shared deadline
+  `D` = B-2 = 0.3 ms from the start of the writer turn, at most once per keypress path; plugin results are messages; a reply is admitted only after the
   token check and only if its `slot_epoch` is current; a plugin actor never touches writer state.
 - I-P4 No host import copies a guest string or list before checking its cap.
 - I-P5 No T3 output is plain author intent (S1) or unattributed unprompted speech unless trusted /
@@ -885,6 +923,17 @@ WASM engineer (M18a-0 unless noted):
 - I-P7 Slot state transitions are exactly §2.5.4; every cell is tested.
 
 ## 8. Changelog
+
+**r4 (2026-10-24)** — applies the r3 review (`docs/reports/adr-0026-review.md`, section r3). No change to
+the fact model or the placement decision.
+
+| Finding | Change |
+|---|---|
+| R3-1 timer slack | `prctl(PR_SET_TIMERSLACK, 1)` on writer and plugin-pool threads; late wakeups measured in M18a-0 (WQ-6); gate p99 <= 0.31 ms stated with the slack setting |
+| R3-2 deadline basis | `D = t0 + 0.3 ms` from the start of the writer turn; snapshot, send and fuse are inside it; PF-8 row and confirmation rule say "from the start of the writer turn"; lazy snapshot rejected |
+| R3-3 wait primitive | atomic countdown + futex (or `timerfd` via `AsyncFd`, measured); never `blocking_recv` or `tokio::time`; replies still via the mailbox; I-P8 updated |
+| R3-4 cascade | one bounded wait per keypress path (K1 and K2 share the first writer's deadline); flapping-focus cap of one interactive wait per N ms |
+| R3-5 gates | benign fixture: facts at first utterance >= 99 % overall and >= 97 % per plugin (PX-6 and the confirmation rule); 97/90 only for the adversarial mix; interactive jobs pre-empt background jobs; max is a quiet-host gate, loaded max reported |
 
 **r3 (2026-10-24)** — owner decisions of 2026-10-24 (`docs/decisions.md`). No change to the fact model;
 one runtime-placement change and one confirmation.
