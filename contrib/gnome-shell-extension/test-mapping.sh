@@ -15,7 +15,7 @@ BIN="${CARGO_TARGET_DIR:-$D/../../target}/debug/examples/pointer_cli"
 TD="$D/../../tools/platform-probes/mouse-emulation/teardown.sh"
 trap '"$TD" "$W"' EXIT
 export GORCA_RIG_EXTRA_EXE="$BIN" GORCA_RIG_NO_X11=
-VM="1200x900 1280x800"; [ "$SCALE" = 2 ] && VM="1920x1200 1280x800"
+VM="${GORCA_RIG_VM:-1200x900 1280x800}"; [ "$SCALE" = 2 ] && VM="${GORCA_RIG_VM:-1920x1200 1280x800}"
 setsid "$D/test-rig.sh" "$W" "$VM" >/dev/null 2>&1 < /dev/null &
 for _ in $(seq 1 60); do sleep 1; grep -q "v2 owns" "$W/shell.log" 2>/dev/null && break; done
 grep -q "v2 owns" "$W/shell.log" || { echo "rig did not start (see $W/shell.log)"; exit 2; }
