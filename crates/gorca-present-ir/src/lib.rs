@@ -585,17 +585,45 @@ impl PresIr {
         self.fields.iter().filter(move |f| f.kind == kind)
     }
 
-    /// The copy a plugin, a log or a braille display may see: every secret field's content is
-    /// replaced by empty text.
+    /// The only form a plugin, a log or a braille display may be given: every secret field's
+    /// content is replaced by empty text and its flat-text span is cleared (a span would leak the
+    /// secret's length). The flag stays, so a consumer can tell something was withheld.
     #[must_use]
-    pub fn redacted(&self) -> PresIr {
+    pub fn redacted(&self) -> Redacted {
         let mut out = self.clone();
         for f in &mut out.fields {
             if f.is_secret() {
                 f.content = Content::Text(Arc::from(""));
+                f.span = None;
             }
         }
-        out
+        Redacted(out)
+    }
+}
+
+/// A `PresIr` with its secrets withheld. The sinks that must never see a secret (plugin hooks,
+/// logs, braille routing) take this type, not `PresIr`, so passing the unredacted IR does not
+/// compile. It can only be made by [`PresIr::redacted`] and derefs to the IR for reading.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Redacted(PresIr);
+
+impl Redacted {
+    /// The redacted IR.
+    pub fn ir(&self) -> &PresIr {
+        &self.0
+    }
+
+    /// Unwrap into a plain IR (still redacted; for an edit hook's result).
+    pub fn into_ir(self) -> PresIr {
+        self.0
+    }
+}
+
+impl std::ops::Deref for Redacted {
+    type Target = PresIr;
+
+    fn deref(&self) -> &PresIr {
+        &self.0
     }
 }
 
@@ -785,6 +813,38 @@ mod tests {
     }
 
     #[test]
+    fn redaction_clears_the_span_of_a_secret_field_and_only_that_one() {
+        let mut secret = Field::new(
+            FieldKind::VALUE,
+            Content::Text("hunter2".into()),
+            Origin::default(),
+        )
+        .with_flags(FieldFlags::SECRET);
+        secret.span = Some(FlatSpan { start: 3, end: 10 });
+        let mut open = Field::new(
+            FieldKind::NAME,
+            Content::Text("User".into()),
+            Origin::default(),
+        );
+        open.span = Some(FlatSpan { start: 0, end: 4 });
+        let ir = PresIr::new(
+            Reason::Focus,
+            node(),
+            1,
+            [open, secret].into_iter().collect(),
+        );
+        let r = ir.redacted();
+        assert_eq!(r.ir().fields[0].span, Some(FlatSpan { start: 0, end: 4 }));
+        assert_eq!(r.fields[1].span, None, "the span would leak the length");
+        assert_eq!(
+            ir.fields[1].span,
+            Some(FlatSpan { start: 3, end: 10 }),
+            "the source is untouched"
+        );
+        assert_eq!(r.into_ir().fields[1].content, Content::Text("".into()));
+    }
+
+    #[test]
     fn segment_kinds_follow_the_field_kind() {
         assert_eq!(FieldKind::NAME.segment_kind(false), SegmentKind::Text);
         assert_eq!(FieldKind::ROLE.segment_kind(false), SegmentKind::Role);
@@ -892,7 +952,6 @@ mod tests {
         assert_eq!(std::mem::size_of::<LangId>(), 2);
         assert_eq!(std::mem::size_of::<Origin>(), 8);
         assert_eq!(std::mem::size_of::<FieldFlags>(), 2);
-        if cfg!(target_pointer_width = "64") {}
         assert_eq!(PRES_IR_VERSION, 1);
     }
 
@@ -909,7 +968,7 @@ mod tests {
             3,
             [odd.clone()].into_iter().collect(),
         );
-        assert_eq!(ir.redacted(), ir, "nothing secret: the copy is identical");
+        assert_eq!(*ir.redacted(), ir, "nothing secret: the copy is identical");
         assert_eq!(ir.fields[0], odd);
         assert_eq!(FieldKind(0x7123).name(), None);
         assert!(!ir.reason.editable());

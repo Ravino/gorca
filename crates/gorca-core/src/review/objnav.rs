@@ -85,6 +85,7 @@ pub fn class_in(snap: &NodeSnapshot, web: bool) -> PresClass {
         | Role::RowHeader
         | Role::Button
         | Role::ToggleButton
+        | Role::Switch
         | Role::CheckBox
         | Role::RadioButton
         | Role::ComboBox

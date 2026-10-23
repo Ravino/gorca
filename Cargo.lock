@@ -1457,6 +1457,7 @@ version = "0.0.0"
 dependencies = [
  "gorca-i18n",
  "gorca-model",
+ "gorca-present-ir",
  "smallvec",
  "thiserror",
 ]

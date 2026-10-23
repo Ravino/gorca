@@ -42,7 +42,7 @@ fn ext_role(r: Role) -> u8 {
         Role::ColumnHeader => 16,
         Role::RowHeader => 17,
         Role::Button => 18,
-        Role::ToggleButton => 19,
+        Role::ToggleButton | Role::Switch => 19,
         Role::CheckBox => 20,
         Role::RadioButton => 21,
         Role::ComboBox => 22,

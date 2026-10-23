@@ -60,7 +60,7 @@ const fn tri_state_word(class: Class) -> Option<M> {
         Class::Checkable => Some(M::StateHalfChecked),
         Class::Toggle => Some(M::StateHalfPressed),
         Class::Progress => Some(M::StateIndeterminate),
-        Class::Field | Class::Other => None,
+        Class::Switch | Class::Field | Class::Other => None,
     }
 }
 
@@ -119,6 +119,16 @@ fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
             Group::Press
         };
         fields.push(word(FieldKind::STATE, m, g));
+    } else if class == Class::Switch {
+        // A switch says on or off, whichever group carries the state.
+        let on = sem.check == Check::On || sem.press == Press::On;
+        let group = if sem.press == Press::NotToggle {
+            Group::Check
+        } else {
+            Group::Press
+        };
+        let id = if on { M::StateOn } else { M::StateOff };
+        fields.push(word(FieldKind::STATE, id, group));
     } else {
         if sem.check == Check::On {
             fields.push(word(FieldKind::STATE, M::StateChecked, Group::Check));
@@ -247,6 +257,34 @@ mod tests {
         assert_eq!(
             off.fields.last().map(|f| f.content.clone()),
             Some(Content::word(M::StateNotChecked))
+        );
+    }
+
+    #[test]
+    fn a_switch_says_switch_and_on_or_off() {
+        let mut e = entry(SemRole::Switch, "Wi-Fi");
+        e.sem.check = Check::On;
+        let on = compose(&e, key(), Reason::Focus, CTX).expect("focus");
+        let words: Vec<_> = on.fields.iter().map(|f| f.content.clone()).collect();
+        assert_eq!(
+            words,
+            [
+                Content::Text(Arc::from("Wi-Fi")),
+                Content::word(M::RoleSwitch),
+                Content::word(M::StateOn)
+            ]
+        );
+        e.sem.check = Check::Off;
+        let off = compose(&e, key(), Reason::Focus, CTX).expect("focus");
+        assert_eq!(
+            off.fields.last().map(|f| f.content.clone()),
+            Some(Content::word(M::StateOff))
+        );
+        assert!(
+            off.fields
+                .iter()
+                .all(|f| f.content != Content::word(M::StateNotPressed)),
+            "never 'not pressed'"
         );
     }
 

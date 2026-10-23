@@ -194,6 +194,7 @@ fn is_surface_role(snap: &NodeSnapshot, parent_is_menubar: bool) -> bool {
         | Role::RowHeader
         | Role::Button
         | Role::ToggleButton
+        | Role::Switch
         | Role::CheckBox
         | Role::RadioButton
         | Role::ComboBox

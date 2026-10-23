@@ -52,6 +52,8 @@ pub enum Role {
     Terminal,
     Landmark,
     Alert,
+    /// A toggle that says on or off (GTK switch): `switch`, `on`, `off`.
+    Switch,
 }
 
 impl Role {
@@ -79,6 +81,7 @@ impl Role {
             | Role::RowHeader
             | Role::Button
             | Role::ToggleButton
+            | Role::Switch
             | Role::CheckBox
             | Role::RadioButton
             | Role::ComboBox
@@ -126,6 +129,7 @@ impl Role {
             Role::RowHeader => "row_header",
             Role::Button => "button",
             Role::ToggleButton => "toggle_button",
+            Role::Switch => "switch",
             Role::CheckBox => "check_box",
             Role::RadioButton => "radio_button",
             Role::ComboBox => "combo_box",
@@ -166,6 +170,7 @@ impl Role {
             | Role::RowHeader
             | Role::Button
             | Role::ToggleButton
+            | Role::Switch
             | Role::CheckBox
             | Role::RadioButton
             | Role::MenuItem
@@ -232,6 +237,7 @@ impl Role {
             Role::RowHeader => M::RoleRowHeader,
             Role::Button => M::RoleButton,
             Role::ToggleButton => M::RoleToggleButton,
+            Role::Switch => M::RoleSwitch,
             Role::CheckBox => M::RoleCheckBox,
             Role::RadioButton => M::RoleRadioButton,
             Role::ComboBox => M::RoleComboBox,

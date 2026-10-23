@@ -33,8 +33,15 @@ pub fn clip(s: &str, max: usize) -> &str {
 
 /// `GetRole` result. Unknown or out-of-range numbers are `Role::Unknown`, never an error (C-4).
 pub fn role_from_raw(raw: u32) -> Role {
+    // AT-SPI 2.56 added ROLE_SWITCH (130); the `atspi` crate does not know it yet.
+    if raw == SWITCH_ROLE {
+        return Role::Switch;
+    }
     atspi::Role::try_from(raw).map_or(Role::Unknown, map_role)
 }
+
+/// `ATSPI_ROLE_SWITCH`.
+const SWITCH_ROLE: u32 = 130;
 
 /// `GetState` result: an array of 32-bit words, least significant first. Missing words are zero;
 /// words beyond the second are ignored (bit numbers above 63 do not exist).
@@ -367,6 +374,12 @@ mod tests {
         let c = clip(&s, MAX_TEXT_BYTES);
         assert!(c.len() <= MAX_TEXT_BYTES && c.len() >= MAX_TEXT_BYTES - 1);
         assert_eq!(clip("abc", 10), "abc");
+    }
+
+    #[test]
+    fn role_130_is_a_switch() {
+        assert_eq!(role_from_raw(130), Role::Switch);
+        assert_eq!(role_from_raw(131), Role::Unknown);
     }
 
     #[allow(clippy::unnecessary_wraps)] // the field it fills is an Option

@@ -4018,6 +4018,7 @@ fn pointer_class(role: Role) -> PointerClass {
         Role::Link
         | Role::Button
         | Role::ToggleButton
+        | Role::Switch
         | Role::CheckBox
         | Role::RadioButton
         | Role::ComboBox

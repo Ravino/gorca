@@ -178,6 +178,7 @@ pub fn lead_segments(win: &NodeSnapshot) -> SmallVec<[Segment; 2]> {
         | Role::RowHeader
         | Role::Button
         | Role::ToggleButton
+        | Role::Switch
         | Role::CheckBox
         | Role::RadioButton
         | Role::ComboBox
@@ -245,6 +246,7 @@ fn part(role: Role) -> Part {
         | Role::RowHeader
         | Role::Button
         | Role::ToggleButton
+        | Role::Switch
         | Role::CheckBox
         | Role::RadioButton
         | Role::ComboBox
