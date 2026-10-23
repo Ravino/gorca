@@ -68,7 +68,8 @@ Epoch ticker thread at 1 ms, `set_epoch_deadline(N)`, infinite loop in the guest
 | 3 | 1,058 / 1,149 us | 5,331 / 6,155 us | 138 / 142 us |
 
 Overshoot beyond the deadline is <= ~1 ms (tick granularity); the loop is interrupted promptly (`Trap::Interrupt`).
-Fuel runs out deterministically after ~3M units in ~138 us (`Trap::OutOfFuel`), i.e. about 22 units per us on the
+Fuel runs out deterministically after ~3M units in ~138 us (`Trap::OutOfFuel`), i.e. about 21,739 units per us (3M / 138 us; an earlier version said "22 units per us", an
+arithmetic slip corrected 2026-10-23 per `docs/reports/plugin-fusion-math.md` §0) on the
 hot path measured here (not the calibration used by `gorca-ext-host`).
 
 Hot-loop slowdown (200M-iteration multiply-add loop in the guest, best of 5, per run):

@@ -5,6 +5,9 @@ store groundwork: `docs/reports/addon-platform-architecture.md`.
 Amends: ADR-0001 §10 (extension model), ADR-0008 §6.1 and amendment 3 (web hooks become the `site`
 world). Covers the scope reserved for ADR-0015 ("extension API stability") in `docs/plan/phase-3.md`.
 Milestone: M18 (M18a platform core, M18b SDK). Follow-up: ADR-0020 (packaging, signing, store; Phase 4).
+**Partly superseded by [ADR-0026](0026-wasm-plugin-model.md)** (WASM plugin model, Proposed r2): §2.2
+(world table, `mirror`/`effects` sketch), I-1 (inline budget) and C-1 (node representation) are
+replaced there; the rest of this ADR stays the umbrella for lifecycle, versioning and packaging.
 
 ## 1. Context
 
@@ -48,6 +51,9 @@ functions and wasmtime resolves semver-compatible import names
 
 ### 2.2 Worlds
 
+> **Superseded by ADR-0026 §2.2–§2.4** (plugin kinds K0–K4, WIT `gorca:ext@0.10.0`, W/R lanes,
+> facts instead of `mirror`/`effects` verdicts). Kept for history.
+
 | World | Topology | Exports |
 |---|---|---|
 | data-only | none | — |
@@ -62,7 +68,8 @@ report §4.3.
 
 ### 2.3 Invariants
 
-- **I-1** Extension code on the keypress → speech path is limited to inline hooks: 2 ms CPU per call
+- **I-1** *(Superseded by ADR-0026 §2.4.2 and §2.5.1: B-2 0.3 ms per focus change and B-3 0.3 ms per
+  utterance, split by progressive filling.)* Extension code on the keypress → speech path is limited to inline hooks: 2 ms CPU per call
   and **3 ms aggregate per presentation**; on overrun the remaining add-ons are skipped and the core
   presentation is used (fail-open), and the overrunning add-on takes a strike.
 - **I-2** No host import blocks or performs IPC; every IPC is a request with a deadline
@@ -162,6 +169,9 @@ Threat model, signing and store review: reviewer report and ADR-0020.
 | XP-8 | 100 patches + 32 categories on a 50k-node page | ≤ 100 ns per upserted node p99 |
 
 ## 6. Contested choice and bake-off
+
+> **Resolved by ADR-0026 §2.3.3**: opaque per-instance handles + accessors, one frozen `view-node`
+> batch record, no `resource` type. Kept for history.
 
 **C-1 node representation across the boundary**: frozen `node-facts` records + accessors (A) vs a
 `node` resource with lazy getters (B). Run a two-day spike measuring `present` p99 on the M4 Shell walk,

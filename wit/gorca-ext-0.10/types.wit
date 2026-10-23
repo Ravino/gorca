@@ -1,25 +1,29 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-// DRAFT (paper only, ADR-0026). Not built, not linked. The shipped contract stays
+// DRAFT (paper only, ADR-0026 r2). Not built, not linked. The shipped contract stays
 // crates/gorca-ext-api/wit/gorca-ext.wit (0.3.0) until M18a-1 freezes this package.
+// Replaces the unshipped 0.9.0 draft (ADR-0026 §8).
 //
 // Rules this package follows (ADR-0019 V-1..V-8, ADR-0024 §2.10, ADR-0026 §2.3):
-// - No connector type crosses the boundary: no AT-SPI path, bus name, interface or role enum,
-//   no AccessKit node id. Everything is a registry code or a host-minted handle, so the same
-//   plugin works over AT-SPI and over Newton/AccessKit.
+// - No connector type or connector vocabulary crosses the boundary: no AT-SPI path, bus name,
+//   interface, event name or role enum, no AccessKit node id. Everything is a registry code or
+//   a host-minted handle, so the same plugin works over AT-SPI and over Newton/AccessKit.
 // - Growing vocabularies are numeric codes with append-only registries (roles, groups, actions,
 //   presentation fields, reasons, causes). An unknown code means "unknown", never a trap.
 // - Records are frozen per major. Anything that grows is read through accessor functions.
-package gorca:ext@0.9.0;
+// - Every string and list the guest passes is length-checked by the host before it is copied
+//   (ADR-0026 §2.5.3); the caps are stated next to each function.
+package gorca:ext@0.10.0;
 
 interface types {
-  /// A node of the plugin's scope. Stable for the life of the node inside that scope (the host
-  /// maps it to a `NodeKey` it never reuses); meaningless in any other scope. Using a handle of a
-  /// node that is gone is not an error: accessors return `none`, effects on it are dropped.
+  /// A node of the instance's scope. Opaque and unforgeable: minted by the host for this
+  /// instance only (index, generation and a keyed MAC, ADR-0026 §2.3.3). A handle that is
+  /// forged, from another instance or scope, or of a node that is gone reads `none`, and
+  /// effects on it are dropped and counted; it never reads another node.
   type node-ref = u64;
 
-  /// Opaque basis token (ADR-0024 W-4). The host passes one with every call that can read the
-  /// model; a fact asserted with it is stale on arrival if what the call read has changed since.
-  type snapshot-token = u64;
+  /// A host-minted anchor (DOM id, structural path or region) of a node, from `model.anchor-of`.
+  /// Opaque and unforgeable like `node-ref`. The guest never computes anchor hashes.
+  type anchor-ref = u64;
 
   /// Speech epoch at the time of the call (ADR-0019 I-4).
   type epoch = u64;
@@ -32,8 +36,8 @@ interface types {
   type category-code = u16;
   /// Presentation field kinds (`PresIr` fields, ADR-0022 §2.5).
   type field-code = u16;
-  /// Presentation reasons: focus, browse-line, quick-nav, say-all, review, change, list-entry,
-  /// where-am-i (ADR-0022 §2.5).
+  /// Presentation reasons: focus, change; browse-line, quick-nav, say-all, list-entry and
+  /// where-am-i once M22b2 is merged; review once M22b3 is merged (ADR-0026 §2.9 M18a-5).
   type reason-code = u8;
   /// Index of a selector declared in the plugin's manifest (`[[selector]]`, ADR-0019 §4.4).
   type selector-id = u16;
@@ -42,7 +46,8 @@ interface types {
 
   record grid-pos { row: u32, col: u32, row-span: u32, col-span: u32 }
 
-  /// Window-relative logical pixels (GTK4 reports WINDOW coordinates only).
+  /// Window-relative logical pixels (whatever origin the connector can report for the
+  /// window; never screen-absolute).
   record rect { x: s32, y: s32, w: u32, h: u32 }
 
   /// The value of one fused group, in the shape its registry row names. New groups reuse these
@@ -58,7 +63,7 @@ interface types {
     /// Integer groups: level.
     number(u32),
     /// Text groups: name, description, role description, value text, placeholder.
-    /// Clipped to 1 KiB by the host.
+    /// At most 1 KiB, both directions (checked before copy).
     text(string),
     position(set-pos),
     grid(grid-pos),
@@ -69,10 +74,12 @@ interface types {
   }
 
   /// Text a plugin wants spoken or shown: a message of its own catalog (ADR-0010) or a literal.
+  /// `id` and each arg at most 1 KiB; at most 8 args.
   record msg-ref { id: string, args: list<tuple<string, string>> }
 
   variant text {
     msg(msg-ref),
+    /// At most 1 KiB.
     literal(string),
   }
 
@@ -102,7 +109,9 @@ interface types {
 
   /// Identity of the application the scope belongs to, as the core verified it.
   record app-info {
-    /// Lowercase application name (ADR-0016 matcher input).
+    /// The core's application identity (ADR-0016 matcher key), normalised across connectors:
+    /// the AT-SPI application name and the Newton/Wayland app id of one application map to the
+    /// same value. One scope per application, never one per connector (ADR-0026 §2.3.1).
     name: string,
     /// Toolkit or engine class code: gtk3, gtk4, gecko, blink, qt, st, unknown, ...
     engine: u16,

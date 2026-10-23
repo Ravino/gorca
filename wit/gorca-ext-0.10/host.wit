@@ -1,0 +1,219 @@
+package gorca:ext@0.10.0;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+// DRAFT (paper only, ADR-0026 r2 §2.3). Interfaces the host provides. Every function here is
+// non-blocking and in-memory: none performs IPC. IPC is `requests.request`. A call without the
+// permission it needs returns `none`/empty (reads) or is dropped and counted (effects); it is
+// not a fault (ADR-0026 §2.5.4). Every guest string/list argument is checked against its cap
+// before the host copies it; over cap = empty result or dropped effect plus a malformed-effect
+// fault (ADR-0026 §2.5.3). Third-party plugins never see nodes of a system scope (SS-1..SS-4):
+// such handles are never minted for them.
+
+/// Read access to the semantic model of the plugin's scope.
+///
+/// Lane rules (ADR-0026 §2.3.2), normative:
+/// - Writer lane (`rules.*`): every value read returns the OBSERVED view (stratum S0 after
+///   quirks, plus cached text). Existence, `parent`, `children` and `subtree` are the observed
+///   structure: no patch, hide, flatten, user, derived, inferred value or plugin category.
+/// - Reader lane (`commands`, `reactor`, `present`): values are the PUBLISHED fused entries
+///   (silenced sources masked); structure and existence are still the observed structure.
+/// - Selectors (`matches`, `select`, manifest watches, selector targets) are evaluated on the
+///   observed view in every lane, so no plugin's selector can depend on any plugin's output.
+/// Every node a read returns joins the call's read set (the host-side basis, §2.6.1).
+interface model {
+  use types.{node-ref, anchor-ref, role-code, group-code, prop-value, view-node, prov-info,
+             selector-id, app-info};
+
+  app: func() -> app-info;
+  /// Document URL of a `site` scope, as matched by the manifest (none in `app-module`).
+  doc-url: func() -> option<string>;
+  /// Reader lane: the focused node of this scope, if any (none in the writer lane).
+  focus: func() -> option<node-ref>;
+  /// Reader lane: the browse or review cursor's node of this scope (none in the writer lane).
+  cursor: func() -> option<node-ref>;
+
+  role: func(n: node-ref) -> option<role-code>;
+  /// `none` = Unknown; `some(absent)` = fetched, no value.
+  prop: func(n: node-ref, group: group-code) -> option<prop-value>;
+  /// Needs `read-names`.
+  name: func(n: node-ref) -> option<string>;
+  /// Registry state bits (focused, selected, editable, ...).
+  states: func(n: node-ref) -> u64;
+  parent: func(n: node-ref) -> option<node-ref>;
+  children: func(n: node-ref, max: u16) -> list<node-ref>;
+  /// One boundary crossing for a bounded subtree, depth first (at most 256 nodes, depth 8).
+  subtree: func(root: node-ref, max-depth: u8, max-nodes: u16) -> list<view-node>;
+  /// Cached text only (never an IPC); `none` when not cached. Needs `read-text`. `len` ≤ 64 KiB.
+  text: func(n: node-ref, start: u32, len: u32) -> option<string>;
+  /// Toolkit or web attribute under a neutral key, clipped to 256 bytes. Needs
+  /// `read-attributes`. Keys (≤ 64 B, lowercase): `tag`, `class`, `id`, `aria-role`,
+  /// `aria-*`; each connector maps them. Unknown keys return none.
+  attr: func(n: node-ref, key: string) -> option<string>;
+  /// Evaluate a manifest selector natively in the core on the observed view (ADR-0019 §4.4).
+  matches: func(n: node-ref, sel: selector-id) -> bool;
+  select: func(root: node-ref, sel: selector-id, max: u16) -> list<node-ref>;
+  /// Host-minted anchor of a node for `fact-target::anchor`: none when the node has no anchor
+  /// of that kind (e.g. no DOM id).
+  anchor-of: func(n: node-ref, kind: anchor-kind) -> option<anchor-ref>;
+  /// Reader lane: provenance of a published group (ADR-0024 §2.10 read side).
+  prov: func(n: node-ref, group: group-code) -> option<prov-info>;
+
+  enum anchor-kind {
+    /// Frame + DOM id (+ duplicate count), web documents.
+    dom-id,
+    /// Structural path, role and name fingerprint.
+    structural,
+    /// Window + area + capture fingerprint (pixel sources).
+    region,
+  }
+}
+
+/// Facts the plugin contributes to the semantic model (ADR-0024 §2.10). Writer lane only; in
+/// other lanes the calls are dropped and counted. Buffered: applied through admission after the
+/// call returns, all or nothing (ADR-0019 I-3). At most 256 facts and 64 other effects per call,
+/// effect text ≤ 32 KiB per call; over a cap the whole call is rejected and struck (B-6).
+/// The basis of every fact is the call's host-side token (ADR-0026 §2.6.1); there is no guest
+/// basis parameter. Trust (ADR-0026 §2.6): for an untrusted third-party plugin `patch` is
+/// admitted as `inferred` (hedged) and `hide` is advisory only.
+interface facts {
+  use types.{node-ref, anchor-ref, group-code, prop-value, selector-id, category-code};
+
+  variant fact-target {
+    node(node-ref),
+    anchor(anchor-ref),
+    /// Resolved on the observed view (ADR-0026 §2.3.2).
+    selector(selector-id),
+  }
+
+  /// Which stratum the fact is for (ADR-0026 §2.6). `patch` is S1 (author intent, plain speech)
+  /// and needs a grant for it; `inferred` is S4 (below derived, hedged by tier and confidence).
+  enum layer { patch, inferred }
+
+  /// `conf` is the plugin's calibrated precision in 1/1000 (ignored for `patch`).
+  /// `ttl-ms` is required for `inferred` (the host applies 300000 when none).
+  %assert: func(target: fact-target, group: group-code, value: prop-value, at: layer,
+                conf: u16, ttl-ms: option<u32>);
+  retract: func(target: fact-target, group: group-code, at: layer);
+  /// Patch layer (existence register): remove from browse, quick nav and review sets.
+  /// First-party or user-trusted plugins only; otherwise advisory (shown in `explain`).
+  hide: func(target: fact-target);
+  /// Retracts only this plugin's own `hide`.
+  unhide: func(target: fact-target);
+  /// Membership in a category the manifest declares (`ExtCats`, ADR-0022 §2.9). Categories are
+  /// never visible to selectors.
+  category: func(target: fact-target, cat: category-code, member: bool);
+}
+
+/// Output through the normal pipeline (ADR-0022 §2.9: declared content utterances, rendered by
+/// the same render stage, epoch-tagged, rate-limited). Buffered like `facts`. Reader lane only.
+/// Third-party output outside a command the plugin owns is prefixed by the add-on name (or an
+/// add-on cue), limited to 1 utterance per 2 s, never `interrupt`, and suppressed while focus
+/// is in a system scope (ADR-0026 §2.7).
+interface output {
+  use types.{node-ref, text, reason-code};
+
+  enum urgency {
+    /// Only inside a command the plugin owns: interrupts current speech.
+    interrupt,
+    message,
+    notification,
+    progress,
+  }
+
+  variant part {
+    text(text),
+    /// Present this node through the core pipeline (compose -> PresIr -> render) for the
+    /// given reason, exactly as the core would.
+    node(tuple<node-ref, reason-code>),
+  }
+
+  /// At most 16 parts.
+  say: func(parts: list<part>, u: urgency);
+  /// A core cue name or a cue file declared in the plugin's manifest theme (name ≤ 64 B).
+  cue: func(name: string);
+}
+
+/// Acting on the application. Buffered; every call is validated by the core again at apply
+/// time. Accepted only while a user command of this plugin is in flight, or in a reactor
+/// delivery of a request that command issued within the same epoch (ADR-0026 AC-3).
+interface actions {
+  use types.{node-ref, action-code};
+
+  enum mode { browse, focus }
+
+  /// Needs `act`. The core maps the code to the connector's action and announces failure.
+  activate: func(n: node-ref, action: action-code);
+  /// Needs `act`: give the node keyboard focus.
+  focus: func(n: node-ref);
+  /// Needs `navigate`: move the browse or review cursor; the core speaks the node. Fails with a
+  /// spoken "not available" when the published model hides the node.
+  move-cursor: func(n: node-ref);
+  /// Needs `navigate`: below the user's toggle (ADR-0024 PS-3).
+  request-mode: func(m: mode);
+  /// Needs `pointer` (first-party only) and the gorca-helper `pointer` capability:
+  /// routed through the ADR-0025 click path with its occlusion and target checks.
+  pointer-click: func(n: node-ref, button: u8);
+  /// Inside a command: hand the key back to the application (pass-through).
+  pass-key: func();
+}
+
+/// The plugin's own settings (`ext.<id>.*`, schema-validated, ADR-0019 I-8). A change bumps the
+/// plugin's source epoch, so the writer lane re-derives (ADR-0026 §2.4.1).
+interface settings {
+  variant setting-value {
+    truth(bool),
+    integer(s64),
+    choice(u16),
+    /// At most 1 KiB.
+    words(string),
+  }
+
+  /// Both lanes. Key ≤ 64 B.
+  get: func(key: string) -> option<setting-value>;
+  /// Buffered; reader lane, only while a command of this plugin is in flight (AC-3).
+  set: func(key: string, value: setting-value);
+}
+
+/// Timers (buffered, reader lane only): at least 50 ms, at most 16 armed per instance. Fire into
+/// `reactor.tick`.
+interface timers {
+  arm: func(token: u32, after-ms: u32);
+  cancel: func(token: u32);
+}
+
+/// Asynchronous reads that may need IPC. Never blocks: returns an id at once, under a host
+/// deadline (ADR-0019 I-2). At most 8 in flight per instance.
+/// - Reader lane: the reply arrives in `reactor.deliver`; it can never become a fact.
+/// - Writer lane: the reply is NOT delivered to the plugin. It enters the observed view (text
+///   cache, mirror children, refetched node); if the observed data changed, the trigger rule
+///   re-derives the node with a normal basis (ADR-0026 §2.4.4). At most one outstanding request
+///   per (node, query kind), and one per (node, query kind, observed revision): a repeated
+///   `refresh` of an unchanged node is dropped and counted.
+interface requests {
+  use types.{node-ref};
+
+  enum budget { interactive, prefetch, background }
+
+  variant query {
+    /// Text beyond the cache (needs `read-text`); length ≤ 64 KiB.
+    text(tuple<node-ref, u32, u32>),
+    /// Children not yet in the mirror.
+    children(tuple<node-ref, u16>),
+    /// Ask the primary source to refetch a node (bounded by the core's fetch scheduler).
+    refresh(node-ref),
+  }
+
+  variant request-error { busy, denied, unsupported, duplicate }
+
+  request: func(q: query, b: budget) -> result<u32, request-error>;
+  cancel: func(id: u32);
+}
+
+interface diag {
+  /// Rate-limited; never contains node text unless the user enabled verbose add-on logs.
+  /// Message ≤ 256 B (checked before copy).
+  log: func(level: u8, msg: string);
+  /// Monotonic milliseconds. Reader lane only: `none` in the writer lane, where output must
+  /// not depend on time (ADR-0026 §2.3.2).
+  now-ms: func() -> option<u64>;
+}
