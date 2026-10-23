@@ -48,6 +48,8 @@ const NEUTRAL: &[&str] = &[
     "gorca-fuse",
     "gorca-fact-api",
     "gorca-sem-atspi",
+    // The presentation pipeline reads the fused model only (M22b1).
+    "gorca-present",
     // The extension API is what a WASM extension links: no transport, no runtime.
     "gorca-ext-api",
 ];

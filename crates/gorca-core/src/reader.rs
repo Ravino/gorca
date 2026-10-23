@@ -459,6 +459,8 @@ pub struct Reader {
     pub(crate) app_policy: Option<Arc<dyn crate::builtin_ext::AppPolicy>>,
     /// The native terminal policy, used when no extension of the application is one.
     pub(crate) term_provider: Option<Arc<dyn crate::TermProvider>>,
+    /// M22b1 shadow presenter: focus utterances are offered to `gorca-present` and diffed.
+    pub(crate) present_shadow: Option<gorca_present::ShadowHandle>,
 }
 
 /// Revalidation and correction counters (B-1 M-6).
@@ -533,7 +535,15 @@ impl Reader {
             notice: crate::present::NoticeCtx::new(),
             app_policy: None,
             term_provider: None,
+            present_shadow: None,
         }
+    }
+
+    /// Run `gorca-present` in shadow mode beside the legacy presenter (ADR-0022 M22b1).
+    #[must_use]
+    pub fn with_present_shadow(mut self, handle: gorca_present::ShadowHandle) -> Self {
+        self.present_shadow = Some(handle);
+        self
     }
 
     /// Set once at construction from `CoreConfig::lazy_attrs`.
@@ -895,6 +905,112 @@ mod tests {
                 | ReaderEffect::SayAllChunk { .. } => None,
             })
             .collect()
+    }
+
+    /// A snapshot of a native node that carries a fused entry (M22b1 shadow tests).
+    fn fused_snap(
+        n: u64,
+        role: Role,
+        sem_role: gorca_model::SemRole,
+        name: &str,
+    ) -> Arc<NodeSnapshot> {
+        let mut s = (*snap(n, role, name)).clone();
+        let mut e = gorca_model::SemEntry::default();
+        e.sem.role = sem_role;
+        e.name = Some(Arc::from(name));
+        s.sem.entry = Some(Arc::new(e));
+        Arc::new(s)
+    }
+
+    #[test]
+    fn shadow_presenter_agrees_on_a_plain_native_focus_and_never_changes_speech() {
+        use gorca_model::SemRole as S;
+        let (h, mut actor) = gorca_present::channel(gorca_present::Deviations::builtin());
+        // One reader per focus: a second focus inside one fixture is rate-limited by the Reader.
+        let cases = [
+            (fused_snap(1, Role::Button, S::Button, "OK"), "OK button"),
+            // The model says link, the legacy snapshot says button: a real difference.
+            (fused_snap(2, Role::Button, S::Link, "OK"), "OK button"),
+            // No fused entry yet: not offered.
+            (snap(3, Role::Button, "Plain"), "Plain button"),
+        ];
+        for (node, want) in cases {
+            let mut f = fixture();
+            f.reader = f.reader.with_present_shadow(h.clone());
+            let n = node.key.local.0;
+            f.writer.apply(
+                SnapshotBatch {
+                    nodes: vec![node],
+                    ..Default::default()
+                },
+                gorca_mirror::ApplyOrigin::Push,
+            );
+            let fx = f.reader.handle(
+                ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(n) }),
+                Instant::now(),
+            );
+            assert_eq!(spoken(&fx), [want], "speech is the legacy presenter's");
+        }
+        assert_eq!(actor.drain_pending(), 2);
+        let s = h.stats();
+        assert_eq!((s.offered, s.equal, s.different), (2, 1, 1), "{s:?}");
+        assert_eq!(s.skipped_no_entry, 1);
+    }
+
+    /// M-6 guard: what the shadow hook adds to the focus path (token clones and one `try_send`).
+    /// The number is printed for the plan; the bound is loose so a debug build passes.
+    #[test]
+    fn shadow_hook_cost_on_the_focus_path_is_microseconds() {
+        use gorca_model::SemRole as S;
+        const N: u32 = 20_000;
+        let (h, mut actor) = gorca_present::channel(gorca_present::Deviations::builtin());
+        let mut f = fixture();
+        f.reader = f.reader.with_present_shadow(h.clone());
+        let snap = fused_snap(1, Role::CheckBox, S::Checkbox, "Remember this choice");
+        let u = f.reader.presenters.present(
+            crate::present::PresentContext::Focus,
+            &snap,
+            gorca_model::UttId(1),
+            gorca_model::Epoch(1),
+        );
+        let mut total = std::time::Duration::ZERO;
+        for i in 0..N {
+            let t = Instant::now();
+            f.reader
+                .shadow_focus(crate::present::PresentContext::Focus, &snap, &u, false);
+            total += t.elapsed();
+            if i % 32 == 31 {
+                actor.drain_pending();
+            }
+        }
+        actor.drain_pending();
+        let mean = total / N;
+        eprintln!("shadow_focus mean = {mean:?} over {N} calls");
+        assert!(mean < std::time::Duration::from_micros(50), "{mean:?}");
+        assert_eq!(h.stats().offered, u64::from(N));
+    }
+
+    #[test]
+    fn shadow_presenter_off_by_default_costs_nothing() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![fused_snap(
+                    1,
+                    Role::Button,
+                    gorca_model::SemRole::Button,
+                    "OK",
+                )],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        assert!(f.reader.present_shadow.is_none());
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
+            Instant::now(),
+        );
+        assert_eq!(spoken(&fx), ["OK button"]);
     }
 
     #[test]

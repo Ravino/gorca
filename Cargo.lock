@@ -1172,6 +1172,7 @@ dependencies = [
  "gorca-mirror",
  "gorca-model",
  "gorca-output-api",
+ "gorca-present",
  "gorca-rt",
  "gorca-speech",
  "gorca-testkit",
@@ -1432,6 +1433,20 @@ dependencies = [
  "gorca-model",
  "gorca-rt",
  "thiserror",
+]
+
+[[package]]
+name = "gorca-present"
+version = "0.0.0"
+dependencies = [
+ "gorca-i18n",
+ "gorca-model",
+ "smallvec",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "toml_edit",
+ "tracing",
 ]
 
 [[package]]

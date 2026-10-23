@@ -14,6 +14,7 @@ gorca-rt = { workspace = true }
 gorca-ingress = { workspace = true }
 gorca-mirror = { workspace = true }
 gorca-fuse = { workspace = true }
+gorca-present = { workspace = true }
 gorca-connector-api = { workspace = true }
 gorca-doc-source-api = { workspace = true }
 gorca-doc = { workspace = true }

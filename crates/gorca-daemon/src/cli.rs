@@ -76,6 +76,9 @@ pub struct Options {
     pub shadow: bool,
     /// `GORCA_LAZY_ATTRS=1`: the M-6b fallback, the cold focus fetch leaves `ATTRS` out.
     pub lazy_attrs: bool,
+    /// `GORCA_PRESENT_SHADOW=1`: M22b1, run the `gorca-present` shadow presenter beside the
+    /// legacy one and count differences (speaks nothing).
+    pub present_shadow: bool,
     /// `--bench-fill-policy=r0|prefetch|candidate`: default is the adopted focus-window prefetch.
     pub fill_policy: FillChoice,
     /// `--topology=...` / `GORCA_TOPOLOGY`: where the lanes run (bake-off B-5). Default `auto`:
@@ -335,6 +338,9 @@ impl Options {
         }
         if get("GORCA_LAZY_ATTRS").is_some_and(|v| v == "1") {
             o.lazy_attrs = true;
+        }
+        if get("GORCA_PRESENT_SHADOW").is_some_and(|v| v == "1") {
+            o.present_shadow = true;
         }
         if get("GORCA_SHADOW").is_some_and(|v| v == "1") {
             o.shadow = true;

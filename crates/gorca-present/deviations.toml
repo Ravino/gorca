@@ -1,0 +1,11 @@
+# Allowed differences between the legacy presenter and `gorca-present` (ADR-0022 section 2.11,
+# M-13). A surface switches when its shadow diff is zero outside this list; every row has a
+# reason and, while the gap is temporary, the slice that closes it (`until`).
+#
+# `id` is a classifier name from `src/diff.rs` (`Classifier`); an id missing here is not allowed.
+
+[[deviation]]
+id = "value-not-fused"
+surface = "focus"
+reason = "The fused entry carries aria-valuetext only; the legacy presenter also speaks an AT-SPI Value range (current value), which is not a fused group yet."
+until = "M22b1 slice 2"

@@ -600,6 +600,54 @@ impl Reader {
         }
     }
 
+    /// M22b1 shadow mode: offer the legacy presenter's focus tokens and the fused entry to
+    /// `gorca-present`. Only a cheap clone of the tokens and one `try_send`; never waits.
+    pub(crate) fn shadow_focus(
+        &self,
+        ctx: PresentContext,
+        snap: &NodeSnapshot,
+        u: &gorca_model::Utterance,
+        from_cache: bool,
+    ) {
+        use gorca_present::{FocusSample, LegacyToken, SkipWhy};
+        let Some(h) = &self.present_shadow else {
+            return;
+        };
+        if ctx != PresentContext::Focus {
+            h.skipped(SkipWhy::Context);
+            return;
+        }
+        let web = crate::aria::Node {
+            role: snap.role,
+            states: snap.states,
+            attrs: &snap.attrs,
+        }
+        .is_web();
+        if web {
+            h.skipped(SkipWhy::Web);
+            return;
+        }
+        let Some(entry) = &snap.sem.entry else {
+            h.skipped(SkipWhy::NoEntry);
+            return;
+        };
+        h.offer(FocusSample {
+            node: snap.key,
+            entry: Arc::clone(entry),
+            legacy: u
+                .segments
+                .iter()
+                .map(|s| LegacyToken {
+                    kind: s.kind,
+                    text: Arc::clone(&s.text),
+                })
+                .collect(),
+            may_refine: from_cache || u.may_refine,
+            secret: snap.role == Role::PasswordEntry,
+            description_pause: self.cmd.effective.browse.description_pause,
+        });
+    }
+
     /// Step `Presented` for the snapshot's node and, if that produced the `Speak` effect, build
     /// the utterance from the snapshot at hand.
     pub(crate) fn present(&mut self, snap: &Arc<NodeSnapshot>, fx: &mut ReaderEffects) {
@@ -629,6 +677,7 @@ impl Reader {
                     PresentContext::Focus
                 };
                 let mut u = self.presenters.present(ctx, snap, id, epoch);
+                self.shadow_focus(ctx, snap, &u, from_cache);
                 if !self.cmd.effective.browse.description_pause {
                     crate::aria::strip_pause(&mut u);
                 }

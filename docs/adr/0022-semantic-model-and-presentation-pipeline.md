@@ -244,6 +244,15 @@ Invariants:
 - **PR-5 (new)** `aria-roledescription` is honoured (QA-3) but never hides the native role from the
   object-info/where-am-I key; ignored when empty, equal to the name, or longer than 64 scalars.
 
+**`PresIr` freeze (M22b1 slice 1, 2026-10-24).** The IR records are frozen at
+`PRES_IR_VERSION = 1` in `crates/gorca-present/src/ir.rs`: `PresIr { reason, node, sem_rev,
+may_refine, fields }`, `Field { kind: FieldKind(u16), content, origin, span }`, `Origin { row, group,
+via }`, `Content::{Word(MsgId), Text(Arc<str>)}`, `FlatSpan`. `FieldKind` codes 1..13 are
+append-only (name, role, state, value, description, level, position, current, error-text,
+placeholder, shortcut, role-description, inferred-label); `>= 0x8000` is the add-on range. `Reason`
+(codes 0..8) and `Content` are append-only. ADR-0026 `present-edit` binds to this version.
+Plan and slices: `docs/reports/m22b1-plan.md`.
+
 ### 2.6 Provenance and "why was this said" (MC-4, A1)
 
 - `Semantics` carries no provenance; `ProvTag` (u64) and the `stale`/`fallback` masks live beside it
@@ -418,7 +427,7 @@ Details: report §8, math reports.
 
 ## 6. Open questions
 
-- **QO-1** If M22b1 lags M18a, is freezing the `PresIr` record from the M22a sketch acceptable,
+- **QO-1 (resolved 2026-10-24: M22b1 slice 1 froze `PresIr`, see section 2.5)** If M22b1 lags M18a, is freezing the `PresIr` record from the M22a sketch acceptable,
   or should M18a wait for M22b1 too (§2.10 item 4)? Recommendation: freeze from the sketch.
 - **QO-2** ADR-0019 selector radius r and the relation fan-out cap (64) are engineering guesses;
   B-FUSE and XP-8 settle them.
