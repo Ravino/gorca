@@ -571,7 +571,7 @@ mod tests {
 
     #[test]
     fn the_allowlist_may_not_grow_for_a_file() {
-        let allow = [row("present-focus", F, 1, Date(2026, 12, 15))];
+        let allow = [row("present-focus", F, 1, Date(2026, 11, 7))];
         let hits = [hit("present-focus", F, 3), hit("present-focus", F, 9)];
         let v = judge(&hits, &allow, TODAY);
         assert_eq!(v.len(), 1, "{v:?}");
@@ -580,7 +580,7 @@ mod tests {
 
     #[test]
     fn a_deleted_use_forces_the_row_down() {
-        let allow = [row("present-focus", F, 2, Date(2026, 12, 15))];
+        let allow = [row("present-focus", F, 2, Date(2026, 11, 7))];
         let v = judge(&[hit("present-focus", F, 3)], &allow, TODAY);
         assert_eq!(v.len(), 1, "{v:?}");
         assert!(v[0].contains("may only shrink"));
@@ -608,16 +608,16 @@ mod tests {
 
     #[test]
     fn rows_parse_and_reject_garbage() {
-        let ok = "# c\npresent-focus | crates/a.rs | 2 | 2026-12-15 | M22b1-5\n";
+        let ok = "# c\npresent-focus | crates/a.rs | 2 | 2026-11-07 | M22b1-5\n";
         assert_eq!(
             parse_allow(ok).unwrap(),
-            vec![row("present-focus", "crates/a.rs", 2, Date(2026, 12, 15))]
+            vec![row("present-focus", "crates/a.rs", 2, Date(2026, 11, 7))]
         );
-        assert!(parse_allow("nope | a.rs | 1 | 2026-12-15 | s").is_err());
+        assert!(parse_allow("nope | a.rs | 1 | 2026-11-07 | s").is_err());
         assert!(parse_allow("present-focus | a.rs | 1 | 15.12.2026 | s").is_err());
-        assert!(parse_allow("present-focus | a.rs | x | 2026-12-15 | s").is_err());
-        assert!(parse_allow("present-focus | a.rs | 1 | 2026-12-15 | ").is_err());
-        assert!(parse_allow("present-focus | a.rs | 1 | 2026-12-15").is_err());
+        assert!(parse_allow("present-focus | a.rs | x | 2026-11-07 | s").is_err());
+        assert!(parse_allow("present-focus | a.rs | 1 | 2026-11-07 | ").is_err());
+        assert!(parse_allow("present-focus | a.rs | 1 | 2026-11-07").is_err());
     }
 
     #[test]
