@@ -234,7 +234,7 @@ async fn hit_test_ok(
     let mut path = Arc::clone(&cur);
     for _ in 0..MAX_DEPTH {
         if path == *start {
-            return true;
+            return hit_accepts(HitRel::Inside, None);
         }
         match c.parent_ref(&path, dl).await {
             Ok(Some((b, p))) => match parent_of(&b, &p) {
@@ -246,23 +246,48 @@ async fn hit_test_ok(
             Err(_) => return true,
         }
     }
-    // ... or an ancestor of it: Blink answers the document for a point on a button and does not descend, so an
-    // ancestor is "the toolkit cannot tell". Only an object of another branch is a disagreement.
-    let mut path = Arc::clone(start);
-    for _ in 0..MAX_DEPTH {
-        if path == cur {
-            return true;
-        }
-        match c.parent_ref(&path, dl).await {
-            Ok(Some((b, p))) => match parent_of(&b, &p) {
-                Some(next) => path = next,
-                None => return false,
-            },
-            Ok(None) => return false,
-            Err(_) => return true,
-        }
+    // ... or the target's direct parent when that is an ordinary container (GTK3 and Gecko report a label or a text leaf as
+    // its parent). Any other answer, an ancestor included, says the target is not at the point (stale extents, an
+    // overlay, a row that moved): a disagreement.
+    let parent = match c.parent_ref(start, dl).await {
+        Ok(Some((b, p))) => parent_of(&b, &p),
+        Ok(None) => None,
+        Err(_) => return true,
+    };
+    if parent.as_ref() != Some(&cur) {
+        return hit_accepts(HitRel::Other, None);
     }
-    false
+    match c.role(&cur, dl).await {
+        Ok(raw) => hit_accepts(HitRel::DirectParent, Some(raw)),
+        Err(_) => true,
+    }
+}
+
+/// How the object the application's hit test ended on relates to the target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HitRel {
+    /// The target itself or one of its descendants.
+    Inside,
+    /// The target's direct parent.
+    DirectParent,
+    /// An ancestor further up, or another branch.
+    Other,
+}
+
+/// The hit test's verdict: the target or inside it agrees; the direct parent agrees only when it is an ordinary
+/// container; anything else is a disagreement.
+fn hit_accepts(rel: HitRel, parent_role: Option<u32>) -> bool {
+    match rel {
+        HitRel::Inside => true,
+        HitRel::DirectParent => parent_role.is_none_or(parent_answer_ok),
+        HitRel::Other => false,
+    }
+}
+
+/// May the hit test's answer be the target's direct parent of this role? Not a window, frame, document, scroll pane,
+/// viewport or inline frame: those contain the target without being at the point.
+fn parent_answer_ok(raw_parent_role: u32) -> bool {
+    !is_toplevel_role(raw_parent_role) && !is_clipping_role(raw_parent_role)
 }
 
 /// A role whose rectangle clips its descendants: scroll panes, viewports, documents and inline frames.
@@ -381,6 +406,62 @@ mod tests {
         assert_eq!(p, (475.0, 395.5));
         // below the document's visible rectangle: not visible, although inside the device-pixel window
         assert_eq!(target_point(r(375, 900, 200, 75), &doc), None);
+    }
+
+    #[test]
+    fn the_hit_test_accepts_the_target_inside_it_and_an_ordinary_direct_parent_only() {
+        use atspi::Role;
+        // the target itself, or a descendant of it
+        assert!(hit_accepts(HitRel::Inside, None));
+        // the direct parent: ordinary container yes, window / frame / document / scroll pane / viewport / iframe no
+        assert!(hit_accepts(
+            HitRel::DirectParent,
+            Some(Role::ListItem as u32)
+        ));
+        for bad in [
+            Role::Window,
+            Role::Frame,
+            Role::DocumentWeb,
+            Role::ScrollPane,
+            Role::Viewport,
+            Role::InternalFrame,
+        ] {
+            assert!(
+                !hit_accepts(HitRel::DirectParent, Some(bad as u32)),
+                "{bad:?}"
+            );
+        }
+        // a grandparent (the document, the toplevel) or another branch
+        assert!(!hit_accepts(HitRel::Other, None));
+        assert!(!hit_accepts(HitRel::Other, Some(Role::DocumentWeb as u32)));
+    }
+
+    #[test]
+    fn a_hit_test_answer_that_is_the_direct_parent_needs_an_ordinary_container() {
+        use atspi::Role;
+        // a label or text leaf reported as its parent: a push button, a list item, a paragraph, a panel
+        for ok in [
+            Role::Button,
+            Role::ListItem,
+            Role::Paragraph,
+            Role::Panel,
+            Role::Link,
+        ] {
+            assert!(parent_answer_ok(ok as u32), "{ok:?}");
+        }
+        // the containers that merely hold the target
+        for bad in [
+            Role::Window,
+            Role::Frame,
+            Role::Dialog,
+            Role::DocumentWeb,
+            Role::DocumentFrame,
+            Role::ScrollPane,
+            Role::Viewport,
+            Role::InternalFrame,
+        ] {
+            assert!(!parent_answer_ok(bad as u32), "{bad:?}");
+        }
     }
 
     #[test]

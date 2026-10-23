@@ -404,6 +404,7 @@ async fn do_named_action(
     c: &super::caller::Caller,
     path: &str,
     wanted: &[&str],
+    default_when_unnamed: bool,
     dl: Deadline,
 ) -> Result<BackendReply, BackendError> {
     let names = c
@@ -414,7 +415,7 @@ async fn do_named_action(
     // it. For a click (never for a context menu) an interface with no readable name falls back to action 0.
     let i = match pick_action(&names, wanted) {
         Some(i) => i,
-        None if names.is_empty() && std::ptr::eq(wanted, CLICK_ACTIONS) => 0,
+        None if names.is_empty() && default_when_unnamed => 0,
         None => return Err(BackendError::NotSupported),
     };
     let index = i32::try_from(i).map_err(|_| BackendError::NotSupported)?;
@@ -440,7 +441,9 @@ pub async fn act_object(
     } else {
         CLICK_ACTIONS
     };
-    do_named_action(&c, path, wanted, dl).await.map(|_| ())
+    do_named_action(&c, path, wanted, !context_menu, dl)
+        .await
+        .map(|_| ())
 }
 
 /// `review.activate`, `review.move_focus` and caret placement. Not allowed in shadow mode.
@@ -503,11 +506,11 @@ pub(super) async fn action(
         }
         ActionReq::Click { node } => {
             let n = resolve(cx, *node)?;
-            do_named_action(c, &n.path, CLICK_ACTIONS, dl).await
+            do_named_action(c, &n.path, CLICK_ACTIONS, true, dl).await
         }
         ActionReq::ContextMenu { node } => {
             let n = resolve(cx, *node)?;
-            do_named_action(c, &n.path, MENU_ACTIONS, dl).await
+            do_named_action(c, &n.path, MENU_ACTIONS, false, dl).await
         }
         ActionReq::ScrollTo { node } => {
             let n = resolve(cx, *node)?;
