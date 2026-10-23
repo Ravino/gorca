@@ -34,6 +34,14 @@ const MAX_PRESS: u8 = 3;
 /// command run at most this often (voice settings repeat; everything else does not repeat).
 pub const REPEAT_MIN: Duration = Duration::from_millis(120);
 
+/// Mutter hands a key that goes through the input method (a Wayland text-input client such as a
+/// browser's editable) to the monitor twice: once as it arrives, once when the input method
+/// forwards it back. The copies are identical and about 1 ms apart. No keyboard autorepeats at
+/// this rate, so an identical event this soon after the same one is that copy.
+pub const MIRROR_WINDOW: Duration = Duration::from_millis(8);
+/// How many recent events are compared for a mirrored copy (copies of fast typing interleave).
+const RECENT_KEYS: usize = 4;
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum Sel {
     Committed,
@@ -62,6 +70,8 @@ pub struct LaneStats {
     pub ambiguous: u64,
     /// Keys whose verdict forked on the double-tap guard band.
     pub band_forks: u64,
+    /// Identical copies of an event Mutter delivered twice, dropped before classification.
+    pub mirrored: u64,
 }
 
 /// What [`InputLane::on_key`] produced.
@@ -94,6 +104,7 @@ pub struct InputLane {
     multi: Option<Multi>,
     shift_armed: Option<Instant>,
     last_key_at: Instant,
+    recent: SmallVec<[(KeyEvent, Instant); RECENT_KEYS]>,
     sent: u64,
     last_repeat_run: Option<Instant>,
     session: u64,
@@ -122,6 +133,7 @@ impl InputLane {
             multi: None,
             shift_armed: None,
             last_key_at: now,
+            recent: SmallVec::new(),
             sent: 0,
             last_repeat_run: None,
             session: 0,
@@ -139,6 +151,7 @@ impl InputLane {
     /// unknown and keys that were down will never be released on this connection.
     pub fn reset(&mut self) {
         self.down.clear();
+        self.recent.clear();
         self.worlds.clear();
         self.worlds.push(World {
             r: Replica::default(),
@@ -215,6 +228,26 @@ impl InputLane {
             self.session = session;
             self.reset();
             self.seen = (view.committed_gen, view.wanted_gen);
+        }
+        if self.is_mirrored(&ev, at) {
+            self.stats.mirrored += 1;
+            return LaneOut {
+                intent: KeyIntent {
+                    event: ev,
+                    kind: if ev.pressed {
+                        PressKind::Repeat
+                    } else {
+                        PressKind::Release
+                    },
+                    class: KeyClass::Swallowed,
+                    repeat: 1,
+                    chord: None,
+                    epoch: self.epoch.current(),
+                    at,
+                },
+                epoch_advanced: false,
+                stale_modifier: None,
+            };
         }
         self.sync(&view);
 
@@ -340,6 +373,28 @@ impl InputLane {
             },
             None => None,
         }
+    }
+
+    /// Is `ev` the second copy of an event seen a moment ago ([`MIRROR_WINDOW`])? Records `ev`
+    /// otherwise. A copy changes no lane state: it is as if it never arrived.
+    fn is_mirrored(&mut self, ev: &KeyEvent, at: Instant) -> bool {
+        self.recent
+            .retain(|(_, t)| at.saturating_duration_since(*t) < MIRROR_WINDOW);
+        if let Some(i) = self
+            .recent
+            .iter()
+            .rposition(|(e, _)| e.keycode == ev.keycode)
+            && self.recent[i].0 == *ev
+        {
+            // One copy per original: a third identical event is a real one.
+            self.recent.remove(i);
+            return true;
+        }
+        if self.recent.len() == RECENT_KEYS {
+            self.recent.remove(0);
+        }
+        self.recent.push((*ev, at));
+        false
     }
 
     fn press_kind(&mut self, ev: &KeyEvent) -> PressKind {
@@ -740,6 +795,45 @@ mod tests {
                 .intent
                 .class
         }
+    }
+
+    #[test]
+    fn a_copy_of_an_event_mutter_delivered_twice_is_swallowed() {
+        // Input-method forwarding makes Mutter notify the monitor twice, ~1 ms apart.
+        let mut r = rig();
+        let first = r.key(KC_T, 0x68, true, 100, Modifiers::empty());
+        assert_eq!(first.intent.class, KeyClass::PassToApp);
+        let copy = r.key(KC_T, 0x68, true, 101, Modifiers::empty());
+        assert_eq!(copy.intent.class, KeyClass::Swallowed);
+        assert!(!copy.epoch_advanced);
+        let up = r.key(KC_T, 0x68, false, 140, Modifiers::empty());
+        assert_eq!(up.intent.kind, PressKind::Release);
+        let up_copy = r.key(KC_T, 0x68, false, 141, Modifiers::empty());
+        assert_eq!(up_copy.intent.class, KeyClass::Swallowed);
+        assert_eq!(r.lane.stats().mirrored, 2);
+        // The copy left no trace: the next press is a fresh press, not an autorepeat.
+        let next = r.key(KC_T, 0x68, true, 300, Modifiers::empty());
+        assert_eq!(next.intent.kind, PressKind::Press);
+    }
+
+    #[test]
+    fn autorepeat_and_fast_retyping_are_not_copies() {
+        let mut r = rig();
+        let a = r.key(KC_T, 0x68, true, 100, Modifiers::empty());
+        assert_eq!(a.intent.kind, PressKind::Press);
+        // Autorepeat starts far later than the mirror window and repeats every 30 ms or more.
+        let b = r.key(KC_T, 0x68, true, 600, Modifiers::empty());
+        assert_eq!(b.intent.kind, PressKind::Repeat);
+        assert_eq!(b.intent.class, KeyClass::PassToApp);
+        let c = r.key(KC_T, 0x68, true, 630, Modifiers::empty());
+        assert_eq!(c.intent.class, KeyClass::PassToApp);
+        // Press, release, press of one key inside a few ms: the events differ.
+        let mut r = rig();
+        r.key(KC_T, 0x68, true, 0, Modifiers::empty());
+        r.key(KC_T, 0x68, false, 3, Modifiers::empty());
+        let again = r.key(KC_T, 0x68, true, 6, Modifiers::empty());
+        assert_eq!(again.intent.kind, PressKind::Press);
+        assert_eq!(r.lane.stats().mirrored, 0);
     }
 
     #[test]
