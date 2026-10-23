@@ -31,14 +31,46 @@ pub fn truncate_str(s: &str, max: usize) -> &str {
     s.get(..end).unwrap_or("")
 }
 
-/// True when `fused` is a name from content that contains everything of the engine's `own` name
-/// and is not the same text: the same words (the engine joins a row's cells without a separator,
-/// "SeatLeftRight", where S3 puts a space between them) plus whatever the engine did not see.
-/// Spaces are not compared.
+/// Fewest non-space characters an engine name needs to be extended by a name from content. A
+/// one- or two-character name ("5", "OK") is a prefix of far too many longer texts to say the
+/// longer one is the same name seen in full.
+pub const NAME_EXTEND_MIN: usize = 3;
+
+/// The one predicate for "the name from content replaces the engine's content name" (M22a-C3,
+/// review M-2): the fuser's S3 gate, the overlay (`fused_name`) and both agreement checkers use
+/// exactly this and nothing looser.
+///
+/// True when `fused` is `own` with more text around it: with white space dropped, `own` occurs in
+/// `fused` as a proper part whose both ends sit on word boundaries of `fused` (the engine joins a
+/// row's cells without a separator, "SeatLeftRight", where S3 puts a space between them, so
+/// spaces are not compared; and a message row the engine named from its one button, "React",
+/// becomes "Alice hello React"). "Seat" is not extended to "Seating" or "Heseat", and `own` needs
+/// at least [`NAME_EXTEND_MIN`] non-space characters. An unrelated longer string never qualifies.
 pub fn name_extends(own: &str, fused: &str) -> bool {
-    let squeeze = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
-    let (o, f) = (squeeze(own), squeeze(fused));
-    !o.is_empty() && own != fused && fused.len() >= own.len() && f.contains(&o)
+    let o: Vec<char> = own.chars().filter(|c| !c.is_whitespace()).collect();
+    if o.len() < NAME_EXTEND_MIN {
+        return false;
+    }
+    // `f` is `fused` without white space; `edge[i]` is true when a word boundary (the start, the
+    // end or white space in `fused`) lies before `f[i]` (and `edge[f.len()]` after the last).
+    let mut f: Vec<char> = Vec::with_capacity(fused.len());
+    let mut edge: Vec<bool> = Vec::with_capacity(fused.len() + 1);
+    let mut gap = true;
+    for c in fused.chars() {
+        if c.is_whitespace() {
+            gap = true;
+        } else {
+            edge.push(gap);
+            f.push(c);
+            gap = false;
+        }
+    }
+    edge.push(true);
+    if f.len() <= o.len() {
+        // The same characters spaced differently is the same text, re-worded: it extends.
+        return f == o && own != fused;
+    }
+    (0..=f.len() - o.len()).any(|i| edge[i] && edge[i + o.len()] && f[i..i + o.len()] == o[..])
 }
 
 /// A per-source monotone sequence number (orders writes within one source only, Lemma 1).
@@ -481,6 +513,27 @@ pub const fn hedge_cap(conf: ConfClass, tier: TrustTier) -> ConfClass {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn name_extends_is_a_strict_word_boundary_containment() {
+        // The engine joined the cells; S3 spaces them.
+        assert!(name_extends("SeatLeftRight", "Seat Left Right"));
+        assert!(!name_extends("Seat Left", "Seat Left"));
+        // More text before or after, on word boundaries.
+        assert!(name_extends("React", "Alice hello React"));
+        assert!(name_extends("Seat", "Seat Left"));
+        // Not on a word boundary, or not contained at all.
+        assert!(!name_extends("Seat", "Seating Left"));
+        assert!(!name_extends("eat", "Seat Left"));
+        assert!(!name_extends("Quantity", "42 Price"));
+        // A short engine name is never extended: "5" and "OK" prefix too many texts.
+        assert!(!name_extends("5", "5 apples"));
+        assert!(!name_extends("5", "Row 5 of 9"));
+        assert!(!name_extends("OK", "OK Cancel"));
+        assert!(!name_extends("", "Anything"));
+        // Shorter fused never extends.
+        assert!(!name_extends("Alice hello React", "React"));
+    }
 
     #[test]
     fn val_group_matches_write_default_round_trip() {

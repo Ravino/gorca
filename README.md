@@ -75,6 +75,10 @@ Phase 1 (focus reader, speech, event ingress, test harness) and most of Phase 2 
   are spoken, and Firefox focus names and flat review follow the browser's accessible name.
 - Extensions: a WebAssembly extension host (wasmtime). The GNOME Shell and terminal policies ship
   as extensions.
+- Mouse emulation (opt-in): NVDA-style click, drag lock and route-to-review keys, using the
+  `gorca-helper` GNOME Shell extension. See the [mouse guide](docs/user-guide/mouse.md).
+- Profiles: per-application settings with chords to save, cycle and announce them. See the
+  [profiles guide](docs/user-guide/profiles.md).
 
 Planned, not done: braille, the Newton connector, an extension (add-on) platform with
 third-party add-ons and a store (ADR-0019, proposed), a typed semantic model and one

@@ -653,8 +653,9 @@ MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its ow
   Reader, fed by `ControlMsg::Pointer(PointerMsg::{Avail, Enabled})`; a gate flip is one `SetGrabSet` effect, i.e. one generation of
   the existing session's coalesced `SetKeyGrabs` (no `GrabKeyboard`, no reconnect, so the Mutter 48.7 NULL-modifiers rules of
   `docs/reports/shell-segfault-20261019.md` are untouched); RG-6 relies on the existing `Ambiguous` classification; RG-7 learn-mode note.
-  The ten `mouse.*` commands exist and answer "not available / not responding / off"; the click path is MO-4. The daemon does not feed
-  `PointerMsg` yet, so in a running gorca the gate stays closed and the keypad types.
+  The ten `mouse.*` commands exist and answer "not available / not responding / off"; the click path is MO-4. At the time of MO-3 the daemon did not feed
+  `PointerMsg` yet. **Correction (2026-10-23):** MO-4 wired the daemon (`ShellHelperClient`, below), so in a running gorca the gate follows helper
+  availability and `mouse.enabled`.
 - **MO-4 (click at the pointer, locks):** `mouse.enabled` is a Base key (`[mouse] enabled`, default true). The Reader never does
   pointer I/O: a command is a `ReaderEffect::Pointer(PointerReq)`, the runtime runs it on the `PointerSink` (150 ms per call, at
   most 16 tasks) and the answer returns as `ControlMsg::PointerReply`. `Holds` (one pure `Hold` per lockable button): press and
@@ -686,14 +687,23 @@ MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its ow
   `mouse.announce_move`.
 - **Gecko quirk (action names)**: a Firefox button can answer `NActions = 0` and empty `GetName(i)` at some moments while `DoAction(0)` presses it
   (and `GetName(0)` is "press" at others). A click, never a context menu, therefore falls back to action 0 when the interface answers but
-  gives no name. The first `DoAction` after accessibility start-up is occasionally dropped by Gecko without an error; the end-to-end test
-  retries it (an item click has no reliable confirmation from the application).
+  gives no name (explicit flag, not a pointer comparison). **Known issue (Gecko)**: the first `DoAction` on the page button returns true and
+  is dropped without an error some of the time. Measured first-try success on the private shell, Firefox, scale 1: 3/6 with no wait, 4/6
+  after waiting 6 s (so a settle time does not cure it); 9/12 over the earlier mixed-scale runs; the immediate second `DoAction`
+  always worked. The product does not retry (a repeated click could toggle a checkbox twice or resubmit a form); `test_items.py` records
+  the first-try result as its own check and allows one retry only to finish the run. Cause not found (not window mapping or focus
+  timing); next candidates: the window is `inactive` (not focused) when the action runs, or Gecko drops the action while its content
+  process has not yet seen the first input.
 - **Resolver visibility (review L-1..L-3)**: the node must be `SHOWING`; its rectangle is clipped to the toplevel and to every scrolling
   ancestor (scroll pane, viewport, document, inline frame) on the way up, which also clips Chromium/Electron device-pixel rectangles (the
   ancestors are in the children's space, so no scale is needed; the logical toplevel is not used for them); the application's own hit test
-  (`Component.GetAccessibleAtPoint`, repeated on every answer because GTK3 answers one level) must end on the node, inside it, or on an ancestor
-  of it (Gecko and GTK3 tell nothing more precise at times), never on another branch. Chromium/Electron are exempt (quirk `blink-hit-test`):
-  their answer is an unrelated page node. A text offset with an empty character rectangle (end of line, empty line) aims at its line's
+  (`Component.GetAccessibleAtPoint`, repeated on every answer because GTK3 answers one level) must end on the node, inside it, or on its
+  direct parent when that parent is an ordinary container (a label or text leaf reported as its parent); an answer that is a window, frame,
+  document, scroll pane, viewport or inline frame, a further ancestor or another branch is a disagreement (review F-1: those say the target
+  is not at the point), which gives "No location" after the item-click `ScrollTo` retry. Chromium/Electron are exempt (quirk
+  `blink-hit-test`): their answer is an unrelated page node, measured at scale 1 (so not a logical/device pixel mix-up: point (380,296)
+  answered accessible/17, not on the button's parent chain 23, 21, 19, 16, 11, 9, 8, 3, 2, 1). A text offset with an empty character
+  rectangle (end of line, empty line) aims at its line's
   rectangle, then at the previous character, and is "No location" otherwise; only an empty text uses the node's extents. Decision for scrolled
   out items: "No location" from the resolver, then one `ScrollTo` and a second locate for item clicks only (the user asked to act on that item);
   route to review never scrolls.

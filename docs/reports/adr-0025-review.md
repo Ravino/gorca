@@ -505,3 +505,18 @@ after a hit-test disagreement, which F-1 makes more frequent; that is acceptable
 
 **L-3: OK.** The fallback is the line rectangle, then the previous character, never the node centre (except offset 0
 of an empty text). The `has_state` mask fix is correct; it affected the `active` hint since MO-5a.
+
+
+## Implementer response to MO-5b review F-1..F-4 (mo5-matcher)
+
+- **F-1 fixed**: `hit_test_ok` accepts the target, a descendant, or the direct parent whose role is not window, frame, dialog, document, scroll
+  pane, viewport or inline frame; everything else is a disagreement (ScrollTo once for item clicks, then "No location"). Pure decision
+  `hit_accepts(HitRel, parent_role)` with unit tests for target/descendant, ordinary parent, each refused container role, grandparent/other branch.
+- **F-2**: the product does not retry. `test_items.py` now prints `FIRSTTRY` and has a separate "FIRST try" check; one retry at most.
+  Measured on Firefox, scale 1, 6 runs each: first-try success 3/6 with no wait, 4/6 after a 6 s wait; earlier mixed-scale runs 9/12. The
+  second `DoAction` always fired. Cause not found; a settle wait does not help, so no settle rule was added. Recorded as a known issue in
+  ADR-0025 15.2. Chromium, Electron and GTK first-try succeeded in all runs.
+- **F-3 partly measured; follow-up open (logical-coordinate re-measure at scale 2 not done)**: at scale 1 logical and device pixels are equal, and Electron's `GetAccessibleAtPoint(380,296)` still answered
+  accessible/17, which is not in the button's parent chain (23, 21, 19, 16, 11, 9, 8, 3, 2, 1). So the disagreement is not a coordinate
+  space error; the hit test stays off for device-pixel toolkits.
+- **F-4 fixed**: `do_named_action` takes `default_when_unnamed: bool` (true for clicks, false for context menus).

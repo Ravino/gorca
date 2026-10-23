@@ -939,7 +939,7 @@ impl Reader {
         b.label_req = b.label_req.wrapping_add(1);
         let req = b.label_req;
         b.label_pending = Some((req, snap.key));
-        fx.push(ReaderEffect::Web(crate::browse::WebEffect::Label {
+        fx.push(ReaderEffect::Web(crate::WebEffect::Label {
             doc,
             node,
             role: snap.role,

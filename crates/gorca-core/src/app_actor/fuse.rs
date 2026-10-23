@@ -49,8 +49,9 @@ const AWAITING_SCAN: usize = 256;
 /// Nodes the engine is asked to hold: the mirror's cap plus the slack of tombstoned and evicted
 /// keys it has not heard of. Beyond it the engine is rebuilt (the mirror evicts silently).
 const MAX_NODES: usize = gorca_mirror::limits::MAX_MIRROR_NODES + 4096;
-/// Property-event invalidations kept waiting; beyond it the oldest are dropped (the mirror still
-/// marks those snapshots stale, only the entry's `stale` mask is lost for them).
+/// Property-event invalidations kept waiting; beyond it an arbitrary waiting one (not the oldest) is dropped to
+/// make room (the mirror still marks those snapshots stale, only the entry's `stale` mask is
+/// lost for them).
 const INVAL_CAP: usize = 4096;
 /// Nodes of a whole-application invalidation marked per step.
 const INVAL_SWEEP_CHUNK: usize = 512;
