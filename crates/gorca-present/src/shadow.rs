@@ -21,7 +21,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::compose::{ComposeCtx, ReportFlags, compose};
 use crate::deviations::Deviations;
-use crate::diff::{DiffOutcome, LegacyToken, diff};
+use crate::diff::{DiffCtx, DiffOutcome, LegacyToken, diff};
 use crate::ir::Reason;
 use crate::render::{RenderOpts, render};
 
@@ -211,7 +211,20 @@ impl ShadowActor {
                 description_pause: s.description_pause,
             },
         );
-        let outcome = diff(&s.legacy, &tokens, &self.deviations);
+        let outcome = diff(
+            &s.legacy,
+            &tokens,
+            &self.deviations,
+            DiffCtx {
+                surface: "focus",
+                entry_has_value_text: s
+                    .entry
+                    .sem
+                    .text
+                    .as_deref()
+                    .is_some_and(|t| t.value_text.as_deref().is_some_and(|v| !v.is_empty())),
+            },
+        );
         match &outcome {
             DiffOutcome::Equal => bump(&self.stats.equal),
             DiffOutcome::OrderOnly => bump(&self.stats.order_only),
@@ -398,6 +411,66 @@ mod tests {
         assert_eq!(h.stats().equal, 1);
         cancel.cancel();
         assert!(task.await.is_ok(), "the actor ends without panicking");
+    }
+
+    /// R-1: the actor runs on the multi-thread pool, off the producer's thread. The producer
+    /// here is a plain thread standing in for the Reader lane; the offer cost is what it pays.
+    #[test]
+    #[allow(clippy::disallowed_methods)] // a plain thread stands for the Reader lane
+    fn the_actor_on_the_pool_keeps_up_and_costs_the_producer_microseconds() {
+        const N: u32 = 20_000;
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_time()
+            .build()
+            .expect("runtime");
+        let (h, a) = channel(Deviations::builtin());
+        let cancel = CancellationToken::new();
+        let task = rt.spawn(a.run(cancel.clone()));
+        let e = entry(SemRole::Checkbox, "Remember this choice", Check::On);
+        let role = gorca_model::Role::CheckBox.spoken();
+        let checked = gorca_i18n::t(gorca_i18n::MsgId::StateChecked);
+        let legacy = vec![
+            tok(SegmentKind::Text, "Remember this choice"),
+            tok(SegmentKind::Role, role),
+            tok(SegmentKind::State, checked),
+        ];
+        let mut worst = std::time::Duration::ZERO;
+        let mut total = std::time::Duration::ZERO;
+        let start = std::time::Instant::now();
+        for i in 0..N {
+            let s = sample(Arc::clone(&e), legacy.clone());
+            let t = std::time::Instant::now();
+            h.offer(s);
+            let d = t.elapsed();
+            total += d;
+            worst = worst.max(d);
+            // A burst of 64 then a pause: the 1 kHz focus rate of a hostile app is far above use.
+            if i % 64 == 63 {
+                std::thread::sleep(Duration::from_micros(200));
+            }
+        }
+        let produced = start.elapsed();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while {
+            let s = h.stats();
+            s.compared() + s.dropped_full < u64::from(N) && std::time::Instant::now() < deadline
+        } {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let s = h.stats();
+        eprintln!(
+            "shadow on the pool: offer mean {:?}, worst {worst:?}, produced {N} in {produced:?}, \
+             compared {}, dropped {}",
+            total / N,
+            s.compared(),
+            s.dropped_full
+        );
+        assert_eq!(s.compared() + s.dropped_full, u64::from(N));
+        assert_eq!(s.different, 0);
+        assert!(total / N < Duration::from_micros(50), "{:?}", total / N);
+        cancel.cancel();
+        assert!(rt.block_on(task).is_ok());
     }
 
     #[tokio::test]

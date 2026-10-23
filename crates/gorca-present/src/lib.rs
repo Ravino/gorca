@@ -4,7 +4,7 @@
 //! `SemEntry -> compose -> PresIr -> (hooks) -> render -> tokens`. It reads only the fused
 //! semantic model (`gorca-model::sem`), never a snapshot or a connector type.
 //!
-//! * [`ir`] - the frozen `PresIr` records (`PRES_IR_VERSION`).
+//! * [`ir`] - the `PresIr` records (draft v0, frozen at the end of M22b1 slice 2).
 //! * [`compose`] - the rule table (slice 1: `native.focus`).
 //! * [`render`] - the only producer of text.
 //! * [`diff`], [`deviations`] - the shadow diff against the legacy presenter and its allowed
@@ -16,14 +16,18 @@
 pub mod compose;
 pub mod deviations;
 pub mod diff;
-pub mod ir;
+/// The IR records live in `gorca-present-ir` (no runtime), re-exported here.
+pub use gorca_present_ir as ir;
 pub mod render;
 pub mod shadow;
 
 pub use compose::{ComposeCtx, ComposeError, ReportFlags, compose};
 pub use deviations::{Deviations, DeviationsError};
-pub use diff::{DiffOutcome, LegacyToken, diff};
-pub use ir::{Content, Field, FieldKind, FlatSpan, Origin, PRES_IR_VERSION, PresIr, Reason, RowId};
+pub use diff::{DiffCtx, DiffOutcome, LegacyToken, diff};
+pub use ir::{
+    Arg, ArgVal, Content, ExtKinds, ExtRef, Field, FieldFlags, FieldKind, FlatSpan, IrFlags,
+    LangId, Origin, PRES_IR_VERSION, PresIr, Reason, RowId,
+};
 pub use render::{RenderOpts, Token, TokenText, render};
 pub use shadow::{
     FocusSample, SHADOW_QUEUE, ShadowActor, ShadowHandle, ShadowSnapshot, SkipWhy, channel,

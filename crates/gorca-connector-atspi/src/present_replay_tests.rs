@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 use gorca_model::{Epoch, NodeSnapshot, UttId, WebEngine};
 use gorca_present::{
-    ComposeCtx, Deviations, DiffOutcome, LegacyToken, Reason, RenderOpts, ReportFlags, compose,
-    diff, render,
+    ComposeCtx, Deviations, DiffCtx, DiffOutcome, LegacyToken, Reason, RenderOpts, ReportFlags,
+    compose, diff, render,
 };
 
 use crate::legacy_agreement_tests::{page, pages_of, root};
@@ -71,7 +71,15 @@ pub(crate) fn replay(label: &str, snaps: &[Arc<NodeSnapshot>], dev: &Deviations,
             continue;
         };
         let tokens = render(&ir, RenderOpts::default());
-        match diff(&legacy, &tokens, dev) {
+        let ctx = DiffCtx {
+            surface: "focus",
+            entry_has_value_text: entry
+                .sem
+                .text
+                .as_deref()
+                .is_some_and(|t| t.value_text.as_deref().is_some_and(|v| !v.is_empty())),
+        };
+        match diff(&legacy, &tokens, dev, ctx) {
             DiffOutcome::Equal => out.equal += 1,
             DiffOutcome::OrderOnly => out.order_only += 1,
             DiffOutcome::Allowed(_) => out.allowed += 1,

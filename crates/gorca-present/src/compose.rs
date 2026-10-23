@@ -14,7 +14,9 @@ use gorca_model::sem::{
 };
 use smallvec::SmallVec;
 
-use crate::ir::{Content, Field, FieldKind, Origin, PresIr, Reason, RowId};
+use std::sync::Arc;
+
+use crate::ir::{Content, Field, FieldFlags, FieldKind, IrFlags, Origin, PresIr, Reason, RowId};
 
 /// Rule row of the native focus utterance.
 pub const ROW_NATIVE_FOCUS: RowId = RowId(1);
@@ -37,7 +39,7 @@ pub struct ComposeCtx {
 pub enum ComposeError {
     /// No rule row exists for the reason yet (later M22b slices add them).
     #[error("no rule row for reason code {0}")]
-    Unsupported(u8),
+    Unsupported(u16),
 }
 
 fn origin(group: Group) -> Origin {
@@ -49,7 +51,7 @@ fn origin(group: Group) -> Origin {
 }
 
 fn word(kind: FieldKind, id: M, group: Group) -> Field {
-    Field::new(kind, Content::Word(id), origin(group))
+    Field::new(kind, Content::word(id), origin(group))
 }
 
 fn tri_state_word(role: Role) -> Option<M> {
@@ -57,7 +59,46 @@ fn tri_state_word(role: Role) -> Option<M> {
         Role::CheckBox | Role::RadioButton => Some(M::StateHalfChecked),
         Role::ToggleButton => Some(M::StateHalfPressed),
         Role::ProgressBar => Some(M::StateIndeterminate),
-        _ => None,
+        Role::Unknown
+        | Role::Application
+        | Role::Window
+        | Role::Dialog
+        | Role::Panel
+        | Role::Document
+        | Role::DocumentWeb
+        | Role::Heading
+        | Role::Paragraph
+        | Role::Link
+        | Role::Image
+        | Role::List
+        | Role::ListItem
+        | Role::Table
+        | Role::Row
+        | Role::Cell
+        | Role::ColumnHeader
+        | Role::RowHeader
+        | Role::Button
+        | Role::ComboBox
+        | Role::TextEntry
+        | Role::PasswordEntry
+        | Role::SpinButton
+        | Role::Slider
+        | Role::Menu
+        | Role::MenuBar
+        | Role::MenuItem
+        | Role::Popover
+        | Role::Tab
+        | Role::TabList
+        | Role::Tree
+        | Role::TreeItem
+        | Role::Toolbar
+        | Role::StatusBar
+        | Role::Separator
+        | Role::Label
+        | Role::StaticText
+        | Role::Terminal
+        | Role::Landmark
+        | Role::Alert => None,
     }
 }
 
@@ -92,7 +133,8 @@ pub fn compose(
         | Reason::Review
         | Reason::Change { .. }
         | Reason::ListEntry
-        | Reason::WhereAmI => Err(ComposeError::Unsupported(reason.code())),
+        | Reason::WhereAmI
+        | Reason::Unknown(_) => Err(ComposeError::Unsupported(reason.code())),
     }
 }
 
@@ -101,10 +143,10 @@ fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
     let role = family(sem.role);
     let mut fields: SmallVec<[Field; 6]> = SmallVec::new();
 
-    if let Some(name) = entry.name.as_deref().filter(|s| !s.is_empty()) {
+    if let Some(name) = entry.name.as_ref().filter(|s| !s.is_empty()) {
         fields.push(Field::new(
             FieldKind::NAME,
-            Content::Text(name.into()),
+            Content::Text(Arc::clone(name)),
             origin(Group::Name),
         ));
     }
@@ -157,41 +199,47 @@ fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
         }
     }
 
+    let secret = role == Role::PasswordEntry;
     if let Some(v) = sem
         .text
         .as_deref()
-        .and_then(|t| t.value_text.as_deref())
+        .and_then(|t| t.value_text.as_ref())
         .filter(|s| !s.is_empty())
     {
-        fields.push(Field::new(
+        let mut f = Field::new(
             FieldKind::VALUE,
-            Content::Text(v.into()),
+            Content::Text(Arc::clone(v)),
             origin(Group::ValueText),
-        ));
+        );
+        if secret {
+            f = f.with_flags(FieldFlags::SECRET);
+        }
+        fields.push(f);
     }
     if speaks_description(role)
-        && let Some(d) = sem.description().filter(|s| !s.is_empty())
+        && let Some(d) = sem
+            .text
+            .as_deref()
+            .and_then(|t| t.description.as_ref())
+            .filter(|s| !s.is_empty())
     {
         fields.push(Field::new(
             FieldKind::DESCRIPTION,
-            Content::Text(d.into()),
+            Content::Text(Arc::clone(d)),
             origin(Group::Description),
         ));
     }
 
-    PresIr {
-        reason: Reason::Focus,
-        node,
-        sem_rev: entry.sem_rev,
-        may_refine: ctx.may_refine,
-        fields,
+    let mut ir = PresIr::new(Reason::Focus, node, entry.sem_rev, fields);
+    ir.may_refine = ctx.may_refine;
+    if secret {
+        ir.flags = IrFlags::SECRET;
     }
+    ir
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use gorca_model::sem::SemText;
     use gorca_model::{AppId, ConnectorId, LocalId};
 
@@ -241,13 +289,13 @@ mod tests {
         let on = compose(&e, key(), Reason::Focus, CTX).expect("focus");
         assert_eq!(
             on.fields.last().map(|f| f.content.clone()),
-            Some(Content::Word(M::StateChecked))
+            Some(Content::word(M::StateChecked))
         );
         e.sem.check = Check::Off;
         let off = compose(&e, key(), Reason::Focus, CTX).expect("focus");
         assert_eq!(
             off.fields.last().map(|f| f.content.clone()),
-            Some(Content::Word(M::StateNotChecked))
+            Some(Content::word(M::StateNotChecked))
         );
     }
 
@@ -260,7 +308,7 @@ mod tests {
             .of_kind(FieldKind::STATE)
             .map(|f| f.content.clone())
             .collect();
-        assert_eq!(states, [Content::Word(M::StateHalfChecked)]);
+        assert_eq!(states, [Content::word(M::StateHalfChecked)]);
     }
 
     #[test]
@@ -295,6 +343,46 @@ mod tests {
                 .of_kind(FieldKind::DESCRIPTION)
                 .next()
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn a_password_value_is_marked_secret_and_survives_redaction_as_empty() {
+        let mut e = entry(SemRole::PasswordBox, "Password");
+        e.sem.text = Some(Arc::new(SemText {
+            value_text: Some(Arc::from("hunter2")),
+            ..SemText::default()
+        }));
+        let ir = compose(&e, key(), Reason::Focus, CTX).expect("focus");
+        assert!(ir.flags.contains(IrFlags::SECRET));
+        let v = ir.of_kind(FieldKind::VALUE).next().expect("value field");
+        assert!(v.is_secret());
+        let red = ir.redacted();
+        assert_eq!(
+            red.of_kind(FieldKind::VALUE)
+                .next()
+                .map(|f| f.content.clone()),
+            Some(Content::Text(Arc::from("")))
+        );
+    }
+
+    #[test]
+    fn name_text_and_entry_share_one_allocation() {
+        let e = entry(SemRole::Button, "OK");
+        let ir = compose(&e, key(), Reason::Focus, CTX).expect("focus");
+        let (Some(Content::Text(a)), Some(b)) = (ir.fields.first().map(|f| &f.content), &e.name)
+        else {
+            unreachable!("a name field");
+        };
+        assert!(Arc::ptr_eq(a, b), "compose clones the Arc, not the text");
+    }
+
+    #[test]
+    fn an_unknown_reason_has_no_row() {
+        let e = entry(SemRole::Button, "OK");
+        assert_eq!(
+            compose(&e, key(), Reason::Unknown(999), CTX),
+            Err(ComposeError::Unsupported(999))
         );
     }
 
