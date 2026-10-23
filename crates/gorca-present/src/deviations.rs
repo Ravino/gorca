@@ -133,9 +133,9 @@ mod tests {
     #[test]
     fn the_checked_in_list_parses_and_is_keyed_by_surface() {
         let d = Deviations::parse(BUILTIN).expect("deviations.toml parses");
-        assert!(d.allows("value-not-fused", "focus"));
+        assert!(d.allows("content-derived-name", "focus"));
         assert!(
-            !d.allows("value-not-fused", "browse"),
+            !d.allows("content-derived-name", "browse"),
             "the same id on another surface is not allowed"
         );
         assert!(!d.allows("anything-else", "focus"));
@@ -156,8 +156,8 @@ mod tests {
     #[test]
     fn expiry_compares_iso_dates() {
         let d = Deviations::parse(BUILTIN).expect("parses");
-        assert_eq!(d.expired("2026-11-08"), vec!["value-not-fused"]);
-        assert!(d.expired("2026-11-07").is_empty());
+        assert_eq!(d.expired("2026-12-16").len(), d.len());
+        assert!(d.expired("2026-12-15").is_empty());
         assert_eq!(today_utc().len(), 10);
     }
 

@@ -8,7 +8,6 @@
 
 use gorca_i18n::MsgId as M;
 use gorca_model::NodeKey;
-use gorca_model::Role;
 use gorca_model::sem::{
     Avail, Check, Expand, Group, Invalid, Press, Select, SemEntry, SemFlags, SemRole,
 };
@@ -17,6 +16,7 @@ use smallvec::SmallVec;
 use std::sync::Arc;
 
 use crate::ir::{Content, Field, FieldFlags, FieldKind, IrFlags, Origin, PresIr, Reason, RowId};
+use crate::roles::{Class, native_role};
 
 /// Rule row of the native focus utterance.
 pub const ROW_NATIVE_FOCUS: RowId = RowId(1);
@@ -54,64 +54,14 @@ fn word(kind: FieldKind, id: M, group: Group) -> Field {
     Field::new(kind, Content::word(id), origin(group))
 }
 
-fn tri_state_word(role: Role) -> Option<M> {
-    match role {
-        Role::CheckBox | Role::RadioButton => Some(M::StateHalfChecked),
-        Role::ToggleButton => Some(M::StateHalfPressed),
-        Role::ProgressBar => Some(M::StateIndeterminate),
-        Role::Unknown
-        | Role::Application
-        | Role::Window
-        | Role::Dialog
-        | Role::Panel
-        | Role::Document
-        | Role::DocumentWeb
-        | Role::Heading
-        | Role::Paragraph
-        | Role::Link
-        | Role::Image
-        | Role::List
-        | Role::ListItem
-        | Role::Table
-        | Role::Row
-        | Role::Cell
-        | Role::ColumnHeader
-        | Role::RowHeader
-        | Role::Button
-        | Role::ComboBox
-        | Role::TextEntry
-        | Role::PasswordEntry
-        | Role::SpinButton
-        | Role::Slider
-        | Role::Menu
-        | Role::MenuBar
-        | Role::MenuItem
-        | Role::Popover
-        | Role::Tab
-        | Role::TabList
-        | Role::Tree
-        | Role::TreeItem
-        | Role::Toolbar
-        | Role::StatusBar
-        | Role::Separator
-        | Role::Label
-        | Role::StaticText
-        | Role::Terminal
-        | Role::Landmark
-        | Role::Alert => None,
+/// What a mixed (tri-state) value says for a role class.
+const fn tri_state_word(class: Class) -> Option<M> {
+    match class {
+        Class::Checkable => Some(M::StateHalfChecked),
+        Class::Toggle => Some(M::StateHalfPressed),
+        Class::Progress => Some(M::StateIndeterminate),
+        Class::Field | Class::Other => None,
     }
-}
-
-fn speaks_description(role: Role) -> bool {
-    matches!(
-        role,
-        Role::TextEntry | Role::PasswordEntry | Role::ComboBox | Role::SpinButton
-    )
-}
-
-/// The legacy word family of a model role: what `native.focus` says for the role field.
-fn family(role: SemRole) -> Role {
-    role.legacy_family()
 }
 
 /// Compose the IR of `entry` for `reason`.
@@ -140,7 +90,8 @@ pub fn compose(
 
 fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
     let sem = &entry.sem;
-    let role = family(sem.role);
+    let info = native_role(sem.role, sem.press);
+    let class = info.class;
     let mut fields: SmallVec<[Field; 6]> = SmallVec::new();
 
     if let Some(name) = entry.name.as_ref().filter(|s| !s.is_empty()) {
@@ -150,8 +101,8 @@ fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
             origin(Group::Name),
         ));
     }
-    if role != Role::Unknown && !role.spoken().is_empty() {
-        fields.push(word(FieldKind::ROLE, role.msg(), Group::Role));
+    if let Some(role_word) = info.word {
+        fields.push(word(FieldKind::ROLE, role_word, Group::Role));
     }
 
     // States, in the legacy speaking order.
@@ -159,7 +110,7 @@ fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
         fields.push(word(FieldKind::STATE, M::StateUnavailable, Group::Avail));
     }
     let mixed = (sem.check == Check::Mixed || sem.press == Press::Mixed)
-        .then(|| tri_state_word(role))
+        .then(|| tri_state_word(class))
         .flatten();
     if let Some(m) = mixed {
         let g = if sem.check == Check::Mixed {
@@ -192,14 +143,14 @@ fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
     }
     // A checkable control says its off state too.
     if mixed.is_none() {
-        if matches!(role, Role::CheckBox | Role::RadioButton) && sem.check != Check::On {
+        if class == Class::Checkable && sem.check != Check::On {
             fields.push(word(FieldKind::STATE, M::StateNotChecked, Group::Check));
-        } else if role == Role::ToggleButton && sem.press != Press::On && sem.check != Check::On {
+        } else if class == Class::Toggle && sem.press != Press::On && sem.check != Check::On {
             fields.push(word(FieldKind::STATE, M::StateNotPressed, Group::Press));
         }
     }
 
-    let secret = role == Role::PasswordEntry;
+    let secret = sem.role == SemRole::PasswordBox;
     if let Some(v) = sem
         .text
         .as_deref()
@@ -216,7 +167,7 @@ fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
         }
         fields.push(f);
     }
-    if speaks_description(role)
+    if class == Class::Field
         && let Some(d) = sem
             .text
             .as_deref()

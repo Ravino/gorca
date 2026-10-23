@@ -19,6 +19,7 @@ pub mod diff;
 /// The IR records live in `gorca-present-ir` (no runtime), re-exported here.
 pub use gorca_present_ir as ir;
 pub mod render;
+pub mod roles;
 pub mod shadow;
 
 pub use compose::{ComposeCtx, ComposeError, ReportFlags, compose};

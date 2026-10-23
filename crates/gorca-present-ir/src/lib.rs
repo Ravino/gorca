@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! `PresIr`: the presentation intermediate representation (ADR-0022 section 2.5).
 //!
-//! **Draft v0** (`PRES_IR_VERSION = 0`). The reviewer blocked the slice 1 freeze
-//! (`docs/reports/m22b1-review.md` P-1..P-5); this is the corrected draft. The freeze to version 1
-//! happens at the end of M22b1 slice 2. This crate is pure data: no runtime, no connector types,
-//! so the plugin API crate may depend on it.
+//! **Frozen at version 1** (`PRES_IR_VERSION = 1`, end of M22b1 slice 2). The slice 1 draft was
+//! blocked by review (`docs/reports/m22b1-review.md` P-1..P-5); the corrected shape was exercised by
+//! the native corpus replay (0 differences outside `deviations.toml`). This crate is pure data: no
+//! runtime, no connector types, so the plugin API crate may depend on it. A change that is not an
+//! append of a code (a reshaped record, a removed or reordered field) bumps the version and amends
+//! ADR-0022; the `shape_*` tests below fail to compile or run on such a change.
 //!
 //! Rules that survive the freeze (they are about the wire, not only about Rust):
 //!
@@ -35,8 +37,8 @@ use gorca_model::sem::GroupMask;
 use gorca_model::{NodeKey, SegmentKind};
 use smallvec::SmallVec;
 
-/// Version of the record shapes below. 0 = draft, 1 = frozen (M22b1 slice 2).
-pub const PRES_IR_VERSION: u32 = 0;
+/// Version of the record shapes below. 1 = frozen (M22b1 slice 2).
+pub const PRES_IR_VERSION: u32 = 1;
 
 /// Why an utterance is composed (ADR-0022 section 2.5). Codes are append-only; an unknown code
 /// is carried as [`Reason::Unknown`] and passed through.
@@ -628,6 +630,67 @@ mod tests {
             SegmentKind::Description
         );
         assert_eq!(FieldKind(0x8001).segment_kind(true), SegmentKind::Text);
+    }
+
+    #[test]
+    fn shape_of_the_records_is_frozen() {
+        // Exhaustive destructuring: adding, removing or renaming a field breaks this at compile
+        // time, which is the signal to bump PRES_IR_VERSION and amend ADR-0022.
+        let f = Field::new(
+            FieldKind::NAME,
+            Content::Text("x".into()),
+            Origin::default(),
+        );
+        let Field {
+            kind: _,
+            flags: _,
+            lang: _,
+            content: _,
+            origin:
+                Origin {
+                    row: _,
+                    group: _,
+                    via: _,
+                },
+            span: _,
+        } = f;
+        let ir = PresIr::new(Reason::Focus, node(), 0, SmallVec::new());
+        let PresIr {
+            reason: _,
+            node: _,
+            sem_rev: _,
+            may_refine: _,
+            flags: _,
+            fields: _,
+        } = ir;
+        let ExtRef {
+            ns: _,
+            key: _,
+            args: _,
+        } = *match Content::ext("a", "b", vec![]) {
+            Content::Ext(r) => r,
+            Content::Text(_) | Content::Msg { .. } | Content::Opaque { .. } => unreachable!(),
+        };
+        assert_eq!(PRES_IR_VERSION, 1);
+    }
+
+    #[test]
+    fn an_unregistered_field_kind_and_opaque_content_pass_through_unchanged() {
+        let odd = Field::new(
+            FieldKind(0x7123),
+            Content::Opaque { code: 40 },
+            Origin::default(),
+        );
+        let ir = PresIr::new(
+            Reason::Unknown(77),
+            node(),
+            3,
+            [odd.clone()].into_iter().collect(),
+        );
+        assert_eq!(ir.redacted(), ir, "nothing secret: the copy is identical");
+        assert_eq!(ir.fields[0], odd);
+        assert_eq!(FieldKind(0x7123).name(), None);
+        assert!(!ir.reason.editable());
     }
 
     #[test]

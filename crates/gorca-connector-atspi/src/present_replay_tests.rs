@@ -10,7 +10,13 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use gorca_model::{Epoch, NodeSnapshot, UttId, WebEngine};
+use std::time::Instant;
+
+use gorca_model::{
+    AppId, ConnectorId, Epoch, LocalId, NodeKey, NodeSnapshot, PropMask, UttId, WebEngine,
+};
+
+use crate::decode::{RawNode, snapshot};
 use gorca_present::{
     ComposeCtx, Deviations, DiffCtx, DiffOutcome, LegacyToken, Reason, RenderOpts, ReportFlags,
     compose, diff, render,
@@ -33,9 +39,13 @@ pub(crate) struct Replay {
 }
 
 fn show<'a>(it: impl Iterator<Item = (gorca_model::SegmentKind, &'a str)>) -> String {
-    it.map(|(k, t)| format!("{k:?}:{t}"))
-        .collect::<Vec<_>>()
-        .join(" | ")
+    // Names and values are page/app content: group on their kind, keep words (role, state).
+    it.map(|(k, t)| match k {
+        gorca_model::SegmentKind::Text | gorca_model::SegmentKind::Value => format!("{k:?}:*"),
+        _ => format!("{k:?}:{t}"),
+    })
+    .collect::<Vec<_>>()
+    .join(" | ")
 }
 
 /// Replay `snaps` (already fused) through both presenters.
@@ -71,14 +81,7 @@ pub(crate) fn replay(label: &str, snaps: &[Arc<NodeSnapshot>], dev: &Deviations,
             continue;
         };
         let tokens = render(&ir, RenderOpts::default());
-        let ctx = DiffCtx {
-            surface: "focus",
-            entry_has_value_text: entry
-                .sem
-                .text
-                .as_deref()
-                .is_some_and(|t| t.value_text.as_deref().is_some_and(|v| !v.is_empty())),
-        };
+        let ctx = DiffCtx::for_entry("focus", entry);
         match diff(&legacy, &tokens, dev, ctx) {
             DiffOutcome::Equal => out.equal += 1,
             DiffOutcome::OrderOnly => out.order_only += 1,
@@ -114,10 +117,49 @@ pub(crate) fn run_native_corpus(dev: &Deviations) -> Replay {
     out
 }
 
+/// A synthetic native slider with a numeric AT-SPI value: the legacy presenter speaks the value
+/// from the snapshot, the fused path from `value_text` (set by the connector), so they agree.
+#[test]
+fn a_native_range_value_replays_equal() {
+    use crate::decode::RawValue;
+    let tables = crate::sem_profile::tables_for("GTK", "app", WebEngine::None);
+    let slider = RawNode {
+        role: 51, // ATSPI_ROLE_SLIDER
+        name: Some("Volume".into()),
+        value: Some(RawValue::Number {
+            current: 30.0,
+            min: 0.0,
+            max: 100.0,
+        }),
+        have: PropMask::ROLE | PropMask::NAME | PropMask::VALUE,
+        ..RawNode::default()
+    };
+    let snaps = vec![snapshot(
+        NodeKey {
+            app: AppId {
+                connector: ConnectorId(1),
+                serial: 1,
+            },
+            local: LocalId(1),
+        },
+        &slider,
+        Instant::now(),
+    )];
+    let fused = gorca_core::fuse_snapshots(tables, &snaps);
+    let mut out = Replay::default();
+    replay("synthetic/slider", &fused, &Deviations::builtin(), &mut out);
+    assert_eq!(
+        (out.equal, out.different, out.allowed),
+        (1, 0, 0),
+        "{:?}",
+        out.table
+    );
+}
+
 /// Differences outside `deviations.toml` the native replay is allowed to show today. Slice 2 drives
-/// it to zero; raising it needs a reason in the commit. Baseline 2026-10-24: 169 of 375 GTK4
-/// nodes (static label role word "text" vs "label", list rows named from content).
-const NATIVE_DIFFERENT_CEILING: u64 = 169;
+/// it to zero; raising it needs a reason in the commit. Slice 2 reached 0 (was 169 of 375 GTK4 nodes);
+/// 11 nodes are explained by `deviations.toml` rows.
+const NATIVE_DIFFERENT_CEILING: u64 = 0;
 
 #[test]
 fn the_native_corpus_replays_through_both_presenters() {
@@ -137,7 +179,7 @@ fn the_native_corpus_replays_through_both_presenters() {
     }
     assert!(compared > 50, "the corpus was not replayed ({compared})");
     assert!(
-        r.different <= NATIVE_DIFFERENT_CEILING,
+        r.different == NATIVE_DIFFERENT_CEILING,
         "{} differences outside deviations.toml",
         r.different
     );

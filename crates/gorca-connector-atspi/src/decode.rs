@@ -164,7 +164,7 @@ pub fn source_record(raw: &RawNode) -> SrcRecord {
         raw.sem_attrs.iter().map(|(k, v)| (&**k, &**v)).collect();
     let lo = raw.state_words.first().copied().unwrap_or(0);
     let hi = raw.state_words.get(1).copied().unwrap_or(0);
-    gorca_sem_atspi::normalise(&gorca_sem_atspi::RawNode {
+    let mut rec = gorca_sem_atspi::normalise(&gorca_sem_atspi::RawNode {
         fetched: raw.have
             & (PropMask::ROLE
                 | PropMask::STATES
@@ -176,7 +176,34 @@ pub fn source_record(raw: &RawNode) -> SrcRecord {
         attrs: &pairs,
         name: raw.name.as_deref(),
         description: raw.description.as_deref(),
-    })
+    });
+    range_value_text(&mut rec, raw.value.as_ref());
+    rec
+}
+
+/// A numeric AT-SPI `Value` (slider, spin button, progress bar) is the node's value text when
+/// the toolkit gave no `valuetext` of its own (M22b1: native focus speaks it from the fused entry,
+/// not from the snapshot). A text value (a field's contents) is text-layer data, not a fused group.
+fn range_value_text(rec: &mut SrcRecord, value: Option<&RawValue>) {
+    use gorca_model::sem::{Group, SemText};
+    let Some(RawValue::Number { current, min, max }) = value else {
+        return;
+    };
+    if !(current.is_finite() && min.is_finite() && max.is_finite()) {
+        return;
+    }
+    if rec
+        .sem
+        .text
+        .as_deref()
+        .is_some_and(|t| t.value_text.is_some())
+    {
+        return;
+    }
+    let mut text: SemText = rec.sem.text.as_deref().cloned().unwrap_or_default();
+    text.value_text = Some(Arc::from(format!("{current}")));
+    rec.sem.text = Some(Arc::new(text));
+    rec.known.set(Group::ValueText, true);
 }
 
 /// The app's child count is untrusted: negative is zero, and nothing above this is believed.
@@ -340,6 +367,54 @@ mod tests {
         let c = clip(&s, MAX_TEXT_BYTES);
         assert!(c.len() <= MAX_TEXT_BYTES && c.len() >= MAX_TEXT_BYTES - 1);
         assert_eq!(clip("abc", 10), "abc");
+    }
+
+    #[allow(clippy::unnecessary_wraps)] // the field it fills is an Option
+    fn num(current: f64) -> Option<RawValue> {
+        Some(RawValue::Number {
+            current,
+            min: 0.0,
+            max: 100.0,
+        })
+    }
+
+    fn value_text_of(raw: &RawNode) -> Option<String> {
+        source_record(raw)
+            .sem
+            .text
+            .as_deref()
+            .and_then(|t| t.value_text.as_deref().map(str::to_owned))
+    }
+
+    #[test]
+    fn a_numeric_value_becomes_the_value_text_and_a_text_value_does_not() {
+        let mut raw = RawNode {
+            have: PropMask::ROLE | PropMask::VALUE,
+            value: num(30.0),
+            ..RawNode::default()
+        };
+        assert_eq!(value_text_of(&raw).as_deref(), Some("30"));
+        raw.value = num(0.5);
+        assert_eq!(value_text_of(&raw).as_deref(), Some("0.5"));
+        raw.value = Some(RawValue::Text("contents".into()));
+        assert_eq!(
+            value_text_of(&raw),
+            None,
+            "a field's contents are not a fused group"
+        );
+        raw.value = num(f64::NAN);
+        assert_eq!(value_text_of(&raw), None);
+    }
+
+    #[test]
+    fn a_toolkit_valuetext_wins_over_the_number() {
+        let raw = RawNode {
+            have: PropMask::ROLE | PropMask::ATTRS | PropMask::VALUE,
+            value: num(30.0),
+            sem_attrs: vec![(Box::from("valuetext"), Box::from("thirty percent"))],
+            ..RawNode::default()
+        };
+        assert_eq!(value_text_of(&raw).as_deref(), Some("thirty percent"));
     }
 
     #[test]

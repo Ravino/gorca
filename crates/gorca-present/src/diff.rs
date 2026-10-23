@@ -3,9 +3,11 @@
 //! of `gorca-present`, compared as (kind, literal).
 
 use gorca_model::SegmentKind;
+use gorca_model::sem::{Check, Group, Press, ProvCode, SemEntry};
 
 use crate::deviations::Deviations;
 use crate::render::Token;
+use crate::roles::{Class, native_role};
 
 /// A token the legacy presenter produced, reduced to what is compared.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -44,14 +46,68 @@ pub enum DiffOutcome {
 /// A classifier of a known, allowed difference. The id is a row of `deviations.toml`.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Classifier {
-    /// Every differing token is a legacy `Value` the fused entry does not carry yet.
-    ValueNotFused,
+    /// A field's contents are spoken by the legacy presenter as its value; they are text-layer
+    /// content, not a fused group.
+    FieldContentsNotFused,
+    /// The fused name was derived from the node's content; the legacy snapshot had no name.
+    ContentDerivedName,
+    /// The legacy presenter says "pressed" for a node the model says is not a toggle.
+    PressedWithoutToggle,
+    /// The legacy presenter had no role word (its role mapping missed); the model has one.
+    RoleFromModel,
 }
 
 impl Classifier {
+    pub const ALL: [Classifier; 4] = [
+        Classifier::FieldContentsNotFused,
+        Classifier::ContentDerivedName,
+        Classifier::PressedWithoutToggle,
+        Classifier::RoleFromModel,
+    ];
+
     pub const fn id(self) -> &'static str {
         match self {
-            Classifier::ValueNotFused => "value-not-fused",
+            Classifier::FieldContentsNotFused => "field-contents-not-fused",
+            Classifier::ContentDerivedName => "content-derived-name",
+            Classifier::PressedWithoutToggle => "pressed-without-toggle",
+            Classifier::RoleFromModel => "role-from-model",
+        }
+    }
+}
+
+/// What the diff needs to know about the comparison besides the tokens.
+#[derive(Copy, Clone, Debug)]
+pub struct DiffCtx<'a> {
+    /// The surface being compared (`deviations.toml` `surface`).
+    pub surface: &'a str,
+    /// The role is a field (entry, combo box, spin button).
+    pub field_role: bool,
+    /// The fused name was derived from content (`ProvCode::Derived`).
+    pub name_derived: bool,
+    /// The model says the node is neither checkable nor a toggle.
+    pub untoggled: bool,
+}
+
+impl DiffCtx<'static> {
+    /// A context with no special facts, for the native focus surface.
+    pub const FOCUS: DiffCtx<'static> = DiffCtx {
+        surface: "focus",
+        field_role: false,
+        name_derived: false,
+        untoggled: false,
+    };
+}
+
+impl<'a> DiffCtx<'a> {
+    /// The facts of `entry` that decide which classifiers may apply.
+    pub fn for_entry(surface: &'a str, entry: &SemEntry) -> DiffCtx<'a> {
+        let role = native_role(entry.sem.role, entry.sem.press);
+        DiffCtx {
+            surface,
+            field_role: role.class == Class::Field,
+            name_derived: entry.prov.get(Group::Name) == Some(ProvCode::Derived),
+            untoggled: entry.sem.press == Press::NotToggle
+                && entry.sem.check == Check::NotCheckable,
         }
     }
 }
@@ -93,30 +149,60 @@ fn difference<'a>(a: &[Key<'a>], b: &[Key<'a>]) -> (Vec<Key<'a>>, Vec<Key<'a>>) 
     (only_a, only_b)
 }
 
-/// What the diff needs to know about the comparison besides the tokens.
-#[derive(Copy, Clone, Debug)]
-pub struct DiffCtx<'a> {
-    /// The surface being compared (`deviations.toml` `surface`).
-    pub surface: &'a str,
-    /// The fused entry has a value text: a missing value token is then a real bug, not a gap.
-    pub entry_has_value_text: bool,
+fn count_kind(keys: &[Key<'_>], kind: SegmentKind) -> usize {
+    keys.iter().filter(|(k, _)| *k == kind_code(kind)).count()
 }
 
-impl DiffCtx<'_> {
-    /// The native focus surface with no fused value text.
-    pub const FOCUS: DiffCtx<'static> = DiffCtx {
-        surface: "focus",
-        entry_has_value_text: false,
-    };
+fn take(keys: &mut Vec<Key<'_>>, pred: impl Fn(&Key<'_>) -> bool) -> bool {
+    match keys.iter().position(pred) {
+        Some(i) => {
+            keys.remove(i);
+            true
+        }
+        None => false,
+    }
 }
 
-/// A legacy `Value` token that is a range's current value (a number), not a field's contents.
-fn is_range_value(t: &str) -> bool {
-    t.trim().parse::<f64>().is_ok()
+/// Try to explain part of the difference with `c`; true when it removed something.
+fn explain<'a>(
+    c: Classifier,
+    ctx: &DiffCtx<'_>,
+    only_legacy: &mut Vec<Key<'a>>,
+    only_new: &mut Vec<Key<'a>>,
+    legacy_all: &[Key<'a>],
+    new_all: &[Key<'a>],
+) -> bool {
+    let kind = |k: SegmentKind| move |key: &Key<'_>| key.0 == kind_code(k);
+    match c {
+        Classifier::FieldContentsNotFused => {
+            ctx.field_role
+                && count_kind(only_legacy, SegmentKind::Value) == 1
+                && count_kind(new_all, SegmentKind::Value) == 0
+                && take(only_legacy, kind(SegmentKind::Value))
+        }
+        Classifier::ContentDerivedName => {
+            ctx.name_derived
+                && count_kind(legacy_all, SegmentKind::Text) == 0
+                && count_kind(only_new, SegmentKind::Text) == 1
+                && take(only_new, kind(SegmentKind::Text))
+        }
+        Classifier::PressedWithoutToggle => {
+            let pressed = gorca_i18n::t(gorca_i18n::MsgId::StatePressed);
+            ctx.untoggled
+                && take(only_legacy, |k| {
+                    k.0 == kind_code(SegmentKind::State) && k.1 == pressed
+                })
+        }
+        Classifier::RoleFromModel => {
+            count_kind(legacy_all, SegmentKind::Role) == 0
+                && count_kind(only_new, SegmentKind::Role) == 1
+                && take(only_new, kind(SegmentKind::Role))
+        }
+    }
 }
 
 /// Compare the legacy tokens with the new ones. `allowed` decides which classifiers count on
-/// `ctx.surface`.
+/// `ctx.surface`; a difference is `Allowed` only when allowed classifiers explain all of it.
 pub fn diff(
     legacy: &[LegacyToken],
     new: &[Token],
@@ -133,23 +219,22 @@ pub fn diff(
     if sa == sb {
         return DiffOutcome::OrderOnly;
     }
-    let (only_legacy, only_new) = difference(&sa, &sb);
-    // value-not-fused: exactly one legacy-only token, a numeric Value, while the entry has no
-    // value text and the new side has no value token at all.
-    let c = Classifier::ValueNotFused;
-    if only_new.is_empty()
-        && !ctx.entry_has_value_text
-        && only_legacy.len() == 1
-        && only_legacy[0].0 == kind_code(SegmentKind::Value)
-        && is_range_value(only_legacy[0].1)
-        && !lb.iter().any(|(k, _)| *k == kind_code(SegmentKind::Value))
-        && allowed.allows(c.id(), ctx.surface)
-    {
-        return DiffOutcome::Allowed(c.id());
+    let (mut only_legacy, mut only_new) = difference(&sa, &sb);
+    let mut used: Option<&'static str> = None;
+    for c in Classifier::ALL {
+        if !allowed.allows(c.id(), ctx.surface) {
+            continue;
+        }
+        if explain(c, &ctx, &mut only_legacy, &mut only_new, &sa, &sb) {
+            used.get_or_insert(c.id());
+        }
     }
-    DiffOutcome::Different {
-        legacy_only: u32::try_from(only_legacy.len()).unwrap_or(u32::MAX),
-        new_only: u32::try_from(only_new.len()).unwrap_or(u32::MAX),
+    match used {
+        Some(id) if only_legacy.is_empty() && only_new.is_empty() => DiffOutcome::Allowed(id),
+        Some(_) | None => DiffOutcome::Different {
+            legacy_only: u32::try_from(only_legacy.len()).unwrap_or(u32::MAX),
+            new_only: u32::try_from(only_new.len()).unwrap_or(u32::MAX),
+        },
     }
 }
 
@@ -215,60 +300,106 @@ mod tests {
         );
     }
 
+    fn ctx(f: impl Fn(&mut DiffCtx<'static>)) -> DiffCtx<'static> {
+        let mut c = DiffCtx::FOCUS;
+        f(&mut c);
+        c
+    }
+
+    fn d(legacy: &[LegacyToken], new: &[Token], c: DiffCtx<'_>) -> DiffOutcome {
+        diff(legacy, new, &Deviations::builtin(), c)
+    }
+
     #[test]
-    fn only_a_numeric_legacy_value_with_no_fused_value_is_allowed() {
-        let legacy = [l(SegmentKind::Text, "Vol"), l(SegmentKind::Value, "30")];
-        let new = [n(SegmentKind::Text, "Vol")];
-        assert_eq!(run(&legacy, &new), DiffOutcome::Allowed("value-not-fused"));
-        // A list without the row allows nothing.
+    fn a_field_contents_value_is_allowed_only_for_a_field_role() {
+        let legacy = [l(SegmentKind::Text, "Name"), l(SegmentKind::Value, "Alice")];
+        let new = [n(SegmentKind::Text, "Name")];
+        let field = ctx(|c| c.field_role = true);
+        assert_eq!(
+            d(&legacy, &new, field),
+            DiffOutcome::Allowed("field-contents-not-fused")
+        );
         assert!(matches!(
-            diff(&legacy, &new, &Deviations::empty(), DiffCtx::FOCUS),
+            d(&legacy, &new, DiffCtx::FOCUS),
             DiffOutcome::Different { .. }
         ));
-        // Another surface is not covered by the focus row.
+        // A list without the row, or another surface, allows nothing.
+        assert!(matches!(
+            diff(&legacy, &new, &Deviations::empty(), field),
+            DiffOutcome::Different { .. }
+        ));
         let browse = DiffCtx {
             surface: "browse",
-            ..DiffCtx::FOCUS
+            ..field
         };
         assert!(matches!(
-            diff(&legacy, &new, &Deviations::builtin(), browse),
+            d(&legacy, &new, browse),
             DiffOutcome::Different { .. }
         ));
     }
 
     #[test]
-    fn a_missing_value_is_a_real_difference_when_the_entry_has_a_value_text() {
-        // The slider has "50 percent" in the entry: compose dropping it must not hide as a gap.
-        let legacy = [l(SegmentKind::Text, "Vol"), l(SegmentKind::Value, "50")];
-        let ctx = DiffCtx {
-            entry_has_value_text: true,
-            ..DiffCtx::FOCUS
-        };
+    fn a_range_value_the_fused_side_lacks_is_never_hidden() {
+        // The connector puts a numeric range value into value_text: a missing one is a bug.
+        let legacy = [l(SegmentKind::Text, "Vol"), l(SegmentKind::Value, "30")];
         assert!(matches!(
-            diff(
-                &legacy,
-                &[n(SegmentKind::Text, "Vol")],
-                &Deviations::builtin(),
-                ctx
+            d(&legacy, &[n(SegmentKind::Text, "Vol")], DiffCtx::FOCUS),
+            DiffOutcome::Different { .. }
+        ));
+        assert!(matches!(
+            d(
+                &[l(SegmentKind::Value, "30")],
+                &[n(SegmentKind::Value, "40")],
+                DiffCtx::FOCUS
             ),
             DiffOutcome::Different { .. }
         ));
     }
 
     #[test]
-    fn a_text_entrys_contents_are_not_a_range_value() {
-        let legacy = [l(SegmentKind::Text, "Name"), l(SegmentKind::Value, "Alice")];
+    fn a_content_derived_name_is_allowed_when_the_entry_says_derived() {
+        let legacy = [l(SegmentKind::Role, "list item")];
+        let new = [
+            n(SegmentKind::Text, "Alpha"),
+            n(SegmentKind::Role, "list item"),
+        ];
         assert!(matches!(
-            run(&legacy, &[n(SegmentKind::Text, "Name")]),
+            d(&legacy, &new, DiffCtx::FOCUS),
+            DiffOutcome::Different { .. }
+        ));
+        let derived = ctx(|c| c.name_derived = true);
+        assert_eq!(
+            d(&legacy, &new, derived),
+            DiffOutcome::Allowed("content-derived-name")
+        );
+        // A different legacy name is not explained by derivation.
+        let legacy2 = [
+            l(SegmentKind::Text, "Beta"),
+            l(SegmentKind::Role, "list item"),
+        ];
+        assert!(matches!(
+            d(&legacy2, &new, derived),
             DiffOutcome::Different { .. }
         ));
     }
 
     #[test]
-    fn a_different_value_is_not_hidden_by_the_row() {
-        let legacy = [l(SegmentKind::Value, "30")];
+    fn pressed_without_toggle_and_role_from_model_combine() {
+        let pressed = gorca_i18n::t(gorca_i18n::MsgId::StatePressed);
+        let legacy = [
+            l(SegmentKind::Text, "Tab 1"),
+            l(SegmentKind::State, pressed),
+        ];
+        let new = [n(SegmentKind::Text, "Tab 1"), n(SegmentKind::Role, "tab")];
+        let c = ctx(|c| c.untoggled = true);
+        assert_eq!(
+            d(&legacy, &new, c),
+            DiffOutcome::Allowed("pressed-without-toggle")
+        );
+        // A role the legacy side did have but spells differently is a real difference.
+        let legacy2 = [l(SegmentKind::Role, "label")];
         assert!(matches!(
-            run(&legacy, &[n(SegmentKind::Value, "40")]),
+            d(&legacy2, &[n(SegmentKind::Role, "text")], DiffCtx::FOCUS),
             DiffOutcome::Different { .. }
         ));
     }
