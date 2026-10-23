@@ -653,8 +653,9 @@ MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its ow
   Reader, fed by `ControlMsg::Pointer(PointerMsg::{Avail, Enabled})`; a gate flip is one `SetGrabSet` effect, i.e. one generation of
   the existing session's coalesced `SetKeyGrabs` (no `GrabKeyboard`, no reconnect, so the Mutter 48.7 NULL-modifiers rules of
   `docs/reports/shell-segfault-20261019.md` are untouched); RG-6 relies on the existing `Ambiguous` classification; RG-7 learn-mode note.
-  The ten `mouse.*` commands exist and answer "not available / not responding / off"; the click path is MO-4. The daemon does not feed
-  `PointerMsg` yet, so in a running gorca the gate stays closed and the keypad types.
+  The ten `mouse.*` commands exist and answer "not available / not responding / off"; the click path is MO-4. At the time of MO-3 the daemon did not feed
+  `PointerMsg` yet. **Correction (2026-10-23):** MO-4 wired the daemon (`ShellHelperClient`, below), so in a running gorca the gate follows helper
+  availability and `mouse.enabled`.
 - **MO-4 (click at the pointer, locks):** `mouse.enabled` is a Base key (`[mouse] enabled`, default true). The Reader never does
   pointer I/O: a command is a `ReaderEffect::Pointer(PointerReq)`, the runtime runs it on the `PointerSink` (150 ms per call, at
   most 16 tasks) and the answer returns as `ControlMsg::PointerReply`. `Holds` (one pure `Hold` per lockable button): press and

@@ -65,6 +65,18 @@ voice = ""                    # optional, a voice name from your voicego engine
   words, every other editor fine ones. The words move with the application's own caret keys; this
   setting changes what is spoken, not where the caret lands.
 
+## Mouse emulation
+
+`[mouse]` tunes mouse emulation (see the [mouse guide](user-guide/mouse.md)). It needs the
+`gorca-helper` extension and the `pointer` capability in its allow-list.
+
+| Key | Default | Allowed values | Meaning |
+|---|---|---|---|
+| `enabled` | `true` | `true`, `false` | Master switch. `false` closes the pointer gate, so the keypad keys type normally. |
+| `item_click` | `"action_first"` | `"action_first"`, `"pointer"` | What an item click tries first: the application's own click or context-menu action and then the pointer, or always the pointer. |
+| `if_covered` | `"refuse"` | `"refuse"`, `"click"` | What an item click does when something covers the target: say what covers it and click nothing, or click whatever is at that point. |
+| `announce_move` | `true` | `true`, `false` | Say "Mouse moved" after moving the pointer to the review position. |
+
 ## Default configuration
 
 ```toml
