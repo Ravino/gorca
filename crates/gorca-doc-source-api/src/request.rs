@@ -51,6 +51,14 @@ pub enum DocRequest {
         deadline: Deadline,
         reply: Reply<SmallVec<[SrcNodeId; 16]>>,
     },
+    /// The on-screen rectangles of nodes (layout, for label inference: M22a C3b). One entry per
+    /// node, in order; `None` for a node that is gone or has no box. Cheap (one call per node,
+    /// no tree walk) and only ever asked for a handful of nodes at a focus, never in bulk.
+    Extents {
+        nodes: SmallVec<[ExtentProbe; 6]>,
+        deadline: Deadline,
+        reply: Reply<SmallVec<[Option<gorca_model::Rect>; 6]>>,
+    },
     /// Awake or dormant (AM-4). Fire and forget: the effect shows in the deltas.
     SetActivity(Activity),
     /// Rebuild as resync: refetch the whole document, re-match it against the ids already issued
@@ -73,6 +81,17 @@ pub enum DocRequest {
     Prioritize { nodes: SmallVec<[SrcNodeId; 8]> },
     /// W3 drift check (M7b).
     DriftCheck,
+}
+
+/// One rectangle asked for by [`DocRequest::Extents`]: the node's own box when it is a real
+/// object; a text run (Firefox keeps text in the container's hypertext and has no object for it)
+/// is measured as `range` of `parent`'s text instead.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExtentProbe {
+    pub node: SrcNodeId,
+    pub parent: SrcNodeId,
+    /// Scalar offsets of the run inside `parent`'s text.
+    pub range: Range<u32>,
 }
 
 /// What a repair found and what it cost (CHR-0).

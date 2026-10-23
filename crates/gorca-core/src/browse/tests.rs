@@ -2044,7 +2044,7 @@ fn acts(fx: &ReaderEffects) -> Vec<(DocAction, DocNodeId)> {
             WebEffect::Act { node, act, .. } | WebEffect::Select { node, act, .. } => {
                 Some((act.clone(), *node))
             }
-            WebEffect::Ensure { .. } | WebEffect::Activity { .. } => None,
+            WebEffect::Ensure { .. } | WebEffect::Activity { .. } | WebEffect::Label { .. } => None,
         })
         .collect()
 }
@@ -2263,7 +2263,10 @@ fn control_does_not_release_a_field_that_holds_the_selection_or_a_non_field_focu
 fn last_select_req(fx: &ReaderEffects) -> Option<u32> {
     effects_web(fx).into_iter().rev().find_map(|w| match w {
         WebEffect::Select { req, .. } => Some(req),
-        WebEffect::Ensure { .. } | WebEffect::Activity { .. } | WebEffect::Act { .. } => None,
+        WebEffect::Ensure { .. }
+        | WebEffect::Activity { .. }
+        | WebEffect::Label { .. }
+        | WebEffect::Act { .. } => None,
     })
 }
 

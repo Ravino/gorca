@@ -1,0 +1,6 @@
+# M22a C3b: form labels on Tab
+
+Pipeline: `overlay_from_meta` (browse/commands.rs) fills an empty name from description then placeholder and turns a focusable editable role-less section into a text entry; `web_group_lead` speaks a fieldset/role=group name on entry; `Reader::web_label_arm` asks the document (`DocCtl::Label`) for an inferred label, `spawn_label` (doc_actor) plans from the mirror (`gorca_doc::web::label::plan`), asks the source for rectangles (`DocRequest::Extents`, one batch, 120 ms), `label::choose` applies Orca's geometry, `web_label_done` refines (<150 ms) or follows.
+Firefox keeps text in container hypertext (no text leaves): runs are measured with `Text.GetRangeExtents`, falling back to the container's `Component.GetExtents` when Gecko answers an empty box. Chromium line boxes overlap by 1 px: 3 px slack.
+Results (bench/results/e2e): c3b-ff6 Firefox and c3b-ch2 Chromium, M8-FLB/FLR/FLT 57 pass, 0 fail. Earlier failing runs kept: c3b-ff1 (4 fails), c3b-ff2/ff3 (extents None / empty), c3b-ch1 (3 fails, 1 px overlap).
+Limits: Orca table branch not ported; multi-line labels measured by container box on Gecko; no config switch yet; browse-mode quick-nav lines do not infer.

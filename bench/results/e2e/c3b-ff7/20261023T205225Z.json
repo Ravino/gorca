@@ -1,0 +1,12 @@
+{
+  "meta": {"utc": "2026-10-23T20:52:25Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "4.22 5.14 5.39 2/2102 1207317", "git_rev": "df3ce251", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "c3b-ff7", "reader": "daemon:<repo>/.claude/worktrees/agent-a4b74c2037a438167/target/release/gorca", "backend": "voicego", "repeats": "3", "samples_per_series": "1200", "quick": "false", "loadavg_before": "5.62 5.43 5.49 3/2108 1205694", "loadavg_end": "4.22 5.14 5.39 1/2102 1207314", "gates": "fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats", "reader_args": "--impersonate-orca", "ext_dir": "none", "extensions": "none"},
+  "rows": [
+    {"id": "M8-FLB.fail", "scenario": "M8-FLB", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "steps", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "steps that fail and are not marked expected-fail"},
+    {"id": "M8-FLB.gap", "scenario": "M8-FLB", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "core ok, NVDA extras missing"},
+    {"id": "M8-FLB.p0_not_pass", "scenario": "M8-FLB", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-FLB.pass", "scenario": "M8-FLB", "bus": "daemon/voicego", "value": 26, "min": 26, "max": 26, "runs": 3, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-FLB.steps", "scenario": "M8-FLB", "bus": "daemon/voicego", "value": 26, "min": 26, "max": 26, "runs": 3, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-FLB.xfail", "scenario": "M8-FLB", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "expected-fail steps that fail (gap table)"},
+    {"id": "M8-FLB.xpass", "scenario": "M8-FLB", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "expected-fail steps that pass: remove their xf() mark"}
+  ]
+}

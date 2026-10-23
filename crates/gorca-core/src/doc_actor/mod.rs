@@ -57,6 +57,9 @@ const MAX_ACTIONS: usize = 8;
 const MAX_DELTAS_PER_WAKE: usize = 4096;
 /// A pull that the browser does not answer in this time is given up.
 const ACTION_DEADLINE: Duration = Duration::from_millis(500);
+/// A label inference (rectangles of the control and of the text around it) is a nicety on a
+/// focus: it gets this long, then the focus stays as it was spoken.
+const LABEL_DEADLINE: Duration = Duration::from_millis(120);
 
 /// Transport key to mirror node, for the Reader's focus join (JN-1, JN-2). Each document is the
 /// single writer of its own keys. Wait-free reads.
@@ -118,6 +121,15 @@ pub enum DocCtl {
         node: DocNodeId,
         act: DocAction,
     },
+    /// Infer the label of the nameless control `node` (taken to be of `role`) from the text
+    /// around it and its layout (M22a C3b). The answer, if there is one, comes back as
+    /// [`DocNotice::Label`] with the same `req`; nothing is sent when nothing is found, the
+    /// source cannot say where things are, or the deadline passed.
+    Label {
+        req: u32,
+        node: DocNodeId,
+        role: gorca_model::Role,
+    },
     /// An `atspi` fact about a node of this document (SM-8): the app actor fetched it (a focus
     /// fetch of a web node) and the document, the node's single writer, fuses it. `issued_at` is
     /// [`DocHandle::timeline`] read when the fetch was issued, so a fact never overwrites what a
@@ -176,6 +188,13 @@ pub enum DocNotice {
     /// A live region changed (ADR-0003 13): already classified, deduplicated and rate-limited by
     /// the document, so the Reader only decides whether this document is the one in front.
     Live { doc: DocId, msg: LiveMsg },
+    /// The label [`DocCtl::Label`] inferred for `node`.
+    Label {
+        doc: DocId,
+        req: u32,
+        node: DocNodeId,
+        text: Arc<str>,
+    },
     /// The result of a [`DocCtl::Select`].
     SelectionDone {
         doc: DocId,
@@ -834,6 +853,7 @@ async fn run(
     let mut src_task: JoinSet<Result<(), SourceError>> = JoinSet::new();
     src_task.spawn(source.attach(ctx));
     let mut actions: JoinSet<()> = JoinSet::new();
+    let mut label_task: Option<tokio::task::JoinHandle<()>> = None;
     let mut sel_chain: Option<oneshot::Receiver<()>> = None;
     let mut a = Actor {
         spec_doc: doc,
@@ -927,6 +947,15 @@ async fn run(
                             // A dropped focus request must not leave the grabbed Tab silent.
                             let _ = a.notices.try_send(DocNotice::FocusFailed { doc: a.spec_doc });
                         }
+                    }
+                    DocCtl::Label { req, node, role } => {
+                        // Labels have a slot of their own (never one of the action slots, so a
+                        // Tab auto-repeat cannot crowd out a Focus or a Click): the newest
+                        // request replaces the one in flight.
+                        if let Some(old) = label_task.take() {
+                            old.abort();
+                        }
+                        label_task = spawn_label(&a, req, node, role);
                     }
                     DocCtl::Fact { local, rec, issued_at } => a.on_fact(local, &rec, issued_at),
                     DocCtl::Select { req, node, act } => {
@@ -1047,6 +1076,99 @@ fn flush_all(a: &mut Actor, deltas: &mut DeltaReceiver) -> bool {
         push(a, d);
     }
     a.flush()
+}
+
+/// Label inference for the nameless control `node` (Orca's rules, `gorca_doc::web::label`): the
+/// candidate texts come from the mirror, one batched rectangle request goes to the source with a
+/// short deadline, and the geometry picks the winner. Anything missing (no source ids, an
+/// author-given ARIA role, a source that cannot measure, the deadline) ends silently.
+fn spawn_label(
+    a: &Actor,
+    req: u32,
+    node: DocNodeId,
+    role: gorca_model::Role,
+) -> Option<tokio::task::JoinHandle<()>> {
+    use gorca_doc::web::label;
+    if !label::infers_for(role) {
+        return None;
+    }
+    let planned = a.read.with(|d| {
+        let v = d.node(node)?;
+        // Orca does not infer for a control whose role the author set (`has_role_from_aria`).
+        if v.meta.is_some_and(|m| {
+            m.attrs
+                .iter()
+                .any(|(k, t)| *k == gorca_doc_source_api::web_attrs::XML_ROLES && !t.is_empty())
+        }) {
+            return None;
+        }
+        let plan = label::plan(d, node, role)?;
+        let src_of = |n| d.node(n).and_then(|v| v.meta).and_then(|m| m.src);
+        let srcs = plan
+            .probes()
+            .into_iter()
+            .map(|n| {
+                let node = src_of(n)?;
+                // A text run is measured inside its container when it has no object.
+                let (parent, range) = match label::hyper_range(d, n) {
+                    Some((p, a, b)) => (src_of(p).unwrap_or(node), a..b),
+                    None => (node, 0..0),
+                };
+                Some(gorca_doc_source_api::ExtentProbe {
+                    node,
+                    parent,
+                    range,
+                })
+            })
+            .collect::<Option<smallvec::SmallVec<[_; 6]>>>()?;
+        Some((plan, srcs))
+    });
+    let Some((plan, srcs)) = planned else {
+        tracing::info!(target: "gorca_phase", phase = "web_label", outcome = "no_plan");
+        return None;
+    };
+    let requests = a.requests.clone();
+    let notices = a.notices.clone();
+    let doc = a.spec_doc;
+    Some(tokio::spawn(async move {
+        let (reply, rx) = oneshot::channel();
+        let deadline = Deadline(Instant::now() + LABEL_DEADLINE);
+        // The send is inside the timeout too: a source whose queue is full costs this task
+        // its deadline, nothing else.
+        let ask = async {
+            requests
+                .send(DocRequest::Extents {
+                    nodes: srcs,
+                    deadline,
+                    reply,
+                })
+                .await
+                .ok()?;
+            rx.await.ok()?.ok()
+        };
+        let Ok(Some(rects)) =
+            tokio::time::timeout(LABEL_DEADLINE + Duration::from_millis(30), ask).await
+        else {
+            tracing::info!(target: "gorca_phase", phase = "web_label", outcome = "no_rects");
+            return;
+        };
+        let chosen = label::choose(&plan, &rects);
+        tracing::info!(
+            target: "gorca_phase",
+            phase = "web_label",
+            outcome = if chosen.is_some() { "label" } else { "far" },
+            cands = plan.cands.len(),
+            rects = ?rects,
+        );
+        if let Some(text) = chosen {
+            let _ = notices.try_send(DocNotice::Label {
+                doc,
+                req,
+                node,
+                text: Arc::from(text),
+            });
+        }
+    }))
 }
 
 /// IR-5: the action goes to the source that declared it, by the source's own node id.

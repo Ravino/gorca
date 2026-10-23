@@ -605,6 +605,12 @@ pub struct BrowseState {
     /// The check box, radio button or toggle that browse mode just clicked.
     /// The dialog whose name was last announced on focus entry.
     pub lead_dialog: Option<DocNodeId>,
+    /// The group (fieldset, `role=group`) whose name was last announced on focus entry.
+    pub lead_group: Option<DocNodeId>,
+    /// The label inference in flight (C3b): its request number and the node it is for.
+    pub label_pending: Option<(u32, NodeKey)>,
+    /// Counter of label requests, for the request number.
+    pub label_req: u32,
     /// The virtual selection `(anchor, active)` in flat offsets (D-3).
     pub sel: Option<(u32, u32)>,
     /// Which Tab directions the last built grab set offered (next, previous): D-2 grabs Tab
@@ -734,6 +740,9 @@ impl BrowseState {
             sel_due: None,
             native_sel_node: None,
             lead_dialog: None,
+            lead_group: None,
+            label_pending: None,
+            label_req: 0,
         }
     }
 }
