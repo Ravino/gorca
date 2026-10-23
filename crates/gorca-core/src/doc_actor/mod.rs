@@ -1171,6 +1171,31 @@ fn spawn_label(
     }))
 }
 
+/// The source id a scroll request is addressed to: the nearest ancestor-or-self that the
+/// transport can address. A text run is a mirror leaf with no object of its own (its id is
+/// synthesised, the source answers `Gone`), and the browse cursor sits on runs, so the page never
+/// followed it. Scrolling the owner of the run brings the run into view.
+pub(crate) fn scroll_src(
+    d: &gorca_doc::web::WebDoc,
+    node: DocNodeId,
+) -> Option<gorca_model::SrcNodeId> {
+    let mut at = Some(node);
+    // The depth bound keeps a corrupt parent chain from looping.
+    for _ in 0..SCROLL_CLIMB_MAX {
+        let n = at?;
+        if let Some(m) = d.node(n).and_then(|v| v.meta)
+            && m.local.is_some()
+        {
+            return m.src;
+        }
+        at = d.parent(n);
+    }
+    None
+}
+
+/// Ancestors tried when addressing a scroll.
+const SCROLL_CLIMB_MAX: u32 = 8;
+
 /// IR-5: the action goes to the source that declared it, by the source's own node id.
 fn spawn_action(
     set: &mut JoinSet<()>,
@@ -1193,8 +1218,16 @@ fn spawn_action(
     let src_of = |d: &gorca_doc::web::WebDoc, n: DocNodeId| {
         d.node(n).and_then(|v| v.meta).and_then(|m| m.src)
     };
-    let src = a.read.with(|d| src_of(d, node));
+    let src = a.read.with(|d| {
+        if matches!(act, DocAction::ScrollIntoView) {
+            return scroll_src(d, node);
+        }
+        src_of(d, node)
+    });
     let Some(src) = src else {
+        if matches!(act, DocAction::ScrollIntoView) {
+            tracing::debug!(target: "gorca_phase", phase = "web_scroll", ok = false, why = "no_src");
+        }
         fail(a);
         if matches!(act, DocAction::Click | DocAction::ClickAnnounced { .. }) {
             // A node the source never issued an id for (a synthetic container) cannot be
@@ -1256,6 +1289,7 @@ fn spawn_action(
     let notices = a.notices.clone();
     let doc = a.spec_doc;
     let is_focus = matches!(act, DocAction::Focus);
+    let is_scroll = matches!(act, DocAction::ScrollIntoView);
     let is_click = matches!(act, DocAction::Click | DocAction::ClickAnnounced { .. });
     set.spawn(async move {
         // Wait for the selection request before this one; `done` is dropped at the end, which
@@ -1286,6 +1320,9 @@ fn spawn_action(
             None
         };
         let ok = matches!(result, Some(Ok(())));
+        if is_scroll {
+            tracing::debug!(target: "gorca_phase", phase = "web_scroll", ok, result = ?result);
+        }
         if is_focus && !ok {
             let _ = notices.try_send(DocNotice::FocusFailed { doc });
         }

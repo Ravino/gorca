@@ -191,6 +191,63 @@ elif SCEN == "scrollup":
     verdict(len(seq) >= 45, "scrollup spoke message numbers across the prepend (about 3 stops per message)", f"{len(seq)}/150")
     verdict(not bad, "scrollup never skipped, repeated or jumped", f"anomalies={bad[:6]}")
 
+elif SCEN == "scrollprobe":
+    # What does Component.ScrollTo do on this browser? (a2 root-cause probe, bypasses gorca)
+    open_first_chat()
+    step("esc 1", ESC, wait=1.0)
+    print("page before:", doc_title(), flush=True)
+
+    def cand(n):
+        try:
+            if (n.get_name() or "").startswith("Message 3"):
+                return True
+            if n.get_child_count() == 0:
+                t = n.get_text_iface()
+                if t:
+                    return (Atspi.Text.get_text(n, 0, 20) or "").startswith("Message 3")
+            return False
+        except Exception:
+            return False
+    seen = []
+
+    def dump(n):
+        try:
+            t = n.get_text_iface()
+            tx = Atspi.Text.get_text(n, 0, 30) if t else None
+            if "Message 39" in (n.get_name() or "") or "Message 39" in (tx or ""):
+                seen.append((n.get_role_name(), n.get_name(), tx, n.get_child_count()))
+        except Exception as e:
+            seen.append(("ERR", str(e)))
+        return False
+    walk(dump, limit=60000)
+    print("NOTE probe seen", seen[:8], flush=True)
+    tgt = walk(cand, limit=60000)
+    if tgt is None:
+        print("NOTE probe no node named Message 3*", flush=True)
+    else:
+        c = tgt.get_component_iface()
+        for ty in (Atspi.ScrollType.TOP_LEFT, Atspi.ScrollType.ANYWHERE, Atspi.ScrollType.TOP_EDGE):
+            ok = c.scroll_to(ty)
+            time.sleep(0.6)
+            print("NOTE probe", tgt.get_role_name(), repr(tgt.get_name())[:40], ty, "->", ok, doc_title(), flush=True)
+        kid = tgt.get_child_at_index(0) if tgt.get_child_count() else None
+        if kid is not None:
+            ok = kid.get_component_iface().scroll_to(Atspi.ScrollType.TOP_LEFT)
+            time.sleep(0.6)
+            print("NOTE probe child", kid.get_role_name(), "->", ok, doc_title(), flush=True)
+
+elif SCEN == "scrollshort":
+    # a2 quick check: 40 Up presses must move the page (scrollTop) and load older messages (lo)
+    open_first_chat()
+    step("esc 1", ESC, wait=1.0)
+    p0 = doc_title()
+    for i in range(40):
+        step(f"up {i+1}", UP, wait=0.3, settle=0.1, show=False)
+    time.sleep(0.5)
+    p1 = doc_title()
+    print("page before:", p0, "after:", p1, flush=True)
+    verdict(p0 != p1, "scrollshort: the page followed the browse cursor", f"{p0} -> {p1}")
+
 elif SCEN == "listscroll":
     # Down through more rows than the windowed chat list renders (22 of 300)
     allsaid = []

@@ -337,6 +337,10 @@ fn map_dbus(e: &DbusError) -> SourceError {
 /// Like [`map_dbus`] for a call that targets one object: a bus error that says the object does
 /// not exist (the browser released it, the page replaced the node) is `Gone`, which the caller
 /// may answer by re-resolving the node.
+/// `ATSPI_SCROLL_ANYWHERE`: scroll the least that brings the object into view (a cursor that is
+/// already visible does not move the page; `TOP_LEFT` would pin every line to the top edge).
+const SCROLL_ANYWHERE: u32 = 6;
+
 fn map_target_err(e: &DbusError) -> SourceError {
     if let DbusError::Zbus(z) = e {
         let text = z.to_string();
@@ -1868,7 +1872,14 @@ impl AtspiDocSource {
             }
             DocAction::ScrollIntoView => {
                 self.app
-                    .call(lane, deadline, &path, COMPONENT, "ScrollTo", &(0u32,))
+                    .call(
+                        lane,
+                        deadline,
+                        &path,
+                        COMPONENT,
+                        "ScrollTo",
+                        &(SCROLL_ANYWHERE,),
+                    )
                     .await
             }
             DocAction::SetCaret(o) => {

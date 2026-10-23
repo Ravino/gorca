@@ -3045,7 +3045,14 @@ impl Reader {
         }
         b.cursor_from = CursorFrom::Own;
         b.counters.moves += 1;
-        b.scroll_due = Some((now + SCROLL_DEBOUNCE, doc, cur.node, cur.local));
+        // A throttle, not a debounce: the deadline of a pending scroll is kept and only its
+        // target moves to the newest position. Under key auto-repeat (30 ms) a debounce never
+        // fires until the keys stop, so a virtual list never saw the cursor near its edge.
+        let due = match b.scroll_due {
+            Some((due, d, ..)) if d == doc && due > now => due,
+            Some(_) | None => now + SCROLL_DEBOUNCE,
+        };
+        b.scroll_due = Some((due, doc, cur.node, cur.local));
     }
 
     fn web_cursor_cmd(
