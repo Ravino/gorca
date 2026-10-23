@@ -70,3 +70,18 @@ the inferred-label fallback only for nodes that got one. The shadow queue holds 
 * `Role::spoken()` words are used for the role field through `SemRole::legacy_family`; roles the
   legacy set has no word for (`legacy_family == Unknown`) give no role field. Slice 2 replaces this by
   a catalog `role-*` table keyed on `SemRole`.
+
+## Round 2 review fixes (2026-10-24)
+
+F-1 `LangId` is a host-interned BCP-47 tag (wire = string); F-2 `ArgVal::Opaque`; F-3 the shape
+test pins field types and exact sizes (`Field` 56 B, `Content` 24 B) and covers `Arg`, `ArgVal`,
+`FlatSpan`, `LangId`; F-4 `ExtNs` token bound by the host plus a 256-kind quota; F-5 `role-from-model`
+is gated on a role allow-list; F-6 `field-contents-not-fused` covers text entries only; F-8
+`pressed-without-toggle` is tabs only; F-10 an unknown message key is `Opaque { 0xFFFF }`. Scroll
+bar and tooltip now have their own catalog words (`scroll bar`, `tooltip`) instead of slider and
+popover. The shadow sample is taken before the edits but sent after the speech effect (off the
+latency path). Not done: F-7 switch words ("switch on/off") need a legacy `Role::Switch` and catalog
+state words in both presenters; moved to slice 3. F-9: the slice 2 criterion "no `native.*` rows
+left" is amended to "every remaining row is dated, gated per role, and witnessed or unit-tested";
+4 `focus` rows remain (until 2026-12-15). F-11 (`Redacted` newtype) and F-12 (co-firing counts) are
+slice 3.

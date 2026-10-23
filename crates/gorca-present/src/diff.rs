@@ -3,11 +3,10 @@
 //! of `gorca-present`, compared as (kind, literal).
 
 use gorca_model::SegmentKind;
-use gorca_model::sem::{Check, Group, Press, ProvCode, SemEntry};
+use gorca_model::sem::{Check, Group, Press, ProvCode, SemEntry, SemRole};
 
 use crate::deviations::Deviations;
 use crate::render::Token;
-use crate::roles::{Class, native_role};
 
 /// A token the legacy presenter produced, reduced to what is compared.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -57,6 +56,33 @@ pub enum Classifier {
     RoleFromModel,
 }
 
+/// Roles whose field contents the legacy presenter speaks as a value and the text layer owns:
+/// text entries only (contents are fetched for them alone). Spin buttons and combo boxes carry a
+/// numeric value that the fused entry holds, so a missing one is a real difference.
+pub const CONTENTS_ROLES: &[SemRole] =
+    &[SemRole::TextBox, SemRole::SearchBox, SemRole::PasswordBox];
+
+/// Roles for which a role word the legacy mapping lacked is an accepted improvement: landmarks,
+/// popovers, sliders, scroll bars, tooltips, generic panels. A scroll bar and a tooltip have their
+/// own words (`scroll bar`, `tooltip`), not "slider" and "popover" (review F-5/F-7).
+pub const ROLE_FROM_MODEL_ROLES: &[SemRole] = &[
+    SemRole::Region,
+    SemRole::Banner,
+    SemRole::Complementary,
+    SemRole::ContentInfo,
+    SemRole::Main,
+    SemRole::Navigation,
+    SemRole::Search,
+    SemRole::Article,
+    SemRole::Popover,
+    SemRole::Slider,
+    SemRole::Scrollbar,
+    SemRole::Tooltip,
+    SemRole::Generic,
+    SemRole::Group,
+    SemRole::Presentation,
+];
+
 impl Classifier {
     pub const ALL: [Classifier; 4] = [
         Classifier::FieldContentsNotFused,
@@ -80,8 +106,8 @@ impl Classifier {
 pub struct DiffCtx<'a> {
     /// The surface being compared (`deviations.toml` `surface`).
     pub surface: &'a str,
-    /// The role is a field (entry, combo box, spin button).
-    pub field_role: bool,
+    /// The fused role of the node: the per-role gates of the classifiers read it.
+    pub role: SemRole,
     /// The fused name was derived from content (`ProvCode::Derived`).
     pub name_derived: bool,
     /// The model says the node is neither checkable nor a toggle.
@@ -92,7 +118,7 @@ impl DiffCtx<'static> {
     /// A context with no special facts, for the native focus surface.
     pub const FOCUS: DiffCtx<'static> = DiffCtx {
         surface: "focus",
-        field_role: false,
+        role: SemRole::Unknown,
         name_derived: false,
         untoggled: false,
     };
@@ -101,10 +127,9 @@ impl DiffCtx<'static> {
 impl<'a> DiffCtx<'a> {
     /// The facts of `entry` that decide which classifiers may apply.
     pub fn for_entry(surface: &'a str, entry: &SemEntry) -> DiffCtx<'a> {
-        let role = native_role(entry.sem.role, entry.sem.press);
         DiffCtx {
             surface,
-            field_role: role.class == Class::Field,
+            role: entry.sem.role,
             name_derived: entry.prov.get(Group::Name) == Some(ProvCode::Derived),
             untoggled: entry.sem.press == Press::NotToggle
                 && entry.sem.check == Check::NotCheckable,
@@ -175,7 +200,7 @@ fn explain<'a>(
     let kind = |k: SegmentKind| move |key: &Key<'_>| key.0 == kind_code(k);
     match c {
         Classifier::FieldContentsNotFused => {
-            ctx.field_role
+            CONTENTS_ROLES.contains(&ctx.role)
                 && count_kind(only_legacy, SegmentKind::Value) == 1
                 && count_kind(new_all, SegmentKind::Value) == 0
                 && take(only_legacy, kind(SegmentKind::Value))
@@ -189,12 +214,14 @@ fn explain<'a>(
         Classifier::PressedWithoutToggle => {
             let pressed = gorca_i18n::t(gorca_i18n::MsgId::StatePressed);
             ctx.untoggled
+                && ctx.role == SemRole::Tab
                 && take(only_legacy, |k| {
                     k.0 == kind_code(SegmentKind::State) && k.1 == pressed
                 })
         }
         Classifier::RoleFromModel => {
-            count_kind(legacy_all, SegmentKind::Role) == 0
+            ROLE_FROM_MODEL_ROLES.contains(&ctx.role)
+                && count_kind(legacy_all, SegmentKind::Role) == 0
                 && count_kind(only_new, SegmentKind::Role) == 1
                 && take(only_new, kind(SegmentKind::Role))
         }
@@ -314,7 +341,7 @@ mod tests {
     fn a_field_contents_value_is_allowed_only_for_a_field_role() {
         let legacy = [l(SegmentKind::Text, "Name"), l(SegmentKind::Value, "Alice")];
         let new = [n(SegmentKind::Text, "Name")];
-        let field = ctx(|c| c.field_role = true);
+        let field = ctx(|c| c.role = SemRole::TextBox);
         assert_eq!(
             d(&legacy, &new, field),
             DiffOutcome::Allowed("field-contents-not-fused")
@@ -388,10 +415,14 @@ mod tests {
         let pressed = gorca_i18n::t(gorca_i18n::MsgId::StatePressed);
         let legacy = [
             l(SegmentKind::Text, "Tab 1"),
+            l(SegmentKind::Role, "tab"),
             l(SegmentKind::State, pressed),
         ];
         let new = [n(SegmentKind::Text, "Tab 1"), n(SegmentKind::Role, "tab")];
-        let c = ctx(|c| c.untoggled = true);
+        let c = ctx(|c| {
+            c.untoggled = true;
+            c.role = SemRole::Tab;
+        });
         assert_eq!(
             d(&legacy, &new, c),
             DiffOutcome::Allowed("pressed-without-toggle")
@@ -400,6 +431,33 @@ mod tests {
         let legacy2 = [l(SegmentKind::Role, "label")];
         assert!(matches!(
             d(&legacy2, &[n(SegmentKind::Role, "text")], DiffCtx::FOCUS),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn the_role_and_contents_rows_are_gated_per_role() {
+        // A role outside the list is never explained by the row, whatever word it gets.
+        let new = [n(SegmentKind::Role, "slider")];
+        let btn = ctx(|c| c.role = SemRole::Button);
+        assert!(matches!(d(&[], &new, btn), DiffOutcome::Different { .. }));
+        let sl = ctx(|c| c.role = SemRole::Slider);
+        assert_eq!(d(&[], &new, sl), DiffOutcome::Allowed("role-from-model"));
+        // A spin button's value is not field contents: a missing one is a difference.
+        let legacy = [l(SegmentKind::Value, "5")];
+        let spin = ctx(|c| c.role = SemRole::SpinButton);
+        assert!(matches!(
+            d(&legacy, &[], spin),
+            DiffOutcome::Different { .. }
+        ));
+        // Pressed-without-toggle is for tabs only.
+        let pressed = gorca_i18n::t(gorca_i18n::MsgId::StatePressed);
+        let btn = ctx(|c| {
+            c.untoggled = true;
+            c.role = SemRole::Button;
+        });
+        assert!(matches!(
+            d(&[l(SegmentKind::State, pressed)], &[], btn),
             DiffOutcome::Different { .. }
         ));
     }

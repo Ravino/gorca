@@ -250,11 +250,14 @@ The slice 1 draft was blocked by review (`docs/reports/m22b1-review.md` P-1..P-5
 before the freeze: `Content` is `Text | Msg { id, args } | Ext { ns, key, args } | Opaque { code }`
 (numbers stay numbers; add-on text is an extension catalog reference, never a raw U+001E string);
 `Field { kind, flags, lang, content, origin, span }` (56 B) with `FieldFlags::{SECRET, VERBOSE_ONLY}`;
+`lang` is a host-interned BCP-47 content-language tag (`LangTags`; on the wire the tag string, never a
+catalog index; an unknown tag is absent); `ArgVal` has `Opaque { code }`;
 `PresIr { reason, node, sem_rev, may_refine, flags, fields }`; `Reason` has `Unknown(u16)`.
 Wire rules, each with a test: kinds are codes and an unknown kind (reason, content, field kind)
 passes through unedited and never traps; words travel as catalog key strings, never as the
 build-order `MsgId` number; add-on `FieldKind` codes are allocated by the host per
-(namespace, name) (`ExtKinds`), a guest never picks a raw code; secret fields are redacted before a
+(namespace, name) (`ExtKinds`: the namespace is an `ExtNs` token bound by the host from the manifest id,
+256 kinds per namespace), a guest never picks a raw code; secret fields are redacted before a
 plugin, a log or braille sees the IR (`PresIr::redacted`). `FieldKind` codes 1..13 are
 append-only. A change that is not an append of a code bumps the version and amends this ADR; the
 `shape_of_the_records_is_frozen` test destructures every record exhaustively. Evidence: the native

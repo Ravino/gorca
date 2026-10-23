@@ -26,8 +26,8 @@ pub use compose::{ComposeCtx, ComposeError, ReportFlags, compose};
 pub use deviations::{Deviations, DeviationsError};
 pub use diff::{DiffCtx, DiffOutcome, LegacyToken, diff};
 pub use ir::{
-    Arg, ArgVal, Content, ExtKinds, ExtRef, Field, FieldFlags, FieldKind, FlatSpan, IrFlags,
-    LangId, Origin, PRES_IR_VERSION, PresIr, Reason, RowId,
+    Arg, ArgVal, Content, ExtKindError, ExtKinds, ExtNs, ExtRef, Field, FieldFlags, FieldKind,
+    FlatSpan, IrFlags, LangId, LangTags, Origin, PRES_IR_VERSION, PresIr, Reason, RowId,
 };
 pub use render::{RenderOpts, Token, TokenText, render};
 pub use shadow::{

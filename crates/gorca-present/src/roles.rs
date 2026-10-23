@@ -78,12 +78,14 @@ pub fn native_role(role: SemRole, press: Press) -> RoleInfo {
         S::TextBox | S::SearchBox => w(M::RoleTextEntry, Class::Field),
         S::PasswordBox => w(M::RolePasswordEntry, Class::Field),
         S::SpinButton => w(M::RoleSpinButton, Class::Field),
-        S::Slider | S::Scrollbar => plain(M::RoleSlider),
+        S::Slider => plain(M::RoleSlider),
+        S::Scrollbar => plain(M::RoleScrollBar),
         S::ProgressBar | S::Meter => w(M::RoleProgressBar, Class::Progress),
         S::Menu => plain(M::RoleMenu),
         S::Menubar => plain(M::RoleMenuBar),
         S::MenuItem => plain(M::RoleMenuItem),
-        S::Popover | S::Tooltip => plain(M::RolePopover),
+        S::Popover => plain(M::RolePopover),
+        S::Tooltip => plain(M::RoleTooltip),
         S::Tab => plain(M::RoleTab),
         S::TabList => plain(M::RoleTabList),
         S::Tree => plain(M::RoleTree),
@@ -210,7 +212,10 @@ mod tests {
             let want = (fam != gorca_model::Role::Unknown).then(|| fam.msg());
             if got != want {
                 assert!(
-                    matches!(role, SemRole::StaticText),
+                    matches!(
+                        role,
+                        SemRole::StaticText | SemRole::Scrollbar | SemRole::Tooltip
+                    ),
                     "{role:?}: table {got:?} vs legacy {want:?}"
                 );
             }
