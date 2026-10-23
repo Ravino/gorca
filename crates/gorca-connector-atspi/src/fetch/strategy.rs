@@ -174,7 +174,7 @@ async fn fetch_node(
         && source_for(core_role, states) != Source::Secret
     {
         have |= PropMask::RELATIONS;
-        if let Some(label) = name_fallback(c, path, dl).await {
+        if let Some(label) = name_fallback(c, path, core_role, dl).await {
             raw.name = Some(label);
         }
     }
@@ -194,7 +194,12 @@ const LABEL_SEARCH_DEPTH: usize = 2;
 /// `LabelledBy` target's name (then its text), else the names (or text) of its descendants,
 /// bounded in depth and count, all within the caller's deadline. Any failure only costs the
 /// fallback.
-async fn name_fallback(c: &Caller, path: &str, dl: Deadline) -> Option<String> {
+///
+/// The descendant search is name from content (accname 2F): it applies only to roles that allow
+/// it (`Role::takes_name_from_content`). A scroll container, a group or a landmark that the
+/// application left nameless stays nameless; naming it from its subtree made the whole list
+/// its focus announcement (Telegram K, a focused scrollable pane).
+async fn name_fallback(c: &Caller, path: &str, role: Role, dl: Deadline) -> Option<String> {
     if let Ok(Some((bus, p))) = c.label_target(path, dl).await
         && label_may_be_read(&bus, c.bus_name())
         && let Some(kind) = classify(c, &p, dl).await
@@ -211,6 +216,9 @@ async fn name_fallback(c: &Caller, path: &str, dl: Deadline) -> Option<String> {
         {
             return Some(clip(&t, MAX_TEXT_BYTES).to_owned());
         }
+    }
+    if !role.takes_name_from_content() {
+        return None;
     }
     descendant_label(c, path, dl).await
 }

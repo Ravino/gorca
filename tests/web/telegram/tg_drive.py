@@ -291,6 +291,16 @@ elif SCEN == "closepane":
     verdict(any(x.startswith("'") for x in c), "closepane: Enter speaks after the pane closed", f"{c}")
     verdict(not any(re.search(r"Message \d+ from", x) for x in a + b), "closepane: nothing from the removed pane is spoken", f"{a} {b} {c}")
 
+elif SCEN == "kfocus":
+    # a4: what does the browser itself say about the focused scroll container? (name, description, attributes)
+    step("tab 1", TAB, wait=0.8)
+    step("tab 2", TAB, wait=0.8)
+    n = walk(lambda n: n.get_state_set().contains(Atspi.StateType.FOCUSED) and n.get_role_name() not in ("frame", "application", "window"))
+    if n:
+        print("NOTE focused", n.get_role_name(), "name_len", len(n.get_name() or ""), "desc", repr((n.get_description() or "")[:60]), "attrs", dict(n.get_attributes() or {}), flush=True)
+    long_ = [x for x in spoken_since(0) if len(x) > 120 and "browse mode" in x]
+    verdict(not long_, "kfocus: the focused scroll container is not named by its whole content", f"{[x[:80] for x in long_]}")
+
 elif SCEN == "listscroll":
     # Down through more rows than the windowed chat list renders (22 of 300)
     allsaid = []
