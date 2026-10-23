@@ -142,11 +142,15 @@ if SCEN == "login":
 elif SCEN == "echo":
     # control page echo.html (APP=E, ?k=input|textarea|ce|cerole): type h i, Enter (clears), h i, Backspace
     step("click-focus", wait=0.2, settle=1.0)
-    step("type h", L["h"], wait=0.7)
-    step("type i", L["i"], wait=0.7)
+    for ch in ("h", "i"):
+        said = step(f"type {ch}", L[ch], wait=0.7)
+        n = sum(1 for x in said if x == f"'{ch}'")
+        verdict(n == 1, f"echo-once {ch}", f"speaks={n}")
     step("enter", ENTER, wait=1.0)
-    step("type h", L["h"], wait=0.7)
-    step("type i", L["i"], wait=0.7)
+    for ch in ("h", "i"):
+        said = step(f"type {ch}", L[ch], wait=0.7)
+        n = sum(1 for x in said if x == f"'{ch}'")
+        verdict(n == 1, f"echo-once {ch} (2nd)", f"speaks={n}")
     step("backspace", 14, wait=0.8)
 
 elif SCEN == "list":
@@ -163,7 +167,9 @@ elif SCEN == "chat":
     # the owner flow: Tab to a chat, Enter, read the messages, Escape, Tab back
     open_first_chat()
     step("type hi", L["h"], L["i"], wait=0.6)
-    step("enter (send)", ENTER, wait=1.2)
+    said = step("enter (send)", ENTER, wait=1.2)
+    nl = sum(1 for x in said if x == "'new line'")
+    verdict(nl <= 1, "send speaks new line at most once", f"new_line={nl}")
     step("esc 1", ESC, wait=1.0)
     for i in range(6):
         step(f"up {i+1}", UP)
