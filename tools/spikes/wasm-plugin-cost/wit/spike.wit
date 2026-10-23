@@ -1,0 +1,25 @@
+package spike:plugin@0.1.0;
+
+interface types {
+  record rec10 { a: string, b: string, c: string, d: string, e: string,
+                 f: string, g: string, h: string, i: string, j: string }
+  record item { id: u32, kind: u8, name: string }
+}
+
+interface hostapi {
+  ping: func() -> u32;
+}
+
+world plugin {
+  use types.{rec10, item};
+  import hostapi;
+  export noop: func() -> u32;
+  export ten: func(r: rec10) -> u32;
+  export list20: func() -> list<item>;
+  export call-host: func(n: u32) -> u32;
+  export spin: func(n: u64) -> u64;
+  export forever: func();
+  export trap: func();
+  export do-panic: func();
+  export grow: func(bytes: u32) -> u32;
+}

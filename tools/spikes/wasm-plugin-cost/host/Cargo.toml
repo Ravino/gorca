@@ -1,0 +1,11 @@
+[package]
+name = "wasm-plugin-cost"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+wasmtime = { version = "=49.0.3", default-features = false, features = ["component-model", "cranelift", "runtime", "pooling-allocator", "std", "async", "parallel-compilation"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+
+[workspace]
