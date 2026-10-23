@@ -49,14 +49,20 @@ fn show<'a>(it: impl Iterator<Item = (gorca_model::SegmentKind, &'a str)>) -> St
 }
 
 /// Replay `snaps` (already fused) through both presenters.
-pub(crate) fn replay(label: &str, snaps: &[Arc<NodeSnapshot>], dev: &Deviations, out: &mut Replay) {
+pub(crate) fn replay(
+    label: &str,
+    snaps: &[Arc<NodeSnapshot>],
+    dev: &Deviations,
+    web_run: bool,
+    out: &mut Replay,
+) {
     for s in snaps {
         out.nodes += 1;
         let is_web = s
             .attrs
             .iter()
             .any(|(k, _)| *k == gorca_doc_source_api::web_attrs::TAG);
-        if is_web {
+        if is_web != web_run {
             out.skipped_web += 1;
             continue;
         }
@@ -76,12 +82,19 @@ pub(crate) fn replay(label: &str, snaps: &[Arc<NodeSnapshot>], dev: &Deviations,
         let ctx = ComposeCtx {
             flags: ReportFlags::default(),
             may_refine: false,
+            web: is_web,
+            skip_selected: false,
         };
         let Ok(ir) = compose(entry, s.key, Reason::Focus, ctx) else {
             continue;
         };
-        let tokens = render(&ir, RenderOpts::default());
-        let ctx = DiffCtx::for_entry("focus", entry);
+        let tokens = render(
+            &ir,
+            RenderOpts {
+                description_pause: web_run,
+            },
+        );
+        let ctx = DiffCtx::for_entry(if web_run { "focus-web" } else { "focus" }, entry);
         match diff(&legacy, &tokens, dev, ctx) {
             DiffOutcome::Equal => out.equal += 1,
             DiffOutcome::OrderOnly => out.order_only += 1,
@@ -93,10 +106,14 @@ pub(crate) fn replay(label: &str, snaps: &[Arc<NodeSnapshot>], dev: &Deviations,
                     show(legacy.iter().map(|t| (t.kind, &*t.text))),
                     show(tokens.iter().map(|t| (t.kind, t.text.as_str())))
                 );
-                let e = out
-                    .table
-                    .entry(sig)
-                    .or_insert_with(|| (0, format!("{label}#{} role={:?}", s.key.local.0, s.role)));
+                let exact = format!(
+                    "{label}#{} sem={:?} legacy={:?} new={:?}",
+                    s.key.local.0,
+                    entry.sem.role,
+                    legacy.iter().map(|t| &*t.text).collect::<Vec<_>>(),
+                    tokens.iter().map(|t| t.text.as_str()).collect::<Vec<_>>()
+                );
+                let e = out.table.entry(sig).or_insert_with(|| (0, exact));
                 e.0 += 1;
             }
         }
@@ -112,7 +129,7 @@ pub(crate) fn run_native_corpus(dev: &Deviations) -> Replay {
             continue;
         };
         let fused = gorca_core::fuse_snapshots(tables, &snaps);
-        replay(&format!("gtk4/{name}"), &fused, dev, &mut out);
+        replay(&format!("gtk4/{name}"), &fused, dev, false, &mut out);
     }
     out
 }
@@ -147,12 +164,72 @@ fn a_native_range_value_replays_equal() {
     )];
     let fused = gorca_core::fuse_snapshots(tables, &snaps);
     let mut out = Replay::default();
-    replay("synthetic/slider", &fused, &Deviations::builtin(), &mut out);
+    replay(
+        "synthetic/slider",
+        &fused,
+        &Deviations::builtin(),
+        false,
+        &mut out,
+    );
     assert_eq!(
         (out.equal, out.different, out.allowed),
         (1, 0, 0),
         "{:?}",
         out.table
+    );
+}
+
+/// The web part of the corpus: Firefox and Chromium pages, web nodes only.
+pub(crate) fn run_web_corpus(dev: &Deviations) -> Replay {
+    let mut out = Replay::default();
+    for (engine, web) in [
+        ("firefox", WebEngine::Gecko),
+        ("chromium", WebEngine::Blink),
+    ] {
+        let tables = crate::sem_profile::tables_for("", "app", web);
+        for name in pages_of(engine) {
+            let Some(snaps) = page(engine, &name) else {
+                continue;
+            };
+            let fused = gorca_core::fuse_snapshots(tables, &snaps);
+            replay(&format!("{engine}/{name}"), &fused, dev, true, &mut out);
+        }
+    }
+    out
+}
+
+fn print_table(title: &str, r: &Replay) {
+    let compared = r.equal + r.order_only + r.allowed + r.different;
+    eprintln!(
+        "present replay ({title}): nodes {} compared {compared} equal {} order-only {} allowed {} \
+         different {} skipped {} no-entry {}",
+        r.nodes, r.equal, r.order_only, r.allowed, r.different, r.skipped_web, r.skipped_no_entry
+    );
+    let mut rows: Vec<_> = r.table.iter().collect();
+    rows.sort_by_key(|(_, (n, _))| std::cmp::Reverse(*n));
+    for (sig, (n, ex)) in rows.iter().take(40) {
+        eprintln!("  {n:>4}x {sig}   e.g. {ex}");
+    }
+}
+
+/// Differences outside `deviations.toml` the web replay shows (17 of 2239, 2026-10-24: option
+/// checked, feed and definition words, indeterminate progress bars, read-only checkboxes, long
+/// names); it only goes down, to zero before the web cut-over.
+const WEB_DIFFERENT_CEILING: u64 = 17;
+
+#[test]
+fn the_web_corpus_replays_through_both_presenters() {
+    let r = run_web_corpus(&Deviations::builtin());
+    print_table("web", &r);
+    let compared = r.equal + r.order_only + r.allowed + r.different;
+    assert!(
+        compared > 200,
+        "the web corpus was not replayed ({compared})"
+    );
+    assert!(
+        r.different <= WEB_DIFFERENT_CEILING,
+        "{} differences",
+        r.different
     );
 }
 

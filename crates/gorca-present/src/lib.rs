@@ -13,6 +13,7 @@
 //!
 //! Everything but [`shadow`] is pure and synchronous.
 
+pub mod change;
 pub mod compose;
 pub mod deviations;
 pub mod diff;
@@ -21,7 +22,9 @@ pub use gorca_present_ir as ir;
 pub mod render;
 pub mod roles;
 pub mod shadow;
+mod web;
 
+pub use change::{changed_groups, compose_change};
 pub use compose::{ComposeCtx, ComposeError, ReportFlags, compose};
 pub use deviations::{Deviations, DeviationsError};
 pub use diff::{DiffCtx, DiffOutcome, LegacyToken, diff};
@@ -31,6 +34,6 @@ pub use ir::{
 };
 pub use render::{RenderOpts, Token, TokenText, render};
 pub use shadow::{
-    FocusSample, SHADOW_QUEUE, ShadowActor, ShadowHandle, ShadowSnapshot, SkipWhy, channel,
-    channel_with,
+    ChangeSample, FocusSample, SHADOW_QUEUE, ShadowActor, ShadowHandle, ShadowSnapshot, SkipWhy,
+    channel, channel_with,
 };

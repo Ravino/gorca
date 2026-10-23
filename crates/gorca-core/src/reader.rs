@@ -2860,6 +2860,63 @@ mod tests {
         assert!(!matches!(f.reader.focus(), FocusState::Orphaned { .. }));
     }
 
+    /// A check box snapshot with a fused entry whose check group follows `checked`.
+    fn fused_check(n: u64, name: &str, checked: bool) -> Arc<NodeSnapshot> {
+        let mut s = (*with_name(
+            n,
+            name,
+            if checked {
+                StateSet::CHECKED
+            } else {
+                StateSet::empty()
+            },
+        ))
+        .clone();
+        let mut e = gorca_model::SemEntry::default();
+        e.sem.role = gorca_model::SemRole::Checkbox;
+        e.sem.check = if checked {
+            gorca_model::sem::Check::On
+        } else {
+            gorca_model::sem::Check::Off
+        };
+        e.name = Some(Arc::from(name));
+        s.sem.entry = Some(Arc::new(e));
+        Arc::new(s)
+    }
+
+    /// M22b1 shadow for Reason::Change: the legacy change tokens and the model's agree, the
+    /// speech is the legacy one, and the sample is offered after the speech effect.
+    #[test]
+    fn shadow_change_agrees_with_the_legacy_state_change_words() {
+        let (h, mut actor) = gorca_present::channel(gorca_present::Deviations::builtin());
+        let mut f = fixture();
+        f.reader = f.reader.with_present_shadow(h.clone());
+        f.writer.apply(
+            SnapshotBatch::new(vec![fused_check(1, "Wi-Fi", false)]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let fx = f.reader.handle(
+            reply(&f, 1, FetchKind::StateChange, fused_check(1, "Wi-Fi", true)),
+            now,
+        );
+        assert_eq!(spoken(&fx), ["checked"]);
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                1,
+                FetchKind::StateChange,
+                fused_check(1, "Wi-Fi", false),
+            ),
+            now,
+        );
+        assert_eq!(spoken(&fx), ["not checked"]);
+        actor.drain_pending();
+        let s = h.stats();
+        assert_eq!((s.change_equal, s.change_different), (2, 0), "{s:?}");
+    }
+
     /// S1 (5.6): a state change of the focused node is fetched and spoken as the change.
     #[test]
     fn a_state_change_of_the_focused_node_is_spoken() {

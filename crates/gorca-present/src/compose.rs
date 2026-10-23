@@ -32,6 +32,10 @@ pub struct ComposeCtx {
     pub flags: ReportFlags,
     /// The entry was composed from stale data.
     pub may_refine: bool,
+    /// The node is web content: the NVDA rows (`web.focus`) instead of the native ones.
+    pub web: bool,
+    /// A change in a switcher: being selected is not news (`Reason::Change` only).
+    pub skip_selected: bool,
 }
 
 /// Why a composition did not happen.
@@ -75,6 +79,7 @@ pub fn compose(
     ctx: ComposeCtx,
 ) -> Result<PresIr, ComposeError> {
     match reason {
+        Reason::Focus if ctx.web => Ok(crate::web::web_focus(entry, node, ctx)),
         Reason::Focus => Ok(native_focus(entry, node, ctx)),
         Reason::FocusAncestor
         | Reason::BrowseLine { .. }
@@ -219,6 +224,8 @@ mod tests {
     const CTX: ComposeCtx = ComposeCtx {
         flags: ReportFlags(0),
         may_refine: false,
+        web: false,
+        skip_selected: false,
     };
 
     fn entry(role: SemRole, name: &str) -> SemEntry {
