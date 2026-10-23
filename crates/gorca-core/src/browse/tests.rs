@@ -3740,17 +3740,77 @@ fn an_announcement_expires() {
 // ---------------------------------------------------------------------------------------------
 // Pointer routing follows the browse cursor, never the focus
 
+/// Put the browse cursor on the document node that came from source node `src_id`.
+fn place_cursor(r: &mut Rig, src_id: u64) {
+    let node = r
+        .reader
+        .web
+        .as_ref()
+        .unwrap()
+        .docs
+        .get(DocId(1))
+        .unwrap()
+        .read
+        .with(|d| {
+            d.preorder()
+                .find(|n| {
+                    d.node(*n)
+                        .and_then(|v| v.meta)
+                        .is_some_and(|m| m.src == Some(SrcNodeId(src_id)))
+                })
+                .unwrap()
+        });
+    let b = r.reader.web.as_mut().unwrap();
+    b.mode = WebMode::Browse {
+        doc: DocId(1),
+        cur: WebCursor { node, local: 0 },
+        scope: Scope::Document,
+        sticky: false,
+    };
+}
+
 #[test]
-fn browse_review_target_is_the_cursor_node_not_the_focus() {
+fn a_run_inside_a_link_routes_to_the_link_not_the_focus() {
     let mut r = rig();
     r.focus(1002);
-    r.key(CoreCmd::BrowseCursorNextLine);
+    place_cursor(&mut r, 7);
     assert!(matches!(r.reader.mode(), Mode::Browse { .. }));
-    // The focus stays on the heading; the cursor moved to the paragraph line with the link.
-    let (node, off) = r.reader.review_target().expect("a target in browse mode");
-    assert_eq!(off, None);
-    assert_ne!(node, nk(1002), "the focus node is not the review target");
-    assert!([1004, 1006].contains(&node.local.0), "got {node:?}");
+    assert_eq!(r.reader.review_target(), Some((nk(1006), None)));
+}
+
+#[test]
+fn a_keyless_run_under_a_paragraph_has_no_target() {
+    let mut r = rig();
+    r.focus(1002);
+    place_cursor(&mut r, 5);
+    assert_eq!(r.reader.review_target(), None);
+}
+
+#[test]
+fn the_cursor_on_the_document_has_no_target() {
+    let mut r = rig();
+    r.focus(1002);
+    place_cursor(&mut r, 1);
+    assert_eq!(r.reader.review_target(), None);
+}
+
+#[test]
+fn the_cursor_on_a_button_routes_to_the_button() {
+    let mut r = rig();
+    make_control(&mut r, Role::Button, "Play", StateSet::empty(), 3);
+    r.focus(1002);
+    place_cursor(&mut r, 6);
+    assert_eq!(r.reader.review_target(), Some((nk(1006), None)));
+    place_cursor(&mut r, 7);
+    assert_eq!(r.reader.review_target(), Some((nk(1006), None)));
+}
+
+#[test]
+fn a_run_inside_a_heading_routes_to_the_heading() {
+    let mut r = rig();
+    r.focus(1006);
+    place_cursor(&mut r, 3);
+    assert_eq!(r.reader.review_target(), Some((nk(1002), None)));
 }
 
 #[test]
