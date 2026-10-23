@@ -762,3 +762,46 @@ mod fused {
         let _ = r.task.await;
     }
 }
+
+#[tokio::test]
+async fn a_burst_of_label_requests_never_blocks_or_drops_an_action() {
+    let mut r = rig();
+    r.script.batches.send(first_batch()).await.unwrap();
+    next_notice(&mut r).await;
+    let (_, link) = r.join.get(nk(14)).unwrap();
+    // A Tab auto-repeat: far more label requests than there are action slots.
+    for req in 0..64 {
+        r.handle
+            .ctl
+            .send(DocCtl::Label {
+                req,
+                node: link,
+                role: gorca_model::Role::TextEntry,
+            })
+            .await
+            .unwrap();
+    }
+    r.handle
+        .ctl
+        .send(DocCtl::Act {
+            node: link,
+            act: DocAction::Focus,
+        })
+        .await
+        .unwrap();
+    // The focus request reaches the source however many labels came before it.
+    let mut got = false;
+    for _ in 0..80 {
+        match tokio::time::timeout(Duration::from_secs(2), r.script.seen.recv()).await {
+            Ok(Some(Seen::Action(SrcNodeId(4), DocAction::Focus))) => {
+                got = true;
+                break;
+            }
+            Ok(Some(_)) => {}
+            Ok(None) | Err(_) => break,
+        }
+    }
+    assert!(got, "the Focus action was dropped behind label requests");
+    r.shutdown.cancel();
+    let _ = r.task.await;
+}

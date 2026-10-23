@@ -1329,8 +1329,20 @@ fn lbl_steps(table: &'static [LblRow]) -> Vec<Step> {
     v
 }
 
+/// Negative rows: nothing visible labels these controls (a `display:none` label, only a `name`
+/// attribute), so no label words may be invented for them.
+const LBL_NONE: &[(&str, usize, &[&str])] = &[
+    ("LB.dnone", 14, &["Papa display none label"]),
+    ("LB.nameattr", 17, &["sierra"]),
+];
+
 fn lb() -> Vec<Step> {
-    lbl_steps(LBL)
+    let mut v = lbl_steps(LBL);
+    for (id, nth, word) in LBL_NONE {
+        v.push(s(id, P0, "Tab onto the control: no label words are invented", Act::FocusNth(*nth), &[]).not(word));
+        v.push(esc(Box::leak(format!("{id}.esc").into_boxed_str())));
+    }
+    v
 }
 
 /// Login shapes of real sites (`tests/web/forms/pages/login-real.html`).

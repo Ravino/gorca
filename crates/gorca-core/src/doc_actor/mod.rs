@@ -853,6 +853,7 @@ async fn run(
     let mut src_task: JoinSet<Result<(), SourceError>> = JoinSet::new();
     src_task.spawn(source.attach(ctx));
     let mut actions: JoinSet<()> = JoinSet::new();
+    let mut label_task: Option<tokio::task::JoinHandle<()>> = None;
     let mut sel_chain: Option<oneshot::Receiver<()>> = None;
     let mut a = Actor {
         spec_doc: doc,
@@ -948,9 +949,13 @@ async fn run(
                         }
                     }
                     DocCtl::Label { req, node, role } => {
-                        if actions.len() < MAX_ACTIONS {
-                            spawn_label(&mut actions, &a, req, node, role);
+                        // Labels have a slot of their own (never one of the action slots, so a
+                        // Tab auto-repeat cannot crowd out a Focus or a Click): the newest
+                        // request replaces the one in flight.
+                        if let Some(old) = label_task.take() {
+                            old.abort();
                         }
+                        label_task = spawn_label(&a, req, node, role);
                     }
                     DocCtl::Fact { local, rec, issued_at } => a.on_fact(local, &rec, issued_at),
                     DocCtl::Select { req, node, act } => {
@@ -1078,15 +1083,14 @@ fn flush_all(a: &mut Actor, deltas: &mut DeltaReceiver) -> bool {
 /// short deadline, and the geometry picks the winner. Anything missing (no source ids, an
 /// author-given ARIA role, a source that cannot measure, the deadline) ends silently.
 fn spawn_label(
-    set: &mut JoinSet<()>,
     a: &Actor,
     req: u32,
     node: DocNodeId,
     role: gorca_model::Role,
-) {
+) -> Option<tokio::task::JoinHandle<()>> {
     use gorca_doc::web::label;
     if !label::infers_for(role) {
-        return;
+        return None;
     }
     let planned = a.read.with(|d| {
         let v = d.node(node)?;
@@ -1121,26 +1125,29 @@ fn spawn_label(
     });
     let Some((plan, srcs)) = planned else {
         tracing::info!(target: "gorca_phase", phase = "web_label", outcome = "no_plan");
-        return;
+        return None;
     };
     let requests = a.requests.clone();
     let notices = a.notices.clone();
     let doc = a.spec_doc;
-    set.spawn(async move {
+    Some(tokio::spawn(async move {
         let (reply, rx) = oneshot::channel();
         let deadline = Deadline(Instant::now() + LABEL_DEADLINE);
-        let sent = requests
-            .send(DocRequest::Extents {
-                nodes: srcs,
-                deadline,
-                reply,
-            })
-            .await;
-        if sent.is_err() {
-            return;
-        }
-        let Ok(Ok(Ok(rects))) =
-            tokio::time::timeout(LABEL_DEADLINE + Duration::from_millis(30), rx).await
+        // The send is inside the timeout too: a source whose queue is full costs this task
+        // its deadline, nothing else.
+        let ask = async {
+            requests
+                .send(DocRequest::Extents {
+                    nodes: srcs,
+                    deadline,
+                    reply,
+                })
+                .await
+                .ok()?;
+            rx.await.ok()?.ok()
+        };
+        let Ok(Some(rects)) =
+            tokio::time::timeout(LABEL_DEADLINE + Duration::from_millis(30), ask).await
         else {
             tracing::info!(target: "gorca_phase", phase = "web_label", outcome = "no_rects");
             return;
@@ -1161,7 +1168,7 @@ fn spawn_label(
                 text: Arc::from(text),
             });
         }
-    });
+    }))
 }
 
 /// IR-5: the action goes to the source that declared it, by the source's own node id.

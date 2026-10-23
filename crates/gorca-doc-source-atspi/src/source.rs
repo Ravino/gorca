@@ -444,6 +444,8 @@ async fn read_node_raw(
 
 /// Mutable per-document state of the running source.
 struct Live {
+    /// The rectangle request in flight (label inference); a newer one aborts it.
+    extents_task: Option<tokio::task::JoinHandle<()>>,
     ident: IdentityMap,
     paths: PathTable,
     dirty: DirtySet,
@@ -661,6 +663,7 @@ const ROOT_ERROR_LIMIT: u32 = 3;
 impl AtspiDocSource {
     async fn run(mut self, mut ctx: DocSourceCtx) -> Result<(), SourceError> {
         let mut live = Live {
+            extents_task: None,
             ident: IdentityMap::new(self.config.use_dom_id),
             paths: PathTable::default(),
             dirty: DirtySet::default(),
@@ -1654,8 +1657,17 @@ impl AtspiDocSource {
                 deadline,
                 reply,
             } => {
-                let r = self.extents(live, &nodes, deadline).await;
-                let _ = reply.send(Ok(r));
+                // Off the request loop (a Pull or an Act never waits behind it), one at a time
+                // per document: a newer request supersedes the older, whose reply is dropped.
+                let targets = Self::extent_targets(live, &nodes);
+                let app = Arc::clone(&self.app);
+                if let Some(old) = live.extents_task.take() {
+                    old.abort();
+                }
+                live.extents_task = Some(tokio::spawn(async move {
+                    let r = measure(&app, targets, deadline).await;
+                    let _ = reply.send(Ok(r));
+                }));
             }
             DocRequest::SetActivity(a) => {
                 let was = live.activity;
@@ -2280,109 +2292,21 @@ impl AtspiDocSource {
         self.remove_ranges(path, 0, deadline).await
     }
 
+    /// The paths a rectangle request needs, resolved while the mirror's tables are at hand, so
+    /// the calls themselves can run as a task off the request loop.
+    fn extent_targets(live: &Live, probes: &[gorca_doc_source_api::ExtentProbe]) -> Vec<Target> {
+        let path = |n: SrcNodeId| live.ident.path_of(n).and_then(|p| live.paths.path_of(p));
+        probes
+            .iter()
+            .map(|p| Target {
+                own: path(p.node).filter(|_| !crate::runs::is_run(p.node)),
+                parent: path(p.parent),
+                range: p.range.clone(),
+            })
+            .collect()
+    }
+
     /// IR-4: a heuristic join is confirmed when the object still exists with the same role.
-    /// The screen rectangles of `probes` (`Component.GetExtents` of the object, or
-    /// `Text.GetRangeExtents` of the run inside its container when the node is a text run with
-    /// no object), one call each, in order and never past `deadline`. A node that is unknown,
-    /// whose call fails or whose box is negative has `None`. Few nodes (a focus), so the calls
-    /// are not spread over tasks.
-    async fn extents(
-        &self,
-        live: &Live,
-        probes: &[gorca_doc_source_api::ExtentProbe],
-        deadline: Deadline,
-    ) -> SmallVec<[Option<gorca_model::Rect>; 6]> {
-        let mut out = SmallVec::new();
-        for p in probes {
-            out.push(self.extent(live, p, deadline).await);
-        }
-        out
-    }
-
-    async fn extent(
-        &self,
-        live: &Live,
-        probe: &gorca_doc_source_api::ExtentProbe,
-        deadline: Deadline,
-    ) -> Option<gorca_model::Rect> {
-        let own = live
-            .ident
-            .path_of(probe.node)
-            .and_then(|p| live.paths.path_of(p));
-        let m = match own {
-            Some(path) if !crate::runs::is_run(probe.node) => {
-                self.app
-                    .call(
-                        self.app.next_lane(),
-                        deadline,
-                        &path,
-                        COMPONENT,
-                        "GetExtents",
-                        &(0u32,),
-                    )
-                    .await
-            }
-            _ => {
-                let path = live
-                    .ident
-                    .path_of(probe.parent)
-                    .and_then(|p| live.paths.path_of(p))?;
-                let (a, b) = (
-                    i32::try_from(probe.range.start).ok()?,
-                    i32::try_from(probe.range.end).ok()?,
-                );
-                self.app
-                    .call(
-                        self.app.next_lane(),
-                        deadline,
-                        &path,
-                        TEXT,
-                        "GetRangeExtents",
-                        &(a, b, 0u32),
-                    )
-                    .await
-            }
-        }
-        .ok()?;
-        let (x, y, w, h): (i32, i32, i32, i32) = m.body().deserialize().ok()?;
-        if w > 0 && h > 0 {
-            return Some(gorca_model::Rect {
-                x,
-                y,
-                w: u32::try_from(w).ok()?,
-                h: u32::try_from(h).ok()?,
-            });
-        }
-        // The engine could not place the run (Gecko answers an empty box for a range it has not
-        // laid out for the reader): the container's own box is the best that is left.
-        if probe.node == probe.parent {
-            return None;
-        }
-        let path = live
-            .ident
-            .path_of(probe.parent)
-            .and_then(|p| live.paths.path_of(p))?;
-        let m = self
-            .app
-            .call(
-                self.app.next_lane(),
-                deadline,
-                &path,
-                COMPONENT,
-                "GetExtents",
-                &(0u32,),
-            )
-            .await
-            .ok()?;
-        let (x, y, w, h): (i32, i32, i32, i32) = m.body().deserialize().ok()?;
-        Some(gorca_model::Rect {
-            x,
-            y,
-            w: u32::try_from(w).ok()?,
-            h: u32::try_from(h).ok()?,
-        })
-    }
-
     async fn validate(&self, live: &Live, node: SrcNodeId, deadline: Deadline) -> bool {
         let Some(path) = live.ident.path_of(node).and_then(|p| live.paths.path_of(p)) else {
             return false;
@@ -2406,6 +2330,83 @@ impl AtspiDocSource {
             Err(_) => false,
         }
     }
+}
+
+/// Where one rectangle of a [`DocRequest::Extents`] is read.
+struct Target {
+    /// The object's own path (not for a text run).
+    own: Option<String>,
+    /// The container of a run, and the run's scalar range in it.
+    parent: Option<String>,
+    range: std::ops::Range<u32>,
+}
+
+async fn rect_call(
+    app: &AppConn,
+    deadline: Deadline,
+    path: &str,
+    iface: &str,
+    member: &str,
+    body: &(impl serde::Serialize + zbus::zvariant::DynamicType),
+) -> Option<gorca_model::Rect> {
+    let m = app
+        .call(app.next_lane(), deadline, path, iface, member, body)
+        .await
+        .ok()?;
+    let (x, y, w, h): (i32, i32, i32, i32) = m.body().deserialize().ok()?;
+    Some(gorca_model::Rect {
+        x,
+        y,
+        w: u32::try_from(w).ok()?,
+        h: u32::try_from(h).ok()?,
+    })
+}
+
+/// The screen rectangles of `targets` (`Component.GetExtents` of the object, or
+/// `Text.GetRangeExtents` of the run inside its container when the node is a text run with no
+/// object, falling back to the container's box when the engine answers an empty one), one call
+/// each, in order and never past `deadline`. A node that is unknown or whose call fails has
+/// `None`.
+async fn measure(
+    app: &AppConn,
+    targets: Vec<Target>,
+    deadline: Deadline,
+) -> SmallVec<[Option<gorca_model::Rect>; 6]> {
+    let mut out = SmallVec::new();
+    for t in targets {
+        let r = if let Some(path) = &t.own {
+            rect_call(app, deadline, path, COMPONENT, "GetExtents", &(0u32,)).await
+        } else if let Some(parent) = &t.parent {
+            let range = (
+                i32::try_from(t.range.start).ok(),
+                i32::try_from(t.range.end).ok(),
+            );
+            let run = match range {
+                (Some(a), Some(b)) => {
+                    rect_call(
+                        app,
+                        deadline,
+                        parent,
+                        TEXT,
+                        "GetRangeExtents",
+                        &(a, b, 0u32),
+                    )
+                    .await
+                }
+                _ => None,
+            };
+            match run {
+                Some(r) if r.w > 0 && r.h > 0 => Some(r),
+                // Gecko answers an empty box for a range it has not laid out for the reader:
+                // the container's own box is the best that is left.
+                _ => rect_call(app, deadline, parent, COMPONENT, "GetExtents", &(0u32,)).await,
+            }
+        } else {
+            None
+        };
+        out.push(r);
+    }
+    out
 }
 
 #[cfg(test)]
