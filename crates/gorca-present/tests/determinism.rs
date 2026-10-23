@@ -1022,13 +1022,10 @@ fn p3_7_unexplainable_residue_is_always_reported() {
     }
 }
 
-/// KNOWN GAP G-P3-a (narrowness): `marker-stripped-name` is gated by no role, no ctx flag and no
-/// marker alphabet. It takes any legacy text token that merely *ends with* a shorter new text
-/// token. "Delete all" -> "all" is a dropped word, not a list marker, and is classified
-/// `Allowed`. Fix proposal: require the removed prefix to be non-empty, made only of marker
-/// characters (bullets, digits and a dot, dashes) plus whitespace.
+/// G-P3-a (narrowness, fixed): `marker-stripped-name` accepts only a removed prefix made of
+/// list-marker characters and whitespace. "Delete all" -> "all" is a dropped word: `Different`.
 #[test]
-fn known_gap_marker_stripped_name_accepts_any_word_suffix() {
+fn marker_stripped_name_rejects_a_dropped_word() {
     let permissive = all_rows(&["focus", "focus-web"]);
     let mut c = cases()
         .into_iter()
@@ -1037,18 +1034,39 @@ fn known_gap_marker_stripped_name_accepts_any_word_suffix() {
     c.legacy = vec![(SegmentKind::Text, "Delete all".into())];
     c.new = vec![(SegmentKind::Text, "all".into())];
     c.role = SemRole::Button;
-    assert_eq!(
-        run_case(&c, &permissive, |_| {}),
-        DiffOutcome::Allowed("marker-stripped-name"),
-        "today: a dropped word is classified as a stripped marker"
+    assert!(
+        matches!(
+            run_case(&c, &permissive, |_| {}),
+            DiffOutcome::Different { .. }
+        ),
+        "a dropped word must not be classified as a stripped marker"
     );
+    for (old, new) in [("\u{2022} Alpha", "Alpha"), ("3. Beta", "Beta"), ("- x", "x")] {
+        c.legacy = vec![(SegmentKind::Text, old.into())];
+        c.new = vec![(SegmentKind::Text, new.into())];
+        assert_eq!(
+            run_case(&c, &permissive, |_| {}),
+            DiffOutcome::Allowed("marker-stripped-name"),
+            "{old:?} -> {new:?}"
+        );
+    }
+    for (old, new) in [("Alpha", "Alpha"), (" Alpha", "Alpha"), ("2 apples", "apples")] {
+        c.legacy = vec![(SegmentKind::Text, old.into())];
+        c.new = vec![(SegmentKind::Text, new.into())];
+        assert!(
+            !matches!(
+                run_case(&c, &permissive, |_| {}),
+                DiffOutcome::Allowed(_)
+            ),
+            "{old:?} -> {new:?}"
+        );
+    }
 }
 
-/// KNOWN GAP G-P3-b (attribution): when several classifiers explain one difference only the
-/// first in `Classifier::ALL` order is reported (`used.get_or_insert`), so per-row counters
-/// under-count later rows, and which row "owns" a case depends on the position in `ALL`.
+/// G-P3-b (attribution, fixed): `diff_report` lists every classifier that fired, in `ALL` order;
+/// the `Allowed` id is the first of them.
 #[test]
-fn known_gap_only_the_first_used_classifier_is_reported() {
+fn every_used_classifier_is_reported() {
     let permissive = all_rows(&["focus"]);
     // A text box: the contents are not fused AND the model says read only; both rows apply.
     let l = [
@@ -1065,11 +1083,10 @@ fn known_gap_only_the_first_used_classifier_is_reported() {
         name_derived: false,
         untoggled: false,
     };
-    assert_eq!(
-        diff(&l, &n, &permissive, ctx),
-        DiffOutcome::Allowed("field-contents-not-fused"),
-        "read-only-from-model also fired but is not attributed"
-    );
+    let (outcome, used) = gorca_present::diff::diff_report(&l, &n, &permissive, ctx);
+    assert_eq!(outcome, DiffOutcome::Allowed("field-contents-not-fused"));
+    assert_eq!(used, ["field-contents-not-fused", "read-only-from-model"]);
+    assert_eq!(diff(&l, &n, &permissive, ctx), outcome);
 }
 
 /// P3.9 the allow-list is monotone: enabling more deviation rows never turns an `Allowed`
