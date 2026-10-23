@@ -1,6 +1,12 @@
 # ADR-0022: Semantic model (roles, states, properties), one fusion stage and one presentation pipeline
 
-Status: **Proposed** (draft r2, 2026-10-18; r3 note 2026-10-19). Owner: architect.
+Status: **Proposed** (draft r2, 2026-10-18; r3 note 2026-10-19; r4 note 2026-10-24). Owner: architect.
+
+**r4 (2026-10-24, owner rule: no legacy tails):** new section 8, "Cut-over and no-legacy rule".
+Shadow windows have expiry dates and exit gates; the legacy path of a surface is deleted in the
+slice that switches it, with no flag; pre-fusion fallbacks become S5 provisional facts in the
+model; xtask rules 12 and 13 enforce a shrink-only dated allowlist; extensions never see legacy
+data. Section 2.11 is read together with section 8.
 
 **r3 (2026-10-19, after the ADR-0024 review):** the source contract is opened to future fact
 sources (browser add-on bus, extensions, local inference) by ADR-0024
@@ -363,7 +369,8 @@ final model (simpler contracts, no shim, easier maintenance). This supersedes th
   multisets (kind, `MsgId`, literal) over the M8 fixtures and the tier-1 covering array; the only
   allowed differences are listed in `crates/gorca-present/deviations.toml`, each with a reason.
   A surface switches when its shadow diff is zero outside the deviations, and its legacy code is
-  deleted in the same milestone. Order: b1 change + focus (P1, P4) → b2 browse/quick-nav/say-all
+  deleted in the same slice, with no flag (section 8: dated windows, exit gates, provisional
+  facts instead of reader fallbacks, xtask rule 12). Order: b1 change + focus (P1, P4) → b2 browse/quick-nav/say-all
   (P2, P3) → b3 review/object nav (P8, P9) → b4 window/notification/info/where-am-I and every
   extension path (P5–P7, P11). X2/X3 move to `Semantics` reads in b2.
 - **Acceptance gate for every slice:** math tier-1 properties P0–P10
@@ -458,3 +465,156 @@ MC-1 → §1.1, §2.2. MC-2 → §2.3, M-6b/M-6c. MC-3 → §2.4. MC-4 → §2.1
 §2.11 (BT1), §4 (Newton), §6 (QA answers). Should-change items: braille spans, lazy `ListEntry`,
 interim `ReportFlags` (§2.5); M-9 all carriers (§5); budget-skip logging (§2.6); dual-connector
 precedence (§2.2); roledescription info key (PR-5).
+
+## 8. Cut-over and no-legacy rule (r4, 2026-10-24)
+
+Owner rule (2026-10-24): when gorca moves from one epoch to the next, here from the legacy
+presenters and mirror attribute reads to the fused semantic model and `PresIr` v1, it leaves no
+tails and no paths back. Every consumer reads only the new model; legacy code is deleted, not kept
+alongside. The failure it prevents: "Firefox says this because the focus presenter uses that
+branch, browse uses `SemEntry`, an extension fixes the role, but review reads the old `AttrMap`."
+This section replaces the "strangler" wording of section 2.11 where the two differ. Inventory and
+the per-slice deletion list: `docs/reports/2026-10-24-architect-m22b-legacy-inventory.md`.
+
+### 8.1 What is legacy, what is not
+
+Legacy is any read of a *presentation fact* (role, name, description, value, spoken states,
+attributes, word tables) from anything but the node's fused `SemEntry` (through `Ivm::entry_view`)
+or from `PresIr`. That includes `NodeMeta` fields, `AttrMap`, `NodeSnapshot.attrs/description`
+read by a consumer, `Role::spoken`, the `aria` tables, `present_focus`/`present_web`/
+`present_change`, `web_overlay`, `subtree_label`, and `PolicyFacts` built from a snapshot.
+Not legacy: identity, tree links, bounds, text content, and *structural* state (`SHOWING`,
+`VISIBLE`, `DEFUNCT`, `FOCUSABLE`, `FOCUSED`). Structural state moves to an explicit `StructState`
+on the node record in b4 so `StateSet` stops being a presentation carrier (open, inventory gap 1).
+
+### 8.2 Shadow windows are temporary
+
+Each surface has a shadow window (section 2.11) with an **expiry date** and exit gates. The dates
+are those of `xtask/legacy.allow`; they move only by a `docs/decisions.md` row.
+
+| Surface | Slice | Window ends (expiry) |
+|---|---|---|
+| Focus, change (P1, P4) | M22b1 slice 5 | 2026-12-15 |
+| Browse, quick-nav, say-all (P2, P3) | M22b2 | 2027-01-31 |
+| Review, object nav (P8, P9) | M22b3 | 2027-02-28 |
+| Window, notification, info, explain, extensions, carriers (P5-P7, P11) | M22b4 | 2027-03-31 |
+
+Exit gates, all required before the cut-over commit:
+1. **Diff**: M-13 holds, 0 differences outside dated `deviations.toml` rows on the fixtures and
+   the tier-1 array; web token diff <= 0.5 %; a deviation row never outlives its surface.
+2. **Latency**: M-6 (and M-6b for cold focus) measured on the real bench, interleaved, load and
+   governor recorded; M-7 and M-8 where the surface has them.
+3. **Soak**: at least 8 hours of real use over at least 3 days with shadow on, `different` ratio
+   < 1 %, `dropped_full` = 0, no new deviation id; the counters go in the slice report.
+
+If a gate fails at the expiry date the answer is not an extension flag: the owner either accepts
+the measured deviation (a decision row; the path is deleted anyway) or declares the slice failed
+and moves the date by a decision row.
+
+### 8.3 Cut-over deletes, in the same slice; no flag keeps the old path
+
+* The slice that switches a surface deletes that surface's legacy path in the same merge. No
+  environment variable, setting, cargo feature or `cfg` selects the old presenter, and there is no
+  "fall back to legacy when the entry is missing" branch. Rollback is `git revert` of the slice.
+* The shadow hook for the surface (`GORCA_PRESENT_SHADOW`, `CoreConfig::present_shadow`, its diff
+  classifier) is deleted with it. The replay corpus stays as golden tests of `compose`.
+* The slice lowers or removes its rows in `xtask/legacy.allow` in the same commit (8.5).
+
+**Pre-fusion fallbacks move into the model as lowest-trust facts.** The C3 overlay exists because
+the document actor publishes a node batch before fusion has produced its entry (a 40-50 ms window
+on a big page), and the Reader then reads `NodeMeta` instead. That branch is the leak, so the
+window is closed in the writer, not worked around in the reader:
+
+* **S5 provisional** is a new stratum below S4 inferred: user > patch > observed > derived >
+  inferred > **provisional** > default, with `ProvCode::Provisional` as its provenance code.
+* When the writer (document actor for web nodes, app actor otherwise) publishes a node, it writes
+  in the *same* publish a provisional entry made only from total, local functions of the source
+  record: role map, state map, the name and description as the engine reported them, and, for a
+  control the engine left nameless, the one-line subtree text label capped at 160 bytes
+  (`gorca_fuse::content_label`, the function S3 uses: one implementation, the fallback is not a
+  copy). Content-derived values are tainted; provisional values are spoken plainly (no hedge) and
+  never beat an S0..S4 value of the same group.
+* Fusion then supersedes: the first register write or derivation for that group replaces the
+  provisional value by the ordinary strata order. A change after an utterance started follows the
+  existing refinement rules (M-6c, `may_refine`).
+* **PV-1 totality**: from the moment a node is visible to a reader surface, `entry_view` returns an
+  entry for it. The Reader has no `Option<SemEntry>` branch; its input type is a fused node
+  (record + entry), so a missing entry cannot be written. The cold-focus path (fetch miss) builds
+  the provisional entry from the fetched snapshot before publish.
+* **PV-2** provisional never wins over a fused value. **PV-3** `ProvTag` shows it, so explain and
+  the shadow can say "provisional". **PV-4** a provisional value is never saved to a profile and
+  never visible to patch selectors (ADR-0019 selectors read S0 and above).
+* Cost: the provisional label runs the existing S3 function once per nameless control, bounded by
+  the 160-byte cap; B-FUSE measures it (M-14b). If it exceeds M-11 the label is dropped (the
+  control speaks its role until fusion lands) and that degradation is recorded; the answer is
+  never to put the branch back in the Reader.
+* The C3b inferred form label (slice 4) is an S4 inferred fact in the entry, with taint and the
+  layout revision it was measured at, not a Reader overlay; the Reader overlay is deleted in
+  slice 5.
+
+### 8.4 One source of truth for every consumer
+
+After b4 the readers of presentation facts are `gorca-fuse` (writer), `gorca-present` (compose,
+render, word tables) and the ADR-0026 accessors for extensions. Browse, quick-nav, review,
+explain, the braille plan, window, notification and policies call `compose` or an accessor over
+the same entry, so "Firefox says this in focus but that in browse" can only be a difference in
+`compose` rules, and an extension role fix (an S1 patch) shows up in every surface at once.
+Structure predicates (group, modal, category) read the entry's structure groups (section 2.11,
+X2/X3), not attributes.
+
+### 8.5 Enforcement: xtask rules 12 and 13
+
+`cargo run -p xtask -- legacy` (also part of `cargo xtask deps`, so CI runs it):
+
+* `BANS` in `xtask/src/legacyrule.rs` lists the banned identifiers (`subtree_label`, `web_overlay`,
+  `overlay_from_meta`, `legacy_name`, `Legacy`, `present_focus`, `present_web`,
+  `present_selected_item`, `present_with`, `present_change`, `aria::`, `mod aria`, `state_words`,
+  `.spoken()`, `legacy_family`, `NodeMeta`, `.meta`, `AttrMap`, `.attrs`, `web_attrs::`,
+  `PolicyFacts`, `mod agree`, and `NodeSnapshot` in the extension crates), each with a path scope
+  and the replacement printed on failure. The braille crates, the extension host, the plugin API
+  and `extensions/` are in scope of the bans that matter to them.
+* `xtask/legacy.allow` rows are `ban | file | uses | expires | slice`. It is a ratchet: a use with
+  no row fails; more uses than the row allows fails; fewer uses than the row says fails (the slice
+  must lower it, so the list only shrinks); a row past its expiry **fails CI** (delete the path,
+  do not extend); no expiry may be later than 2027-03-31; every row names its deleting slice.
+* A slice that introduces a replacement API adds the ban for what it replaces in the same change,
+  and a slice that cuts a surface over removes its rows. At the end of b4 the allowlist file is
+  empty and is deleted; the bans stay as a permanent guard.
+* Test code, comments and `tests/`, `benches/`, `examples/` are not scanned: test code of a legacy
+  path dies with it. The rule is a text check, so a renamed wrapper around a banned read escapes
+  it. Hence the review checklist of every M22b slice includes "no new reader of a presentation
+  fact outside `compose` or the accessors", and b4 makes the fields private (visible to
+  `gorca-fuse` only), which the compiler enforces.
+* **Rule 13**: the `host` cargo feature of `gorca-present-ir` (`ExtKinds`, the `ExtNs` binding,
+  `LangTags`) is enabled by `gorca-present` only. No other manifest, above all no plugin-API crate
+  or extension, may enable or forward it, and the IR crate's `default` features may not include it.
+
+### 8.6 Extensions and plugins get no legacy data, ever
+
+Extensions and plugins (ADR-0026) read facts only through accessors over `SemEntry` and write only
+through ADR-0019 patches and `PresIr` edit hooks. They never see `NodeSnapshot`, `AttrMap`,
+`NodeMeta`, the legacy `Role` enum or `StateSet`: WIT 0.9 role codes are `SemRole`. The
+`ext-snapshot`, `attr-map`, `attrs-field`, `web-attrs` and `policy-facts` bans enforce this for
+`gorca-ext-api`, `gorca-ext-host` and `extensions/` (today `convert.rs` and `host.rs` still convert
+from `NodeSnapshot`: allowlisted until b4). An extension-side "role fix" is an S1 patch that fusion
+applies before any surface reads, so an extension cannot make one surface differ from another. A
+plugin that needs a fact the accessors lack gets an accessor (a WIT version bump), never a back
+door to the old carriers.
+
+### 8.7 Slice plan changes
+
+`docs/reports/m22b1-plan.md` is amended: slice 4 builds the provisional stratum and moves the C3
+and C3b fallbacks into the entry; slice 5 deletes the focus and change legacy and the Reader
+overlay; b2, b3 and b4 each end with their deletions and their allowlist rows removed. The
+structural/presentation split of `StateSet` (8.1) lands in b4 at the latest.
+
+### 8.8 Consequences and metrics
+
+* More work per slice (deleting, not only adding) and no rollback by flag; accepted by the owner
+  for the sake of one behaviour per fact.
+* The provisional stratum adds a write per published node, inside the `SemEntry` size already
+  budgeted (M-9); no new per-node storage.
+* **M-14**: `xtask/legacy.allow` holds zero rows of a slice's surface at the end of that slice and
+  is empty at the end of b4. **M-14b**: provisional-label cost in B-FUSE within M-11. **M-14c**:
+  PV-1 test: no published node without an entry under the F1-F10 shuffles.
+* Open: QO-6, the `StructState` shape and entries for lazily cached ancestors (inventory gaps 1, 2).
