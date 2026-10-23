@@ -248,6 +248,49 @@ elif SCEN == "scrollshort":
     print("page before:", p0, "after:", p1, flush=True)
     verdict(p0 != p1, "scrollshort: the page followed the browse cursor", f"{p0} -> {p1}")
 
+elif SCEN == "closepane":
+    # a1: Escape closes the chat pane under the browse cursor; Tab and Enter must keep working
+    open_first_chat()
+    step("esc 1", ESC, wait=1.0)
+    step("up", UP)
+    evs = []
+    from gi.repository import GLib
+    lis = Atspi.EventListener.new(lambda e, *a: evs.append((e.type, e.detail1, e.detail2, e.source.get_role_name() if e.source else None, (e.source.get_name() or "")[:20] if e.source else None, e.any_data.get_name()[:20] if hasattr(e.any_data, "get_name") and e.any_data is not None else None)))
+    for t in ("object:children-changed", "object:state-changed:showing"):
+        lis.register(t)
+    key(ESC, wait=0.1)
+    t_end = time.monotonic() + 2.0
+    ctx = GLib.MainContext.default()
+    while time.monotonic() < t_end:
+        while ctx.pending():
+            ctx.iteration(False)
+        time.sleep(0.02)
+    print("NOTE events after esc2:", len(evs), flush=True)
+    for e in evs[:40]:
+        print("NOTE   ev", e, flush=True)
+    cnt = [0]
+
+    def cm(n):
+        try:
+            if n.get_child_count() == 0 and n.get_text_iface() and (Atspi.Text.get_text(n, 0, 9) or "") == "Message 3":
+                cnt[0] += 1
+        except Exception:
+            pass
+        return False
+    walk(cm, limit=60000)
+    print("NOTE page truth: messages still in the a11y tree after the pane closed:", cnt[0], flush=True)
+    a = step("tab", TAB, wait=0.8)
+    b = step("tab", TAB, wait=0.8)
+    c = step("enter", ENTER, wait=2.0)
+    step("up", UP)
+    step("up", UP)
+    step("home", HOME)
+    step("down", DOWN)
+    dead = any("no next focusable" in x for x in a + b)
+    verdict(not dead, "closepane: Tab finds the next focusable after the pane closed", f"{a} {b}")
+    verdict(any(x.startswith("'") for x in c), "closepane: Enter speaks after the pane closed", f"{c}")
+    verdict(not any(re.search(r"Message \d+ from", x) for x in a + b), "closepane: nothing from the removed pane is spoken", f"{a} {b} {c}")
+
 elif SCEN == "listscroll":
     # Down through more rows than the windowed chat list renders (22 of 300)
     allsaid = []

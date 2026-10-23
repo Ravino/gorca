@@ -3836,3 +3836,87 @@ fn browse_review_target_is_none_when_the_lookup_fails() {
     assert!(matches!(r.reader.mode(), Mode::Browse { .. }));
     assert_eq!(r.reader.review_target(), None);
 }
+
+/// a1: the page closes the pane the cursor is in (Telegram: Escape on an open chat). The cursor
+/// re-anchors to the nearest surviving container, not to the end of the document, and Tab is
+/// offered again from there (the grab set is re-synced; a stale grab ate Tab for good).
+#[test]
+fn a_removed_pane_under_the_cursor_re_anchors_to_the_surviving_container() {
+    let mut r = rig();
+
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![
+                block(src(20, Role::Paragraph, Some(1020))),
+                run(22, "Head"),
+                block(src(25, Role::Panel, Some(1025))),
+                run(26, "Tail two"),
+                block(src(21, Role::Panel, Some(1021))),
+                run(23, "Deep text"),
+            ]),
+            kids(1, &[2, 4, 9, 11, 13, 20]),
+            kids(20, &[22, 25, 21]),
+            kids(25, &[26]),
+            kids(21, &[23]),
+            DocDelta::Settled { batch: 2 },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 2,
+        }),
+        r.now,
+    );
+    r.focus(1006);
+    let mut said = Vec::new();
+    for _ in 0..12 {
+        said = spoken(&r.key(CoreCmd::BrowseCursorNextLine));
+        if said.iter().any(|s| s.contains("Deep text")) {
+            break;
+        }
+    }
+    assert!(said.iter().any(|s| s.contains("Deep text")), "{said:?}");
+    settle(&mut r);
+    // The page removes the inner panel; the cursor's node is gone, the text shrank.
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            kids(20, &[22, 25]),
+            DocDelta::Removed(vec![SrcNodeId(21), SrcNodeId(23)]),
+            DocDelta::Settled { batch: 3 },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 3,
+        }),
+        r.now,
+    );
+    assert!(
+        spoken(&fx).is_empty(),
+        "re-anchoring is silent: {:?}",
+        spoken(&fx)
+    );
+    let WebMode::Browse { doc, cur, .. } = r.mode() else {
+        panic!("not browsing");
+    };
+    let stay = r.tr.id_of(SrcNodeId(22)).expect("Head");
+    let attached = r
+        .docs
+        .get(doc)
+        .unwrap()
+        .read
+        .with(|d| d.is_attached(cur.node));
+    assert!(attached, "the cursor is on a live node");
+    assert_eq!(
+        cur.node, stay,
+        "the start of the surviving pane, not the end of the document"
+    );
+}

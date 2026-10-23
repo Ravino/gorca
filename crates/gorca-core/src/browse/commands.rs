@@ -4,6 +4,7 @@
 //! sends nothing but fire-and-forget effects afterwards (BI-1, BI-2).
 
 use gorca_i18n::{MsgId as M, t};
+use smallvec::SmallVec;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -631,6 +632,21 @@ fn is_ancestor_or_self(d: &WebDoc, anc: DocNodeId, node: DocNodeId) -> bool {
         }
     }
     false
+}
+
+/// The nearest ancestors of a node, nearest first (at most the inline capacity): where the
+/// browse cursor re-anchors when the page removes the node together with its whole subtree.
+fn ancestor_chain(d: &WebDoc, node: DocNodeId) -> SmallVec<[DocNodeId; 8]> {
+    let mut chain = SmallVec::new();
+    let mut up = d.parent(node);
+    while let Some(p) = up {
+        if chain.len() == chain.inline_size() {
+            break;
+        }
+        chain.push(p);
+        up = d.parent(p);
+    }
+    chain
 }
 
 /// The visible text of a node's subtree as a one-line label, or `None` when it holds none: the
@@ -2332,6 +2348,7 @@ impl Reader {
         self.web_rejoin_after_grace(doc, fx);
         self.web_late_entry(doc, fx);
         let Some(b) = self.web.as_mut() else { return };
+        let mut resync_tabs = false;
         match b.mode {
             WebMode::Loading { .. } => self.web_retry_loading(false, fx),
             WebMode::Browse { doc: d, cur, .. } if d == doc => {
@@ -2393,27 +2410,57 @@ impl Reader {
                 let window = b
                     .restore_until
                     .is_some_and(|(t, off)| now < t && off == last);
-                let fixed = h.read.with(|d| {
-                    if d.is_attached(cur.node) && !window {
-                        None
-                    } else {
-                        cursor::cursor_at(d, last).filter(|c| c.node != cur.node)
-                    }
-                });
                 let lost = h.read.with(|d| !d.is_attached(cur.node));
+                if !lost {
+                    // Remember where the node sits, for the day the page removes all of it.
+                    b.cursor_chain = h.read.with(|d| ancestor_chain(d, cur.node));
+                }
+                // The page removed the cursor's whole subtree (a pane closed) and the flat offset
+                // now lies past the end of what is left: re-anchor to the nearest surviving
+                // ancestor instead of the end of the document, where no Tab target and nothing
+                // to click remain.
+                let anchored = h.read.with(|d| {
+                    if !lost || last < d.text_len() {
+                        return None;
+                    }
+                    b.cursor_chain
+                        .iter()
+                        .find(|n| d.is_attached(**n) && d.root() != Some(**n))
+                        .and_then(|n| cursor::content_start(d, *n))
+                        .and_then(|off| cursor::cursor_at(d, off).map(|c| (c, off)))
+                });
+                let fixed = match anchored {
+                    Some(a) => Some(a),
+                    None => h.read.with(|d| {
+                        if d.is_attached(cur.node) && !window {
+                            None
+                        } else {
+                            cursor::cursor_at(d, last)
+                                .filter(|c| c.node != cur.node)
+                                .map(|c| (c, last))
+                        }
+                    }),
+                };
                 if lost {
                     b.restore_until = Some((now + RESTORE_WINDOW, last));
                 }
-                if let Some(c) = fixed
+                if let Some((c, off)) = fixed
                     && let WebMode::Browse { cur, .. } = &mut b.mode
                 {
                     *cur = c;
+                    b.last_off = off;
                     // The page took the node the user was on and the cursor settled on
                     // another: the next Enter says where it is before it clicks.
                     b.displaced = Some(c.node);
                 }
+                // The cursor moved without a key: Tab availability follows it (D-2); a grab that
+                // was right for the old place would keep eating Tab for good.
+                resync_tabs = lost;
             }
             WebMode::Focus { .. } | WebMode::Browse { .. } | WebMode::Inactive => {}
+        }
+        if resync_tabs {
+            self.web_sync_tab_grabs(fx);
         }
     }
 
@@ -3040,6 +3087,9 @@ impl Reader {
         }
         b.last_off = off;
         b.sel = None;
+        if let Some(h) = b.docs.get(doc) {
+            b.cursor_chain = h.read.with(|d| ancestor_chain(d, cur.node));
+        }
         if b.native_sel_node.is_some() && b.model == SelectionModel::Native {
             b.sel_due = Some(now + SEL_DEBOUNCE);
         }

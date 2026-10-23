@@ -578,6 +578,9 @@ pub struct BrowseState {
     /// Bare quick-navigation keys are grabbed (gorca+Shift+Space turns them off).
     pub single_letter: bool,
     pub restore_until: Option<(Instant, u32)>,
+    /// The cursor node's ancestors (nearest first) as of the last mirror change that found the
+    /// node attached: where to re-anchor when the page removes the node's whole subtree.
+    pub cursor_chain: SmallVec<[DocNodeId; 8]>,
     /// Latest scroll request: sent after a pause so held keys do not flood the page (LP-6).
     pub scroll_due: Option<(Instant, DocId, DocNodeId, u32)>,
     /// When the browser last reported `load-complete`, by document root (page auto-read): the
@@ -712,6 +715,7 @@ impl BrowseState {
             counters: BrowseCounters::default(),
             last_off: 0,
             restore_until: None,
+            cursor_chain: SmallVec::new(),
             displaced: None,
             armed_click: None,
             focus_key: None,
