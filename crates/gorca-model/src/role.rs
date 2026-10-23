@@ -206,8 +206,13 @@ impl Role {
 
     /// The spoken name of the role in the UI language (catalog `role-*`).
     pub fn spoken(self) -> &'static str {
+        gorca_i18n::t(self.msg())
+    }
+
+    /// The catalog message of the role word (`role-*`).
+    pub fn msg(self) -> gorca_i18n::MsgId {
         use gorca_i18n::MsgId as M;
-        let id = match self {
+        match self {
             Role::Unknown => M::RoleUnknown,
             Role::Application => M::RoleApplication,
             Role::Window => M::RoleWindow,
@@ -251,8 +256,7 @@ impl Role {
             Role::Terminal => M::RoleTerminal,
             Role::Landmark => M::RoleLandmark,
             Role::Alert => M::RoleAlert,
-        };
-        gorca_i18n::t(id)
+        }
     }
 }
 

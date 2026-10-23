@@ -730,6 +730,10 @@ pub(crate) fn one_line_label(s: &str) -> Option<String> {
 /// button). Any other different name is the snapshot's: it was read after the mirror and is the
 /// fresher.
 pub(crate) fn fused_name(snap: &gorca_model::NodeSnapshot, e: &SemEntry) -> Option<Arc<str>> {
+    // L-4 (C3 review): a name the entry marks stale is not spoken as current.
+    if e.stale.has(Group::Name) {
+        return None;
+    }
     let fused = e.name.as_ref()?;
     match snap.name.as_deref() {
         own if crate::present::name_is_blank(own) => {
@@ -3898,6 +3902,19 @@ mod overlay_tests {
             fused_name(&snap(Role::ListItem, Some("Alpha Beta")), &e),
             None
         );
+    }
+
+    #[test]
+    fn a_stale_fused_name_is_not_spoken_as_current() {
+        let mut e = (*entry(Some("Alpha"))).clone();
+        assert_eq!(
+            fused_name(&snap(Role::Button, None), &e).as_deref(),
+            Some("Alpha"),
+            "a fresh content name fills a nameless control"
+        );
+        e.stale = e.stale.with(gorca_model::sem::Group::Name);
+        assert_eq!(fused_name(&snap(Role::Button, None), &e), None);
+        assert_eq!(fused_name(&snap(Role::ListItem, Some("• Alpha")), &e), None);
     }
 
     #[test]

@@ -1,0 +1,13 @@
+# Allowed differences between the legacy presenter and `gorca-present` (ADR-0022 section 2.11,
+# M-13). A surface switches when its shadow diff is zero outside this list. Every row has:
+#   id       a classifier name from `src/diff.rs` (`Classifier`); a missing row allows nothing
+#   surface  where it applies (`focus`); the same id on another surface is NOT allowed
+#   reason   why the difference is acceptable
+#   until    ISO date after which the row is expired; a unit test fails once it passes, so the gap
+#            is closed or the row is renewed with a new reason
+
+[[deviation]]
+id = "value-not-fused"
+surface = "focus"
+reason = "A numeric AT-SPI Value range (current value) is spoken by the legacy presenter; the fused entry carries aria-valuetext only, so a node without value_text lacks it."
+until = "2026-11-07"

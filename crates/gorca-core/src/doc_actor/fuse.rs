@@ -708,4 +708,160 @@ mod tests {
         assert!(changed.len() >= usize::try_from(N).unwrap());
         assert!(took < std::time::Duration::from_secs(20), "{took:?}");
     }
+
+    /// M-3 storm bench (C3 review, pre-M22b): a streaming leaf renamed in three tree shapes, the
+    /// fusion stage end to end (apply, run to quiescence). The counts are exact and asserted; the
+    /// times are printed (`--nocapture`, use `--release` for the recorded numbers) and bounded
+    /// loosely so a debug build passes.
+    mod storm {
+        use super::*;
+
+        struct Tree {
+            nodes: Vec<SrcNode>,
+            kids: Vec<DocDelta>,
+            leaf: u64,
+        }
+
+        fn leaf_node(id: u64, text: &str) -> SrcNode {
+            node(id, SemRole::StaticText, Some(text))
+        }
+
+        /// 500 list items with a paragraph and 20 leaves each in the last; the last leaf streams.
+        fn chat_log() -> Tree {
+            let mut nodes = vec![
+                node(1, SemRole::DocumentWeb, None),
+                node(2, SemRole::List, None),
+            ];
+            let mut kids = vec![kids(1, &[2])];
+            let mut items = Vec::new();
+            let mut next = 10;
+            let mut leaf = 0;
+            for i in 0..500u64 {
+                let item = next;
+                next += 1;
+                nodes.push(node(item, SemRole::ListItem, None));
+                items.push(item);
+                let wrapper = next;
+                next += 1;
+                nodes.push(node(wrapper, SemRole::Generic, None));
+                let para = next;
+                next += 1;
+                nodes.push(node(para, SemRole::Paragraph, None));
+                let n_leaves = if i == 499 { 20 } else { 1 };
+                let mut ls = Vec::new();
+                for _ in 0..n_leaves {
+                    leaf = next;
+                    next += 1;
+                    nodes.push(leaf_node(leaf, "word"));
+                    ls.push(leaf);
+                }
+                kids.push(self::kids(item, &[wrapper]));
+                kids.push(self::kids(wrapper, &[para]));
+                kids.push(self::kids(para, &ls));
+            }
+            kids.push(self::kids(2, &items));
+            Tree { nodes, kids, leaf }
+        }
+
+        /// One list item over 8 nameless levels with fan-out 2: 256 leaves.
+        fn deep_item() -> Tree {
+            let mut nodes = vec![
+                node(1, SemRole::DocumentWeb, None),
+                node(2, SemRole::ListItem, None),
+            ];
+            let mut kids = vec![kids(1, &[2])];
+            let mut level = vec![2u64];
+            let mut next = 10;
+            let mut leaf = 0;
+            for depth in 0..8 {
+                let mut below = Vec::new();
+                for p in &level {
+                    let a = next;
+                    let b = next + 1;
+                    next += 2;
+                    let role = if depth == 7 {
+                        SemRole::StaticText
+                    } else {
+                        SemRole::Generic
+                    };
+                    let name = (depth == 7).then_some("t");
+                    nodes.push(node(a, role, name));
+                    nodes.push(node(b, role, name));
+                    kids.push(self::kids(*p, &[a, b]));
+                    below.extend([a, b]);
+                    leaf = b;
+                }
+                level = below;
+            }
+            Tree { nodes, kids, leaf }
+        }
+
+        /// 64 list items nested through nameless lists.
+        fn nested_items() -> Tree {
+            let mut nodes = vec![node(1, SemRole::DocumentWeb, None)];
+            let mut kids = Vec::new();
+            let mut parent = 1;
+            let mut next = 10;
+            for _ in 0..64 {
+                let list = next;
+                let item = next + 1;
+                next += 2;
+                nodes.push(node(list, SemRole::List, None));
+                nodes.push(node(item, SemRole::ListItem, None));
+                kids.push(self::kids(parent, &[list]));
+                kids.push(self::kids(list, &[item]));
+                parent = item;
+            }
+            let leaf = next;
+            nodes.push(leaf_node(leaf, "tok"));
+            kids.push(self::kids(parent, &[leaf]));
+            Tree { nodes, kids, leaf }
+        }
+
+        fn settle(s: &mut FuseStage) {
+            let mut guard = 0;
+            while s.pending() > 0 && guard < 1_000 {
+                s.step();
+                guard += 1;
+            }
+        }
+
+        /// (fusions per rename, mean time per rename) over `n` renames of the tree's leaf.
+        fn measure(t: Tree, n: u32) -> (f64, std::time::Duration) {
+            let mut s = FuseStage::new(setup());
+            let mut batch = vec![reset(1), DocDelta::Upsert(t.nodes)];
+            batch.extend(t.kids);
+            s.apply(&batch);
+            settle(&mut s);
+            let before = s.stats().fusions;
+            let start = std::time::Instant::now();
+            for i in 0..n {
+                let text = format!("tok{i}");
+                s.apply(&[DocDelta::Upsert(vec![leaf_node(t.leaf, &text)])]);
+                settle(&mut s);
+            }
+            let dt = start.elapsed() / n;
+            let delta = u32::try_from(s.stats().fusions - before).unwrap_or(u32::MAX);
+            let per = f64::from(delta) / f64::from(n);
+            assert_eq!(s.stats().errors, 0);
+            (per, dt)
+        }
+
+        #[test]
+        fn a_streaming_leaf_costs_a_bounded_number_of_fusions() {
+            let (chat, t_chat) = measure(chat_log(), 200);
+            let (deep, t_deep) = measure(deep_item(), 200);
+            let (nested, t_nested) = measure(nested_items(), 200);
+            eprintln!("M-3 chat log     : {chat:.1} fusions/rename, {t_chat:?}/rename");
+            eprintln!("M-3 deep item    : {deep:.1} fusions/rename, {t_deep:?}/rename");
+            eprintln!("M-3 nested items : {nested:.1} fusions/rename, {t_nested:?}/rename");
+            // The review's counts (3.0, 3.0, 130): a regression that widens the cascade fails.
+            assert!(chat <= 4.0, "{chat}");
+            assert!(deep <= 4.0, "{deep}");
+            assert!(nested <= 140.0, "{nested}");
+            // 10k events/s is 100 us per event; the worst shape gets a debug-build allowance.
+            let limit = std::time::Duration::from_millis(2);
+            assert!(t_chat < limit && t_deep < limit && t_nested < limit);
+        }
+    }
 }

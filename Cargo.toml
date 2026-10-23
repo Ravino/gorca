@@ -52,6 +52,8 @@ ext-vte = { path = "extensions/ext-vte" }
 gorca-testkit = { path = "crates/gorca-testkit" }
 gorca-bench-b2 = { path = "crates/gorca-bench-b2" }
 gorca-fuse = { path = "crates/gorca-fuse" }
+gorca-present = { path = "crates/gorca-present" }
+gorca-present-ir = { path = "crates/gorca-present-ir" }
 gorca-fact-api = { path = "crates/gorca-fact-api" }
 gorca-sem-atspi = { path = "crates/gorca-sem-atspi" }
 

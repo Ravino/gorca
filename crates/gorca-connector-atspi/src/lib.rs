@@ -35,6 +35,8 @@ mod events;
 mod fetch;
 #[cfg(test)]
 mod legacy_agreement_tests;
+#[cfg(test)]
+mod present_replay_tests;
 mod proc;
 mod role_map;
 mod sem_profile;

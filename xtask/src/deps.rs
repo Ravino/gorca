@@ -48,6 +48,9 @@ const NEUTRAL: &[&str] = &[
     "gorca-fuse",
     "gorca-fact-api",
     "gorca-sem-atspi",
+    // The presentation pipeline reads the fused model only (M22b1).
+    "gorca-present",
+    "gorca-present-ir",
     // The extension API is what a WASM extension links: no transport, no runtime.
     "gorca-ext-api",
 ];
@@ -74,6 +77,7 @@ const TOKIO_FREE: &[&str] = &[
     "gorca-config",
     "gorca-fuse",
     "gorca-sem-atspi",
+    "gorca-present-ir",
 ];
 /// The only crates that may depend directly on the AT-SPI semantic normaliser (rule 10, H-7).
 const MAY_USE_SEM_ATSPI: &[&str] = &["gorca-connector-atspi", "gorca-doc-source-atspi"];

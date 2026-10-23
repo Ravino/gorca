@@ -244,6 +244,18 @@ Invariants:
 - **PR-5 (new)** `aria-roledescription` is honoured (QA-3) but never hides the native role from the
   object-info/where-am-I key; ignored when empty, equal to the name, or longer than 64 scalars.
 
+**`PresIr` draft v0 (M22b1 slice 1, 2026-10-24; freeze moved to the end of slice 2).** The
+reviewer blocked the first freeze (`docs/reports/m22b1-review.md` P-1..P-5). The corrected draft is
+in `crates/gorca-present-ir` (no runtime, so the plugin API can depend on it), `PRES_IR_VERSION = 0`:
+`Content` is `Text | Msg { id, args } | Ext { ns, key, args } | Opaque { code }` (numbers stay
+numbers; add-on text is an extension catalog reference, never a raw U+001E string); `Field` has
+`flags` (`SECRET`, `VERBOSE_ONLY`) and `lang`; `PresIr` has `flags`; `Reason` has `Unknown(u16)`.
+Wire rules, to be tested at the freeze: kinds are codes and an unknown kind passes through unedited
+(never a trap); words travel as catalog key strings, not as the build-order `MsgId` number; add-on
+`FieldKind` codes are allocated by the host per (namespace, name) (`ExtKinds`), never chosen by a
+guest; secret fields are redacted before a plugin, a log or braille sees the IR (`PresIr::redacted`).
+`Field` is 56 B. `FieldKind` codes 1..13 are append-only. Plan: `docs/reports/m22b1-plan.md`.
+
 ### 2.6 Provenance and "why was this said" (MC-4, A1)
 
 - `Semantics` carries no provenance; `ProvTag` (u64) and the `stale`/`fallback` masks live beside it
@@ -418,7 +430,7 @@ Details: report §8, math reports.
 
 ## 6. Open questions
 
-- **QO-1** If M22b1 lags M18a, is freezing the `PresIr` record from the M22a sketch acceptable,
+- **QO-1 (answered 2026-10-24: M22b1 freezes `PresIr` itself, at the end of slice 2, section 2.5)** If M22b1 lags M18a, is freezing the `PresIr` record from the M22a sketch acceptable,
   or should M18a wait for M22b1 too (§2.10 item 4)? Recommendation: freeze from the sketch.
 - **QO-2** ADR-0019 selector radius r and the relation fan-out cap (64) are engineering guesses;
   B-FUSE and XP-8 settle them.
