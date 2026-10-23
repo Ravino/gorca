@@ -195,8 +195,8 @@ const LABEL_SEARCH_DEPTH: usize = 2;
 /// bounded in depth and count, all within the caller's deadline. Any failure only costs the
 /// fallback.
 ///
-/// The descendant search is name from content (accname 2F): it applies only to roles that allow
-/// it (`Role::takes_name_from_content`). A scroll container, a group or a landmark that the
+/// The descendant search is name from content (accname 2F); it is skipped for container roles
+/// ([`never_content_named`]). A scroll container, a group or a landmark that the
 /// application left nameless stays nameless; naming it from its subtree made the whole list
 /// its focus announcement (Telegram K, a focused scrollable pane).
 async fn name_fallback(c: &Caller, path: &str, role: Role, dl: Deadline) -> Option<String> {
@@ -217,10 +217,21 @@ async fn name_fallback(c: &Caller, path: &str, role: Role, dl: Deadline) -> Opti
             return Some(clip(&t, MAX_TEXT_BYTES).to_owned());
         }
     }
-    if !role.takes_name_from_content() {
+    if never_content_named(role) {
         return None;
     }
     descendant_label(c, path, dl).await
+}
+
+/// Containers whose subtree is content, not a name: a focused scroll container, a group, a
+/// landmark, a list or a document read as a name would speak the whole page region. Every other
+/// role keeps the descendant fallback: a GTK4 drop-down, a dialog or an alert is legitimately
+/// named by its label children.
+fn never_content_named(role: Role) -> bool {
+    matches!(
+        role,
+        Role::Panel | Role::Landmark | Role::Document | Role::DocumentWeb | Role::List
+    )
 }
 
 /// What a node may contribute to a name it does not own.
