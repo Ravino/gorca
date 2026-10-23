@@ -44,6 +44,13 @@ coded_enum! {
         Live = 15 => "live",
         Orientation = 16 => "orientation",
         Sort = 17 => "sort",
+        // Appended after the oracle corpus (M22a-C3, review W-6): the rare text of `SemText`
+        // and the name source, one register each. Primary-only: no fact may target them.
+        RoleDescription = 18 => "roledescription",
+        Placeholder = 19 => "placeholder",
+        KeyShortcuts = 20 => "keyshortcuts",
+        ValueText = 21 => "valuetext",
+        NameFrom = 22 => "namefrom",
     }
 }
 
@@ -61,6 +68,21 @@ coded_enum! {
 }
 
 impl Group {
+    /// True for the groups only a primary source writes (the rare text and the name source,
+    /// appended in M22a-C3): no fact shape exists for them, so a secondary or inferred fact that
+    /// names one is malformed.
+    #[inline]
+    pub const fn is_primary_only(self) -> bool {
+        matches!(
+            self,
+            Group::RoleDescription
+                | Group::Placeholder
+                | Group::KeyShortcuts
+                | Group::ValueText
+                | Group::NameFrom
+        )
+    }
+
     /// The slot index of this group in every mask.
     #[inline]
     pub const fn slot(self) -> u8 {
@@ -369,13 +391,15 @@ mod tests {
 
     #[test]
     fn groups_are_dense_in_slot_order() {
-        assert_eq!(GROUP_COUNT, 18);
+        assert_eq!(GROUP_COUNT, 23);
         for (i, g) in Group::ALL.iter().enumerate() {
             assert_eq!(usize::from(g.slot()), i);
             assert_eq!(g.group_code().classify(), GroupClass::Semantic(*g));
         }
         assert_eq!(Group::Orientation.code(), 16);
         assert_eq!(Group::Sort.code(), 17);
+        assert_eq!(Group::NameFrom.code(), 22);
+        assert_eq!(Group::ALL.iter().filter(|g| g.is_primary_only()).count(), 5);
     }
 
     #[test]
@@ -387,7 +411,8 @@ mod tests {
         }
         assert!(GroupCode(0x8007).is_evidence());
         assert!(!GroupCode(0x8007).is_registered());
-        assert!(!GroupCode(18).is_registered());
+        assert!(GroupCode(22).is_registered());
+        assert!(!GroupCode(23).is_registered());
         assert!(!GroupCode(0x0100).is_registered());
     }
 

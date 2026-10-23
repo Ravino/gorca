@@ -216,92 +216,21 @@ pub fn may_have_text(r: u32) -> bool {
     )
 }
 
-pub mod state_bit {
-    pub const ACTIVE: u8 = 1;
-    pub const BUSY: u8 = 3;
-    pub const CHECKED: u8 = 4;
-    pub const COLLAPSED: u8 = 5;
-    pub const DEFUNCT: u8 = 6;
-    pub const EDITABLE: u8 = 7;
-    pub const ENABLED: u8 = 8;
-    pub const EXPANDABLE: u8 = 9;
-    pub const EXPANDED: u8 = 10;
-    pub const FOCUSABLE: u8 = 11;
-    pub const FOCUSED: u8 = 12;
-    pub const MODAL: u8 = 16;
-    pub const MULTI_LINE: u8 = 17;
-    pub const PRESSED: u8 = 20;
-    pub const SELECTABLE: u8 = 22;
-    pub const SELECTED: u8 = 23;
-    pub const SHOWING: u8 = 25;
-    pub const TRANSIENT: u8 = 28;
-    pub const VISIBLE: u8 = 30;
-    pub const MANAGES_DESCENDANTS: u8 = 31;
-    pub const INDETERMINATE: u8 = 32;
-    pub const REQUIRED: u8 = 33;
-    pub const INVALID_ENTRY: u8 = 36;
-    pub const VISITED: u8 = 40;
-    pub const HAS_POPUP: u8 = 42;
-    pub const READ_ONLY: u8 = 43;
-}
+/// The AT-SPI state bit numbers: the one table of `gorca-sem-atspi`.
+pub use gorca_sem_atspi::states::bit as state_bit;
 
-/// Fold the AT-SPI state bitset (state number = bit index) into the normalised set.
-pub fn map_states(bits: u64) -> StateSet {
-    use state_bit::{
-        ACTIVE, BUSY, CHECKED, COLLAPSED, DEFUNCT, EDITABLE, ENABLED, EXPANDED, FOCUSABLE, FOCUSED,
-        HAS_POPUP, INDETERMINATE, INVALID_ENTRY, MANAGES_DESCENDANTS, MODAL, MULTI_LINE, PRESSED,
-        READ_ONLY, REQUIRED, SELECTABLE, SELECTED, SHOWING, TRANSIENT, VISIBLE, VISITED,
-    };
-    let has = |n: u8| bits & (1u64 << n) != 0;
-    let mut s = StateSet::empty();
-    for (n, f) in [
-        (ACTIVE, StateSet::ACTIVE),
-        (BUSY, StateSet::BUSY),
-        (CHECKED, StateSet::CHECKED),
-        (COLLAPSED, StateSet::COLLAPSED),
-        (DEFUNCT, StateSet::DEFUNCT),
-        (EDITABLE, StateSet::EDITABLE),
-        (ENABLED, StateSet::ENABLED),
-        (EXPANDED, StateSet::EXPANDED),
-        (FOCUSABLE, StateSet::FOCUSABLE),
-        (FOCUSED, StateSet::FOCUSED),
-        (MODAL, StateSet::MODAL),
-        (MULTI_LINE, StateSet::MULTILINE),
-        (PRESSED, StateSet::PRESSED),
-        (SELECTABLE, StateSet::SELECTABLE),
-        (SELECTED, StateSet::SELECTED),
-        (SHOWING, StateSet::SHOWING),
-        (TRANSIENT, StateSet::TRANSIENT),
-        (VISIBLE, StateSet::VISIBLE),
-        (MANAGES_DESCENDANTS, StateSet::MANAGES_DESCENDANTS),
-        (REQUIRED, StateSet::REQUIRED),
-        (INVALID_ENTRY, StateSet::INVALID),
-        (HAS_POPUP, StateSet::HAS_POPUP),
-        (READ_ONLY, StateSet::READ_ONLY),
-        (VISITED, StateSet::VISITED),
-        (INDETERMINATE, StateSet::MIXED),
-    ] {
-        if has(n) {
-            s |= f;
-        }
-    }
-    // Gecko never sets `collapsed`: an expandable node that is not expanded is collapsed.
-    if has(state_bit::EXPANDABLE) && !has(EXPANDED) {
-        s |= StateSet::COLLAPSED;
-    }
-    s
+/// The flat state set of a web node's raw AT-SPI states (the one mapping of `gorca-sem-atspi`,
+/// in its web form).
+pub fn map_web_states(bits: u64) -> StateSet {
+    gorca_sem_atspi::states::state_set(
+        gorca_sem_atspi::StateBits(bits),
+        gorca_sem_atspi::states::StateMode::Web,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn indeterminate_maps_to_mixed() {
-        let bits = (1u64 << state_bit::INDETERMINATE) | (1u64 << state_bit::ENABLED);
-        assert!(map_states(bits).contains(StateSet::MIXED));
-        assert!(!map_states(1u64 << state_bit::ENABLED).contains(StateSet::MIXED));
-    }
 
     #[test]
     fn web_roles_map() {
@@ -310,13 +239,6 @@ mod tests {
         assert_eq!(map_role(raw::LINK), Role::Link);
         assert_eq!(map_role(raw::SECTION), Role::Panel);
         assert_eq!(map_role(9999), Role::Unknown);
-    }
-
-    #[test]
-    fn states_map() {
-        let s = map_states((1 << state_bit::SHOWING) | (1 << state_bit::FOCUSABLE));
-        assert!(s.contains(StateSet::SHOWING | StateSet::FOCUSABLE));
-        assert!(!s.contains(StateSet::FOCUSED));
     }
 
     #[test]

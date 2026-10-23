@@ -1,0 +1,50 @@
+# e2e c3-ab-base-4
+# utc=2026-10-19T18:28:21Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=10.69 12.85 14.82 1/1954 2621643
+# git_rev=b264e4b1
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx6
+# topology_expected=-
+# label=c3-ab-base-4
+# reader=daemon:/var/tmp/c3-base-target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=10.69 12.85 14.82 1/1954 2621640
+# reader_env=GORCA_M1=1 GORCA_TOPOLOGY_REPORT=bench/results/e2e/c3-ab-base-4/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=K1: correlated by echoed character and time
+# note1=k2_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)
+# note2=k2_ms: 0 chords without a SPEAK in their window; reader counters: submitted 1231, spoken 1231, superseded 0, stale 0, inbox 0, received by the server 1231
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K1.k1_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+K1.k1_ms.p50               daemon/voicego        0.553        0.515        0.595  3                  info   [ms]
+K1.k1_ms.p95               daemon/voicego        0.783        0.773        0.818  3                  info   [ms]
+K1.k1_ms.p99               daemon/voicego        0.897        0.886        0.938  3 <=           15  PASS   [ms]
+K1.k1_ms.p999              daemon/voicego        1.044        0.942        1.125  3                  info   [ms]
+K1.k1_ms.max               daemon/voicego        1.121        0.978        1.174  3                  info   [ms]
+K1.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K2.k2_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+K2.k2_ms.p50               daemon/voicego        0.488        0.487        0.501  3                  info   [ms]
+K2.k2_ms.p95               daemon/voicego        0.756        0.746        0.769  3                  info   [ms]
+K2.k2_ms.p99               daemon/voicego        0.880        0.862        0.903  3 <=            5  PASS   [ms]
+K2.k2_ms.p999              daemon/voicego        1.007        0.952        1.047  3                  info   [ms]
+K2.k2_ms.max               daemon/voicego        1.105        0.968        1.274  3                  info   [ms]
+K2.late                    daemon/voicego            0            0            0  3                  info   [events]
+K2.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K2.not_consumed            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K2.superseded              daemon/voicego            0            0            0  3                  info   [events]

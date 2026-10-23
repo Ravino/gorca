@@ -383,3 +383,110 @@ fn what_the_writer_holds_is_capped_in_bytes_not_only_in_nodes() {
         );
     }
 }
+
+/// Apply `snaps` to the mirror and queue them, like a reply issued at `at`.
+fn feed(
+    w: &mut FuseWriter,
+    mirror: &mut gorca_mirror::MirrorWriter,
+    at: u64,
+    snaps: &[Arc<NodeSnapshot>],
+) {
+    mirror.apply(
+        SnapshotBatch::new(snaps.to_vec()),
+        gorca_mirror::ApplyOrigin::Reply { issued_at: at },
+    );
+    w.enqueue(snaps, at);
+    while w.step(mirror, Duration::from_millis(20)) {}
+}
+
+fn entry_name(read: &impl MirrorRead, n: u64) -> Option<String> {
+    read.get(key(n)).hit().and_then(|s| {
+        s.sem
+            .entry
+            .as_ref()
+            .and_then(|e| e.name.as_deref().map(str::to_owned))
+    })
+}
+
+#[test]
+fn children_that_arrive_before_their_parent_are_adopted_for_the_content_name() {
+    let mut w = FuseWriter::new(None);
+    let (mut mirror, read) = gorca_mirror::mirror();
+    // Replies in the order the application answered: the children first.
+    feed(
+        &mut w,
+        &mut mirror,
+        1,
+        &[snap_of(2, Some(1), "Save"), snap_of(3, Some(1), "all")],
+    );
+    assert_eq!(entry_name(&read, 2).as_deref(), Some("Save"));
+    // The parent, nameless, arrives later: it takes its name from the children it already has.
+    feed(&mut w, &mut mirror, 2, &[snap_of(1, None, "")]);
+    assert_eq!(entry_name(&read, 1).as_deref(), Some("Save all"));
+    assert_eq!(w.node_count(), 3);
+}
+
+#[test]
+fn a_parent_entry_follows_children_that_arrive_after_it() {
+    let mut w = FuseWriter::new(None);
+    let (mut mirror, read) = gorca_mirror::mirror();
+    feed(&mut w, &mut mirror, 1, &[snap_of(1, None, "")]);
+    assert_eq!(entry_name(&read, 1), None);
+    let before = w.stats().view().refreshed;
+    // A child shows up: the parent snapshot is unchanged, its entry is re-fused and replaced.
+    feed(&mut w, &mut mirror, 2, &[snap_of(2, Some(1), "Menu")]);
+    assert_eq!(entry_name(&read, 1).as_deref(), Some("Menu"));
+    assert!(w.stats().view().refreshed > before);
+}
+
+#[test]
+fn a_property_event_marks_the_entry_stale_and_a_newer_reply_makes_it_fresh() {
+    let mut w = FuseWriter::new(None);
+    let (mut mirror, read) = gorca_mirror::mirror();
+    let issued = mirror.seq();
+    feed(&mut w, &mut mirror, issued, &[snap_of(1, None, "OK")]);
+    let fresh = read.get(key(1)).hit().unwrap().sem.entry.clone().unwrap();
+    assert!(!fresh.stale.has(Group::Name));
+    // The event: the mirror marks the snapshot, the writer the registers (same sequence).
+    mirror.invalidate(key(1), PropMask::NAME, Instant::now());
+    w.invalidate(key(1), mirror.seq());
+    while w.step(&mut mirror, Duration::from_millis(20)) {}
+    let e = read.get(key(1)).hit().unwrap().sem.entry.clone().unwrap();
+    assert!(e.stale.has(Group::Name), "the entry no longer reads fresh");
+    // A reply issued before the invalidation cannot make it fresh again.
+    feed(&mut w, &mut mirror, issued, &[snap_of(1, None, "OK")]);
+    let e = read.get(key(1)).hit().unwrap().sem.entry.clone().unwrap();
+    assert!(e.stale.has(Group::Name));
+    // The re-read, issued after it, does.
+    let at = mirror.seq();
+    feed(&mut w, &mut mirror, at, &[snap_of(1, None, "Done")]);
+    let e = read.get(key(1)).hit().unwrap().sem.entry.clone().unwrap();
+    assert_eq!(e.name.as_deref(), Some("Done"));
+    assert!(!e.stale.has(Group::Name));
+}
+
+#[test]
+fn a_whole_application_invalidation_marks_every_node_in_bounded_steps() {
+    let mut w = FuseWriter::new(None);
+    let (mut mirror, read) = gorca_mirror::mirror();
+    let snaps: Vec<_> = (1..=1200u64).map(|n| snap_of(n, None, "x")).collect();
+    for chunk in snaps.chunks(256) {
+        let at = mirror.seq();
+        feed(&mut w, &mut mirror, at, chunk);
+    }
+    mirror.invalidate_all(Instant::now());
+    w.invalidate_all(mirror.seq());
+    // One step handles a bounded part of the sweep, not all of it.
+    w.step(&mut mirror, Duration::from_micros(50));
+    assert!(w.work_left() > 0, "the sweep is spread over steps");
+    while w.step(&mut mirror, Duration::from_millis(20)) {}
+    let stale = (1..=1200u64)
+        .filter(|n| {
+            read.get(key(*n))
+                .hit()
+                .and_then(|s| s.sem.entry.as_ref().map(|e| e.stale.has(Group::Name)))
+                .unwrap_or(false)
+        })
+        .count();
+    assert_eq!(stale, 1200);
+}

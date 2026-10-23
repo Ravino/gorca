@@ -10,7 +10,8 @@
 //! to the mirror's snapshots by [`FuseWriter::step`], which the actor runs **after** it routed
 //! the pump's events, under a time budget (the focus chain first: the engine's priority classes).
 //! What does not fit stays queued or dirty for the next step. Nothing here waits on the
-//! application, and nothing reads the fused entry for speech before M22a-C3 (dual-carry).
+//! application, and speech does not read this entry yet (dual-carry): the web overlay of the Reader
+//! reads the document actor's entries (`NodeMeta::sem`), the presenter switches in M22b.
 //!
 //! The entry attached to a snapshot is read through [`gorca_fuse::Ivm::entry_view`], never the
 //! unmasked one (ADR-0024 review: a silenced source must not leak through the cache).
@@ -48,6 +49,15 @@ const AWAITING_SCAN: usize = 256;
 /// Nodes the engine is asked to hold: the mirror's cap plus the slack of tombstoned and evicted
 /// keys it has not heard of. Beyond it the engine is rebuilt (the mirror evicts silently).
 const MAX_NODES: usize = gorca_mirror::limits::MAX_MIRROR_NODES + 4096;
+/// Property-event invalidations kept waiting; beyond it an arbitrary waiting one (not the oldest) is dropped to
+/// make room (the mirror still marks those snapshots stale, only the entry's `stale` mask is
+/// lost for them).
+const INVAL_CAP: usize = 4096;
+/// Nodes of a whole-application invalidation marked per step.
+const INVAL_SWEEP_CHUNK: usize = 512;
+/// Children waiting for a parent the engine does not hold yet. Beyond it the list is dropped (the
+/// children simply stay roots, which only costs them a content-named parent).
+const ORPHAN_CAP: usize = 4096;
 /// Longest chain of ancestors handed to the engine as the focus chain.
 const FOCUS_CHAIN: usize = 64;
 /// Disagreements one writer logs (the counters keep counting past it).
@@ -68,6 +78,11 @@ pub struct FuseStats {
     pub applied: AtomicU64,
     /// Fused entries attached to the mirror.
     pub attached: AtomicU64,
+    /// Entries of snapshots that already carried one, replaced by a re-fused one (a content-named
+    /// parent, a node a property event made stale).
+    pub refreshed: AtomicU64,
+    /// Waiting invalidations dropped because too many were waiting.
+    pub inval_dropped: AtomicU64,
     /// Entries the mirror refused (the snapshot was replaced, evicted, or the budget was full).
     pub attach_missed: AtomicU64,
     /// Times the engine was rebuilt because it held more nodes than the mirror can.
@@ -86,6 +101,8 @@ pub struct FuseStatsView {
     pub dropped: u64,
     pub applied: u64,
     pub attached: u64,
+    pub refreshed: u64,
+    pub inval_dropped: u64,
     pub attach_missed: u64,
     pub resets: u64,
     pub carried: u64,
@@ -101,6 +118,8 @@ impl FuseStats {
             dropped: g(&self.dropped),
             applied: g(&self.applied),
             attached: g(&self.attached),
+            refreshed: g(&self.refreshed),
+            inval_dropped: g(&self.inval_dropped),
             attach_missed: g(&self.attach_missed),
             resets: g(&self.resets),
             carried: g(&self.carried),
@@ -152,6 +171,11 @@ pub fn writes_of(rec: &SrcRecord) -> impl Iterator<Item = Write> + '_ {
             Group::Live => Write::Val(Val::Live(s.live)),
             Group::Orientation => Write::Val(Val::Orientation(s.orientation)),
             Group::Sort => Write::Val(Val::Sort(s.sort)),
+            Group::RoleDescription
+            | Group::Placeholder
+            | Group::KeyShortcuts
+            | Group::ValueText
+            | Group::NameFrom => gorca_fuse::rare_write(s, *g).unwrap_or(Write::Absent(*g)),
         })
 }
 
@@ -183,6 +207,15 @@ pub(super) struct FuseWriter {
     engine_bytes: usize,
     /// Register bytes charged per engine node, by `NodeIdx`.
     reg_bytes: Vec<u32>,
+    /// Children whose parent was not in the engine yet, by the parent's key: the parent adopts
+    /// them when its own snapshot arrives (`Ivm::reparent`), so a content name sees its children
+    /// whatever the order the replies came in. Bounded by [`ORPHAN_CAP`].
+    orphans: HashMap<NodeKey, Vec<NodeKey>>,
+    orphan_count: usize,
+    /// Property-event invalidations waiting to be written (newest sequence per node), and the
+    /// sweep of a whole-application invalidation: `(seq, nodes still to mark)`.
+    pending_inval: HashMap<NodeKey, u64>,
+    inval_sweep: Option<(u64, Vec<NodeIdx>)>,
     focus: Option<NodeKey>,
     focus_dirty: bool,
     started: Instant,
@@ -243,6 +276,10 @@ impl FuseWriter {
             awaiting_bytes: 0,
             engine_bytes: 0,
             reg_bytes: Vec::new(),
+            orphans: HashMap::new(),
+            orphan_count: 0,
+            pending_inval: HashMap::new(),
+            inval_sweep: None,
             focus: None,
             focus_dirty: false,
             started: Instant::now(),
@@ -276,6 +313,10 @@ impl FuseWriter {
         self.index.clear();
         self.nodes.clear();
         self.reg_bytes.clear();
+        self.orphans.clear();
+        self.orphan_count = 0;
+        self.pending_inval.clear();
+        self.inval_sweep = None;
         self.engine_bytes = 0;
         self.awaiting_bytes = 0;
         self.free.clear();
@@ -365,13 +406,75 @@ impl FuseWriter {
         }
     }
 
+    /// A property event marked fields of `key` untrustworthy at mirror sequence `seq` (W-6): the
+    /// registers older than it read stale, and the entry the mirror carries is refreshed.
+    pub(super) fn invalidate(&mut self, key: NodeKey, seq: u64) {
+        if !self.index.contains_key(&key) {
+            return;
+        }
+        if self.pending_inval.len() >= INVAL_CAP && !self.pending_inval.contains_key(&key) {
+            // Drop an arbitrary waiting entry: they are all equally old to within a pump.
+            if let Some(k) = self.pending_inval.keys().next().copied() {
+                self.pending_inval.remove(&k);
+            }
+            bump(&self.stats.inval_dropped, 1);
+        }
+        let e = self.pending_inval.entry(key).or_insert(seq);
+        *e = (*e).max(seq);
+    }
+
+    /// Every node of the application is untrustworthy at `seq` (flood resync, dirty-all).
+    pub(super) fn invalidate_all(&mut self, seq: u64) {
+        let nodes: Vec<NodeIdx> = self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, n)| n.as_ref().and_then(|_| u32::try_from(i).ok().map(NodeIdx)))
+            .collect();
+        self.pending_inval.clear();
+        self.inval_sweep = Some((seq, nodes));
+    }
+
+    /// Write the waiting invalidations into the engine (a bounded part of a sweep per step).
+    fn apply_invalidations(&mut self, inputs: &mut Vec<Input>) {
+        for (key, seq) in self.pending_inval.drain() {
+            if let Some(&node) = self.index.get(&key) {
+                inputs.push(Input::Inval {
+                    node,
+                    src: PrimarySlot::P0,
+                    seq,
+                });
+            }
+        }
+        if let Some((seq, nodes)) = self.inval_sweep.as_mut() {
+            let take = nodes.len().min(INVAL_SWEEP_CHUNK);
+            let start = nodes.len() - take;
+            inputs.extend(nodes.drain(start..).map(|node| Input::Inval {
+                node,
+                src: PrimarySlot::P0,
+                seq: *seq,
+            }));
+            if nodes.is_empty() {
+                self.inval_sweep = None;
+            }
+        }
+    }
+
     /// True while queued or dirty work is left: the actor asks to be woken again.
     pub(super) fn has_work(&self) -> bool {
-        !self.queue.is_empty() || !self.awaiting.is_empty() || self.ivm.pending() > 0
+        !self.queue.is_empty()
+            || !self.awaiting.is_empty()
+            || self.ivm.pending() > 0
+            || !self.pending_inval.is_empty()
+            || self.inval_sweep.is_some()
     }
 
     pub(super) fn work_left(&self) -> usize {
-        self.queue.len() + self.awaiting.len() + self.ivm.pending()
+        self.queue.len()
+            + self.awaiting.len()
+            + self.ivm.pending()
+            + self.pending_inval.len()
+            + self.inval_sweep.as_ref().map_or(0, |(_, n)| n.len())
     }
 
     /// Bytes the writer holds: queued snapshots, waiting records, engine registers.
@@ -406,7 +509,48 @@ impl FuseWriter {
         }
         self.nodes[slot] = Some((key, parent));
         self.index.insert(key, idx);
+        self.adopt_orphans(key, idx);
         Some(idx)
+    }
+
+    /// `child` is `parent`'s child (the engine learned it after the child existed): link it and
+    /// keep the focus-chain bookkeeping in step. A refused move (a cycle in a hostile tree) leaves
+    /// the node where it was.
+    fn link(&mut self, child: NodeIdx, parent: NodeIdx) {
+        if self.ivm.parent(child) == Some(parent) {
+            return;
+        }
+        if self.ivm.reparent(child, Some(parent)).is_ok()
+            && let Some(Some((_, p))) = self.nodes.get_mut(child.0 as usize)
+        {
+            *p = Some(parent);
+        }
+    }
+
+    fn adopt_orphans(&mut self, key: NodeKey, idx: NodeIdx) {
+        let Some(kids) = self.orphans.remove(&key) else {
+            return;
+        };
+        self.orphan_count = self.orphan_count.saturating_sub(kids.len());
+        for k in kids {
+            if let Some(&ci) = self.index.get(&k)
+                && self.ivm.parent(ci).is_none()
+            {
+                self.link(ci, idx);
+            }
+        }
+    }
+
+    fn remember_orphan(&mut self, parent: NodeKey, child: NodeKey) {
+        if self.orphan_count >= ORPHAN_CAP {
+            self.orphans.clear();
+            self.orphan_count = 0;
+        }
+        let list = self.orphans.entry(parent).or_default();
+        if !list.contains(&child) {
+            list.push(child);
+            self.orphan_count += 1;
+        }
     }
 
     /// Write one queued snapshot into the registers.
@@ -419,6 +563,12 @@ impl FuseWriter {
         let Some(idx) = self.alloc(key, parent) else {
             return;
         };
+        match (q.snap.parent, parent) {
+            // The parent is known now but was not when the node was first added.
+            (Some(_), Some(p)) => self.link(idx, p),
+            (Some(pk), None) => self.remember_orphan(pk, key),
+            (None, _) => {}
+        }
         inputs.push(Input::Life {
             node: idx,
             src: PrimarySlot::P0,
@@ -433,8 +583,10 @@ impl FuseWriter {
                 write: w,
             });
         }
-        let strings =
-            rec.name.as_deref().map_or(0, str::len) + rec.sem.description().map_or(0, str::len);
+        // Every text register counts (the rare ones too), so a hostile page cannot hide bytes
+        // in a field the bound does not see.
+        let strings = rec.name.as_deref().map_or(0, str::len)
+            + rec.sem.text.as_deref().map_or(0, SemText::heap_bytes);
         let regs = NODE_FIXED + strings;
         if self.reg_bytes.len() <= idx.0 as usize {
             self.reg_bytes.resize(idx.0 as usize + 1, 0);
@@ -500,6 +652,7 @@ impl FuseWriter {
                 break;
             }
         }
+        self.apply_invalidations(&mut inputs);
         let ms = u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX);
         inputs.push(Input::Tick(ms));
         let rep = self.ivm.apply(inputs);
@@ -515,13 +668,37 @@ impl FuseWriter {
         } else {
             Budget::until(deadline)
         };
-        let run = self.ivm.run_with(budget, &mut |_| {});
+        let mut published: Vec<NodeIdx> = Vec::new();
+        let run = self.ivm.run_with(budget, &mut |p| {
+            if p.entry.is_some() {
+                published.push(p.node);
+            }
+        });
         self.attach(mirror, run.pending == 0, deadline);
+        self.refresh(mirror, &published);
         let more = self.has_work();
         if more {
             bump(&self.stats.carried, 1);
         }
         more
+    }
+
+    /// Re-fused entries of nodes whose snapshot already carries one: a parent whose content name
+    /// followed its children, a node a property event made stale. (A snapshot still waiting for
+    /// its first entry is [`Self::attach`]'s.)
+    fn refresh(&mut self, mirror: &mut MirrorWriter, published: &[NodeIdx]) {
+        for &idx in published {
+            let Some(Some((key, _))) = self.nodes.get(idx.0 as usize) else {
+                continue;
+            };
+            let key = *key;
+            let Some(entry) = self.ivm.entry_view(idx) else {
+                continue;
+            };
+            if mirror.refresh_sem(key, entry) {
+                bump(&self.stats.refreshed, 1);
+            }
+        }
     }
 
     /// Attach the entries of the nodes that are no longer dirty. With nothing pending every

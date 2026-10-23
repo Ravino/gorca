@@ -1064,6 +1064,29 @@ impl MirrorWriter {
     /// entry is the fused form of it). Returns whether the entry was attached; `false` for a node
     /// that is gone, replaced, or when the all-apps budget has no room for the difference.
     pub fn attach_sem(&mut self, k: NodeKey, rec: &Arc<SrcRecord>, entry: Arc<SemEntry>) -> bool {
+        self.swap_sem(k, entry, |sem| {
+            sem.rec.as_ref().is_some_and(|r| Arc::ptr_eq(r, rec))
+        })
+    }
+
+    /// Replace the entry of a snapshot that already carries one with a re-fused `entry` (a
+    /// parent whose content name changed with its children, a node the engine marked stale after
+    /// a property event). Does nothing, and returns `false`, when the node is gone, carries no
+    /// entry yet (its record is still waiting to be fused: [`Self::attach_sem`] owns that case)
+    /// or already carries an equal one.
+    pub fn refresh_sem(&mut self, k: NodeKey, entry: Arc<SemEntry>) -> bool {
+        let newer = entry.clone();
+        self.swap_sem(k, entry, move |sem| {
+            sem.entry.as_ref().is_some_and(|e| **e != *newer)
+        })
+    }
+
+    fn swap_sem(
+        &mut self,
+        k: NodeKey,
+        entry: Arc<SemEntry>,
+        ok: impl Fn(&NodeSem) -> bool,
+    ) -> bool {
         if !self.owns(k) {
             return false;
         }
@@ -1075,7 +1098,7 @@ impl MirrorWriter {
         else {
             return false;
         };
-        if !snap.sem.rec.as_ref().is_some_and(|r| Arc::ptr_eq(r, rec)) {
+        if !ok(&snap.sem) {
             return false;
         }
         let mut n = (*snap).clone();

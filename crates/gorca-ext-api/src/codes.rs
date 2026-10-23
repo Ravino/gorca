@@ -28,6 +28,11 @@ pub const GROUPS: &[Row] = &[
     ("live", 15),
     ("orientation", 16),
     ("sort", 17),
+    ("roledescription", 18),
+    ("placeholder", 19),
+    ("keyshortcuts", 20),
+    ("valuetext", 21),
+    ("namefrom", 22),
 ];
 
 /// Evidence kinds (bit 15 set).

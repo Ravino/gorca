@@ -19,10 +19,13 @@
 //! | popup | ATTRS, or STATES when HAS_POPUP is clear |
 //! | current, sort, setpos, grid | ATTRS |
 //! | level, live | ATTRS and ROLE |
+//! | roledescription, placeholder, keyshortcuts, valuetext | ATTRS |
+//! | namefrom | NAME, and ATTRS unless the name is empty |
 //!
 //! The text fields of [`Semantics::text`] other than the description (placeholder, key shortcuts,
-//! value text, role description) are filled whenever ATTRS was fetched; they have no group slot
-//! of their own, they ride with `Description`.
+//! value text, role description) are filled whenever ATTRS was fetched, and each has a group of its
+//! own (M22a-C3, review W-6), known exactly when ATTRS was fetched; `namefrom` needs NAME, and
+//! ATTRS unless the name is empty.
 
 use gorca_model::PropMask;
 use gorca_model::sem::{
@@ -176,8 +179,16 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
         } else {
             NameFrom::None
         };
+        // The rare text (below) and the name source come from attributes; the name source also
+        // needs the name itself.
+        known.set(Group::RoleDescription, true);
+        known.set(Group::Placeholder, true);
+        known.set(Group::KeyShortcuts, true);
+        known.set(Group::ValueText, true);
+        known.set(Group::NameFrom, have_name);
     } else if have_name && !name_nonempty {
         sem.name_from = NameFrom::None;
+        known.set(Group::NameFrom, true);
     }
 
     // ---- popup ------------------------------------------------------------------------------
@@ -707,6 +718,46 @@ mod tests {
         let r = normalise(&n);
         assert!(!r.known.has(Group::Description));
         assert_eq!(r.sem.description(), None);
+    }
+
+    #[test]
+    fn rare_text_and_name_source_groups_are_known_with_attributes() {
+        let rare = [
+            Group::RoleDescription,
+            Group::Placeholder,
+            Group::KeyShortcuts,
+            Group::ValueText,
+        ];
+        let r = normalise(&node(
+            all(),
+            79,
+            StateBits(0),
+            &[
+                ("placeholder-text", "Search"),
+                ("keyshortcuts", "Control+K"),
+                ("valuetext", "3 of 10"),
+            ],
+        ));
+        for g in rare {
+            assert!(r.known.has(g), "{g:?}");
+        }
+        assert!(r.known.has(Group::NameFrom));
+        // Without ATTRS none of the attribute-derived text is known.
+        let r = normalise(&node(
+            PropMask::ROLE | PropMask::NAME | PropMask::STATES,
+            79,
+            StateBits(0),
+            &[],
+        ));
+        for g in rare {
+            assert!(!r.known.has(g), "{g:?} needs ATTRS");
+        }
+        // A fetched empty name has no source even without attributes; a non-empty one needs them.
+        let mut n = node(PropMask::ROLE | PropMask::NAME, 79, StateBits(0), &[]);
+        n.name = None;
+        assert!(normalise(&n).known.has(Group::NameFrom));
+        n.name = Some("Save");
+        assert!(!normalise(&n).known.has(Group::NameFrom));
     }
 
     #[test]

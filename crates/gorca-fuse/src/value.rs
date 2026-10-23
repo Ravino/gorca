@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 use gorca_model::event::Politeness;
 use gorca_model::sem::{
-    Avail, Check, ConfClass, Current, Expand, GridPos, Group, Invalid, Live, Orientation, Popup,
-    Press, ProvCode, Select, SemEntry, SemFlags, SemRole, SemText, SetPos, Sort, TrustTier,
+    Avail, Check, ConfClass, Current, Expand, GridPos, Group, Invalid, Live, NameFrom, Orientation,
+    Popup, Press, ProvCode, Select, SemEntry, SemFlags, SemRole, SemText, SetPos, Sort, TrustTier,
 };
 
 /// Product limit for a name or description string (ADR string limit, 1 KiB).
@@ -29,6 +29,48 @@ pub fn truncate_str(s: &str, max: usize) -> &str {
         end -= 1;
     }
     s.get(..end).unwrap_or("")
+}
+
+/// Fewest non-space characters an engine name needs to be extended by a name from content. A
+/// one- or two-character name ("5", "OK") is a prefix of far too many longer texts to say the
+/// longer one is the same name seen in full.
+pub const NAME_EXTEND_MIN: usize = 3;
+
+/// The one predicate for "the name from content replaces the engine's content name" (M22a-C3,
+/// review M-2): the fuser's S3 gate, the overlay (`fused_name`) and both agreement checkers use
+/// exactly this and nothing looser.
+///
+/// True when `fused` is `own` with more text around it: with white space dropped, `own` occurs in
+/// `fused` as a proper part whose both ends sit on word boundaries of `fused` (the engine joins a
+/// row's cells without a separator, "SeatLeftRight", where S3 puts a space between them, so
+/// spaces are not compared; and a message row the engine named from its one button, "React",
+/// becomes "Alice hello React"). "Seat" is not extended to "Seating" or "Heseat", and `own` needs
+/// at least [`NAME_EXTEND_MIN`] non-space characters. An unrelated longer string never qualifies.
+pub fn name_extends(own: &str, fused: &str) -> bool {
+    let o: Vec<char> = own.chars().filter(|c| !c.is_whitespace()).collect();
+    if o.len() < NAME_EXTEND_MIN {
+        return false;
+    }
+    // `f` is `fused` without white space; `edge[i]` is true when a word boundary (the start, the
+    // end or white space in `fused`) lies before `f[i]` (and `edge[f.len()]` after the last).
+    let mut f: Vec<char> = Vec::with_capacity(fused.len());
+    let mut edge: Vec<bool> = Vec::with_capacity(fused.len() + 1);
+    let mut gap = true;
+    for c in fused.chars() {
+        if c.is_whitespace() {
+            gap = true;
+        } else {
+            edge.push(gap);
+            f.push(c);
+            gap = false;
+        }
+    }
+    edge.push(true);
+    if f.len() <= o.len() {
+        // The same characters spaced differently is the same text, re-worded: it extends.
+        return f == o && own != fused;
+    }
+    (0..=f.len() - o.len()).any(|i| edge[i] && edge[i + o.len()] && f[i..i + o.len()] == o[..])
 }
 
 /// A per-source monotone sequence number (orders writes within one source only, Lemma 1).
@@ -57,6 +99,12 @@ pub enum Val {
     Live(Option<Live>),
     Orientation(Orientation),
     Sort(Sort),
+    /// `aria-roledescription` (rare text, one register each; primary sources only).
+    RoleDescription(Arc<str>),
+    Placeholder(Arc<str>),
+    KeyShortcuts(Arc<str>),
+    ValueText(Arc<str>),
+    NameFrom(NameFrom),
 }
 
 impl Val {
@@ -81,14 +129,24 @@ impl Val {
             Val::Live(_) => Group::Live,
             Val::Orientation(_) => Group::Orientation,
             Val::Sort(_) => Group::Sort,
+            Val::RoleDescription(_) => Group::RoleDescription,
+            Val::Placeholder(_) => Group::Placeholder,
+            Val::KeyShortcuts(_) => Group::KeyShortcuts,
+            Val::ValueText(_) => Group::ValueText,
+            Val::NameFrom(_) => Group::NameFrom,
         }
     }
 
-    /// True for an empty `Name`/`Description` or `Level(0)`: the "nothing here" values that the
-    /// fill rule (A6) treats like `Absent`.
+    /// True for an empty string value or `Level(0)`: the "nothing here" values that the fill rule
+    /// (A6) treats like `Absent`.
     pub fn is_empty_like(&self) -> bool {
         match self {
-            Val::Name(s) | Val::Description(s) => s.is_empty(),
+            Val::Name(s)
+            | Val::Description(s)
+            | Val::RoleDescription(s)
+            | Val::Placeholder(s)
+            | Val::KeyShortcuts(s)
+            | Val::ValueText(s) => s.is_empty(),
             Val::Level(l) => *l == 0,
             _ => false,
         }
@@ -98,7 +156,13 @@ impl Val {
     fn tie_text(&self) -> Cow<'_, str> {
         match self {
             Val::Role(v) => Cow::Borrowed(v.name()),
-            Val::Name(s) | Val::Description(s) => Cow::Borrowed(s),
+            Val::Name(s)
+            | Val::Description(s)
+            | Val::RoleDescription(s)
+            | Val::Placeholder(s)
+            | Val::KeyShortcuts(s)
+            | Val::ValueText(s) => Cow::Borrowed(s),
+            Val::NameFrom(v) => Cow::Borrowed(v.name()),
             Val::Check(v) => Cow::Borrowed(v.name()),
             Val::Press(v) => Cow::Borrowed(v.name()),
             Val::Expand(v) => Cow::Borrowed(v.name()),
@@ -149,8 +213,60 @@ impl Val {
             Val::Live(v) => entry.sem.live = *v,
             Val::Orientation(v) => entry.sem.orientation = *v,
             Val::Sort(v) => entry.sem.sort = *v,
+            Val::RoleDescription(s) => set_text(entry, TextField::RoleDescription, non_empty(s)),
+            Val::Placeholder(s) => set_text(entry, TextField::Placeholder, non_empty(s)),
+            Val::KeyShortcuts(s) => set_text(entry, TextField::KeyShortcuts, non_empty(s)),
+            Val::ValueText(s) => set_text(entry, TextField::ValueText, non_empty(s)),
+            Val::NameFrom(v) => entry.sem.name_from = *v,
         }
     }
+}
+
+/// The register write of one of the groups that read a single field of `sem` and nothing else
+/// (the rare text and the name source): an empty or missing string is `Absent`. `None` for any
+/// other group (the writers own those). One definition for every writer, so a new rare group is
+/// added here and nowhere else.
+pub fn rare_write(sem: &gorca_model::sem::Semantics, g: Group) -> Option<Write> {
+    fn text(g: Group, s: Option<&str>, f: impl FnOnce(Arc<str>) -> Val) -> Write {
+        match s {
+            Some(t) if !t.is_empty() => Write::Val(f(Arc::from(t))),
+            Some(_) | None => Write::Absent(g),
+        }
+    }
+    let t = sem.text.as_deref();
+    Some(match g {
+        Group::RoleDescription => text(g, sem.role_description(), Val::RoleDescription),
+        Group::Placeholder => text(
+            g,
+            t.and_then(|t| t.placeholder.as_deref()),
+            Val::Placeholder,
+        ),
+        Group::KeyShortcuts => text(
+            g,
+            t.and_then(|t| t.key_shortcuts.as_deref()),
+            Val::KeyShortcuts,
+        ),
+        Group::ValueText => text(g, t.and_then(|t| t.value_text.as_deref()), Val::ValueText),
+        Group::NameFrom => Write::Val(Val::NameFrom(sem.name_from)),
+        Group::Role
+        | Group::Name
+        | Group::Description
+        | Group::Check
+        | Group::Press
+        | Group::Expand
+        | Group::Select
+        | Group::Current
+        | Group::Invalid
+        | Group::Popup
+        | Group::Avail
+        | Group::Flags
+        | Group::Level
+        | Group::SetPos
+        | Group::Grid
+        | Group::Live
+        | Group::Orientation
+        | Group::Sort => return None,
+    })
 }
 
 fn non_empty(s: &Arc<str>) -> Option<Arc<str>> {
@@ -161,14 +277,34 @@ fn non_empty(s: &Arc<str>) -> Option<Arc<str>> {
     }
 }
 
+/// The `SemText` fields that have a register of their own.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum TextField {
+    Description,
+    RoleDescription,
+    Placeholder,
+    KeyShortcuts,
+    ValueText,
+}
+
 fn set_description(entry: &mut SemEntry, d: Option<Arc<str>>) {
+    set_text(entry, TextField::Description, d);
+}
+
+fn set_text(entry: &mut SemEntry, f: TextField, v: Option<Arc<str>>) {
     let mut t = entry
         .sem
         .text
         .as_deref()
         .cloned()
         .unwrap_or_else(SemText::default);
-    t.description = d;
+    match f {
+        TextField::Description => t.description = v,
+        TextField::RoleDescription => t.role_description = v,
+        TextField::Placeholder => t.placeholder = v,
+        TextField::KeyShortcuts => t.key_shortcuts = v,
+        TextField::ValueText => t.value_text = v,
+    }
     entry.sem.text = if t.is_empty() {
         None
     } else {
@@ -198,6 +334,11 @@ pub fn write_default(entry: &mut SemEntry, g: Group, default_role: SemRole) {
         Group::Live => entry.sem.live = None,
         Group::Orientation => entry.sem.orientation = Orientation::default(),
         Group::Sort => entry.sem.sort = Sort::default(),
+        Group::RoleDescription => set_text(entry, TextField::RoleDescription, None),
+        Group::Placeholder => set_text(entry, TextField::Placeholder, None),
+        Group::KeyShortcuts => set_text(entry, TextField::KeyShortcuts, None),
+        Group::ValueText => set_text(entry, TextField::ValueText, None),
+        Group::NameFrom => entry.sem.name_from = NameFrom::default(),
     }
 }
 
@@ -279,6 +420,22 @@ impl Write {
                 Write::Val(Val::Description(Arc::from(truncate_str(&s, max)))),
                 true,
             ),
+            Write::Val(Val::RoleDescription(s)) if s.len() > max => (
+                Write::Val(Val::RoleDescription(Arc::from(truncate_str(&s, max)))),
+                true,
+            ),
+            Write::Val(Val::Placeholder(s)) if s.len() > max => (
+                Write::Val(Val::Placeholder(Arc::from(truncate_str(&s, max)))),
+                true,
+            ),
+            Write::Val(Val::KeyShortcuts(s)) if s.len() > max => (
+                Write::Val(Val::KeyShortcuts(Arc::from(truncate_str(&s, max)))),
+                true,
+            ),
+            Write::Val(Val::ValueText(s)) if s.len() > max => (
+                Write::Val(Val::ValueText(Arc::from(truncate_str(&s, max)))),
+                true,
+            ),
             w => (w, false),
         }
     }
@@ -356,6 +513,27 @@ pub const fn hedge_cap(conf: ConfClass, tier: TrustTier) -> ConfClass {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn name_extends_is_a_strict_word_boundary_containment() {
+        // The engine joined the cells; S3 spaces them.
+        assert!(name_extends("SeatLeftRight", "Seat Left Right"));
+        assert!(!name_extends("Seat Left", "Seat Left"));
+        // More text before or after, on word boundaries.
+        assert!(name_extends("React", "Alice hello React"));
+        assert!(name_extends("Seat", "Seat Left"));
+        // Not on a word boundary, or not contained at all.
+        assert!(!name_extends("Seat", "Seating Left"));
+        assert!(!name_extends("eat", "Seat Left"));
+        assert!(!name_extends("Quantity", "42 Price"));
+        // A short engine name is never extended: "5" and "OK" prefix too many texts.
+        assert!(!name_extends("5", "5 apples"));
+        assert!(!name_extends("5", "Row 5 of 9"));
+        assert!(!name_extends("OK", "OK Cancel"));
+        assert!(!name_extends("", "Anything"));
+        // Shorter fused never extends.
+        assert!(!name_extends("Alice hello React", "React"));
+    }
 
     #[test]
     fn val_group_matches_write_default_round_trip() {

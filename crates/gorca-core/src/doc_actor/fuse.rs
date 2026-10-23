@@ -415,6 +415,11 @@ pub fn writes_of(rec: &SrcRecord) -> Vec<Write> {
                 .map_or(Write::Absent(g), |l| Write::Val(Val::Live(Some(l)))),
             Group::Orientation => pick(s.orientation, g, Val::Orientation),
             Group::Sort => pick(s.sort, g, Val::Sort),
+            Group::RoleDescription
+            | Group::Placeholder
+            | Group::KeyShortcuts
+            | Group::ValueText
+            | Group::NameFrom => gorca_fuse::rare_write(s, g).unwrap_or(Write::Absent(g)),
         });
     }
     out

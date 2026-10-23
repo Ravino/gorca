@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use gorca_model::fact::SourceId;
 use gorca_model::sem::{
-    Avail, Check, Current, Expand, GROUP_COUNT, Group, GroupMask, Invalid, Orientation, Popup,
-    Press, ProvCode, Select, SemEntry, SemFlags, SemRole, Sort,
+    Avail, Check, Current, Expand, GROUP_COUNT, Group, GroupMask, Invalid, NameFrom, Orientation,
+    Popup, Press, ProvCode, Select, SemEntry, SemFlags, SemRole, Sort,
 };
 
 use crate::explain::{Conflict, NoTrace, ObsCand, PatchTrail, Tracer};
@@ -292,7 +292,22 @@ pub fn rebuild_slot(e: &SemEntry, g: Group) -> Slot {
         Group::Live => Val::Live(s.live),
         Group::Orientation => Val::Orientation(s.orientation),
         Group::Sort => Val::Sort(s.sort),
+        Group::RoleDescription => Val::RoleDescription(text_or_empty(s.role_description())),
+        Group::Placeholder => Val::Placeholder(text_or_empty(
+            s.text.as_deref().and_then(|t| t.placeholder.as_deref()),
+        )),
+        Group::KeyShortcuts => Val::KeyShortcuts(text_or_empty(
+            s.text.as_deref().and_then(|t| t.key_shortcuts.as_deref()),
+        )),
+        Group::ValueText => Val::ValueText(text_or_empty(
+            s.text.as_deref().and_then(|t| t.value_text.as_deref()),
+        )),
+        Group::NameFrom => Val::NameFrom(s.name_from),
     })
+}
+
+fn text_or_empty(s: Option<&str>) -> Arc<str> {
+    s.map_or_else(|| Arc::from(""), Arc::from)
 }
 
 /// The exceptions to [`rebuild_slot`] over the groups in `mask`: where `s0` holds something the
@@ -821,8 +836,13 @@ pub fn default_slot(g: Group, default_role: SemRole) -> Slot {
         Group::Flags => Slot::Val(Val::Flags(SemFlags::empty())),
         Group::Orientation => Slot::Val(Val::Orientation(Orientation::NotApplicable)),
         Group::Sort => Slot::Val(Val::Sort(Sort::None)),
+        Group::NameFrom => Slot::Val(Val::NameFrom(NameFrom::None)),
         Group::Name
         | Group::Description
+        | Group::RoleDescription
+        | Group::Placeholder
+        | Group::KeyShortcuts
+        | Group::ValueText
         | Group::Level
         | Group::SetPos
         | Group::Grid
@@ -951,9 +971,23 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
     let mut truncated = GroupMask::EMPTY;
 
     // S3 derived (a): name from content over the children's final names.
-    if fillable(&eff, &layer, Group::Name)
+    // An engine's own content name of a container may be shallower than the subtree: for the
+    // roles in `content_over_engine`, a name the engine computed from content gives way to the
+    // name from content when that adds text. An authored name never does.
+    let engine_content_name = role_in(profile.rules.content_over_engine)
+        && matches!(layer[ix(Group::Name)], Layer::Observed)
+        && matches!(
+            &eff[ix(Group::NameFrom)],
+            Slot::Val(Val::NameFrom(NameFrom::Content))
+        );
+    let current_name = eff[ix(Group::Name)].text().map(Arc::clone);
+    if (fillable(&eff, &layer, Group::Name) || engine_content_name)
         && role_in(profile.rules.content_named)
         && let Some(c) = name_from_content(nb.children, nb.more_children, &profile.limits)
+        && (!engine_content_name
+            || current_name
+                .as_deref()
+                .is_some_and(|own| crate::value::name_extends(own, &c.name)))
     {
         truncated.set(Group::Name, c.truncated);
         if T::ON {

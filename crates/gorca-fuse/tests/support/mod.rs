@@ -185,6 +185,8 @@ pub fn toy_rules() -> Rules {
         disableable: RoleSet::of(&[R::Button, R::Checkbox, R::Link]),
         expandable: RoleSet::of(&[R::Button, R::Link, R::ListItem]),
         level_roles: RoleSet::of(&[R::Heading]),
+        content_depth: 0,
+        content_over_engine: RoleSet::of(&[]),
         content_named: RoleSet::of(&[R::Button, R::Link, R::Heading, R::ListItem, R::Checkbox]),
         title_named: RoleSet::of(&[R::Button, R::Link, R::Img, R::Checkbox]),
     }
