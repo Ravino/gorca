@@ -62,6 +62,13 @@ pub enum Classifier {
     GroupingWord,
     /// A role the web table has no word for: the legacy mapping spoke one from the engine role.
     RoleNotInTable,
+    /// The legacy presenter said "unavailable" for static structure the model never disables.
+    UnavailableStatic,
+    /// A role word the model improves where the legacy mapping used a coarser one (a fixed list
+    /// of (role, legacy word, model word) pairs).
+    RoleWordImproved,
+    /// A very long name: the legacy and the model cut it at different lengths.
+    NameCapDiffers,
     /// The model says the field is read only; the legacy snapshot's state set did not.
     ReadOnlyFromModel,
     /// The fused value (`aria-valuetext`, `aria-valuenow`) is spoken where the legacy snapshot of
@@ -137,8 +144,22 @@ pub const VALUE_ROLES: &[SemRole] = &[
     SemRole::Combobox,
 ];
 
+/// (role, legacy word, model word) pairs accepted by `role-word-improved`.
+pub fn role_word_pairs() -> [(SemRole, &'static str, &'static str); 5] {
+    use gorca_i18n::MsgId as M;
+    let t = gorca_i18n::t;
+    [
+        (SemRole::Option, t(M::RolePanel), t(M::RoleListItem)),
+        (SemRole::Feed, t(M::RolePanel), t(M::RoleList)),
+        (SemRole::Definition, t(M::RoleParagraph), t(M::RoleListItem)),
+        // A layout table (presentation role) is not a table for the user.
+        (SemRole::Presentation, t(M::RoleTable), t(M::RolePanel)),
+        (SemRole::AlertDialog, t(M::RoleAlert), t(M::RoleDialog)),
+    ]
+}
+
 impl Classifier {
-    pub const ALL: [Classifier; 10] = [
+    pub const ALL: [Classifier; 13] = [
         Classifier::FieldContentsNotFused,
         Classifier::ContentDerivedName,
         Classifier::PressedWithoutToggle,
@@ -149,6 +170,9 @@ impl Classifier {
         Classifier::RoleNotInTable,
         Classifier::ValueFromAttrs,
         Classifier::ReadOnlyFromModel,
+        Classifier::UnavailableStatic,
+        Classifier::RoleWordImproved,
+        Classifier::NameCapDiffers,
     ];
 
     pub const fn id(self) -> &'static str {
@@ -163,6 +187,9 @@ impl Classifier {
             Classifier::RoleNotInTable => "role-not-in-table",
             Classifier::ValueFromAttrs => "value-from-attrs",
             Classifier::ReadOnlyFromModel => "read-only-from-model",
+            Classifier::UnavailableStatic => "unavailable-static",
+            Classifier::RoleWordImproved => "role-word-improved",
+            Classifier::NameCapDiffers => "name-cap-differs",
         }
     }
 }
@@ -281,10 +308,22 @@ fn explain<'a>(
                 count_kind(only_new, SegmentKind::Text) == 1 && take(only_new, text)
             } else {
                 // The legacy name was a different join of the same content.
-                count_kind(only_legacy, SegmentKind::Text) == 1
-                    && count_kind(only_new, SegmentKind::Text) == 1
-                    && take(only_legacy, text)
-                    && take(only_new, text)
+                let squash = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+                let text_code = kind_code(SegmentKind::Text);
+                let pair = only_legacy.iter().position(|a| {
+                    a.0 == text_code
+                        && only_new
+                            .iter()
+                            .any(|b| b.0 == text_code && squash(a.1) == squash(b.1))
+                });
+                match pair {
+                    Some(i) => {
+                        let a = only_legacy.remove(i);
+                        take(only_new, |b| b.0 == text_code && squash(a.1) == squash(b.1));
+                        true
+                    }
+                    None => false,
+                }
             }
         }
         Classifier::PressedWithoutToggle => {
@@ -346,6 +385,48 @@ fn explain<'a>(
                 && count_kind(legacy_all, SegmentKind::Value) == 0
                 && count_kind(only_new, SegmentKind::Value) == 1
                 && take(only_new, kind(SegmentKind::Value))
+        }
+        Classifier::UnavailableStatic => {
+            let un = gorca_i18n::t(gorca_i18n::MsgId::StateUnavailable);
+            matches!(
+                ctx.role,
+                SemRole::Generic | SemRole::Group | SemRole::Presentation | SemRole::Article
+            ) && take(only_legacy, |k| {
+                k.0 == kind_code(SegmentKind::State) && k.1 == un
+            })
+        }
+        Classifier::RoleWordImproved => {
+            let role = kind_code(SegmentKind::Role);
+            role_word_pairs()
+                .iter()
+                .find(|(r, l, n)| {
+                    *r == ctx.role
+                        && only_legacy.iter().any(|k| k.0 == role && k.1 == *l)
+                        && only_new.iter().any(|k| k.0 == role && k.1 == *n)
+                })
+                .is_some_and(|(_, l, n)| {
+                    take(only_legacy, |k| k.0 == role && k.1 == *l)
+                        && take(only_new, |k| k.0 == role && k.1 == *n)
+                })
+        }
+        Classifier::NameCapDiffers => {
+            let text = kind_code(SegmentKind::Text);
+            let common =
+                |a: &str, b: &str| a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count();
+            let pair = only_legacy.iter().position(|a| {
+                a.0 == text
+                    && only_new
+                        .iter()
+                        .any(|b| b.0 == text && a.1 != b.1 && common(a.1, b.1) >= 200)
+            });
+            match pair {
+                Some(i) => {
+                    let a = only_legacy.remove(i);
+                    take(only_new, |b| b.0 == text && common(a.1, b.1) >= 200);
+                    true
+                }
+                None => false,
+            }
         }
         Classifier::ReadOnlyFromModel => {
             let ro = gorca_i18n::t(gorca_i18n::MsgId::StateReadOnly);
@@ -536,18 +617,26 @@ mod tests {
             d(&legacy, &new, derived),
             DiffOutcome::Allowed("content-derived-name")
         );
-        // A different join of the same content (the legacy name had other spacing) is explained
-        // by derivation too, but only when the entry says the name was derived.
-        let legacy2 = [
-            l(SegmentKind::Text, "Beta"),
+        // A different join of the same content (other spacing) is explained too, but only when
+        // the entry says the name was derived; a different name is not.
+        let respaced = [
+            l(SegmentKind::Text, "Al pha"),
             l(SegmentKind::Role, "list item"),
         ];
         assert_eq!(
-            d(&legacy2, &new, derived),
+            d(&respaced, &new, derived),
             DiffOutcome::Allowed("content-derived-name")
         );
         assert!(matches!(
-            d(&legacy2, &new, DiffCtx::FOCUS),
+            d(&respaced, &new, DiffCtx::FOCUS),
+            DiffOutcome::Different { .. }
+        ));
+        let other = [
+            l(SegmentKind::Text, "Beta"),
+            l(SegmentKind::Role, "list item"),
+        ];
+        assert!(matches!(
+            d(&other, &new, derived),
             DiffOutcome::Different { .. }
         ));
     }
@@ -600,6 +689,55 @@ mod tests {
         });
         assert!(matches!(
             d(&[l(SegmentKind::State, pressed)], &[], btn),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn the_narrow_web_rows_are_gated_per_cause() {
+        let un = gorca_i18n::t(gorca_i18n::MsgId::StateUnavailable);
+        let leg = [l(SegmentKind::Role, "panel"), l(SegmentKind::State, un)];
+        let new = [n(SegmentKind::Role, "panel")];
+        let web = |role| DiffCtx {
+            surface: "focus-web",
+            role,
+            ..DiffCtx::FOCUS
+        };
+        let gen_ = web(SemRole::Generic);
+        assert_eq!(
+            d(&leg, &new, gen_),
+            DiffOutcome::Allowed("unavailable-static")
+        );
+        let btn = web(SemRole::Button);
+        assert!(matches!(d(&leg, &new, btn), DiffOutcome::Different { .. }));
+        // Role word pairs only for their own role.
+        let l2 = [l(SegmentKind::Role, "panel")];
+        let n2 = [n(SegmentKind::Role, "list")];
+        let feed = web(SemRole::Feed);
+        assert_eq!(
+            d(&l2, &n2, feed),
+            DiffOutcome::Allowed("role-word-improved")
+        );
+        assert!(matches!(d(&l2, &n2, btn), DiffOutcome::Different { .. }));
+        // Names that agree for 200 characters and then differ in length.
+        let long_a = "x".repeat(260);
+        let long_b = "x".repeat(300);
+        assert_eq!(
+            d(
+                &[l(SegmentKind::Text, &long_a)],
+                &[n(SegmentKind::Text, &long_b)],
+                btn
+            ),
+            DiffOutcome::Allowed("name-cap-differs")
+        );
+        let short_a = "x".repeat(20);
+        let short_b = "y".repeat(20);
+        assert!(matches!(
+            d(
+                &[l(SegmentKind::Text, &short_a)],
+                &[n(SegmentKind::Text, &short_b)],
+                DiffCtx::FOCUS
+            ),
             DiffOutcome::Different { .. }
         ));
     }

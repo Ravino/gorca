@@ -91,6 +91,15 @@ impl Deviations {
         self.rows.iter().any(|r| r.id == id && r.surface == surface)
     }
 
+    /// The ids of the rows for `surface`.
+    pub fn ids_for(&self, surface: &str) -> Vec<String> {
+        self.rows
+            .iter()
+            .filter(|r| r.surface == surface)
+            .map(|r| r.id.clone())
+            .collect()
+    }
+
     /// Ids of the rows whose `until` is before `today` (`YYYY-MM-DD`).
     pub fn expired(&self, today: &str) -> Vec<&str> {
         self.rows
@@ -156,8 +165,8 @@ mod tests {
     #[test]
     fn expiry_compares_iso_dates() {
         let d = Deviations::parse(BUILTIN).expect("parses");
-        assert_eq!(d.expired("2026-12-16").len(), d.len());
-        assert!(d.expired("2026-12-15").is_empty());
+        assert_eq!(d.expired("2026-11-08").len(), d.len());
+        assert!(d.expired("2026-11-07").is_empty());
         assert_eq!(today_utc().len(), 10);
     }
 

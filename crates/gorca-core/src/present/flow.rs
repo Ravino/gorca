@@ -683,6 +683,23 @@ impl Reader {
         })
     }
 
+    /// A snapshot copy whose fused entry carries `name` too (the legacy code patched only the
+    /// snapshot), so the shadow compares the model with what was really spoken.
+    fn with_entry_name(snap: &mut NodeSnapshot, name: &Arc<str>) {
+        if let Some(e) = &snap.sem.entry {
+            let mut ne = (**e).clone();
+            ne.name = Some(Arc::clone(name));
+            snap.sem.entry = Some(Arc::new(ne));
+        }
+    }
+
+    /// Hand a prepared message to the shadow actor (after the speech effect).
+    pub(crate) fn shadow_send(&self, msg: Option<gorca_present::ShadowMsg>) {
+        if let (Some(h), Some(msg)) = (&self.present_shadow, msg) {
+            h.offer_msg(msg);
+        }
+    }
+
     /// Step 2: hand the sample to the shadow actor (one `try_send`, never waits).
     pub(crate) fn shadow_offer(&self, sample: Option<gorca_present::FocusSample>) {
         if let (Some(h), Some(sample)) = (&self.present_shadow, sample) {
@@ -1003,9 +1020,13 @@ impl Reader {
         };
         let mut merged = (*p.snap).clone();
         merged.name = Some(name.into());
+        Self::with_entry_name(&mut merged, &Arc::from(name));
         let merged = Arc::new(merged);
         let id = self.utt_id();
         let u = present_change(&merged, ch, id, self.epoch.current(), None);
+        let shadow = self
+            .shadow_change(&p.snap, &merged, &u, p.ctx)
+            .map(gorca_present::ShadowMsg::Change);
         self.log_presentation(&u, &merged, PresentSource::StateChange, None);
         self.presented = Some(Presented {
             node: p.node,
@@ -1016,6 +1037,7 @@ impl Reader {
             ctx: p.ctx,
         });
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+        self.shadow_send(shadow);
     }
 
     /// A web control spoken without a name, of a kind Orca infers a label for, asks its document
@@ -1067,6 +1089,7 @@ impl Reader {
         };
         let mut merged = (*p.snap).clone();
         merged.name = Some(Arc::from(label.as_str()));
+        Self::with_entry_name(&mut merged, &Arc::from(label.as_str()));
         // The words are not said twice: a description that is the label stays unsaid.
         if crate::aria::speakable_description(merged.description.as_deref(), Some(&label)).is_none()
         {
@@ -1076,8 +1099,12 @@ impl Reader {
         let id = self.utt_id();
         let epoch = self.epoch.current();
         let refine = self.now.saturating_duration_since(p.at) < REFINE_WINDOW;
+        let mut shadow = None;
         let (mut u, source) = if refine {
             let mut u = self.presenters.present(p.ctx, &merged, id, epoch);
+            shadow = self
+                .shadow_focus(p.ctx, &merged, &u, false)
+                .map(gorca_present::ShadowMsg::Focus);
             self.drop_web_unavailable(&mut u, &merged);
             u.refines = Some(p.utt);
             if let Some((_, word, tail)) = self.web_extra.as_ref().filter(|e| e.0 == p.utt) {
@@ -1100,6 +1127,11 @@ impl Reader {
             )
         };
         u.may_refine = false;
+        if matches!(source, PresentSource::Followup) {
+            shadow = self
+                .shadow_change(&p.snap, &merged, &u, p.ctx)
+                .map(gorca_present::ShadowMsg::Change);
+        }
         self.log_presentation(&u, &merged, source, Some(p.utt));
         self.presented = Some(Presented {
             node: p.node,
@@ -1110,6 +1142,7 @@ impl Reader {
             ctx: p.ctx,
         });
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+        self.shadow_send(shadow);
     }
 
     /// Schedule the next delayed try of a `Busy` focus fetch. False when the tries are used up.
@@ -1210,9 +1243,13 @@ impl Reader {
                 let id = self.utt_id();
                 let refine = self.now.saturating_duration_since(p.at) < REFINE_WINDOW
                     && r.epoch == self.epoch.current();
+                let mut shadow = None;
                 let (mut u, source) = if refine {
                     // Replace: the whole node again, interrupting the earlier utterance.
                     let mut u = self.presenters.present(p.ctx, new, id, r.epoch);
+                    shadow = self
+                        .shadow_focus(p.ctx, new, &u, false)
+                        .map(gorca_present::ShadowMsg::Focus);
                     self.drop_web_unavailable(&mut u, new);
                     u.refines = Some(p.utt);
                     if let Some((_, word, tail)) = self.web_extra.as_ref().filter(|e| e.0 == p.utt)
@@ -1229,6 +1266,11 @@ impl Reader {
                     )
                 };
                 u.may_refine = false;
+                if matches!(source, PresentSource::Followup) {
+                    shadow = self
+                        .shadow_change(&p.snap, new, &u, p.ctx)
+                        .map(gorca_present::ShadowMsg::Change);
+                }
                 self.log_presentation(&u, new, source, Some(p.utt));
                 self.presented = Some(Presented {
                     node: p.node,
@@ -1239,6 +1281,7 @@ impl Reader {
                     ctx: p.ctx,
                 });
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+                self.shadow_send(shadow);
             }
             // The node vanished between presenting and checking: the focus machine decides.
             Err(gorca_connector_api::BackendError::Gone) => {

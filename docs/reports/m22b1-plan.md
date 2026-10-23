@@ -155,3 +155,24 @@ them outlives the cut-over.
   not by shadowing. The new code adds no legacy use (rule 12 passes at 82 rows; the shadow's web
   test lives in one helper).
 * The shadow samples are taken before edits and offered after the speech effect.
+
+## Slice 3 gap closure (2026-10-24, second pass)
+
+* **Change sites.** All four `present_change` sites and both refine paths are shadowed now (name
+  reply, label follow-up and refine, revalidation follow-up and refine, state reply); there is no
+  fifth focus/change site (`browse/commands.rs` presents a browse line, a different surface). The
+  patched name also goes into the shadow's fused entry (`with_entry_name`). Test:
+  `shadow_change_covers_the_late_name_site`.
+* **Web diff 17 to 0** of 2239. Model fixes: `ProgressBar`/`Meter` are checkable (indeterminate is
+  the mixed state), `Option`/`TreeItem`/`MenuItem` are checkable when the engine says so
+  (aria-checked on an option). Four narrow rows added for the rest (`unavailable-static`,
+  `role-word-improved` with a fixed (role, legacy word, model word) list, `name-cap-differs`), and
+  `content-derived-name` replacement tightened to "same words ignoring spacing".
+* **Is `focus-web` too wide?** 396 nodes were covered by 11 rows: content-derived-name 101,
+  static-text-word 89, marker-stripped-name 54, value-from-attrs 46, role-from-model 40,
+  role-not-in-table 35, grouping-word 16, read-only-from-model 6, role-word-improved 5,
+  name-cap-differs 2, unavailable-static 2. Every row is per cause and gated per role; the replay
+  test now fails when a row has no witness in the corpus, and the unit tests prove each gate
+  rejects the neighbouring case. The widest honest classes are static text (the engine's label vs
+  static distinction is not in the model) and derived names (intended improvement).
+* All deviation rows end 2026-11-07 (owner: upper bounds, cut-over as soon as ready).

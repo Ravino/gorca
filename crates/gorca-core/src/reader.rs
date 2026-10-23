@@ -2691,6 +2691,44 @@ mod tests {
         assert!(timer_of(&again).is_none() || !effects_of(&again).contains(&"fetch-name"));
     }
 
+    /// The late-name change is shadowed too: the model's change words equal the legacy ones.
+    #[test]
+    fn shadow_change_covers_the_late_name_site() {
+        let fused = |name: &str| {
+            let mut s = (*selected_snap(1, name)).clone();
+            let mut e = gorca_model::SemEntry::default();
+            e.sem.role = gorca_model::SemRole::Button;
+            if !name.is_empty() {
+                e.name = Some(Arc::from(name));
+            }
+            s.sem.entry = Some(Arc::new(e));
+            Arc::new(s)
+        };
+        let (h, mut actor) = gorca_present::channel(gorca_present::Deviations::builtin());
+        let mut f = fixture();
+        f.reader = f.reader.with_present_shadow(h.clone());
+        let t = Instant::now();
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            t,
+        );
+        f.reader
+            .handle(ReaderMsg::Timer, t + std::time::Duration::from_millis(5));
+        let fx = f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, fused("")),
+            t + std::time::Duration::from_millis(6),
+        );
+        let at = timer_of(&fx).expect("the late name read is armed");
+        f.reader.handle(ReaderMsg::Timer, at);
+        let fx = f
+            .reader
+            .handle(reply(&f, 1, FetchKind::Name, fused("Files")), at);
+        assert_eq!(spoken(&fx), ["Files"]);
+        actor.drain_pending();
+        let s = h.stats();
+        assert_eq!((s.change_equal, s.change_different), (1, 0), "{s:?}");
+    }
+
     /// Nothing is added when the late read is still nameless or the focus moved on.
     #[test]
     fn a_late_name_that_is_still_empty_or_stale_says_nothing() {
