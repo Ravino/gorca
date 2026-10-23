@@ -89,17 +89,23 @@ for kind in sys.argv[1:]:
         if out.startswith('clickwin '):
             break
     R.check(f'{kind}: resolver found "Target"', out.startswith('clickwin '), out)
+    # ITEMS_SETTLE: seconds to wait between finding the node and the first click (cause analysis of dropped first clicks)
+    time.sleep(float(os.environ.get('ITEMS_SETTLE', '0')))
     r = run_loc('act-click')
     time.sleep(1.2)
-    ok = wait_for(lambda: fired(kind, c), 3)
+    first_ok = bool(r == "acted" and wait_for(lambda: fired(kind, c), 3))
+    # The product never retries; the test allows ONE retry only to finish the run, and says so: the first-try result is
+    # printed as a FIRSTTRY line and is its own check, so a dropped first click is never hidden.
     tries = [r]
-    for _ in range(2):
-        if ok:
-            break
+    ok = first_ok
+    if not ok:
         tries.append(run_loc('act-click'))
         time.sleep(1.2)
         ok = wait_for(lambda: fired(kind, c), 3)
-    R.check(f'{kind}: left item click by the click/press action fires the button (no pointer)', r == 'acted' and ok, f'{tries} {errs[-1][:300]} titles={[w["title"] for w in windows()]}')
+    print(f'FIRSTTRY {kind} scale={scale} settle={os.environ.get("ITEMS_SETTLE", "0")} first_try={int(first_ok)}', flush=True)
+    # Firefox: known issue (ADR-0025 15.2, about half of the first DoActions are dropped); recorded, not failed. Others must work first time.
+    R.check(f'{kind}: left item click by the click/press action fires the button on the FIRST try' + (' [known Gecko issue, recorded]' if kind == 'firefox' else ''), first_ok or kind == 'firefox', f'first_try={int(first_ok)} {tries} {errs[-1][:200]}')
+    R.check(f'{kind}: left item click fires the button (at most one retry)', ok, f'{tries} titles={[w["title"] for w in windows()]}')
     # 2. right item click: the context-menu action if there is one, else the pointer (route + right click)
     r = run_loc('act-menu')
     if r == 'no action' and kind in ('firefox', 'chromium', 'electron'):
