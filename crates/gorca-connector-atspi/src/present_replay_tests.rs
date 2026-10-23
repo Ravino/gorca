@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! M22b1 replay harness: the recorded native corpus (`tests/fixtures/sem`) is fused the way the
+//! app actor does, every node is presented by the legacy presenter and by `gorca-present`, and the
+//! token multisets are diffed (ADR-0022 section 2.11, M-13). Offline, deterministic, no bus.
+//!
+//! Web pages are skipped (the web focus rows are slice 3). The table printed with `--nocapture`
+//! groups the differences by (legacy tokens, new tokens) so a slice can work through it; the test
+//! asserts a **ceiling** on the differences outside `deviations.toml`, which only goes down.
+
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use gorca_model::{Epoch, NodeSnapshot, UttId, WebEngine};
+use gorca_present::{
+    ComposeCtx, Deviations, DiffOutcome, LegacyToken, Reason, RenderOpts, ReportFlags, compose,
+    diff, render,
+};
+
+use crate::legacy_agreement_tests::{page, pages_of, root};
+
+/// The outcome of one replay.
+#[derive(Debug, Default)]
+pub(crate) struct Replay {
+    pub nodes: u64,
+    pub skipped_web: u64,
+    pub skipped_no_entry: u64,
+    pub equal: u64,
+    pub order_only: u64,
+    pub allowed: u64,
+    pub different: u64,
+    /// (legacy tokens, new tokens) of each differing node, with a count and one example.
+    pub table: BTreeMap<String, (u64, String)>,
+}
+
+fn show<'a>(it: impl Iterator<Item = (gorca_model::SegmentKind, &'a str)>) -> String {
+    it.map(|(k, t)| format!("{k:?}:{t}"))
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
+/// Replay `snaps` (already fused) through both presenters.
+pub(crate) fn replay(label: &str, snaps: &[Arc<NodeSnapshot>], dev: &Deviations, out: &mut Replay) {
+    for s in snaps {
+        out.nodes += 1;
+        let is_web = s
+            .attrs
+            .iter()
+            .any(|(k, _)| *k == gorca_doc_source_api::web_attrs::TAG);
+        if is_web {
+            out.skipped_web += 1;
+            continue;
+        }
+        let Some(entry) = s.sem.entry.as_ref() else {
+            out.skipped_no_entry += 1;
+            continue;
+        };
+        let u = gorca_core::present_focus(s, UttId(1), Epoch(1));
+        let legacy: Vec<LegacyToken> = u
+            .segments
+            .iter()
+            .map(|g| LegacyToken {
+                kind: g.kind,
+                text: Arc::clone(&g.text),
+            })
+            .collect();
+        let ctx = ComposeCtx {
+            flags: ReportFlags::default(),
+            may_refine: false,
+        };
+        let Ok(ir) = compose(entry, s.key, Reason::Focus, ctx) else {
+            continue;
+        };
+        let tokens = render(&ir, RenderOpts::default());
+        match diff(&legacy, &tokens, dev) {
+            DiffOutcome::Equal => out.equal += 1,
+            DiffOutcome::OrderOnly => out.order_only += 1,
+            DiffOutcome::Allowed(_) => out.allowed += 1,
+            DiffOutcome::Different { .. } => {
+                out.different += 1;
+                let sig = format!(
+                    "legacy [{}] new [{}]",
+                    show(legacy.iter().map(|t| (t.kind, &*t.text))),
+                    show(tokens.iter().map(|t| (t.kind, t.text.as_str())))
+                );
+                let e = out
+                    .table
+                    .entry(sig)
+                    .or_insert_with(|| (0, format!("{label}#{} role={:?}", s.key.local.0, s.role)));
+                e.0 += 1;
+            }
+        }
+    }
+}
+
+/// The native part of the corpus: GTK pages (the web engines' pages are web content).
+pub(crate) fn run_native_corpus(dev: &Deviations) -> Replay {
+    let mut out = Replay::default();
+    let tables = crate::sem_profile::tables_for("GTK", "app", WebEngine::None);
+    for name in pages_of("gtk4") {
+        let Some(snaps) = page("gtk4", &name) else {
+            continue;
+        };
+        let fused = gorca_core::fuse_snapshots(tables, &snaps);
+        replay(&format!("gtk4/{name}"), &fused, dev, &mut out);
+    }
+    out
+}
+
+/// Differences outside `deviations.toml` the native replay is allowed to show today. Slice 2 drives
+/// it to zero; raising it needs a reason in the commit. Baseline 2026-10-24: 169 of 375 GTK4
+/// nodes (static label role word "text" vs "label", list rows named from content).
+const NATIVE_DIFFERENT_CEILING: u64 = 169;
+
+#[test]
+fn the_native_corpus_replays_through_both_presenters() {
+    assert!(root().exists(), "fixtures missing");
+    let dev = Deviations::builtin();
+    let r = run_native_corpus(&dev);
+    let compared = r.equal + r.order_only + r.allowed + r.different;
+    eprintln!(
+        "present replay (gtk4): nodes {} compared {compared} equal {} order-only {} allowed {} \
+         different {} skipped web {} no-entry {}",
+        r.nodes, r.equal, r.order_only, r.allowed, r.different, r.skipped_web, r.skipped_no_entry
+    );
+    let mut rows: Vec<_> = r.table.iter().collect();
+    rows.sort_by_key(|(_, (n, _))| std::cmp::Reverse(*n));
+    for (sig, (n, ex)) in rows.iter().take(25) {
+        eprintln!("  {n:>4}x {sig}   e.g. {ex}");
+    }
+    assert!(compared > 50, "the corpus was not replayed ({compared})");
+    assert!(
+        r.different <= NATIVE_DIFFERENT_CEILING,
+        "{} differences outside deviations.toml",
+        r.different
+    );
+}

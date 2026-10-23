@@ -14,7 +14,7 @@ use gorca_model::{AppId, ConnectorId, LocalId, NodeKey, NodeSnapshot, PropMask, 
 
 use crate::decode::{RawNode, keep_attrs, keep_sem_attrs, snapshot};
 
-fn root() -> PathBuf {
+pub(crate) fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/sem")
 }
 
@@ -30,7 +30,7 @@ fn key(i: u64) -> NodeKey {
 
 /// The recorded pages of one engine as snapshots (document order, parents first), the way the
 /// connector decodes a full fetch: role, states, name, description, attributes.
-fn page(engine: &str, name: &str) -> Option<Vec<Arc<NodeSnapshot>>> {
+pub(crate) fn page(engine: &str, name: &str) -> Option<Vec<Arc<NodeSnapshot>>> {
     let text = std::fs::read_to_string(root().join(engine).join(format!("{name}.jsonl"))).ok()?;
     let mut out = Vec::new();
     for line in text.lines() {
@@ -94,7 +94,7 @@ const ENGINES: [(&str, WebEngine, &str); 3] = [
     ("gtk4", WebEngine::None, "GTK"),
 ];
 
-fn pages_of(engine: &str) -> Vec<String> {
+pub(crate) fn pages_of(engine: &str) -> Vec<String> {
     let mut v: Vec<String> = std::fs::read_dir(root().join(engine))
         .map(|d| {
             d.filter_map(Result::ok)

@@ -841,7 +841,8 @@ mod tests {
                 settle(&mut s);
             }
             let dt = start.elapsed() / n;
-            let per = (s.stats().fusions - before) as f64 / f64::from(n);
+            let delta = u32::try_from(s.stats().fusions - before).unwrap_or(u32::MAX);
+            let per = f64::from(delta) / f64::from(n);
             assert_eq!(s.stats().errors, 0);
             (per, dt)
         }
