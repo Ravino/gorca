@@ -34,6 +34,6 @@ pub use ir::{
 };
 pub use render::{RenderOpts, Token, TokenText, render};
 pub use shadow::{
-    ChangeSample, FocusSample, SHADOW_QUEUE, ShadowActor, ShadowHandle, ShadowSnapshot, SkipWhy,
-    channel, channel_with,
+    ChangeSample, FocusSample, SHADOW_QUEUE, ShadowActor, ShadowHandle, ShadowMsg, ShadowSnapshot,
+    SkipWhy, channel, channel_with,
 };

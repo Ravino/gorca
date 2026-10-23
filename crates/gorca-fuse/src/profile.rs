@@ -74,6 +74,13 @@ impl Rules {
                 R::Switch,
                 R::MenuItemCheckbox,
                 R::MenuItemRadio,
+                // Checkable only when the engine says so (`check_optional` in the normaliser).
+                R::Option,
+                R::TreeItem,
+                R::MenuItem,
+                // Indeterminate (no value) is the mixed state of a progress bar.
+                R::ProgressBar,
+                R::Meter,
             ]),
             disableable: RoleSet::of(&[
                 R::Button,

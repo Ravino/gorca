@@ -419,8 +419,8 @@ mod tests {
         assert_eq!(compare(&n, NodeFlags::NONE, 0, &e), vec![Aspect::Check]);
         e.sem.check = Check::On;
         assert!(compare(&n, NodeFlags::NONE, 0, &e).is_empty());
-        let n = node(Role::ListItem, Some("x"), StateSet::CHECKED);
-        let e = entry(SemRole::Option, Some("x"));
+        let n = node(Role::Paragraph, Some("x"), StateSet::CHECKED);
+        let e = entry(SemRole::Paragraph, Some("x"));
         assert!(
             compare(&n, NodeFlags::NONE, 0, &e).is_empty(),
             "not checkable"

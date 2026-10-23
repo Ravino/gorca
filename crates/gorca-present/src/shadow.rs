@@ -179,6 +179,11 @@ impl ShadowHandle {
         self.send(ShadowMsg::Focus(sample));
     }
 
+    /// Offer a prepared message (same drop rules).
+    pub fn offer_msg(&self, msg: ShadowMsg) {
+        self.send(msg);
+    }
+
     /// Offer a state-change sample (same drop rules).
     pub fn offer_change(&self, sample: ChangeSample) {
         self.send(ShadowMsg::Change(sample));
