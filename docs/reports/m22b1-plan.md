@@ -139,3 +139,19 @@ Revised slices 3 to 5 (each ends with deleting what it replaced):
 
 The shadow hook, `GORCA_PRESENT_SHADOW` and the replay ceilings are removed in slice 5; nothing about
 them outlives the cut-over.
+
+## Slice 3b result (2026-10-24)
+
+* Web focus row (`gorca-present::web`): NVDA role words from the ARIA role, state order, current,
+  value text, description (not a repeat of the name), tree/heading level, error text. Web corpus
+  replay (Firefox + Chromium, 2239 web nodes): 1840 equal, 382 explained by dated `focus-web`
+  deviation rows, **17 different** (0.8 %). Ceiling set to 17; the open classes are option
+  `checked`, feed/definition words, indeterminate progress bars, read-only check boxes, very long
+  names, an unavailable generic. Each is a model or table gap to close before the web cut-over.
+* `Reason::Change` row (`gorca-present::change::compose_change`, two entries) and the Reader hook
+  on the focused-node state change, shadowed with its own counters (`change_*`); an integration
+  test shows the legacy and the model words agree for a check box flip.
+* No `legacy.allow` row is deleted yet: the legacy presenter is deleted at the cut-over (slice 5),
+  not by shadowing. The new code adds no legacy use (rule 12 passes at 82 rows; the shadow's web
+  test lives in one helper).
+* The shadow samples are taken before edits and offered after the speech effect.

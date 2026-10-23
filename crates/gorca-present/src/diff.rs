@@ -54,6 +54,19 @@ pub enum Classifier {
     PressedWithoutToggle,
     /// The legacy presenter had no role word (its role mapping missed); the model has one.
     RoleFromModel,
+    /// The fused name drops a list marker or bullet the legacy name carried (quirk row).
+    MarkerStrippedName,
+    /// Static text: the engine's `label` and `static` roles are one model role.
+    StaticTextWord,
+    /// A fieldset or group: the model says "grouping" where the legacy mapping said "panel".
+    GroupingWord,
+    /// A role the web table has no word for: the legacy mapping spoke one from the engine role.
+    RoleNotInTable,
+    /// The model says the field is read only; the legacy snapshot's state set did not.
+    ReadOnlyFromModel,
+    /// The fused value (`aria-valuetext`, `aria-valuenow`) is spoken where the legacy snapshot of
+    /// the recorded fixture carries no `Value` interface.
+    ValueFromAttrs,
 }
 
 /// Roles whose field contents the legacy presenter speaks as a value and the text layer owns:
@@ -81,14 +94,61 @@ pub const ROLE_FROM_MODEL_ROLES: &[SemRole] = &[
     SemRole::Generic,
     SemRole::Group,
     SemRole::Presentation,
+    SemRole::Application,
+    SemRole::Term,
+    SemRole::Definition,
+    SemRole::Feed,
+    SemRole::Img,
+    SemRole::Form,
+    SemRole::DescriptionList,
+];
+
+/// Roles the web table says nothing for where the legacy mapping spoke a word.
+pub const WEB_UNWORDED_ROLES: &[SemRole] = &[
+    SemRole::Log,
+    SemRole::Figure,
+    SemRole::Note,
+    SemRole::Marquee,
+    SemRole::Timer,
+    SemRole::Math,
+    SemRole::Strong,
+    SemRole::Emphasis,
+    SemRole::Mark,
+    SemRole::Code,
+    SemRole::Subscript,
+    SemRole::Superscript,
+    SemRole::Insertion,
+    SemRole::Deletion,
+    SemRole::Time,
+    SemRole::Form,
+    SemRole::RowGroup,
+    SemRole::Comment,
+    SemRole::Suggestion,
+];
+
+/// Roles whose value the fused entry knows from attributes.
+pub const VALUE_ROLES: &[SemRole] = &[
+    SemRole::Slider,
+    SemRole::ProgressBar,
+    SemRole::Meter,
+    SemRole::SpinButton,
+    SemRole::Separator,
+    SemRole::Scrollbar,
+    SemRole::Combobox,
 ];
 
 impl Classifier {
-    pub const ALL: [Classifier; 4] = [
+    pub const ALL: [Classifier; 10] = [
         Classifier::FieldContentsNotFused,
         Classifier::ContentDerivedName,
         Classifier::PressedWithoutToggle,
         Classifier::RoleFromModel,
+        Classifier::MarkerStrippedName,
+        Classifier::StaticTextWord,
+        Classifier::GroupingWord,
+        Classifier::RoleNotInTable,
+        Classifier::ValueFromAttrs,
+        Classifier::ReadOnlyFromModel,
     ];
 
     pub const fn id(self) -> &'static str {
@@ -97,6 +157,12 @@ impl Classifier {
             Classifier::ContentDerivedName => "content-derived-name",
             Classifier::PressedWithoutToggle => "pressed-without-toggle",
             Classifier::RoleFromModel => "role-from-model",
+            Classifier::MarkerStrippedName => "marker-stripped-name",
+            Classifier::StaticTextWord => "static-text-word",
+            Classifier::GroupingWord => "grouping-word",
+            Classifier::RoleNotInTable => "role-not-in-table",
+            Classifier::ValueFromAttrs => "value-from-attrs",
+            Classifier::ReadOnlyFromModel => "read-only-from-model",
         }
     }
 }
@@ -206,10 +272,20 @@ fn explain<'a>(
                 && take(only_legacy, kind(SegmentKind::Value))
         }
         Classifier::ContentDerivedName => {
-            ctx.name_derived
-                && count_kind(legacy_all, SegmentKind::Text) == 0
-                && count_kind(only_new, SegmentKind::Text) == 1
-                && take(only_new, kind(SegmentKind::Text))
+            if !ctx.name_derived {
+                return false;
+            }
+            let text = kind(SegmentKind::Text);
+            if count_kind(legacy_all, SegmentKind::Text) == 0 {
+                // The legacy snapshot had no name at all.
+                count_kind(only_new, SegmentKind::Text) == 1 && take(only_new, text)
+            } else {
+                // The legacy name was a different join of the same content.
+                count_kind(only_legacy, SegmentKind::Text) == 1
+                    && count_kind(only_new, SegmentKind::Text) == 1
+                    && take(only_legacy, text)
+                    && take(only_new, text)
+            }
         }
         Classifier::PressedWithoutToggle => {
             let pressed = gorca_i18n::t(gorca_i18n::MsgId::StatePressed);
@@ -218,6 +294,67 @@ fn explain<'a>(
                 && take(only_legacy, |k| {
                     k.0 == kind_code(SegmentKind::State) && k.1 == pressed
                 })
+        }
+        Classifier::MarkerStrippedName => {
+            let text = kind_code(SegmentKind::Text);
+            let pair = only_legacy.iter().position(|a| {
+                a.0 == text
+                    && only_new
+                        .iter()
+                        .any(|b| b.0 == text && a.1.len() > b.1.len() && a.1.ends_with(b.1))
+            });
+            match pair {
+                Some(i) => {
+                    let a = only_legacy.remove(i);
+                    take(only_new, |b| b.0 == text && a.1.ends_with(b.1));
+                    true
+                }
+                None => false,
+            }
+        }
+        Classifier::StaticTextWord => {
+            let (label, text) = (
+                gorca_i18n::t(gorca_i18n::MsgId::RoleLabel),
+                gorca_i18n::t(gorca_i18n::MsgId::RoleStaticText),
+            );
+            let word =
+                |k: &Key<'_>| k.0 == kind_code(SegmentKind::Role) && (k.1 == label || k.1 == text);
+            matches!(ctx.role, SemRole::StaticText | SemRole::Caption)
+                && only_legacy.iter().filter(|k| word(k)).count() == 1
+                && only_new.iter().filter(|k| word(k)).count() == 1
+                && take(only_legacy, word)
+                && take(only_new, word)
+        }
+        Classifier::GroupingWord => {
+            let panel = gorca_i18n::t(gorca_i18n::MsgId::RolePanel);
+            let group = gorca_i18n::t(gorca_i18n::MsgId::AriaGroup);
+            let role = kind_code(SegmentKind::Role);
+            matches!(ctx.role, SemRole::Group | SemRole::RadioGroup)
+                && only_legacy.iter().any(|k| k.0 == role && k.1 == panel)
+                && only_new.iter().any(|k| k.0 == role && k.1 == group)
+                && take(only_legacy, |k| k.0 == role && k.1 == panel)
+                && take(only_new, |k| k.0 == role && k.1 == group)
+        }
+        Classifier::RoleNotInTable => {
+            WEB_UNWORDED_ROLES.contains(&ctx.role)
+                && count_kind(new_all, SegmentKind::Role) == 0
+                && count_kind(only_legacy, SegmentKind::Role) == 1
+                && take(only_legacy, kind(SegmentKind::Role))
+        }
+        Classifier::ValueFromAttrs => {
+            VALUE_ROLES.contains(&ctx.role)
+                && count_kind(legacy_all, SegmentKind::Value) == 0
+                && count_kind(only_new, SegmentKind::Value) == 1
+                && take(only_new, kind(SegmentKind::Value))
+        }
+        Classifier::ReadOnlyFromModel => {
+            let ro = gorca_i18n::t(gorca_i18n::MsgId::StateReadOnly);
+            matches!(
+                ctx.role,
+                SemRole::TextBox | SemRole::SearchBox | SemRole::PasswordBox | SemRole::Checkbox
+            ) && take(only_new, |k| {
+                k.0 == kind_code(SegmentKind::State) && k.1 == ro
+            })
         }
         Classifier::RoleFromModel => {
             ROLE_FROM_MODEL_ROLES.contains(&ctx.role)
@@ -399,13 +536,18 @@ mod tests {
             d(&legacy, &new, derived),
             DiffOutcome::Allowed("content-derived-name")
         );
-        // A different legacy name is not explained by derivation.
+        // A different join of the same content (the legacy name had other spacing) is explained
+        // by derivation too, but only when the entry says the name was derived.
         let legacy2 = [
             l(SegmentKind::Text, "Beta"),
             l(SegmentKind::Role, "list item"),
         ];
-        assert!(matches!(
+        assert_eq!(
             d(&legacy2, &new, derived),
+            DiffOutcome::Allowed("content-derived-name")
+        );
+        assert!(matches!(
+            d(&legacy2, &new, DiffCtx::FOCUS),
             DiffOutcome::Different { .. }
         ));
     }

@@ -19,6 +19,7 @@ use smallvec::SmallVec;
 use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio_util::sync::CancellationToken;
 
+use crate::change::compose_change;
 use crate::compose::{ComposeCtx, ReportFlags, compose};
 use crate::deviations::Deviations;
 use crate::diff::{DiffCtx, DiffOutcome, LegacyToken, diff};
@@ -30,6 +31,7 @@ pub const SHADOW_QUEUE: usize = 64;
 
 /// One focus utterance of the legacy presenter, with the entry it should have been made from.
 #[derive(Clone, Debug)]
+#[allow(clippy::struct_excessive_bools)] // one flag per fact of the legacy call site
 pub struct FocusSample {
     pub node: NodeKey,
     pub entry: Arc<SemEntry>,
@@ -40,6 +42,28 @@ pub struct FocusSample {
     pub secret: bool,
     /// `browse.description_pause` as the legacy presenter saw it.
     pub description_pause: bool,
+    /// The node is web content (the legacy web presenter produced the tokens).
+    pub web: bool,
+}
+
+/// One state change of the focused node: the entry that was spoken, the new one, and the tokens
+/// the legacy change presenter produced.
+#[derive(Clone, Debug)]
+pub struct ChangeSample {
+    pub node: NodeKey,
+    pub old: Arc<SemEntry>,
+    pub new: Arc<SemEntry>,
+    pub legacy: SmallVec<[LegacyToken; 6]>,
+    pub skip_selected: bool,
+    pub secret: bool,
+    pub web: bool,
+}
+
+/// What travels to the actor.
+#[derive(Clone, Debug)]
+pub enum ShadowMsg {
+    Focus(FocusSample),
+    Change(ChangeSample),
 }
 
 /// Why the Reader did not offer a sample.
@@ -67,6 +91,9 @@ pub struct ShadowStats {
     allowed: AtomicU64,
     different: AtomicU64,
     unsupported: AtomicU64,
+    change_equal: AtomicU64,
+    change_allowed: AtomicU64,
+    change_different: AtomicU64,
 }
 
 /// A copy of the counters.
@@ -83,12 +110,20 @@ pub struct ShadowSnapshot {
     pub allowed: u64,
     pub different: u64,
     pub unsupported: u64,
+    pub change_equal: u64,
+    pub change_allowed: u64,
+    pub change_different: u64,
 }
 
 impl ShadowSnapshot {
     /// Samples the actor has compared.
     pub fn compared(&self) -> u64 {
         self.equal + self.order_only + self.allowed + self.different
+    }
+
+    /// State changes compared (focus samples are counted by [`ShadowSnapshot::compared`]).
+    pub fn change_compared(&self) -> u64 {
+        self.change_equal + self.change_allowed + self.change_different
     }
 
     /// Differences outside `deviations.toml`, as a fraction of the compared samples.
@@ -124,6 +159,9 @@ impl ShadowStats {
             allowed: g(&self.allowed),
             different: g(&self.different),
             unsupported: g(&self.unsupported),
+            change_equal: g(&self.change_equal),
+            change_allowed: g(&self.change_allowed),
+            change_different: g(&self.change_different),
         }
     }
 }
@@ -131,15 +169,24 @@ impl ShadowStats {
 /// The Reader's end: cheap to clone, never blocks.
 #[derive(Clone, Debug)]
 pub struct ShadowHandle {
-    tx: mpsc::Sender<FocusSample>,
+    tx: mpsc::Sender<ShadowMsg>,
     stats: Arc<ShadowStats>,
 }
 
 impl ShadowHandle {
     /// Offer a sample; a full or closed queue drops it and counts that.
     pub fn offer(&self, sample: FocusSample) {
+        self.send(ShadowMsg::Focus(sample));
+    }
+
+    /// Offer a state-change sample (same drop rules).
+    pub fn offer_change(&self, sample: ChangeSample) {
+        self.send(ShadowMsg::Change(sample));
+    }
+
+    fn send(&self, msg: ShadowMsg) {
         bump(&self.stats.offered);
-        match self.tx.try_send(sample) {
+        match self.tx.try_send(msg) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => bump(&self.stats.dropped_full),
             Err(TrySendError::Closed(_)) => bump(&self.stats.dropped_closed),
@@ -163,7 +210,7 @@ impl ShadowHandle {
 /// The actor: owns the receiving end and the deviation list.
 #[derive(Debug)]
 pub struct ShadowActor {
-    rx: mpsc::Receiver<FocusSample>,
+    rx: mpsc::Receiver<ShadowMsg>,
     stats: Arc<ShadowStats>,
     deviations: Deviations,
 }
@@ -196,6 +243,8 @@ impl ShadowActor {
         let ctx = ComposeCtx {
             flags: ReportFlags::default(),
             may_refine: s.may_refine,
+            web: s.web,
+            skip_selected: false,
         };
         let ir = match compose(&s.entry, s.node, Reason::Focus, ctx) {
             Ok(ir) => ir,
@@ -215,7 +264,7 @@ impl ShadowActor {
             &s.legacy,
             &tokens,
             &self.deviations,
-            DiffCtx::for_entry("focus", &s.entry),
+            DiffCtx::for_entry(if s.web { "focus-web" } else { "focus" }, &s.entry),
         );
         match &outcome {
             DiffOutcome::Equal => bump(&self.stats.equal),
@@ -232,12 +281,61 @@ impl ShadowActor {
         Some(outcome)
     }
 
+    /// Process one change sample: compose the change, render, diff, count.
+    pub fn process_change(&self, s: &ChangeSample) -> DiffOutcome {
+        let ctx = ComposeCtx {
+            flags: ReportFlags::default(),
+            may_refine: false,
+            web: s.web,
+            skip_selected: s.skip_selected,
+        };
+        let ir = compose_change(&s.old, &s.new, s.node, ctx);
+        let tokens = render(
+            &ir,
+            RenderOpts {
+                description_pause: false,
+            },
+        );
+        let surface = if s.web { "change-web" } else { "change" };
+        let outcome = diff(
+            &s.legacy,
+            &tokens,
+            &self.deviations,
+            DiffCtx::for_entry(surface, &s.new),
+        );
+        match &outcome {
+            DiffOutcome::Equal | DiffOutcome::OrderOnly => bump(&self.stats.change_equal),
+            DiffOutcome::Allowed(_) => bump(&self.stats.change_allowed),
+            DiffOutcome::Different { .. } => {
+                bump(&self.stats.change_different);
+                if !s.secret {
+                    tracing::debug!(target: "gorca_present::shadow", node = ?s.node, ?outcome,
+                        legacy = ?s.legacy.iter().map(|t| &*t.text).collect::<Vec<_>>(),
+                        new = ?tokens.iter().map(|t| t.text.as_str()).collect::<Vec<_>>(),
+                        "shadow change diff");
+                }
+            }
+        }
+        outcome
+    }
+
+    fn handle(&self, m: &ShadowMsg) {
+        match m {
+            ShadowMsg::Focus(s) => {
+                self.process(s);
+            }
+            ShadowMsg::Change(s) => {
+                self.process_change(s);
+            }
+        }
+    }
+
     /// Process every sample already queued, without waiting; returns how many. For tests and
     /// for an owner that wants a final flush before it reads the counters.
     pub fn drain_pending(&mut self) -> usize {
         let mut n = 0;
-        while let Ok(s) = self.rx.try_recv() {
-            self.process(&s);
+        while let Ok(m) = self.rx.try_recv() {
+            self.handle(&m);
             n += 1;
         }
         n
@@ -249,9 +347,7 @@ impl ShadowActor {
             tokio::select! {
                 () = cancel.cancelled() => break,
                 got = self.rx.recv() => match got {
-                    Some(s) => {
-                        self.process(&s);
-                    }
+                    Some(m) => self.handle(&m),
                     None => break,
                 },
             }
@@ -319,6 +415,7 @@ mod tests {
             may_refine: false,
             secret: false,
             description_pause: false,
+            web: false,
         }
     }
 

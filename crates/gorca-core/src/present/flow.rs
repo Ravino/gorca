@@ -600,6 +600,17 @@ impl Reader {
         }
     }
 
+    /// Whether the shadow compares this node on the web surface (one place for the legacy test,
+    /// deleted with the shadow hook).
+    fn shadow_node_is_web(snap: &NodeSnapshot) -> bool {
+        crate::aria::Node {
+            role: snap.role,
+            states: snap.states,
+            attrs: &snap.attrs,
+        }
+        .is_web()
+    }
+
     /// M22b1 shadow mode, step 1: take the legacy presenter's raw focus tokens and the fused
     /// entry (Arc clones only, before policy and lead-in edit the utterance). Nothing is sent
     /// here; `shadow_offer` does that after the speech effect is issued (R-1: off the
@@ -617,16 +628,7 @@ impl Reader {
             h.skipped(SkipWhy::Context);
             return None;
         }
-        let web = crate::aria::Node {
-            role: snap.role,
-            states: snap.states,
-            attrs: &snap.attrs,
-        }
-        .is_web();
-        if web {
-            h.skipped(SkipWhy::Web);
-            return None;
-        }
+        let web = Self::shadow_node_is_web(snap);
         let Some(entry) = &snap.sem.entry else {
             h.skipped(SkipWhy::NoEntry);
             return None;
@@ -644,7 +646,40 @@ impl Reader {
                 .collect(),
             may_refine: from_cache || u.may_refine,
             secret: snap.role == Role::PasswordEntry,
-            description_pause: self.cmd.effective.browse.description_pause,
+            // The raw web presenter output carries description segments whatever the setting.
+            description_pause: web || self.cmd.effective.browse.description_pause,
+            web,
+        })
+    }
+
+    /// Shadow mode for a state change of the focused node: both fused entries and the legacy
+    /// change tokens. `None` when shadow is off or either side has no fused entry yet.
+    fn shadow_change(
+        &self,
+        old: &NodeSnapshot,
+        new: &NodeSnapshot,
+        u: &gorca_model::Utterance,
+        ctx: PresentContext,
+    ) -> Option<gorca_present::ChangeSample> {
+        use gorca_present::{ChangeSample, LegacyToken};
+        self.present_shadow.as_ref()?;
+        let (old_e, new_e) = (old.sem.entry.as_ref()?, new.sem.entry.as_ref()?);
+        let web = Self::shadow_node_is_web(new);
+        Some(ChangeSample {
+            node: new.key,
+            old: Arc::clone(old_e),
+            new: Arc::clone(new_e),
+            legacy: u
+                .segments
+                .iter()
+                .map(|s| LegacyToken {
+                    kind: s.kind,
+                    text: Arc::clone(&s.text),
+                })
+                .collect(),
+            skip_selected: skip_states(ctx).contains(StateSet::SELECTED),
+            secret: new.role == Role::PasswordEntry,
+            web,
         })
     }
 
@@ -1318,6 +1353,7 @@ impl Reader {
         }
         let id = self.utt_id();
         let u = present_change(new, ch, id, self.epoch.current(), None);
+        let shadow = self.shadow_change(&p.snap, new, &u, p.ctx);
         self.counters.state_changes_spoken += 1;
         self.log_presentation(&u, new, PresentSource::StateChange, None);
         self.presented = Some(Presented {
@@ -1329,6 +1365,10 @@ impl Reader {
             ctx: p.ctx,
         });
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+        // After the speech effect: the shadow is off the latency path.
+        if let (Some(h), Some(sample)) = (&self.present_shadow, shadow) {
+            h.offer_change(sample);
+        }
     }
 }
 
