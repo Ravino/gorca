@@ -4,9 +4,10 @@ package gorca:ext@0.10.0;
 // DRAFT (paper only, ADR-0026 r2 §2.3). Interfaces a plugin exports, and the worlds.
 //
 // Lanes (ADR-0026 §2.4): the host keeps up to two instances of a component per scope:
-//   W (writer lane): runs `rules.*` in the node writer's turn (app actor or document actor;
-//     placement decided by the C-3 bake-off, ADR-0026 §5) under a fuel grant and a wall-clock
-//     check. Reads the observed view only.
+//   W (writer lane): runs `rules.*` as a plugin actor on the plugin thread pool (ADR-0026 r3
+//     §2.4.6, design target B'; the fallback runs it inline in the node writer's turn, which the
+//     guest cannot observe) under a fuel grant and a wall-clock check. Reads the observed view
+//     only (an immutable snapshot at the call's turn).
 //   R (reader lane): runs `commands.*`, `reactor.*`, `site-hooks.*` on the extension worker,
 //     and `present.*` inline on the Reader. Reads published fused values.
 // The two instances share no memory; they communicate only through the model (facts the W

@@ -94,6 +94,8 @@ latest; memory 32 MiB per instance (exists).
 
 ### 2.5 Lifecycle
 
+> r3 pointer (ADR-0027): the precompiled `.cwasm` cache is keyed by package hash + `Engine::precompile_compatibility_hash()` (includes host ISA flags); packages ship `.wasm` only.
+
 Package states `Discovered → Installed{enabled} → Active`, with `Rejected`, `Staged{next, prev}`,
 `Quarantined{reason}` and `PendingRemoval`; transition table in report §4.6. Key rules:
 updates are staged (validated and precompiled while the old version runs) and swapped at a switch

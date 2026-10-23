@@ -1,6 +1,8 @@
 # ADR-0026: WASM plugin model on the fused semantic model (M18a)
 
-Status: **Proposed** (r2, 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
+Status: **Proposed** (r3, 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
+r3 follows the owner decision of 2026-10-24 (canonical actor model: plugins are actors, **B' is the design
+target**, §2.4.6, §5) and records QP-1..QP-5 as confirmed (§6).
 Refines: ADR-0019 (extension platform: lifecycle, versioning V-1..V-8, packaging). ADR-0019 stays the
 umbrella for packaging, lifecycle states and versioning; this ADR **supersedes** its §2.2 world table,
 its `mirror`/`effects` interface sketch, its I-1 budget and its C-1 question (ADR-0019 carries
@@ -217,16 +219,21 @@ across lanes; the MAC gives the unforgeability a resource would).
             app actor / doc actor (node writer, SM-8)                Reader / ext worker
  events -> coalescer -> S0 registers -> stamps[n][class] -> [trigger: reverse index + watch prefilter]
                                          |                     -> W instance.derive -> facts buffer
-                                         +-- admit (gorca-fact-api) <---+  (same writer turn, PF-7)
+                                         +-- admit (gorca-fact-api) <---+  (token check, PF-7; same turn or later)
                                          v
                                    FUSE S-1..R -> publish SemEntry ---------> R instance: commands,
                                                                                reactor, present.edit
 ```
 
-- **Instances.** Per (plugin, scope) at most two instances of the same component: **W** (in the writer:
-  the app actor for K1, the document actor for K2; under arm B' of the C-3 bake-off, a dedicated
-  plugin thread per scope) and **R** (ext worker; `present.edit` inline on the Reader). They share no
-  memory; R learns what W knows only through the model. A `Store` is never shared between threads.
+This is the arm-A picture (W instance called inline). **The design target is B' (r3, §2.4.6):** the
+`W instance.derive` box is a message to the scope's plugin actor, the writer waits at most 0.3 ms on
+the interactive slice, and the reply is a message that enters at `admit` under the same token check.
+
+- **Instances.** Per (plugin, scope) at most two instances of the same component: **W** (a **plugin
+  actor** with its own mailbox, run on the plugin thread pool, §2.4.6; the fallback arm A runs it
+  inline in the writer: the app actor for K1, the document actor for K2) and **R** (ext worker;
+  `present.edit` inline on the Reader). They share no memory; R learns what W knows only through the
+  model. A `Store` is owned by exactly one actor and never shared between threads.
 - **Pre-load (review H-3e).** At daemon start and on enable, a background task reads every enabled
   plugin's `.cwasm` into memory and deserializes it **from the buffer** (`Component::deserialize`,
   never `deserialize_file`, which maps the file and page-faults code in on first execution), then
@@ -235,8 +242,8 @@ across lanes; the MAC gives the unforgeability a resource would).
   writer turn. A plugin whose `InstancePre` is not ready is skipped (fail-open) for that turn.
 - **Pool.** Pooling allocator: `total_component_instances = 512`, `total_core_instances = 2048`
   (≥ 4 × instances, spike §3), `max_memory_size` 32 MiB virtual per memory. Idle eviction: R after
-  10 min without a call, W when its scope closes. `.cwasm` cache keyed by package hash + wasmtime
-  version + engine config (ADR-0019 §2.5).
+  10 min without a call, W when its scope closes. `.cwasm` cache keyed by package hash + `Engine::precompile_compatibility_hash()` (wasmtime version,
+  compiler flags, **host ISA flags**, features, tunables; ADR-0027, ADR-0019 §2.5).
 - **Attach (review H-3c, math §2.3).** `attach` runs eagerly when the scope attaches, on the writer's
   background lane under the B-1 grant, never on the interactive slice; it is followed by one `derive`
   of every currently watched node (a plugin whose read set never changes would otherwise never run).
@@ -308,6 +315,100 @@ differ between runs; the *final* model cannot: with PF-1..PF-4 and PF-7, once pr
 quiescent the published model equals `Full(S0)` (every plugin called once on the final S0, fused),
 whatever the batching and call order (math Theorem P; 0 mismatches in 12,000 randomized runs).
 
+#### 2.4.6 The plugin actor: B' as the design target (r3; owner decision 2026-10-24)
+
+The owner follows the canonical actor model: a plugin is an actor with a mailbox, it talks to the
+writer only by messages, and as many plugins as there are cores run in parallel. Arm A (inline
+`derive` in the writer) is the **fallback**, not the baseline.
+
+```rust
+// Writer -> plugin actor (bounded mailbox: 1 job running + 1 coalesced pending dirty set)
+enum PluginMsg {
+    Derive(DeriveJob),          // { job_id, slot_epoch, t, interactive, rows: Arc<FrozenRows>,
+                                //   grant: FuelGrant, deadline: Instant }
+    Cancel { job_id },          // superseded or scope closing; cooperative (checked at every import)
+    Shutdown,
+}
+// Plugin actor -> writer actor (the writer's own mailbox, never a shared structure)
+enum PluginReply {
+    Done  { job_id, slot_epoch, token: Token /*(t,R,M,g), host-minted*/, facts: Facts, taint: TaintBits,
+            exec: Duration, queued: Duration, fuel_used: u64 },
+    Fault { job_id, slot_epoch, kind: FaultKind, exec: Duration },
+    Cancelled { job_id, slot_epoch },       // not a fault, no strike
+}
+```
+
+- **Ownership.** The writer (app or document actor) owns the `Slot` (§2.5.4), the clock `T`, the stamps
+  and admission. The plugin actor owns its `Store`/`Instance`, the frozen view and the per-call token
+  under construction. Nothing is shared mutably; the only shared data is the immutable `FrozenRows`.
+- **Plugin thread pool.** Plugin actors run on a dedicated pool of OS threads (not tokio workers: a
+  guest call is CPU-bound and only fuel stops it). Size `T = max(2, cores - 2)`, to be set by the
+  M18a-0 numbers; an actor prefers the thread it last ran on (warm cache) and the pool prefers idle
+  threads. R-lane work keeps its existing ext worker.
+- **Interactive handoff.** On a focus change the writer (1) recomputes S0 and bumps `T`, (2) builds one
+  `FrozenRows` per plugin batch (the batch rows plus the immutable snapshot of S0 reachable within the
+  import bounds, taken **after** step 1 so the token's `t` is the snapshot turn), (3) sends
+  `Derive{interactive}` to every plugin actor in the focus chain at once (parallel), (4) waits for the
+  replies on **one shared deadline `D = send time + 0.3 ms`** (a futex/park with timeout, spinning
+  first for about 10 µs), (5) fuses and publishes with the facts that arrived and the rest missing,
+  (6) late `Done` messages are admitted in the writer's later turns and trigger the LB-4 refine. The
+  wait is the **only** blocking call in a writer and is bounded by B-2 by construction (an explicit,
+  documented exception to "actors never block": a timer-wheel await has about 1 ms granularity and
+  cannot express 0.3 ms). The wake cost (about 5-20 µs, to be measured) is charged inside the 0.3 ms.
+- **Background slice.** No wait at all: `Derive{interactive: false}` is sent and the reply is admitted
+  when it arrives. This is the only path for batches over 16 nodes and for attach/removed.
+- **Backpressure and coalescing.** At most one job running and one pending dirty set per plugin actor
+  (latest cause wins per node, §2.4.1). If a new interactive batch finds the actor busy (previous job
+  not finished), the writer does **not** wait for that plugin: it merges the nodes into the pending set
+  (they run next, background class), counts `pa_busy`, and publishes without its facts (fail-open).
+  A superseded running job is sent `Cancel`: the next import traps with `Cancelled` (free in the strike
+  rules); a pure-compute loop is stopped by fuel as before.
+- **Fuel grants under parallelism.** Grants stay as in §2.4.2 (progressive filling with `P = κ_int·(B -
+  n·c_max)`), which is the **serial-equivalent bound**: even if all n jobs ran on one thread they would
+  fit in B-2. This is conservative; with free threads the true bound is the shared deadline `D`. A
+  tighter grant for the parallel case (`a_k` up to the cap whenever `n` is at most the idle pool
+  threads, progressive filling over `T` threads otherwise) is **MQ-4** for the math researcher and
+  WQ-6 for the bake-off; the serial-equivalent rule applies until MQ-4 is proved.
+- **Wall accounting** (§2.5.2) is measured on the plugin thread around the guest call (`exec`); the
+  mailbox delay (`queued`) is a separate metric and never an overrun. The writer's wait is bounded by
+  `D` regardless of the guest.
+- **Slot machine under messages (delta to §2.5.4).** `Ready` gains `busy: Option<JobId>` and the slot
+  an incarnation counter `slot_epoch` (bumped on every transition out of `Ready`, on package swap and
+  on scope close). The events "call ok", "fault" and "wall overrun" are the corresponding
+  `PluginReply` messages processed by the writer; a reply whose `slot_epoch` differs from the slot's is
+  **dropped and counted** (its facts are never admitted; it cannot revive a `Backoff`/`Disabled` slot
+  or re-open a closed scope). "Call needed" while `busy` = coalesce into the pending set. Every cell of
+  the §2.5.4 table stays as written; the new cells ("stale reply" per state, "call needed while busy")
+  are tested with the same exhaustive harness (M18a-2).
+- **Plugin-actor faults that are not guest faults** (host panic in the actor, a closed reply channel, no
+  heartbeat for 10 × the longest grant): the supervisor drops the actor, records a strike (`kind =
+  ActorLost`) and spawns a replacement from `Cold`; a wedged thread is detached (it holds no writer
+  state; imports are non-blocking host calls on immutable data) and the pool grows by one up to a hard
+  cap, after which the slot is `Disabled`.
+- **Shutdown and scope close.** `Shutdown` is sent; the writer does not wait; the actor drops its
+  `Store` after the current call ends (bounded by fuel).
+- **One result path.** Arm A would deliver `Done` synchronously inside the same turn; the admission
+  code is the same function in both arms, so the fallback is a different *runner* (`InlineRunner` vs
+  `ActorRunner` behind one `WLaneRunner` trait), not a different model.
+
+**Restrictions PF-1..PF-8 under asynchronous delivery (re-checked for r3; none is relaxed).**
+
+| Rule | Holds under B' because | Extra test |
+|---|---|---|
+| PF-1 view-functional S1 | the call's view is the immutable `FrozenRows` at turn `t`; the result is a function of it, wherever and whenever it runs | differential: B' result equals A result on the same view (bit-equal facts) |
+| PF-2 S0-only views, structure included | the plugin thread has no access to fused entries at all (only frozen S0 rows are reachable), so the rule is enforced structurally, not by convention | A7 (patches matching each other's selectors) under B' |
+| PF-3 plugin facts never enter S0 | admission stays on the writer through `gorca-fact-api`; the actor cannot write any register | existing |
+| PF-4 trigger rule | a late `Done` is a message handled by admission and enqueues no job; only stamp changes, TTL, attach and epoch do (§2.4.1) | A12 (self-trigger) with deliberately delayed replies: still 1 call per real change |
+| PF-5 taint-clean derivation | taint bits are computed by the host while serving imports on the actor (from the provenance on the frozen rows) and travel in `Done`; the guest cannot set them; admission re-checks tier against taint on the writer | T3 taint test with deferred admission |
+| PF-6 total S1 rank | CR-2 ranks by (tier, specificity, id, anchor key), never by arrival order, and `FUSE` is a pure function of the admitted set, so a late arrival cannot change the winner, only when it appears | permutation test: all arrival orders of 3 plugins' replies give the same fused entry |
+| PF-7 token fixes the basis | exactly the case it was written for (§2.6.1): `t` is the snapshot turn, `g` the `BindGen` at the snapshot; stale iff some `n ∈ R, c ∈ M` has `stamp > t` or the `BindGen` changed; `slot_epoch` additionally rejects replies of a dead incarnation | MQ-2 replay corpus with randomized delivery delay: 0 false accepts |
+| PF-8 interactive budget | the writer's added delay is at most `D` (0.3 ms) by the bounded wait; per-plugin grants are the serial-equivalent progressive filling (§2.4.2) until MQ-4 | PX-4 A1-A6 on B', stall max reported |
+
+Determinism (§2.4.5) is unchanged: once primary inputs are quiescent, every reply is admitted or
+rejected by the token, the re-derivations caused by rejections run on the final S0, and the final
+model equals `Full(S0)`. Only the *first utterance* depends on the race between the plugin and the
+0.3 ms deadline, which is what the "facts at first utterance" gate measures.
+
 ### 2.5 Performance and safety
 
 #### 2.5.1 Budgets (provisional; frozen only after WQ-1..WQ-3 in M18a-0)
@@ -335,8 +436,9 @@ units, 0.3 ms ≈ 6.5 M units, 1 ms ≈ 21.7 M units. Normative calibration:
 | B-8 | host imports | each import **pre-charges** fuel for its estimated work before doing it (e.g. `subtree` 1 unit per node + per byte/16) and traps without doing the work when the grant cannot cover it | — | runs out like guest code; δ = 0 in the bound |
 | B-9 | argument and result sizes | caps of §2.5.3, checked **before** any copy or UTF-8 validation | — | effect dropped / call rejected, malformed-effect fault |
 
-Budget fit: keypress → speech p99 < 15 ms gorca-side; under arm A, B-2 + B-3 add at most 0.6 ms for
-plugins whose rate is at least κ_int, typically < 10 µs. Under memory-bound adversarial code the
+Budget fit: keypress → speech p99 < 15 ms gorca-side; under B' the writer adds at most the wait
+`D` = 0.3 ms (plus B-3 on the Reader); under arm A at most 0.6 ms for plugins whose rate is at least
+κ_int; typically < 10 µs either way. Under memory-bound adversarial code the
 bound is ρ-dependent (math §4.5: ρ = 3 → ≈ 0.86 ms) until the wall-clock rules demote the plugin;
 this is exactly what the C-3 bake-off measures (§5). 10k events/s: with the prefilter only matched
 nodes reach a plugin; even if all 10k nodes/s match, batches of 64 make ≈ 160 calls/s × ~2–8 µs of
@@ -360,8 +462,8 @@ marshalling ≈ 1 ms/s, plus guest work bounded by B-1.
 - **Host watchdog inside imports**: every 64th import checks the wall clock and traps the call when it
   exceeds 4 × its grant time (catches long import chains early; does not tighten the bound for pure
   compute loops, math §4.2).
-- Arm B' (if the bake-off picks it) bounds the writer's wait by wall clock regardless of all the
-  above; the per-plugin accounting stays the same on the plugin thread.
+- Under B' (the design target) the writer's wait is bounded by wall clock (the shared deadline `D`,
+  §2.4.6) regardless of all the above; the per-plugin accounting is the same, run on the plugin thread.
 
 #### 2.5.3 Size caps before copy (review H-3d)
 
@@ -628,9 +730,9 @@ Gate before M18a-0: **M22b1 merged** (presenter reads only fused entries) and th
 
 | Slice | Content | Acceptance | Benchmarks |
 |---|---|---|---|
-| **M18a-0** | **C-3 bake-off** A vs B' (§5) on a minimal host; WQ-1..WQ-3 measured; H-3 probes (PX-4 adversarial set); κ_int/κ_bg table per core class; lazy-parameter bindgen check (§2.5.3) | reviewer verdict on the measured numbers; budgets B-1..B-9 frozen in the exit report; decision row | PX-4, PX-6 (on the bake-off fixture), WQ-1..3 |
+| **M18a-0** | **C-3 bake-off**: measures A against B' to **confirm B'** (§5, confirmation rule); WQ-1..WQ-3 and WQ-6 measured; H-3 probes (PX-4 adversarial set); κ_int/κ_bg table per core class; lazy-parameter bindgen check (§2.5.3) | reviewer verdict on the measured numbers; budgets B-1..B-9 frozen in the exit report; decision row | PX-4, PX-6 (on the bake-off fixture), WQ-1..3 |
 | M18a-1 | WIT 0.10 freeze from `wit/gorca-ext-0.10/` into `gorca-ext-api` (beside 0.3), generated registries, golden empty components | host + guest bindgen compile; registry equality test (L-1); a component built for 0.10.0 links against 0.10.1 with an added import | — |
-| M18a-2 | Runtime: pre-load, pool, `.cwasm` cache, W/R slots, `Slot`/`SlotState` table, fuel grants + import pre-charging + watchdog, wall accounting + overrun strikes, size caps, handle MAC, limiter, `SourceState` link | exhaustive `SlotState` tests (every cell of §2.5.4); PX-4 full adversarial set A1..A13 passes its gates | PX-1..PX-5 |
+| M18a-2 | Runtime: pre-load, pool, `.cwasm` cache (keyed by `precompile_compatibility_hash`), W/R slots, plugin actor + `WLaneRunner` (B', §2.4.6; inline runner as fallback), `Slot`/`SlotState` table, fuel grants + import pre-charging + watchdog, wall accounting + overrun strikes, size caps, handle MAC, limiter, `SourceState` link | exhaustive `SlotState` tests (every cell of §2.5.4, plus the stale-reply and busy cells of §2.4.6); PX-4 full adversarial set A1..A13 passes its gates | PX-1..PX-5 |
 | M18a-3 | K0: manifest v2, add-on profile rows (L3/L4), selectors + declarative patches (tier → S1/S4), categories, watch prefilter, KB-1..KB-4 load checks; **P-0 system-scopes**, **P-1 vscode**; `web-apps.toml` deleted | vscode parity e2e; safe-mode row test; T3 patch hedged test; SS denial tests (a T3 matcher on the polkit and Shell dialog fixtures matches nothing) | XP-8 (≤ 100 ns/node), B-FUSE with 100 patches unchanged |
 | M18a-4 | W lane: `rules`, `facts`, revision token and stamps (§2.6.1), trigger rule, W-lane requests (§2.4.4), PF-5 taint bit, progressive filling, admission via `gorca-fact-api`, masking on fault; **P-2 signal-desktop** (shadow → switch) | Signal private-session e2e: message rows read author/text/time at first focus; F-test with two plugins whose patches would match each other's selectors (H-4): no oscillation; self-trigger test: 1 call per real change; PF-1 differential test | PX-6, PX-7 |
 | M18a-5 | R lane: `commands`, `output` (content utterances through render, T3 attribution), `actions` (AC-3/AC-4), `settings`, `timers`, `requests`/`reactor`, `site` world + `route-changed`; **P-3 telegram-web** A and K. **Gate: M22b1 + M22b2 + M22b3 merged** (browse, quick nav and review on `Semantics`; review M-5) | M8-TG/M8-TGL re-based on mock A and K pages; capability denial tests per permission and per KB rule (a T3 keymap binding `a` or `Enter` is refused) | PX-8 |
@@ -668,7 +770,7 @@ its own target every call (self-trigger); A13 a loop of `subtree(max)` imports.
 | Alternative | Why not |
 |---|---|
 | A. Keep ADR-0019's `mirror` + `present`/`policy` verdicts as the main path | builds on raw mirror data and legacy speech; fixes one surface at a time; owner rule forbids it |
-| B. Fact rules as async `FactPort` producers via `spawn_blocking` | a hop costs 5–14 µs p50 / 0.19 ms p99 and the first utterance misses the fact; superseded as a bake-off arm by **B'** (dedicated plugin thread, bounded wait, §5), which is the real alternative (review §3) |
+| B. Fact rules as async `FactPort` producers via `spawn_blocking` | a hop costs 5–14 µs p50 / 0.19 ms p99 and the first utterance misses the fact; superseded as a bake-off arm by **B'** (dedicated plugin actor, bounded wait, §2.4.6), which r3 makes the **design target** (owner, 2026-10-24) |
 | C. One instance per plugin, shared by all actors (behind a mutex) | contention between app actors and the Reader; one slow call stalls every app; violates "one actor per application" isolation |
 | D. W-lane reads or selectors on fused entries | feedback loops between plugins, order-dependent results, oscillation (math C-2); breaks ADR-0022 A4 |
 | E. Fuel + epoch (current `gorca-ext-host`) | 34–36 % compute penalty; epoch granularity coarser than our budgets; it checks at the same points as fuel and does not catch faults, misses or lifting; wall accounting does the useful part (C-2) |
@@ -691,8 +793,10 @@ its own target every call (self-trigger); A13 a loop of `subtree(max)` imports.
 - App names disappear from core code and product rows (lint).
 - Plugin authors write against a small, typed, backend-neutral API; behaviour is explainable
   (`explain` names plugin, layer, tier, binding, basis, taint).
-- Costs: a writer turn may spend up to 0.3 ms on plugins at focus (ρ-dependent until demotion under
-  arm A); the W/R split forbids shared plugin memory; a plugin needing private-state-dependent output
+- Costs: a writer turn waits up to 0.3 ms for plugins at focus (the shared deadline under B'; under the
+  fallback arm A it computes for up to that long, ρ-dependent until demotion); the first utterance may
+  lack a plugin's facts when the plugin loses the race (accepted, ≥ 97 % gate) and the refine arrives
+  by LB-4; a plugin thread pool and per-job `FrozenRows` snapshots exist; the W/R split forbids shared plugin memory; a plugin needing private-state-dependent output
   can only produce S4; T3 plugins have a narrower key space (gorca-modifier chords only) and attributed
   unprompted speech.
 - ADR-0019 §2.2, the `mirror`/`effects` sketch, I-1 and C-1 are superseded here (ADR-0019 points to
@@ -703,40 +807,51 @@ its own target every call (self-trigger); A13 a loop of `subtree(max)` imports.
 
 - **C-2 fuel-only engine + wall accounting vs fuel + epoch.** Decided fuel-only on the engine plus wall
   accounting (§2.5.2), medium-high confidence; validated by PX-4/PX-5. No bake-off unless PX-4 fails.
-- **C-3 synchronous W-lane `derive` (arm A) vs dedicated plugin thread with a bounded wait (arm B').
-  Not decided.** Proposal: A. Bake-off = slice **M18a-0**, the gate for every later slice.
-  - **Arm A**: `derive` inside the writer turn, with all of §2.5 (progressive filling, κ_int, wall
-    accounting, size caps, pre-load).
-  - **Arm B'**: the scope's W instance on a dedicated plugin thread; the writer hands over the
-    interactive batch with a frozen view (the batch rows plus an immutable snapshot of the scope's S0
-    reachable within the import bounds) and waits on a futex **at most 0.3 ms wall**; on timeout it
-    publishes without the facts and admits late facts next turn under the PF-7 staleness rule
-    (refine via LB-4). Cost: one cross-thread wake (≈ 5–20 µs, to be measured) and the snapshot.
+- **C-3 plugin placement: dedicated plugin actor with a bounded wait (B') vs synchronous `derive` in the
+  owner actor (A). Decided by the owner on 2026-10-24: B' is the design target; A is the fallback.**
+  The bake-off (slice **M18a-0**, the gate for every later slice) still runs both arms, but its job is
+  now to **confirm that B' meets the budgets**, not to choose between equals.
+  - **Arm B' (target)**: §2.4.6. The writer hands the interactive batch to the plugin actors with a
+    frozen view and waits on the shared deadline `D` = 0.3 ms wall; on timeout it publishes without the
+    facts and admits the late facts under the PF-7 token check (refine via LB-4). Cost: one cross-thread
+    wake (about 5-20 µs, to be measured) and the snapshot.
+  - **Arm A (fallback, kept as a measured reference)**: `derive` inside the writer turn, with all of
+    §2.5 (progressive filling, κ_int, wall accounting, size caps, pre-load).
   - Fixture: Signal private session, P-2 + 9 benign dummies, then the PX-4 adversarial set A1..A6 and
     A13 added one at a time and all together. Host conditions per `bench/b1/quiet-host.sh`, labelled.
   - Criteria (reviewer judges on the measured numbers): (1) writer-turn stall per focus change, p99
     and max, benign and adversarial; (2) facts at first utterance, overall and per plugin; (3) Δp99
     keypress → speech vs no plugins; (4) PX-7 background throughput; (5) writer-integration code size
-    and `unsafe` count.
-  - Decision rule: pick **A** iff adversarial stall p99 ≤ 0.45 ms and max ≤ 1 ms per occurrence (with
-    demotion active), benign Δp99 ≤ 0.3 ms and benign facts-at-first-utterance ≥ 99 %. Else pick
-    **B'** if its stall max ≤ 0.35 ms and facts at first utterance ≥ 97 %. If neither passes, run
-    arm **C**: A for T2, B' for T3, and reopen.
+    and `unsafe` count; (6) **B' only**: reply delay distribution (queued, exec), `pa_busy` rate,
+    pool-size sensitivity (T = 2, 4, cores - 2), and the arrival-order test of PF-6.
+  - **Confirmation rule (r3).** B' is **confirmed** iff: stall max ≤ 0.35 ms and p99 ≤ 0.31 ms per
+    focus change (benign and adversarial, with demotion active), benign Δp99 ≤ 0.3 ms, facts at first
+    utterance ≥ 97 % overall and ≥ 90 % for every plugin, PX-7 ingress lag unchanged, and 0 false
+    accepts in the randomized-delay MQ-2 replay. A's numbers are reported for the record and **do not by
+    themselves overturn B'** (A being faster on a gate B' also passes is not a reason to switch).
+  - **If B' is not confirmed** the reviewer reports which gate failed and why; the fallback needs a new
+    owner decision row. Candidates, in order: (i) tune B' (pool size, spin time, grant rule MQ-4) and
+    rerun the failed gate; (ii) arm A if it passes its former rule (adversarial stall p99 ≤ 0.45 ms and
+    max ≤ 1 ms with demotion, benign Δp99 ≤ 0.3 ms, facts at first utterance ≥ 99 %); (iii) arm C: A
+    for T2 (first-party) and B' for T3.
   - Budget numbers (B-1..B-9, κ table) are frozen in the M18a-0 exit report, after WQ-1..WQ-3.
 
 ## 6. Open questions
 
-Owner (recommended defaults by the orchestrator, **pending owner confirmation**):
-- **QP-1** One `telegram-web` plugin with two site profiles (A, K): yes.
-- **QP-2** Safe mode keeps first-party data rows (profile rows) but runs no plugin code: yes.
-- **QP-3** Third-party facts, declarative patches and `hide` are hedged/advisory until the user marks
-  the plugin trusted (spoken warning), which allows S1: yes.
-- **QP-4** First-party plugins are files under `/usr/lib/gorca/addons/` pinned by an sha256 list
-  compiled into the daemon: yes.
-- **QP-5** `pointer-click` first-party only: yes.
+Owner decisions, **CONFIRMED by the owner on 2026-10-24 with the defaults unchanged**
+(`docs/decisions.md`, row of that date):
+- **QP-1 (CONFIRMED)** One `telegram-web` plugin with two site profiles (A, K): yes.
+- **QP-2 (CONFIRMED)** Safe mode keeps first-party data rows (profile rows) but runs no plugin code: yes.
+- **QP-3 (CONFIRMED)** Third-party facts, declarative patches and `hide` are hedged/advisory until the
+  user marks the plugin trusted (spoken warning), which allows S1: yes.
+- **QP-4 (CONFIRMED)** First-party plugins are files under `/usr/lib/gorca/addons/` pinned by an sha256
+  list compiled into the daemon: yes.
+- **QP-5 (CONFIRMED)** `pointer-click` first-party only: yes.
 
 Math: MQ-1..MQ-3 answered (`docs/reports/plugin-fusion-math.md`), adopted as §2.4.1, §2.4.2, §2.6.1,
-§2.6.2. Remaining: ρ across shapes and cores is unmeasured (WQ-2); the 6-class partition must match
+§2.6.2. New in r3: **MQ-4**, the tightest provable grant rule when the n interactive jobs run in
+parallel on T pool threads under one shared deadline (serial-equivalent progressive filling is the
+safe default until it is proved; §2.4.6). Remaining: ρ across shapes and cores is unmeasured (WQ-2); the 6-class partition must match
 the final `read-*` permissions; relations and positions are assumed to behave like the S3 name edge.
 
 WASM engineer (M18a-0 unless noted):
@@ -748,6 +863,10 @@ WASM engineer (M18a-0 unless noted):
 - **WQ-4** (M18a-2) `memory_growing` denial: clean trap path and rebuild cost with 16 MiB touched.
 - **WQ-5** (M18a-2) RSS of a W/R instance pair of one component (shared code); resident code after
   buffer deserialize under memory pressure; whether `mlock` is needed.
+- **WQ-6** (M18a-0, r3) B' mechanics: wake latency p50/p99/max of the writer → plugin actor → reply
+  round trip (spin vs park, pool size T, P/E cores, loaded host); cost of building `FrozenRows` per
+  focus change (eager snapshot vs a lazy variant where an import that reads a node with `stamp > t`
+  flags the call stale); the parallel grant rule per MQ-4.
 
 ## 7. Invariants (summary)
 
@@ -755,6 +874,9 @@ WASM engineer (M18a-0 unless noted):
 - I-P2 Plugin facts never enter S0; admission never triggers `derive`.
 - I-P3 Every guest call has a fuel grant and a wall measurement; no file read, deserialize or compile
   runs on a writer turn.
+- I-P8 (r3) The only blocking call a writer makes for a plugin is the interactive wait, bounded by the
+  shared deadline `D` = B-2 = 0.3 ms; plugin results are messages; a reply is admitted only after the
+  token check and only if its `slot_epoch` is current; a plugin actor never touches writer state.
 - I-P4 No host import copies a guest string or list before checking its cap.
 - I-P5 No T3 output is plain author intent (S1) or unattributed unprompted speech unless trusted /
   inside its command; no T3 code touches a system scope; no T3 binding exists without the gorca
@@ -763,6 +885,18 @@ WASM engineer (M18a-0 unless noted):
 - I-P7 Slot state transitions are exactly §2.5.4; every cell is tested.
 
 ## 8. Changelog
+
+**r3 (2026-10-24)** — owner decisions of 2026-10-24 (`docs/decisions.md`). No change to the fact model;
+one runtime-placement change and one confirmation.
+
+| Source | Change |
+|---|---|
+| Owner: canonical actor model (C-3) | plugins are actors with mailboxes; **B' is the design target**, synchronous `derive` in the owner actor (A) is the fallback. New §2.4.6 (messages, ownership, plugin thread pool, shared deadline `D` = 0.3 ms, backpressure, cancel, actor-lost fault, slot machine delta with `slot_epoch`, `WLaneRunner` trait). Also the §2.4 diagram note and Instances bullet, §2.5.1 budget fit, §2.5.2, §3 alt. B, §4 costs, §2.9 M18a-0/M18a-2 rows, invariant I-P8 |
+| C-3 / §5 | bake-off kept, goal changed to **confirm B'**: confirmation rule with numeric gates, A reported for the record, fallback order (tune B', A, arm C) needing a new owner row; criterion (6), WQ-6 and MQ-4 added |
+| PF-1..PF-8 re-check | all eight kept verbatim and verified under asynchronous delivery (table in §2.4.6); the MQ-2 token already fixes the basis at call time, so late replies need no new staleness mechanism; PF-8 uses the serial-equivalent grants until MQ-4; a test per rule |
+| QP-1..QP-5 | **CONFIRMED by the owner, defaults unchanged** (§6) |
+| WIT | **no change to any interface or type** (`gorca:ext@0.10.0` stays). The guest cannot tell whether `derive` runs inline or on an actor; the frozen view is host-side. Only the lane comment in `plugin.wit` was reworded |
+| `.cwasm` cache | key is now `Engine::precompile_compatibility_hash()` (covers triple, compiler flags, ISA flags, features, tunables, module version; read in `refs/wasmtime/crates/wasmtime/src/compile/code_builder.rs`); see ADR-0027 |
 
 **r2 (2026-10-23)** — folds in `docs/reports/adr-0026-review.md` and `docs/reports/plugin-fusion-math.md`.
 
