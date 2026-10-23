@@ -6,6 +6,8 @@ mod deps;
 mod entryrule;
 mod envrule;
 mod ext;
+mod hostfeature;
+mod legacyrule;
 mod strings;
 
 use std::process::ExitCode;
@@ -13,19 +15,43 @@ use std::process::ExitCode;
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
-        Some("deps") => match (
-            deps::run(),
-            envrule::run(),
-            entryrule::run(),
-            strings::run(false),
-        ) {
-            (Ok(true), Ok(true), Ok(true), Ok(true)) => ExitCode::SUCCESS,
-            (Ok(_), Ok(_), Ok(_), Ok(_)) => ExitCode::FAILURE,
-            (Err(e), ..) | (_, Err(e), ..) | (_, _, Err(e), _) | (_, _, _, Err(e)) => {
-                eprintln!("xtask deps: {e:#}");
-                ExitCode::from(2)
+        Some("deps") => {
+            let results = [
+                deps::run(),
+                envrule::run(),
+                entryrule::run(),
+                strings::run(false),
+                legacyrule::run(false),
+                hostfeature::run(),
+            ];
+            let mut ok = true;
+            for r in results {
+                match r {
+                    Ok(true) => {}
+                    Ok(false) => ok = false,
+                    Err(e) => {
+                        eprintln!("xtask deps: {e:#}");
+                        return ExitCode::from(2);
+                    }
+                }
             }
-        },
+            if ok {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            }
+        }
+        Some("legacy") => {
+            let print = args.next().as_deref() == Some("--print");
+            match (legacyrule::run(print), hostfeature::run()) {
+                (Ok(true), Ok(true)) => ExitCode::SUCCESS,
+                (Ok(_), Ok(_)) => ExitCode::FAILURE,
+                (Err(e), _) | (_, Err(e)) => {
+                    eprintln!("xtask legacy: {e:#}");
+                    ExitCode::from(2)
+                }
+            }
+        }
         Some("strings") => match strings::run(args.next().as_deref() == Some("--update")) {
             Ok(true) => ExitCode::SUCCESS,
             Ok(false) => ExitCode::FAILURE,
@@ -44,12 +70,14 @@ fn main() -> ExitCode {
         },
         Some(other) => {
             eprintln!(
-                "unknown xtask command `{other}`\n\nusage: cargo xtask deps | strings [--update] | build-ext [--dest DIR]"
+                "unknown xtask command `{other}`\n\nusage: cargo xtask deps | legacy [--print] | strings [--update] | build-ext [--dest DIR]"
             );
             ExitCode::from(2)
         }
         None => {
-            eprintln!("usage: cargo xtask deps | strings [--update] | build-ext [--dest DIR]");
+            eprintln!(
+                "usage: cargo xtask deps | legacy [--print] | strings [--update] | build-ext [--dest DIR]"
+            );
             ExitCode::from(2)
         }
     }
