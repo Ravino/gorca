@@ -20,6 +20,9 @@
 //!   arguments, so speech and braille format separately.
 //! * **Add-on text is a catalog reference** (`Content::Ext { ns, key, args }`), resolved through the
 //!   extension catalog at render. A `U+001E` reference never reaches a `Text`.
+//! * **Host-only by type.** `ExtKinds`, `ExtNs` binding and `LangTags` exist only with the `host`
+//!   cargo feature, which only host crates (`gorca-present`) enable. The plugin API crate depends
+//!   on this crate without it, so a guest-facing build cannot even name them.
 //! * **Add-on field kinds are host-allocated** per (namespace, name) by [`ExtKinds`]; a guest never
 //!   picks a raw code.
 //! * **Reserved bits** of `FieldFlags`/`IrFlags` are zero and preserved by editors.
@@ -29,6 +32,7 @@
 //! A `PresIr` is built by `compose` from one fused `SemEntry`, edited by hooks, deduplicated
 //! (PR-1) and only then rendered into tokens. `render` is the only producer of text.
 
+#[cfg(feature = "host")]
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -193,6 +197,7 @@ impl ExtNs {
 /// Host-side allocator of add-on `FieldKind` codes, one per (namespace, name). Idempotent; codes
 /// are stable for the process lifetime. A guest names a kind; it never picks the number, and each
 /// namespace has a quota so one add-on cannot use up the range.
+#[cfg(feature = "host")]
 #[derive(Debug, Default)]
 pub struct ExtKinds {
     by_name: HashMap<(Arc<str>, Arc<str>), FieldKind>,
@@ -200,6 +205,7 @@ pub struct ExtKinds {
     next: u16,
 }
 
+#[cfg(feature = "host")]
 impl ExtKinds {
     /// Longest namespace or name.
     pub const MAX_NAME: usize = 64;
@@ -286,11 +292,13 @@ impl Origin {
 pub struct LangId(pub u16);
 
 /// Host-side interner of content-language tags.
+#[cfg(feature = "host")]
 #[derive(Debug, Default)]
 pub struct LangTags {
     tags: Vec<Arc<str>>,
 }
 
+#[cfg(feature = "host")]
 impl LangTags {
     /// Most distinct tags held (a hostile page cannot grow the table).
     pub const MAX_TAGS: usize = 1024;
@@ -687,6 +695,7 @@ mod tests {
         assert!(matches!(&c, Content::Msg { args, .. } if args[0].val == ArgVal::Num(3)));
     }
 
+    #[cfg(feature = "host")]
     #[test]
     fn add_on_field_kinds_are_host_allocated_per_bound_namespace() {
         let mut k = ExtKinds::new();
@@ -703,6 +712,7 @@ mod tests {
         assert_eq!(k.rows().len(), 2);
     }
 
+    #[cfg(feature = "host")]
     #[test]
     fn one_namespace_cannot_use_up_the_range() {
         let mut k = ExtKinds::new();
@@ -717,6 +727,7 @@ mod tests {
         assert!(k.alloc(&other, "x").is_ok());
     }
 
+    #[cfg(feature = "host")]
     #[test]
     fn a_content_language_is_an_interned_bcp47_tag_that_travels_as_a_string() {
         let mut t = LangTags::new();
@@ -874,7 +885,14 @@ mod tests {
         if cfg!(target_pointer_width = "64") {
             assert_eq!(std::mem::size_of::<Field>(), 56);
             assert_eq!(std::mem::size_of::<Content>(), 24);
+            assert_eq!(std::mem::size_of::<Arg>(), 40);
+            assert_eq!(std::mem::size_of::<ArgVal>(), 24);
         }
+        assert_eq!(std::mem::size_of::<FlatSpan>(), 8);
+        assert_eq!(std::mem::size_of::<LangId>(), 2);
+        assert_eq!(std::mem::size_of::<Origin>(), 8);
+        assert_eq!(std::mem::size_of::<FieldFlags>(), 2);
+        if cfg!(target_pointer_width = "64") {}
         assert_eq!(PRES_IR_VERSION, 1);
     }
 
