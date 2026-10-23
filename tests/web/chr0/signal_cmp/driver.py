@@ -343,6 +343,12 @@ SCENARIOS = {
     # the page focuses its first conversation button (?focus=grid) or the newest message (?focus=timeline)
     'list': [('settle', 'wait', 2.0), ('prime', 'key', 'Shift'), ('down1', 'key', 'Down'), ('down2', 'key', 'Down'), ('down3', 'key', 'Down'),
              ('up1', 'key', 'Up'), ('up2', 'key', 'Up'), ('flush', 'wait', 4.0)],
+    # Telegram Web A fixture (tests/web/telegram/a.html, SC_PAGE): Orca-vs-gorca on the owner's flow
+    'tg_list': [('settle', 'wait', 2.0), ('prime', 'key', 'Shift')] + [('down%d' % i, 'key', 'Down') for i in range(1, 9)]
+               + [('up%d' % i, 'key', 'Up') for i in range(1, 4)] + [('flush', 'wait', 3.0)],
+    'tg_chat': [('settle', 'wait', 2.0), ('prime', 'key', 'Shift'), ('tab1', 'key', 'Tab'), ('tab2', 'key', 'Tab'), ('tab3', 'key', 'Tab'),
+                ('enter', 'key', 'Return'), ('open', 'wait', 2.0), ('esc1', 'key', 'Escape')]
+               + [('up%d' % i, 'key', 'Up') for i in range(1, 7)] + [('flush', 'wait', 3.0)],
     'chat': [('settle', 'wait', 2.0), ('prime', 'key', 'Shift'), ('up1', 'key', 'Up'), ('up2', 'key', 'Up'), ('up3', 'key', 'Up'), ('up4', 'key', 'Up'),
              ('down1', 'key', 'Down'), ('down2', 'key', 'Down'), ('home', 'key', 'Home'), ('end', 'key', 'End'),
              ('tab', 'key', 'Tab'), ('enter', 'key', 'Return'), ('flush', 'wait', 4.0)],

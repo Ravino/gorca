@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Echo</title></head>
+<body>
+<!-- Typing-echo control page: which composer kinds echo a typed character twice? ?k=input|textarea|ce|cerole
+     (default ce = contenteditable div, no role; cerole = contenteditable div[role=textbox], as Telegram A/K). -->
+<main>
+<label for="c">Message</label>
+<div id="slot"></div>
+<p id="log">log</p>
+</main>
+<script>
+const k = new URLSearchParams(location.search).get("k") || "cerole";
+let e;
+if (k === "input") { e = document.createElement("input"); e.type = "text"; }
+else if (k === "textarea") { e = document.createElement("textarea"); }
+else { e = document.createElement("div"); e.contentEditable = "true"; e.tabIndex = 0; if (k === "cerole") e.setAttribute("role", "textbox"); e.style.minHeight = "24px"; e.style.border = "1px solid #888"; }
+e.id = "c";
+if (k !== "ce") e.setAttribute("aria-label", "Message");
+document.getElementById("slot").append(e);
+e.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); if (k === "input" || k === "textarea") e.value = ""; else e.textContent = ""; }
+});
+e.focus();
+</script>
+</body>
+</html>

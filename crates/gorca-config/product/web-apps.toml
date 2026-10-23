@@ -11,3 +11,10 @@ triggers = [{ app = { name = ["code", "visual studio code", "code - oss", "vscod
 
 [profile.values]
 browse.enabled = false
+
+# Proposed telegram-web rows (docs/reports/telegram-web-a-study.md, section 2b). NOT active: they need the
+# plugin watch/skip schema of ADR-0026, which the profile schema does not have yet.
+#   site web.telegram.org /a/* and /k/*  (one plugin for both, owner QP-1)
+#   announce additions under .messages-container (A) / .bubbles-inner (K), coalesce floods
+#   skip avatar text (.Avatar, .dialog-avatar), say "N unread" for .ChatBadge / .dialog-subtitle-badge
+#   treat .Message (A) as a navigable message item
