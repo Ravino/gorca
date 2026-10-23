@@ -28,6 +28,8 @@ pub enum Seen {
     Repair,
     /// A repair request that may be answered by the cheap look (a guess).
     RepairCheap,
+    /// A rectangle request (label inference): the nodes asked for.
+    Extents(Vec<SrcNodeId>),
     Other,
 }
 
@@ -39,6 +41,9 @@ pub struct ScriptHandle {
     pub seen: mpsc::Receiver<Seen>,
     /// Ends the source with `Detached` (navigation, a dead browser).
     pub end: mpsc::Sender<()>,
+    /// The rectangles the source answers an `Extents` request with (a node absent from the map
+    /// has no box).
+    pub rects: Arc<Mutex<HashMap<SrcNodeId, gorca_model::Rect>>>,
 }
 
 /// A source driven by a [`ScriptHandle`].
@@ -47,6 +52,7 @@ pub struct ScriptedDocSource {
     batches: mpsc::Receiver<Vec<DocDelta>>,
     seen: mpsc::Sender<Seen>,
     end: mpsc::Receiver<()>,
+    rects: Arc<Mutex<HashMap<SrcNodeId, gorca_model::Rect>>>,
     fuse: Option<gorca_doc_source_api::FuseSetup>,
 }
 
@@ -55,17 +61,20 @@ impl ScriptedDocSource {
         let (batches_tx, batches) = mpsc::channel(64);
         let (seen, seen_rx) = mpsc::channel(256);
         let (end_tx, end) = mpsc::channel(1);
+        let rects = Arc::new(Mutex::new(HashMap::new()));
         (
             Self {
                 batches,
                 seen,
                 end,
+                rects: Arc::clone(&rects),
                 fuse: None,
             },
             ScriptHandle {
                 batches: batches_tx,
                 seen: seen_rx,
                 end: end_tx,
+                rects,
             },
         )
     }
@@ -107,6 +116,7 @@ impl DocSource for ScriptedDocSource {
                 mut batches,
                 seen,
                 mut end,
+                rects,
                 ..
             } = *self;
             let DocSourceCtx {
@@ -156,6 +166,14 @@ impl DocSource for ScriptedDocSource {
                             DocRequest::Revalidate { reply, .. } => {
                                 let _ = reply.send(Ok(smallvec::SmallVec::default()));
                                 Seen::Other
+                            }
+                            DocRequest::Extents { nodes, reply, .. } => {
+                                let out = {
+                                    let map = rects.lock().unwrap_or_else(PoisonError::into_inner);
+                                    nodes.iter().map(|n| map.get(n).copied()).collect()
+                                };
+                                let _ = reply.send(Ok(out));
+                                Seen::Extents(nodes.to_vec())
                             }
                             DocRequest::Prioritize { .. } | DocRequest::DriftCheck => Seen::Other,
                         };

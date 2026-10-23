@@ -1398,6 +1398,21 @@ fn exec_web(shared: &Shared, w: WebEffect) {
                 });
             }
         }
+        WebEffect::Label {
+            doc,
+            node,
+            role,
+            req,
+        } => {
+            if shared
+                .web
+                .docs
+                .get(doc)
+                .is_none_or(|h| h.ctl.try_send(DocCtl::Label { req, node, role }).is_err())
+            {
+                bump(&shared.web.counters.controls_dropped);
+            }
+        }
         WebEffect::Act { doc, node, act } => {
             if let Some(h) = shared.web.docs.get(doc)
                 && h.ctl.try_send(DocCtl::Act { node, act }).is_err()

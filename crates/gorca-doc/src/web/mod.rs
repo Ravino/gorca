@@ -22,6 +22,7 @@ pub mod cats;
 pub mod doc;
 pub mod error;
 pub mod flat;
+pub mod label;
 pub mod ops;
 pub mod publish;
 pub mod space;

@@ -26,6 +26,7 @@ web-unlabeled = unlabeled
 web-frame = frame
 web-article = article
 web-list-box = list box
+web-group = group
 web-cant-move-focus = can't move focus there
 web-loading = loading
 web-browse-unavailable = browse mode is not available

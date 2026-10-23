@@ -59,6 +59,9 @@ impl DocSource for FakeDocSource {
                             DocRequest::Repair { reply, .. } => {
                                 let _ = reply.send(Ok(gorca_doc_source_api::RepairReport::default()));
                             }
+                            DocRequest::Extents { nodes, reply, .. } => {
+                                let _ = reply.send(Ok(nodes.iter().map(|_| None).collect()));
+                            }
                             DocRequest::SetActivity(_)
                             | DocRequest::Rebuild
                             | DocRequest::Prioritize { .. }

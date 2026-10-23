@@ -1649,6 +1649,14 @@ impl AtspiDocSource {
                 }
                 let _ = reply.send(Ok(out));
             }
+            DocRequest::Extents {
+                nodes,
+                deadline,
+                reply,
+            } => {
+                let r = self.extents(live, &nodes, deadline).await;
+                let _ = reply.send(Ok(r));
+            }
             DocRequest::SetActivity(a) => {
                 let was = live.activity;
                 live.activity = a;
@@ -2273,6 +2281,53 @@ impl AtspiDocSource {
     }
 
     /// IR-4: a heuristic join is confirmed when the object still exists with the same role.
+    /// The screen rectangles of `nodes` (`Component.GetExtents`), one call each, in order and
+    /// never past `deadline`. A node that is unknown, whose call fails or whose box is negative
+    /// has `None`. Few nodes (a focus), so the calls are not spread over tasks.
+    async fn extents(
+        &self,
+        live: &Live,
+        nodes: &[SrcNodeId],
+        deadline: Deadline,
+    ) -> SmallVec<[Option<gorca_model::Rect>; 6]> {
+        let mut out = SmallVec::new();
+        for n in nodes {
+            out.push(self.extent(live, *n, deadline).await);
+        }
+        out
+    }
+
+    async fn extent(
+        &self,
+        live: &Live,
+        node: SrcNodeId,
+        deadline: Deadline,
+    ) -> Option<gorca_model::Rect> {
+        let path = live
+            .ident
+            .path_of(node)
+            .and_then(|p| live.paths.path_of(p))?;
+        let m = self
+            .app
+            .call(
+                self.app.next_lane(),
+                deadline,
+                &path,
+                COMPONENT,
+                "GetExtents",
+                &(0u32,),
+            )
+            .await
+            .ok()?;
+        let (x, y, w, h): (i32, i32, i32, i32) = m.body().deserialize().ok()?;
+        Some(gorca_model::Rect {
+            x,
+            y,
+            w: u32::try_from(w).ok()?,
+            h: u32::try_from(h).ok()?,
+        })
+    }
+
     async fn validate(&self, live: &Live, node: SrcNodeId, deadline: Deadline) -> bool {
         let Some(path) = live.ident.path_of(node).and_then(|p| live.paths.path_of(p)) else {
             return false;

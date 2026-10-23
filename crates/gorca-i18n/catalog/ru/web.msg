@@ -26,6 +26,7 @@ web-unlabeled = без подписи
 web-frame = фрейм
 web-article = статья
 web-list-box = список выбора
+web-group = группа
 web-cant-move-focus = не удаётся переместить фокус
 web-loading = загрузка
 web-browse-unavailable = режим просмотра недоступен

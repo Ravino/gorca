@@ -51,6 +51,14 @@ pub enum DocRequest {
         deadline: Deadline,
         reply: Reply<SmallVec<[SrcNodeId; 16]>>,
     },
+    /// The on-screen rectangles of nodes (layout, for label inference: M22a C3b). One entry per
+    /// node, in order; `None` for a node that is gone or has no box. Cheap (one call per node,
+    /// no tree walk) and only ever asked for a handful of nodes at a focus, never in bulk.
+    Extents {
+        nodes: SmallVec<[SrcNodeId; 6]>,
+        deadline: Deadline,
+        reply: Reply<SmallVec<[Option<gorca_model::Rect>; 6]>>,
+    },
     /// Awake or dormant (AM-4). Fire and forget: the effect shows in the deltas.
     SetActivity(Activity),
     /// Rebuild as resync: refetch the whole document, re-match it against the ids already issued

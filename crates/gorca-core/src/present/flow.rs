@@ -675,6 +675,7 @@ impl Reader {
                     self.window_hold(u, fx);
                 } else {
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+                    self.web_label_arm(snap, fx);
                 }
                 fx.push(ReaderEffect::FocusSettled { node: snap.key });
                 self.name_retry_arm(snap, epoch, fx);
@@ -918,6 +919,100 @@ impl Reader {
             snap: merged,
             utt: id,
             epoch: p.epoch,
+            at: self.now,
+            ctx: p.ctx,
+        });
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+    }
+
+    /// A web control spoken without a name, of a kind Orca infers a label for, asks its document
+    /// for one (C3b): the text next to it, picked by layout, with a deadline. The answer
+    /// ([`Self::web_label_done`]) refines or follows the utterance; no answer leaves it as it was.
+    fn web_label_arm(&mut self, snap: &Arc<NodeSnapshot>, fx: &mut ReaderEffects) {
+        if !name_is_blank(snap.name.as_deref()) || !gorca_doc::web::label::infers_for(snap.role) {
+            return;
+        }
+        let Some(b) = self.web.as_mut() else { return };
+        let Some((doc, node)) = b.join.get(snap.key) else {
+            return;
+        };
+        b.label_req = b.label_req.wrapping_add(1);
+        let req = b.label_req;
+        b.label_pending = Some((req, snap.key));
+        fx.push(ReaderEffect::Web(crate::browse::WebEffect::Label {
+            doc,
+            node,
+            role: snap.role,
+            req,
+        }));
+    }
+
+    /// The inferred label of the control in focus arrived. Spoken plainly, as Orca speaks an
+    /// inferred label: within the refine window it replaces the utterance (label first, then the
+    /// role), later it follows as the name alone. Dropped when the focus has moved on or the
+    /// control got a name meanwhile.
+    pub(crate) fn web_label_done(&mut self, req: u32, text: &str, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some((r, key)) = b.label_pending else {
+            return;
+        };
+        if r != req {
+            return;
+        }
+        b.label_pending = None;
+        let Some(p) = self.presented.clone() else {
+            return;
+        };
+        if p.node != key
+            || p.epoch != self.epoch.current()
+            || !name_is_blank(p.snap.name.as_deref())
+        {
+            return;
+        }
+        let Some(label) = crate::browse::commands::one_line_label(text) else {
+            return;
+        };
+        let mut merged = (*p.snap).clone();
+        merged.name = Some(Arc::from(label.as_str()));
+        // The words are not said twice: a description that is the label stays unsaid.
+        if crate::aria::speakable_description(merged.description.as_deref(), Some(&label)).is_none()
+        {
+            merged.description = None;
+        }
+        let merged = Arc::new(merged);
+        let id = self.utt_id();
+        let epoch = self.epoch.current();
+        let refine = self.now.saturating_duration_since(p.at) < REFINE_WINDOW;
+        let (mut u, source) = if refine {
+            let mut u = self.presenters.present(p.ctx, &merged, id, epoch);
+            self.drop_web_unavailable(&mut u, &merged);
+            u.refines = Some(p.utt);
+            if let Some((_, word, tail)) = self.web_extra.as_ref().filter(|e| e.0 == p.utt) {
+                apply_web_extra(&mut u, *word, tail, self.verbalize_opts());
+            }
+            self.counters.refined += 1;
+            (u, PresentSource::Refine)
+        } else {
+            let ch = Changed {
+                name: true,
+                role: false,
+                states: StateSet::empty(),
+                value: false,
+                description: false,
+            };
+            self.counters.followups += 1;
+            (
+                present_change(&merged, ch, id, epoch, Some(p.utt)),
+                PresentSource::Followup,
+            )
+        };
+        u.may_refine = false;
+        self.log_presentation(&u, &merged, source, Some(p.utt));
+        self.presented = Some(Presented {
+            node: p.node,
+            snap: merged,
+            utt: id,
+            epoch,
             at: self.now,
             ctx: p.ctx,
         });

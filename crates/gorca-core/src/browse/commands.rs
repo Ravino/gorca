@@ -45,6 +45,14 @@ pub enum WebEffect {
         node: DocNodeId,
         act: DocAction,
     },
+    /// Infer the label of a nameless control from the text around it (C3b); the answer, if any,
+    /// returns as `DocNotice::Label { req }`.
+    Label {
+        doc: DocId,
+        node: DocNodeId,
+        role: Role,
+        req: u32,
+    },
     /// A page-selection action; its result returns as `DocNotice::SelectionDone { req }`.
     Select {
         doc: DocId,
@@ -535,6 +543,20 @@ fn states_of(d: &WebDoc, id: DocNodeId) -> StateSet {
         .map_or(StateSet::empty(), |m| m.states)
 }
 
+/// A group of controls: a `fieldset`, or an element the author gave `role=group` or
+/// `role=radiogroup`. Landmarks, forms and regions are not groups here.
+fn is_group(v: &gorca_doc::web::NodeView<'_>) -> bool {
+    use gorca_doc_source_api::web_attrs::{TAG, XML_ROLES};
+    if v.role != Role::Panel {
+        return false;
+    }
+    let Some(m) = v.meta else { return false };
+    let attr = |k| m.attrs.iter().find(|(a, _)| *a == k).map(|(_, t)| &**t);
+    attr(TAG) == Some("fieldset")
+        || attr(XML_ROLES)
+            .is_some_and(|r| r.split_whitespace().any(|t| matches!(t, "group" | "radiogroup")))
+}
+
 fn role_states(d: &WebDoc, id: DocNodeId) -> (Role, StateSet) {
     (
         d.node(id).map_or(Role::Unknown, |v| v.role),
@@ -666,7 +688,7 @@ const LABEL_CAP: usize = 160;
 
 /// A name derived from content as a one-line label: whitespace collapsed, icon glyphs and object
 /// markers dropped, capped at [`LABEL_CAP`] characters. `None` when nothing speakable is left.
-fn one_line_label(s: &str) -> Option<String> {
+pub(crate) fn one_line_label(s: &str) -> Option<String> {
     let kept: String = s
         .chars()
         .filter(|c| {
@@ -720,17 +742,96 @@ pub(crate) fn fused_name(snap: &gorca_model::NodeSnapshot, e: &SemEntry) -> Opti
     }
 }
 
+/// Roles that are spoken with a name and take one from the description or the placeholder when
+/// the engine gave none (Orca: `_generate_accessible_name` takes the description, the entry
+/// presenters the placeholder).
+fn takes_fallback_name(role: Role) -> bool {
+    crate::present::needs_name(role)
+        || matches!(
+            role,
+            Role::TextEntry | Role::PasswordEntry | Role::SpinButton | Role::Slider
+        )
+}
+
+/// The name of a nameless control from what the author left on it, in Orca's order: the
+/// description (`title`, `aria-description`, `aria-describedby` when the engine did not turn
+/// it into the name), then the placeholder (`placeholder`, `aria-placeholder`). The flag says
+/// the description was used, so it is not spoken again after the name.
+fn fallback_name(
+    role: Role,
+    description: Option<&str>,
+    placeholder: Option<&str>,
+) -> Option<(Arc<str>, bool)> {
+    if !takes_fallback_name(role) {
+        return None;
+    }
+    if let Some(n) = description.and_then(one_line_label) {
+        return Some((Arc::from(n), true));
+    }
+    placeholder
+        .and_then(one_line_label)
+        .map(|n| (Arc::from(n), false))
+}
+
+/// A focusable, editable section with no ARIA role of its own is a `contenteditable` host (a
+/// chat composer, Telegram's phone field): a text entry, not a "panel".
+fn editable_section(snap: &gorca_model::NodeSnapshot, meta: &gorca_doc::web::NodeMeta) -> bool {
+    snap.role == Role::Panel
+        && snap
+            .states
+            .contains(StateSet::EDITABLE | StateSet::FOCUSABLE)
+        && !snap.states.contains(StateSet::READ_ONLY)
+        && !meta
+            .attrs
+            .iter()
+            .any(|(k, t)| *k == gorca_doc_source_api::web_attrs::XML_ROLES && !t.is_empty())
+}
+
 /// The overlay of one mirror node on a snapshot; `None` when it adds nothing.
 fn overlay_from_meta(
     snap: &Arc<gorca_model::NodeSnapshot>,
     meta: &gorca_doc::web::NodeMeta,
 ) -> Option<Arc<gorca_model::NodeSnapshot>> {
     let entry = meta.sem.as_deref();
-    let name = entry.and_then(|e| fused_name(snap, e));
-    let description = entry
+    let mut name = entry.and_then(|e| fused_name(snap, e));
+    let mut description = entry
         .filter(|_| snap.description.is_none())
         .and_then(|e| e.sem.text.as_deref())
         .and_then(|t| t.description.clone());
+    let role = if editable_section(snap, meta) {
+        Role::TextEntry
+    } else {
+        snap.role
+    };
+    // The fallbacks below only fill a name nobody gave (C3b): the description, then the
+    // placeholder. Inference from the text around the control is asked for later, with layout.
+    let have_name = name
+        .as_deref()
+        .or(snap.name.as_deref())
+        .is_some_and(|n| !crate::present::name_is_blank(Some(n)));
+    let mut description_used = false;
+    if !have_name {
+        let eff_desc = description
+            .as_deref()
+            .or(snap.description.as_deref())
+            .or(meta.description.as_deref());
+        let placeholder = entry
+            .and_then(|e| e.sem.text.as_deref())
+            .and_then(|t| t.placeholder.as_deref());
+        if let Some((n, from_description)) = fallback_name(role, eff_desc, placeholder) {
+            name = Some(n);
+            description_used = from_description;
+        }
+    }
+    // The description is not said again after a name that already says it.
+    let final_name = name.as_deref().or(snap.name.as_deref());
+    let eff_desc = description.as_deref().or(snap.description.as_deref());
+    let drop_description = eff_desc.is_some()
+        && (description_used
+            || crate::aria::speakable_description(eff_desc, final_name).is_none());
+    if drop_description {
+        description = None;
+    }
     let mut add = StateSet::empty();
     if let Some(e) = entry {
         if e.sem.flags.contains(SemFlags::READ_ONLY) {
@@ -741,12 +842,23 @@ fn overlay_from_meta(
         }
     }
     let carry_attrs = !snap.have.contains(gorca_model::PropMask::ATTRS) && !meta.attrs.is_empty();
-    if name.is_none() && description.is_none() && snap.states.contains(add) && !carry_attrs {
+    let clear_description = drop_description && snap.description.is_some();
+    if name.is_none()
+        && description.is_none()
+        && !clear_description
+        && role == snap.role
+        && snap.states.contains(add)
+        && !carry_attrs
+    {
         return None;
     }
     let mut c = (**snap).clone();
+    c.role = role;
     if let Some(n) = name {
         c.name = Some(n);
+    }
+    if clear_description {
+        c.description = None;
     }
     if let Some(d) = description {
         c.description = Some(d);
@@ -1213,6 +1325,7 @@ impl Reader {
             }
             self.web_dialog_lead(doc, id, last_before);
             self.web_listbox_lead(doc, id, last_before);
+            self.web_group_lead(doc, id, last_before);
             if switched {
                 self.web_document_lead(doc, id);
             }
@@ -1546,6 +1659,68 @@ impl Reader {
         false
     }
 
+    /// Focus landed in a named group (a `fieldset` with its legend, a `role=group`) that the
+    /// focus was not in: the group's name and "group" lead the focus speech, once, as Orca says
+    /// the legend when the focus enters a fieldset. Browsers expose the legend as the group's
+    /// name, never as the control's, so nothing else would say it.
+    fn web_group_lead(&mut self, doc: DocId, id: DocNodeId, before: Option<DocNodeId>) -> bool {
+        let Some(b) = self.web.as_mut() else {
+            return false;
+        };
+        let Some(h) = b.docs.get(doc) else {
+            return false;
+        };
+        let last = b.lead_group;
+        let found = h.read.with(|d| {
+            // Only a control is announced into its group, not a node the cursor walks over.
+            if !d.node(id)?.cats.intersects(Cat::FORM_FIELD) {
+                return None;
+            }
+            let mut cur = d.parent(id);
+            for _ in 0..8 {
+                let n = cur?;
+                let v = d.node(n)?;
+                if is_group(&v) {
+                    let name = v.name.filter(|x| !crate::present::name_is_blank(Some(x)))?;
+                    let inside = before.is_some_and(|p| {
+                        let mut c = Some(p);
+                        for _ in 0..64 {
+                            match c {
+                                Some(x) if x == n => return true,
+                                Some(x) => c = d.parent(x),
+                                None => return false,
+                            }
+                        }
+                        false
+                    });
+                    if inside || last == Some(n) {
+                        return Some((n, Vec::new()));
+                    }
+                    return Some((
+                        n,
+                        vec![
+                            Item::Lead(name.to_owned()),
+                            Item::Lead(t(M::WebGroup).to_owned()),
+                        ],
+                    ));
+                }
+                cur = d.parent(n);
+            }
+            None
+        });
+        b.lead_group = found.as_ref().map(|(n, _)| *n);
+        if let Some((_, mut lead)) = found
+            && !lead.is_empty()
+        {
+            let now = self.now;
+            let rest = b.pending_tail.take().map(|(t, _)| t).unwrap_or_default();
+            lead.extend(rest);
+            b.pending_tail = Some((lead, now));
+            return true;
+        }
+        false
+    }
+
     /// Focus landed on an option of a list box the focus was not in: the list box's name leads
     /// ("Toppings list box, Cheese selected").
     fn web_listbox_lead(&mut self, doc: DocId, id: DocNodeId, before: Option<DocNodeId>) -> bool {
@@ -1719,6 +1894,7 @@ impl Reader {
             DocNotice::SelectionDone { doc, req, outcome } => {
                 self.web_selection_done(doc, req, outcome, fx);
             }
+            DocNotice::Label { req, text, .. } => self.web_label_done(req, &text, fx),
             DocNotice::FocusFailed { doc } => {
                 // The grabbed Tab asked for a focus the page refused: say so (R-6).
                 if self.web.as_ref().is_some_and(|b| b.mode.doc() == Some(doc)) {
