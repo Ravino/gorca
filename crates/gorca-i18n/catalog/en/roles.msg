@@ -20,6 +20,7 @@ role-column-header = column header
 role-row-header = row header
 role-button = button
 role-toggle-button = toggle button
+role-switch = switch
 role-check-box = check box
 role-radio-button = radio button
 role-combo-box = combo box

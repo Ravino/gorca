@@ -170,7 +170,12 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
     // A tri-state control in its middle state says that only ("half checked", "half pressed").
     let mixed_w = mixed_word(n.role).filter(|_| n.states.contains(StateSet::MIXED));
     let mixed = mixed_w.is_some();
+    // A switch says on or off, not checked or pressed (Orca's wording).
+    let switch = n.role == Role::Switch;
     for (flag, word) in STATE_WORDS {
+        if switch && matches!(*flag, StateSet::CHECKED | StateSet::PRESSED) {
+            continue;
+        }
         if *flag == StateSet::MIXED {
             if let Some(w) = mixed_w {
                 segments.push(seg(w, SegmentKind::State));
@@ -186,6 +191,13 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
         if n.states.contains(*flag) && !skip.contains(*flag) {
             segments.push(seg(t(*word), SegmentKind::State));
         }
+    }
+    if switch && !skip.intersects(StateSet::CHECKED | StateSet::PRESSED) {
+        let on = n.states.intersects(StateSet::CHECKED | StateSet::PRESSED);
+        segments.push(seg(
+            t(if on { M::StateOn } else { M::StateOff }),
+            SegmentKind::State,
+        ));
     }
     // A checkable control says its off state too ("check box not checked", "not pressed").
     let off = if matches!(n.role, Role::CheckBox | Role::RadioButton)
@@ -460,6 +472,7 @@ fn is_plain_text_role(role: gorca_model::Role) -> bool {
         | Role::Table
         | Role::Button
         | Role::ToggleButton
+        | Role::Switch
         | Role::CheckBox
         | Role::RadioButton
         | Role::ComboBox
@@ -569,6 +582,22 @@ mod change_tests {
         exp.states = StateSet::EXPANDED;
         assert_eq!(change_words(&col, &exp), ["expanded"]);
         assert_eq!(change_words(&exp, &col), ["collapsed"]);
+    }
+
+    #[test]
+    fn a_native_switch_says_switch_and_on_or_off() {
+        let mut on = snap("Wi-Fi", StateSet::CHECKED, None);
+        on.role = Role::Switch;
+        assert_eq!(
+            texts(&present_focus(&on, UttId(1), Epoch(1))),
+            ["Wi-Fi", "switch", "on"]
+        );
+        let mut off = on.clone();
+        off.states = StateSet::empty();
+        assert_eq!(
+            texts(&present_focus(&off, UttId(1), Epoch(1))),
+            ["Wi-Fi", "switch", "off"]
+        );
     }
 
     #[test]

@@ -127,6 +127,7 @@ fn role_agrees(legacy: Role, sem: SemRole) -> Option<bool> {
         Role::Heading => &[S::Heading],
         Role::Link => &[S::Link],
         Role::Button | Role::ToggleButton => &[S::Button, S::Switch],
+        Role::Switch => &[S::Switch, S::Checkbox],
         Role::CheckBox => &[S::Checkbox, S::Switch, S::MenuItemCheckbox],
         Role::RadioButton => &[S::Radio, S::MenuItemRadio],
         Role::ComboBox => &[S::Combobox],

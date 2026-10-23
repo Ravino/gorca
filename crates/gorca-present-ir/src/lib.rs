@@ -20,6 +20,9 @@
 //!   arguments, so speech and braille format separately.
 //! * **Add-on text is a catalog reference** (`Content::Ext { ns, key, args }`), resolved through the
 //!   extension catalog at render. A `U+001E` reference never reaches a `Text`.
+//! * **Host-only by type.** `ExtKinds`, `ExtNs` binding and `LangTags` exist only with the `host`
+//!   cargo feature, which only host crates (`gorca-present`) enable. The plugin API crate depends
+//!   on this crate without it, so a guest-facing build cannot even name them.
 //! * **Add-on field kinds are host-allocated** per (namespace, name) by [`ExtKinds`]; a guest never
 //!   picks a raw code.
 //! * **Reserved bits** of `FieldFlags`/`IrFlags` are zero and preserved by editors.
@@ -29,6 +32,7 @@
 //! A `PresIr` is built by `compose` from one fused `SemEntry`, edited by hooks, deduplicated
 //! (PR-1) and only then rendered into tokens. `render` is the only producer of text.
 
+#[cfg(feature = "host")]
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -193,6 +197,7 @@ impl ExtNs {
 /// Host-side allocator of add-on `FieldKind` codes, one per (namespace, name). Idempotent; codes
 /// are stable for the process lifetime. A guest names a kind; it never picks the number, and each
 /// namespace has a quota so one add-on cannot use up the range.
+#[cfg(feature = "host")]
 #[derive(Debug, Default)]
 pub struct ExtKinds {
     by_name: HashMap<(Arc<str>, Arc<str>), FieldKind>,
@@ -200,6 +205,7 @@ pub struct ExtKinds {
     next: u16,
 }
 
+#[cfg(feature = "host")]
 impl ExtKinds {
     /// Longest namespace or name.
     pub const MAX_NAME: usize = 64;
@@ -286,11 +292,13 @@ impl Origin {
 pub struct LangId(pub u16);
 
 /// Host-side interner of content-language tags.
+#[cfg(feature = "host")]
 #[derive(Debug, Default)]
 pub struct LangTags {
     tags: Vec<Arc<str>>,
 }
 
+#[cfg(feature = "host")]
 impl LangTags {
     /// Most distinct tags held (a hostile page cannot grow the table).
     pub const MAX_TAGS: usize = 1024;
@@ -577,17 +585,45 @@ impl PresIr {
         self.fields.iter().filter(move |f| f.kind == kind)
     }
 
-    /// The copy a plugin, a log or a braille display may see: every secret field's content is
-    /// replaced by empty text.
+    /// The only form a plugin, a log or a braille display may be given: every secret field's
+    /// content is replaced by empty text and its flat-text span is cleared (a span would leak the
+    /// secret's length). The flag stays, so a consumer can tell something was withheld.
     #[must_use]
-    pub fn redacted(&self) -> PresIr {
+    pub fn redacted(&self) -> Redacted {
         let mut out = self.clone();
         for f in &mut out.fields {
             if f.is_secret() {
                 f.content = Content::Text(Arc::from(""));
+                f.span = None;
             }
         }
-        out
+        Redacted(out)
+    }
+}
+
+/// A `PresIr` with its secrets withheld. The sinks that must never see a secret (plugin hooks,
+/// logs, braille routing) take this type, not `PresIr`, so passing the unredacted IR does not
+/// compile. It can only be made by [`PresIr::redacted`] and derefs to the IR for reading.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Redacted(PresIr);
+
+impl Redacted {
+    /// The redacted IR.
+    pub fn ir(&self) -> &PresIr {
+        &self.0
+    }
+
+    /// Unwrap into a plain IR (still redacted; for an edit hook's result).
+    pub fn into_ir(self) -> PresIr {
+        self.0
+    }
+}
+
+impl std::ops::Deref for Redacted {
+    type Target = PresIr;
+
+    fn deref(&self) -> &PresIr {
+        &self.0
     }
 }
 
@@ -687,6 +723,7 @@ mod tests {
         assert!(matches!(&c, Content::Msg { args, .. } if args[0].val == ArgVal::Num(3)));
     }
 
+    #[cfg(feature = "host")]
     #[test]
     fn add_on_field_kinds_are_host_allocated_per_bound_namespace() {
         let mut k = ExtKinds::new();
@@ -703,6 +740,7 @@ mod tests {
         assert_eq!(k.rows().len(), 2);
     }
 
+    #[cfg(feature = "host")]
     #[test]
     fn one_namespace_cannot_use_up_the_range() {
         let mut k = ExtKinds::new();
@@ -717,6 +755,7 @@ mod tests {
         assert!(k.alloc(&other, "x").is_ok());
     }
 
+    #[cfg(feature = "host")]
     #[test]
     fn a_content_language_is_an_interned_bcp47_tag_that_travels_as_a_string() {
         let mut t = LangTags::new();
@@ -771,6 +810,38 @@ mod tests {
         assert_eq!(r.fields[1].content, Content::Text("".into()));
         assert!(r.fields[1].is_secret(), "the flag survives redaction");
         assert_eq!(ir.fields[1].content, Content::Text("hunter2".into()));
+    }
+
+    #[test]
+    fn redaction_clears_the_span_of_a_secret_field_and_only_that_one() {
+        let mut secret = Field::new(
+            FieldKind::VALUE,
+            Content::Text("hunter2".into()),
+            Origin::default(),
+        )
+        .with_flags(FieldFlags::SECRET);
+        secret.span = Some(FlatSpan { start: 3, end: 10 });
+        let mut open = Field::new(
+            FieldKind::NAME,
+            Content::Text("User".into()),
+            Origin::default(),
+        );
+        open.span = Some(FlatSpan { start: 0, end: 4 });
+        let ir = PresIr::new(
+            Reason::Focus,
+            node(),
+            1,
+            [open, secret].into_iter().collect(),
+        );
+        let r = ir.redacted();
+        assert_eq!(r.ir().fields[0].span, Some(FlatSpan { start: 0, end: 4 }));
+        assert_eq!(r.fields[1].span, None, "the span would leak the length");
+        assert_eq!(
+            ir.fields[1].span,
+            Some(FlatSpan { start: 3, end: 10 }),
+            "the source is untouched"
+        );
+        assert_eq!(r.into_ir().fields[1].content, Content::Text("".into()));
     }
 
     #[test]
@@ -874,7 +945,13 @@ mod tests {
         if cfg!(target_pointer_width = "64") {
             assert_eq!(std::mem::size_of::<Field>(), 56);
             assert_eq!(std::mem::size_of::<Content>(), 24);
+            assert_eq!(std::mem::size_of::<Arg>(), 40);
+            assert_eq!(std::mem::size_of::<ArgVal>(), 24);
         }
+        assert_eq!(std::mem::size_of::<FlatSpan>(), 8);
+        assert_eq!(std::mem::size_of::<LangId>(), 2);
+        assert_eq!(std::mem::size_of::<Origin>(), 8);
+        assert_eq!(std::mem::size_of::<FieldFlags>(), 2);
         assert_eq!(PRES_IR_VERSION, 1);
     }
 
@@ -891,7 +968,7 @@ mod tests {
             3,
             [odd.clone()].into_iter().collect(),
         );
-        assert_eq!(ir.redacted(), ir, "nothing secret: the copy is identical");
+        assert_eq!(*ir.redacted(), ir, "nothing secret: the copy is identical");
         assert_eq!(ir.fields[0], odd);
         assert_eq!(FieldKind(0x7123).name(), None);
         assert!(!ir.reason.editable());

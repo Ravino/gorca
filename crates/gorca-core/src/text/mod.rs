@@ -275,6 +275,7 @@ fn trackable(snap: &NodeSnapshot) -> Option<Kind> {
         | Role::RowHeader
         | Role::Button
         | Role::ToggleButton
+        | Role::Switch
         | Role::CheckBox
         | Role::RadioButton
         | Role::SpinButton

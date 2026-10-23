@@ -13,5 +13,12 @@ gorca-i18n = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 
+[features]
+# Host-only allocators (ExtKinds, LangTags). Only host crates enable it; the plugin API does not.
+host = []
+
+[dev-dependencies]
+gorca-present-ir = { path = ".", features = ["host"] }
+
 [lints]
 workspace = true

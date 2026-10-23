@@ -16,6 +16,8 @@ pub enum Class {
     Checkable,
     /// A toggle button: "pressed"/"not pressed", "half pressed" when mixed.
     Toggle,
+    /// A switch: "on" or "off" (never checked or pressed).
+    Switch,
     /// A progress bar: "indeterminate" when mixed.
     Progress,
     /// A field whose description is its help or error text.
@@ -71,7 +73,7 @@ pub fn native_role(role: SemRole, press: Press) -> RoleInfo {
         S::RowHeader => plain(M::RoleRowHeader),
         S::Button if press != Press::NotToggle => w(M::RoleToggleButton, Class::Toggle),
         S::Button => plain(M::RoleButton),
-        S::Switch => w(M::RoleToggleButton, Class::Toggle),
+        S::Switch => w(M::RoleSwitch, Class::Switch),
         S::Checkbox | S::MenuItemCheckbox => w(M::RoleCheckBox, Class::Checkable),
         S::Radio | S::MenuItemRadio => w(M::RoleRadioButton, Class::Checkable),
         S::Combobox => w(M::RoleComboBox, Class::Field),
@@ -214,7 +216,10 @@ mod tests {
                 assert!(
                     matches!(
                         role,
-                        SemRole::StaticText | SemRole::Scrollbar | SemRole::Tooltip
+                        SemRole::StaticText
+                            | SemRole::Scrollbar
+                            | SemRole::Tooltip
+                            | SemRole::Switch
                     ),
                     "{role:?}: table {got:?} vs legacy {want:?}"
                 );

@@ -19,6 +19,7 @@ role-column-header = заголовок столбца
 role-row-header = заголовок строки
 role-button = кнопка
 role-toggle-button = кнопка-переключатель
+role-switch = переключатель
 role-check-box = флажок
 role-radio-button = радиокнопка
 role-combo-box = комбинированный список

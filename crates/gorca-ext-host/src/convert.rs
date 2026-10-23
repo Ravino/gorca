@@ -77,7 +77,8 @@ pub fn role_to_ext(r: Role) -> api::Role {
         Role::ColumnHeader => A::ColumnHeader,
         Role::RowHeader => A::RowHeader,
         Role::Button => A::Button,
-        Role::ToggleButton => A::ToggleButton,
+        // The extension ABI has no switch role (WIT is frozen): a switch is a toggle button there.
+        Role::ToggleButton | Role::Switch => A::ToggleButton,
         Role::CheckBox => A::CheckBox,
         Role::RadioButton => A::RadioButton,
         Role::ComboBox => A::ComboBox,

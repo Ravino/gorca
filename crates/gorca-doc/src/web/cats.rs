@@ -220,7 +220,9 @@ pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
             };
             Cat::LINK | v | Cat::FOCUSABLE | Cat::CLICKABLE
         }
-        Role::Button | Role::ToggleButton => Cat::FORM_FIELD | Cat::BUTTON | Cat::FOCUSABLE,
+        Role::Button | Role::ToggleButton | Role::Switch => {
+            Cat::FORM_FIELD | Cat::BUTTON | Cat::FOCUSABLE
+        }
         Role::CheckBox => Cat::FORM_FIELD | Cat::CHECKBOX | Cat::FOCUSABLE,
         Role::RadioButton => Cat::FORM_FIELD | Cat::RADIO | Cat::FOCUSABLE,
         Role::ComboBox => Cat::FORM_FIELD | Cat::COMBOBOX | Cat::FOCUSABLE,

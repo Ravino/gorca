@@ -56,6 +56,7 @@ pub fn passes_through(role: Role, states: StateSet, reason: Reason) -> bool {
                     | Role::Table
                     | Role::Button
                     | Role::ToggleButton
+                    | Role::Switch
                     | Role::CheckBox
                     | Role::ComboBox
                     | Role::TextEntry
@@ -114,6 +115,7 @@ pub fn passes_through(role: Role, states: StateSet, reason: Reason) -> bool {
                     | Role::RowHeader
                     | Role::Button
                     | Role::ToggleButton
+                    | Role::Switch
                     | Role::CheckBox
                     | Role::RadioButton
                     | Role::ProgressBar

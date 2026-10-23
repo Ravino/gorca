@@ -85,3 +85,24 @@ state words in both presenters; moved to slice 3. F-9: the slice 2 criterion "no
 left" is amended to "every remaining row is dated, gated per role, and witnessed or unit-tested";
 4 `focus` rows remain (until 2026-12-15). F-11 (`Redacted` newtype) and F-12 (co-firing counts) are
 slice 3.
+
+## Owner rule (2026-10-24): no legacy tails
+
+Shadow mode is temporary. Each surface has an **expiry date** and **exit gates**; when a surface is
+cut over, its legacy path is **deleted in the same slice** and no flag keeps it alive. Pre-fusion
+fallbacks (C3's `NodeMeta` fallback in the web overlay, the late Reader label overlay) move into the
+model as lowest-trust provisional facts (S4 stratum, tainted, with their revision); they do not stay
+as reader-side branches. An architect amends ADR-0022 and adds an `xtask` rule with a dated allowlist
+of legacy uses; this plan follows it.
+
+Revised slices 3 to 5 (each ends with deleting what it replaced):
+
+| # | Content | Deleted at the end | Exit gates / expiry |
+|---|---|---|---|
+| 3a (done in this pass) | `Redacted` newtype (sinks take it, spans cleared); GTK switch words in both presenters (`Role::Switch`, AT-SPI role 130, "switch on/off"); host-only `ExtKinds`/`LangTags` by cargo feature; exact size asserts | the toggle-button-for-switch behaviour of the native row | native corpus replay stays at 0 different |
+| 3b | Web focus rows in `compose` (NVDA words, current, haspopup, level, error text, description pause, PR-4/PR-5); `Reason::Change` rows (ST-1..6) | `present_web` and the `aria.rs` word tables it used, the web overlay's `NodeMeta` fallback (becomes a lowest-trust provisional fact in the fuse) | tier-1 array + M8 web fixtures: 0 outside deviations; shadow expiry 2026-12-15 for the surface |
+| 4 | C3b inferred label as an S4 fallback with taint, layout revision and the `browse.hedge_inferred` switch; policy / lead-in / web-extra as IR edits | the late Reader label overlay (`web_label_arm` path), `window_lead_in` string edits | label invalidates on layout revision; both hedge settings tested |
+| 5 | Cut focus and change over to `PresIr` render; M-6 on the real bench | `present_focus`, `present_with`, `present_web`, the shadow hook itself, `GORCA_PRESENT_SHADOW`, `deviations.toml` focus rows | M-6 Δp99 <= 0.1 ms interleaved GTK4 + Firefox; M-13 zero; memory within M-9 |
+
+The shadow hook, `GORCA_PRESENT_SHADOW` and the replay ceilings are removed in slice 5; nothing about
+them outlives the cut-over.
