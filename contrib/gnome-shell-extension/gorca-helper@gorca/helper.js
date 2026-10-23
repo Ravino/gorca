@@ -15,7 +15,9 @@ const OBJECT_PATH = '/org/gorca/ShellHelper';
 const MAX_PIXELS = 2048 * 2048;     // logical area cap per request
 const RATE_PER_SEC = 100;           // token bucket, burst = 2x
 const PTR_RATE_PER_SEC = 20;        // H-1: pointer methods, burst 2x (a count=2 click costs 2)
-const DENIED_RATE_PER_SEC = 10;     // H-1a: ONE global bucket for all callers that are not (yet) allow-listed, burst 2x
+const DENIED_RATE_PER_SEC = 10;     // H-1a: per-sender bucket for a caller that is not (yet) allow-listed, burst 2x
+const LOOKUP_RATE_PER_SEC = 10;     // H-1a: ONE global bucket for the costly broker/proc lookups of such callers, burst 2x
+const MAX_SENDERS = 512;            // identity cache bound; only denied/unknown entries are ever evicted
 const DENIED_TTL_US = 5e6;          // negative authorization cache lifetime (re-reads /proc after this)
 const HOLD_BACKSTOP_MS = 125000;    // H-3: gorca releases at 120 s, the helper at 125 s
 const DOUBLE_CLICK_GAP_MS = 30;
@@ -129,8 +131,9 @@ export class ShellHelperService {
         this._denied = 0;
         this._senders = new Map();
         this._configGen = 0;
-        this._denyTokens = DENIED_RATE_PER_SEC * 2;   // H-1a: global bucket, shared by every non-allowed sender
-        this._denyTokenTime = GLib.get_monotonic_time();
+        this._senderBuckets = new Map();   // sender -> {tokens, time}; ONLY non-allowed senders, bounded
+        this._lookupTokens = LOOKUP_RATE_PER_SEC * 2;   // global: costly lookups of non-allowed senders
+        this._lookupTokenTime = GLib.get_monotonic_time();
         this._denyLogLast = 0;
         this._denyLogSuppressed = 0;
         this._gen = 0;                     // bumped by stop(): work started before it must not act after it
@@ -141,6 +144,7 @@ export class ShellHelperService {
         this._device = null;               // H-6: one lazily created POINTER_DEVICE
         this._holds = new Map();           // logical button -> {phys, source}
         this._holder = null;               // unique bus name that holds buttons (H-3)
+        this._capWatch = 0;                // 1 s source while buttons are held: re-checks the holder's pointer cap
         this._timers = new Set();          // H-7 double-click timers {id, sender, resolve}
         this._auditLast = 0;
         this._auditSuppressed = 0;
@@ -194,6 +198,7 @@ export class ShellHelperService {
             this._monitorsId = 0;
         }
         this._releaseEverything('disabled');
+        this._stopCapWatch();
         if (this._device) {
             // H-6: destroy explicitly (Mutter releases anything still pressed when the device goes away)
             try {
@@ -205,6 +210,7 @@ export class ShellHelperService {
         }
         for (const k of [...this._senders.keys()])
             this._dropSender(k);
+        this._senderBuckets.clear();
         this._dbus?.unexport();
         this._dbus = null;
     }
@@ -281,6 +287,7 @@ export class ShellHelperService {
         if (this._holder === name)
             this._releaseHolds(`holder ${name} vanished`);
         this._cancelTimers(t => t.sender === name);
+        this._senderBuckets.delete(name);
         this._dropSender(name);
     }
 
@@ -299,14 +306,20 @@ export class ShellHelperService {
         const gen = this._gen;
         const sender = invocation.get_sender();
         let id = this._senders.get(sender);
-        // H-1a: a caller that is not (yet) known to be allow-listed is rate limited per sender BEFORE any
-        // /proc, config or broker work; a cached negative decision answers without touching anything.
+        // H-1a. A sender that is already allowed never pays any of this (a flood of strangers cannot touch it).
+        // A caller that is not (yet) allowed: (1) its OWN bucket is the first gate, so one flooder only
+        // exhausts itself; (2) a cached negative decision answers with no /proc or broker work; (3) only a
+        // real lookup (unknown sender, or a denial past its TTL) draws on the GLOBAL lookup bucket.
+        let lookup = !id;
         if (!id?.allowed) {
-            this._denyBucket();
+            this._senderBucket(sender);
             this._loadConfig();     // a changed config stamp bumps _configGen and so voids cached denials
             if (id?.denied && id.denied.gen === this._configGen && GLib.get_monotonic_time() < id.denied.until)
                 throw new DeniedError(id.denied.msg);
+            lookup = true;
         }
+        if (lookup)
+            this._lookupBucket();
         if (!id) {
             const [reply, fds] = await new Promise((resolve, reject) => {
                 Gio.DBus.session.call_with_unix_fd_list(
@@ -340,9 +353,7 @@ export class ShellHelperService {
                 start: this._startTime(pid),
                 label: label ? new TextDecoder().decode(label.get_data_as_bytes().toArray()) : '',
             };
-            if (this._senders.size > 256)
-                for (const k of [...this._senders.keys()])
-                    this._dropSender(k);
+            this._evictDenied();
             this._senders.set(sender, id);
         }
         const {pid} = id;
@@ -359,6 +370,8 @@ export class ShellHelperService {
             // Re-check after reading: the pidfd must still refer to the same live process.
             if (this._pidfdPid(id.fd) !== pid)
                 throw new Error('process gone');
+            id.exe = exe;
+            id.cgroup = cgroup;
         } catch (e) {
             this._dropSender(sender);
             throw new DeniedError(`identity check failed: ${e.message}`);
@@ -369,6 +382,7 @@ export class ShellHelperService {
                 (rule.label === undefined || rule.label === id.label)) {
                 id.allowed = true;
                 id.denied = null;
+                this._senderBuckets.delete(sender);
                 if (cap && !rule.caps.has(cap)) {
                     // Identity is fine, only this method's cap is missing: not cached as a sender denial.
                     this._denied++;
@@ -400,14 +414,47 @@ export class ShellHelperService {
         throw new DeniedError(msg);
     }
 
-    _denyBucket() {
+    // Per-sender first gate for callers that are not allowed. Only non-allowed senders have a bucket (allowed ones
+    // drop theirs); the map is bounded and evicts the oldest bucket.
+    _senderBucket(sender) {
         const now = GLib.get_monotonic_time();
-        this._denyTokens = Math.min(DENIED_RATE_PER_SEC * 2,
-            this._denyTokens + (now - this._denyTokenTime) * DENIED_RATE_PER_SEC / 1e6);
-        this._denyTokenTime = now;
-        if (this._denyTokens < 1)
-            throw new HelperError('rate', 'too many calls from callers that are not allow-listed');
-        this._denyTokens -= 1;
+        let b = this._senderBuckets.get(sender);
+        if (!b) {
+            if (this._senderBuckets.size >= 4 * MAX_SENDERS)
+                this._senderBuckets.delete(this._senderBuckets.keys().next().value);
+            b = {tokens: DENIED_RATE_PER_SEC * 2, time: now};
+            this._senderBuckets.set(sender, b);
+        }
+        b.tokens = Math.min(DENIED_RATE_PER_SEC * 2, b.tokens + (now - b.time) * DENIED_RATE_PER_SEC / 1e6);
+        b.time = now;
+        if (b.tokens < 1)
+            throw new HelperError('rate', 'too many calls from a caller that is not allow-listed');
+        b.tokens -= 1;
+    }
+
+    // Global bucket for the costly work (broker credentials call, /proc reads) done for non-allowed senders.
+    _lookupBucket() {
+        const now = GLib.get_monotonic_time();
+        this._lookupTokens = Math.min(LOOKUP_RATE_PER_SEC * 2,
+            this._lookupTokens + (now - this._lookupTokenTime) * LOOKUP_RATE_PER_SEC / 1e6);
+        this._lookupTokenTime = now;
+        if (this._lookupTokens < 1)
+            throw new HelperError('rate', 'authorization lookups are rate limited');
+        this._lookupTokens -= 1;
+    }
+
+    // Keeps the identity cache bounded by dropping denied/unknown entries (oldest first). Allowed entries are never
+    // evicted, so a flood of strangers cannot force the real client to re-authorize.
+    _evictDenied() {
+        if (this._senders.size < MAX_SENDERS)
+            return;
+        for (const [k, e] of this._senders) {
+            if (e.allowed)
+                continue;
+            this._dropSender(k);
+            if (this._senders.size <= MAX_SENDERS * 3 / 4)
+                break;
+        }
     }
 
     // Log limit for denials is global too (many connections cannot multiply it): 1 line/s plus a counter.
@@ -608,12 +655,15 @@ export class ShellHelperService {
         }, {ptr: true});
     }
 
+    // Any allow-listed caller may release what it holds, even after its pointer cap was removed: letting go of a
+    // button is always safe, and a held button must never outlive the permission to hold it.
     async PointerReleaseAsync(_params, invocation) {
-        await this._guard(invocation, 'pointer', ctx => {
-            this._pointerRate(1);
+        // Charged to the general bucket only (never the 20/s pointer bucket): letting go must always work, and a
+        // caller that holds nothing pays no more than any other cheap call.
+        await this._guard(invocation, null, ctx => {
             const n = this._holder === ctx.sender ? this._releaseHolds('PointerRelease') : 0;
             return new GLib.Variant('(u)', [n]);
-        }, {ptr: true});
+        });
     }
 
     // ---- pointer implementation ---------------------------------------------------
@@ -816,6 +866,7 @@ export class ShellHelperService {
         });
         this._holds.set(btn, {phys, source});
         this._holder = ctx.sender;
+        this._startCapWatch();
     }
 
     // Releases `btn` if `sender` is the holder and holds it. Returns 1 if a release was injected.
@@ -832,9 +883,54 @@ export class ShellHelperService {
         } catch (e) {
             console.warn(`gorca-helper: release failed: ${e.message}`);
         }
-        if (this._holds.size === 0)
+        if (this._holds.size === 0) {
             this._holder = null;
+            this._stopCapWatch();
+        }
         return 1;
+    }
+
+    // While buttons are held, look once a second whether the holder is still allowed to hold them: the owner may
+    // remove the `pointer` cap (or the rule) from the allow-list mid-drag, and the button must not stay down until
+    // the 125 s backstop.
+    _startCapWatch() {
+        if (this._capWatch)
+            return;
+        this._capWatch = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+            if (this._holds.size === 0) {
+                this._capWatch = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            this._recheckHolder();
+            if (this._holds.size === 0) {
+                this._capWatch = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopCapWatch() {
+        if (this._capWatch) {
+            GLib.source_remove(this._capWatch);
+            this._capWatch = 0;
+        }
+    }
+
+    _recheckHolder() {
+        const id = this._holder ? this._senders.get(this._holder) : null;
+        let ok = false;
+        if (id) {
+            for (const rule of this._loadConfig().allowed) {
+                if (rule.exe === id.exe && rule.cgroup === id.cgroup &&
+                    (rule.label === undefined || rule.label === id.label)) {
+                    ok = rule.caps.has('pointer');
+                    break;
+                }
+            }
+        }
+        if (!ok)
+            this._releaseHolds('the holder lost its pointer cap (or is no longer allow-listed)');
     }
 
     // Releases every held button (whoever holds it). Returns how many. A no-op without holds.
@@ -851,6 +947,7 @@ export class ShellHelperService {
             n++;
         }
         this._holder = null;
+        this._stopCapWatch();
         if (n)
             console.log(`gorca-helper: released ${n} held button(s): ${why}`);
         return n;

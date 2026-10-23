@@ -43,6 +43,25 @@ pub enum Availability {
     Planned(Milestone),
 }
 
+/// A runtime condition under which a command's non-gorca chords are grabbed (ADR-0025 RG-1). Static
+/// availability stays `Implemented | Planned`; the grab compiler splits each mode's chords into
+/// always-on and one set per gate, and the Reader adds a gate's set while the gate is open.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum RuntimeGate {
+    /// Pointer emulation: the helper is usable and `mouse.enabled` is on.
+    Pointer,
+}
+
+impl RuntimeGate {
+    pub const ALL: [RuntimeGate; 1] = [RuntimeGate::Pointer];
+
+    pub const fn bit(self) -> u8 {
+        match self {
+            RuntimeGate::Pointer => 0b1,
+        }
+    }
+}
+
 /// The keymap contexts a command may be bound in (KC-8).
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct ContextMask(u8);
@@ -91,6 +110,9 @@ pub struct CmdSpec {
     pub input_help_bypass: bool,
     /// Learn-mode description (catalog `cmd-<name>`).
     pub help: gorca_i18n::MsgId,
+    /// The runtime gate of this command's non-gorca chords, if any (RG-1). `None`: grabbed whenever
+    /// the command is implemented (KM-1).
+    pub gate: Option<RuntimeGate>,
 }
 
 impl CmdSpec {
@@ -266,7 +288,9 @@ mod tests {
         assert!(impl_names.contains(&"info.selection"));
         assert!(impl_names.contains(&"info.formatting"));
         // `debug.explain_last` is implemented in dev builds only.
-        assert_eq!(impl_names.len(), 190 + usize::from(cfg!(debug_assertions)));
+        // M21 (ADR-0025): the ten `mouse.*` commands are implemented as the runtime-gated shell.
+        assert!(impl_names.contains(&"mouse.left_click"));
+        assert_eq!(impl_names.len(), 200 + usize::from(cfg!(debug_assertions)));
     }
 
     #[test]

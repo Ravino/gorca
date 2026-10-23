@@ -9,9 +9,13 @@
 mod compile;
 mod diag;
 mod handlers;
+mod holds;
 mod info;
 mod keys;
 mod mode;
+mod mouse;
+mod pointer_gate;
+mod pointer_req;
 pub(crate) mod profiles;
 mod spec;
 mod state;
@@ -19,15 +23,20 @@ mod table;
 
 pub use compile::{
     Compiled, PlatformFacts, browse_grabs, chord_grabs, command_id, compile, compile_with,
-    escape_grabs, gorca_modifiers, grab_collisions, lane_settings, letter_grabs, tab_grabs,
+    escape_grabs, gated_chord_grabs, gorca_modifiers, grab_collisions, lane_settings, letter_grabs,
+    tab_grabs,
 };
 pub use diag::{
     ATSPI_SOURCE, ExplainReport, SegLine, SourceDirectory, SourceEntry, explain_utterance,
     set_explain_text,
 };
 pub use handlers::PASS_TIMEOUT;
+pub use pointer_gate::{GateOut, OPEN_AFTER, PointerGate, PointerMsg};
+pub use pointer_req::{
+    AtAct, ItemAction, PointerAtReq, PointerDone, PointerOp, PointerReply, PointerReq, PtrReqId,
+};
 pub use profiles::prewarm;
-pub use spec::{Availability, CmdSpec, CommandTable, ContextMask, Milestone};
+pub use spec::{Availability, CmdSpec, CommandTable, ContextMask, Milestone, RuntimeGate};
 pub(crate) use state::CmdState;
 pub use state::{
     CapitalLevels, ConfigRequest, ControlMsg, InputNotice, LoadCause, LoadedSettings, LocalTime,

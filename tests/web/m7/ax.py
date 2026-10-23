@@ -231,6 +231,38 @@ def handle(req):
         bits = call(req["bus"], req["path"], ACC, "GetState")[0]
         st = int(req.get("state", 10))
         return {"ok": True, "has": (bits[st // 32] >> (st % 32)) & 1}
+    if cmd == "focusables":
+        # FL: every FOCUSABLE node under root in document order (depth first), with the AT-SPI
+        # name, description, role name, interfaces-free attributes and relations: what a Tab walk
+        # visits and what the browser exposes there. Skips the root itself.
+        out, stack, seen = [], [req["root"]], 0
+        while stack and seen < 60000:
+            p = stack.pop()
+            seen += 1
+            if p != req["root"]:
+                try:
+                    bits = call(req["bus"], p, ACC, "GetState")[0]
+                except GLib.Error:
+                    bits = [0, 0]
+                if (bits[0] >> 11) & 1 and (bits[0] >> 8) & 1:  # FOCUSABLE and ENABLED
+                    ent = {"path": p, "role": role_of(req["bus"], p), "name": name_of(req["bus"], p),
+                           "states": [i for i in range(64) if (bits[i // 32] >> (i % 32)) & 1]}
+                    try:
+                        ent["desc"] = prop(req["bus"], p, ACC, "Description")
+                    except GLib.Error:
+                        ent["desc"] = ""
+                    try:
+                        ent["attrs"] = dict(call(req["bus"], p, ACC, "GetAttributes")[0])
+                    except GLib.Error:
+                        ent["attrs"] = {}
+                    try:
+                        ent["rels"] = [r[0] for r in call(req["bus"], p, ACC, "GetRelationSet")[0]]
+                    except GLib.Error:
+                        ent["rels"] = []
+                    out.append(ent)
+            kids = [c for (b, c) in children(req["bus"], p) if b == req["bus"]]
+            stack.extend(reversed(kids))
+        return {"ok": True, "nodes": out}
     if cmd == "tabs":
         root = "/org/a11y/atspi/accessible/root"
         tabs = []

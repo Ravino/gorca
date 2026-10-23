@@ -57,6 +57,15 @@
 "gorca+a" = "browse.toggle"
 "gorca+z" = "browse.single_letter_toggle"
 "gorca+backslash" = "browse.live_regions_toggle"
+# Mouse emulation (ADR-0025, owner decision QM-1: NVDA's chords in every preset). The item-click
+# commands (mouse.left_click_item, mouse.right_click_item) are unbound by default.
+"gorca+bracketleft" = "mouse.left_click"
+"gorca+bracketright" = "mouse.right_click"
+"gorca+ctrl+bracketleft" = "mouse.left_lock_toggle"
+"gorca+ctrl+bracketright" = "mouse.right_lock_toggle"
+"gorca+shift+m" = "mouse.route_to_review"
+"gorca+shift+n" = "mouse.review_to_pointer"
+"gorca+ctrl+shift+m" = "mouse.say_position"
 
 [keymap.browse]
 "q" = "quicknav.next.blockquote"

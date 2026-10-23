@@ -514,6 +514,8 @@ impl Sim {
             | ReaderEffect::FocusSettled { .. }
             | ReaderEffect::QueryActiveWindowFocus
             | ReaderEffect::SetGrabSet(_)
+            | ReaderEffect::Pointer(_)
+            | ReaderEffect::PointerAt(_)
             | ReaderEffect::SpeechCtl(_)
             | ReaderEffect::Config(_)
             | ReaderEffect::Web(_)

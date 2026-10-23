@@ -1,7 +1,7 @@
 <!doctype html><meta charset="utf-8"><title>WAIT</title>
 <body style="margin:0;font:20px sans-serif">
 <p id="p" style="position:absolute;left:40px;top:40px;margin:0">Select this sentence with the context menu.</p>
-<button id="t" style="position:absolute;left:300px;top:200px;width:160px;height:60px" onclick="document.title='CLICKED'">Target</button>
+<button id="t" style="position:absolute;left:300px;top:200px;width:160px;height:60px" onclick="document.title='CLICKED'" oncontextmenu="document.title='CTX'; return false">Target</button>
 <script>
 document.title = 'L' + (sessionStorage.n = (+sessionStorage.n || 0) + 1);
 document.addEventListener('selectionchange', () => { const n = getSelection().toString().length; if (n > 0) document.title = 'SEL' + n; });

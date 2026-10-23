@@ -24,6 +24,7 @@ use crate::toolkit::Toolkit;
 
 mod caller;
 pub mod items;
+pub mod locate;
 pub mod review;
 pub mod shadow;
 mod strategy;
@@ -254,6 +255,8 @@ impl AppServer {
             app: port.app,
             counters: Arc::clone(&self.counters),
         };
+        // What the pointer resolver needs to describe a window to the compositor (ADR-0025).
+        self.caller.set_pid(self.identity.map(|i| i.0));
         let mut inflight: JoinSet<()> = JoinSet::new();
         // Identifying the application is informational and may be slow: requests (the first
         // focus the user is waiting for) are served meanwhile.
@@ -298,6 +301,9 @@ impl AppServer {
                     announce_info(&port, &toolkit, &app_name, verified, settle_ms);
                     self.caller.set_text_screen_coords(
                         Toolkit::classify(&toolkit, &app_name).text_extents_use_screen_coords(),
+                    );
+                    self.caller.set_children_in_device_pixels(
+                        Toolkit::classify(&toolkit, &app_name).children_in_device_pixels(),
                     );
                     // Quirk row `blink-wake-call`: once, at first sight (a re-announcement
                     // after Shell verification does not repeat it).
@@ -544,6 +550,7 @@ async fn serve_one(cx: &CallCx, req: &BackendRequest) -> Result<BackendReply, Ba
             .map_err(|e| backend_error(&e)),
         BackendOp::Text(q) => review::text(cx, q, dl).await,
         BackendOp::Action(a) => review::action(cx, a, dl).await,
+        BackendOp::Locate { node, offset } => locate::locate(cx, *node, *offset, dl).await,
         BackendOp::Collection(rule) => review::collection(cx, rule, dl).await,
         BackendOp::Children { .. } | BackendOp::HitTest { .. } => Err(BackendError::NotSupported),
     }

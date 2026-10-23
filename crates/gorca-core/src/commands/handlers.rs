@@ -467,6 +467,36 @@ impl Reader {
             | CoreCmd::BrowseTabPrev
             | CoreCmd::BrowseNativeSelectionToggle
             | CoreCmd::QuicknavPrevArticle => self.browse_command(c, rep, now, fx),
+            CoreCmd::MouseLeftClick => {
+                self.mouse_command(super::mouse::MouseCmd::LeftClick, rep, fx);
+            }
+            CoreCmd::MouseRightClick => {
+                self.mouse_command(super::mouse::MouseCmd::RightClick, rep, fx);
+            }
+            CoreCmd::MouseMiddleClick => {
+                self.mouse_command(super::mouse::MouseCmd::MiddleClick, rep, fx);
+            }
+            CoreCmd::MouseLeftClickItem => {
+                self.mouse_command(super::mouse::MouseCmd::LeftClickItem, rep, fx);
+            }
+            CoreCmd::MouseRightClickItem => {
+                self.mouse_command(super::mouse::MouseCmd::RightClickItem, rep, fx);
+            }
+            CoreCmd::MouseLeftLockToggle => {
+                self.mouse_command(super::mouse::MouseCmd::LeftLockToggle, rep, fx);
+            }
+            CoreCmd::MouseRightLockToggle => {
+                self.mouse_command(super::mouse::MouseCmd::RightLockToggle, rep, fx);
+            }
+            CoreCmd::MouseRouteToReview => {
+                self.mouse_command(super::mouse::MouseCmd::RouteToReview, rep, fx);
+            }
+            CoreCmd::MouseReviewToPointer => {
+                self.mouse_command(super::mouse::MouseCmd::ReviewToPointer, rep, fx);
+            }
+            CoreCmd::MouseSayPosition => {
+                self.mouse_command(super::mouse::MouseCmd::SayPosition, rep, fx);
+            }
             planned_cmds!() => {
                 // Declared but not implemented: the keymap never routes these (inert), so this
                 // is only reachable through a stale table. Say so instead of staying silent.
@@ -744,6 +774,9 @@ impl Reader {
                 let h = c.spec().help_text();
                 if let super::spec::Availability::Planned(_) = c.spec().available {
                     msg!(InputHelpPlanned, help = h)
+                } else if c.spec().gate.is_some() && !self.cmd.pointer.is_open() {
+                    // RG-7: a gated command is described normally, with a note while its gate is closed.
+                    format!("{h}, {}", t(M::MouseNotAvailableNow))
                 } else {
                     h.to_owned()
                 }
@@ -772,8 +805,10 @@ impl Reader {
                 self.say(text, fx);
             }
             ControlMsg::Input(n) => self.on_input_notice(n, fx),
+            ControlMsg::Pointer(m) => self.on_pointer(m, now, fx),
+            ControlMsg::PointerReply(r) => self.on_pointer_reply(r, now, fx),
+            ControlMsg::PointerHint(h) => self.cmd.pointer_hint = Some(h),
         }
-        let _ = now;
     }
 
     fn on_input_notice(&mut self, n: InputNotice, fx: &mut ReaderEffects) {
@@ -836,7 +871,8 @@ impl Reader {
             || self.keys.exact != l.mode_keys.exact
             || self.keys.quick_nav != l.mode_keys.quick_nav
             || self.keys.web_escape != l.mode_keys.web_escape
-            || self.keys.letters != l.mode_keys.letters;
+            || self.keys.letters != l.mode_keys.letters
+            || self.keys.gated != l.mode_keys.gated;
         self.cmd.republish();
         // Messages and role words follow the speech language of the new settings.
         gorca_i18n::set_language(gorca_i18n::Lang::from_code(
@@ -845,6 +881,15 @@ impl Reader {
         // The grab set follows the keymap (HR-1): re-sent only when the keys changed, and
         // always once at startup, which is when the source learns what to grab.
         self.keys = l.mode_keys.clone();
+        self.keys.open_gates = self.cmd.pointer.open_bits();
+        // `mouse.enabled` (a Base key) drives the pointer gate; only a change moves it.
+        if self.cmd.pointer.enabled() != l.settings.mouse.enabled {
+            self.on_pointer(
+                super::pointer_gate::PointerMsg::Enabled(l.settings.mouse.enabled),
+                self.now,
+                fx,
+            );
+        }
         if keys_changed || l.cause == LoadCause::Startup {
             fx.push(ReaderEffect::SetGrabSet(self.current_grabs()));
         }

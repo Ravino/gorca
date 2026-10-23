@@ -15,6 +15,7 @@ use gorca_rt::EpochCell;
 
 use super::*;
 
+mod mouse;
 mod profiles;
 mod quick;
 use crate::directory::MirrorDirectory;
@@ -156,6 +157,8 @@ fn spoken(fx: &ReaderEffects) -> Vec<String> {
             | ReaderEffect::QueryActiveWindowFocus
             | ReaderEffect::ArmTimer(_)
             | ReaderEffect::SetGrabSet(_)
+            | ReaderEffect::Pointer(_)
+            | ReaderEffect::PointerAt(_)
             | ReaderEffect::SpeechCtl(_)
             | ReaderEffect::Config(_)
             | ReaderEffect::ReviewNav { .. }
@@ -183,6 +186,8 @@ fn ctls(fx: &ReaderEffects) -> Vec<SpeechCtl> {
             | ReaderEffect::QueryActiveWindowFocus
             | ReaderEffect::ArmTimer(_)
             | ReaderEffect::SetGrabSet(_)
+            | ReaderEffect::Pointer(_)
+            | ReaderEffect::PointerAt(_)
             | ReaderEffect::Config(_)
             | ReaderEffect::ReviewNav { .. }
             | ReaderEffect::ReviewBuild(_)

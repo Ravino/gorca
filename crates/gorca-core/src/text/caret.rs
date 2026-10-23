@@ -39,6 +39,26 @@ pub const WINDOW_RADIUS: u32 = 2048;
 /// A caret event this close behind an insert or delete at the same offset is its echo (CR-4).
 const ABSORB: Duration = Duration::from_millis(50);
 const ABSORB_MS: u64 = 50;
+/// How long the text of a leaf stays valid while the tracking sits on the editable's root: the
+/// events of one edit arrive within milliseconds of each other.
+const LEAF_MEMO_MS: u64 = 500;
+const LEAF_MEMO_TTL: Duration = Duration::from_millis(LEAF_MEMO_MS);
+
+/// One change found in a rebuilt text node ([`CaretState::leaf_diff`]).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LeafDiff {
+    Removed { offset: u32, len: u32, text: String },
+    Inserted { offset: u32, len: u32, text: String },
+}
+
+/// The text of the leaf the tracking just left for the root of its rich editable.
+#[derive(Clone, Debug)]
+struct LeafMemo {
+    node: NodeKey,
+    text: Vec<char>,
+    caret: Option<u32>,
+    at: Instant,
+}
 /// A caret event this long before its key (lanes are separate threads) is still correlated
 /// (EV-4).
 pub const HOLD: Duration = Duration::from_millis(5);
@@ -457,6 +477,15 @@ pub struct Tracked {
     /// An insert that was spoken as unexplained text, for a late key that explains it.
     flushed_ins: Option<HeldIns>,
     held_del: Option<HeldDel>,
+    /// The text of the last leaf of a rich editable the machine read, kept while the tracking
+    /// sits on the editable's root (its churn events retarget there): a framework that rebuilds
+    /// the text node on every edit announces the new node as one insert of its whole text, and
+    /// only the old text tells what a Backspace took out of it ([`CaretState::leaf_removal`]).
+    leaf_memo: Option<LeafMemo>,
+    /// The caret event that follows a removal found in a rebuilt text node (see `leaf_memo`):
+    /// the editable's churn events retarget the tracking and replace `absorb` in between, so
+    /// the echo is remembered here, apart from it.
+    erase_caret: Option<Absorb>,
     /// A delete that no erase key explains arrived while a typed key was waiting for its
     /// insert: the key may have replaced a selection (Gecko reports a delete and a caret move
     /// and no insert at all). The caret event that follows settles the key's expectation.
@@ -515,6 +544,8 @@ impl Tracked {
             held_ins: None,
             flushed_ins: None,
             held_del: None,
+            leaf_memo: None,
+            erase_caret: None,
             replaced: None,
             cut_at: None,
             clip_quiet: false,
@@ -555,6 +586,10 @@ impl Tracked {
             let mut t = w.into_bytes();
             t.fill(0);
             std::hint::black_box(&t);
+        }
+        if let Some(mut m) = self.leaf_memo.take() {
+            m.text.fill('\0');
+            std::hint::black_box(&m);
         }
     }
 
@@ -617,6 +652,14 @@ impl Tracked {
     }
 
     fn absorbs(&mut self, off: u32, now: Instant) -> bool {
+        match self.erase_caret {
+            Some(a) if a.at == off && now <= a.until => {
+                self.erase_caret = None;
+                return true;
+            }
+            Some(a) if now > a.until => self.erase_caret = None,
+            Some(_) | None => {}
+        }
         match self.absorb {
             Some(a) if (a.at == off || a.alt == Some(off)) && now <= a.until => {
                 self.absorb = None;
@@ -791,6 +834,105 @@ impl CaretState {
         matches!(self, CaretState::Off)
     }
 
+    /// The rebuilt node the tracking moved to holds `text` now: it is the window, so the next
+    /// edit of the same node has something to be diffed against (a run of Backspaces).
+    pub fn seed_leaf(&mut self, text: &str, caret: Option<u32>) {
+        let Some(t) = self.tracked_mut() else {
+            return;
+        };
+        t.win.fill(&TextWindowFill {
+            base: 0,
+            text: Arc::from(text),
+            len: to_u32(text.chars().count()),
+            caret,
+        });
+        t.caret = caret;
+    }
+
+    /// The removal returned by [`Self::leaf_removal`] was fed to the machine: the caret event
+    /// that lands at `at` is its echo.
+    pub fn leaf_erased(&mut self, at: u32, now: Instant) {
+        if let Some(t) = self.tracked_mut() {
+            t.caret = Some(at);
+            t.erase_caret = Some(Absorb {
+                at,
+                alt: None,
+                until: now + ABSORB,
+            });
+        }
+    }
+
+    /// A rebuilt text node of the tracked rich editable carries `new` as the whole of its text
+    /// (one insert at 0). When that is the text the machine last read with one run taken out of
+    /// it, or one run put into it (and a typed key is waiting for its insert), return the change.
+    /// This is how Backspace, Delete and typing are heard in an editor that replaces the text
+    /// node on every edit (Signal's composer): the browser sends no delete and no insert of the
+    /// typed run, only the new node. A text that is not the last one with a single change is not
+    /// ours (a clock, a log, a cut and a paste at once) and gives `None`.
+    pub fn leaf_diff(&self, new: &str, now: Instant, now_ms: u64) -> Option<LeafDiff> {
+        let t = self.tracked()?;
+        if !t.kind.editable || t.kind.secret {
+            return None;
+        }
+        let (old, caret): (&[char], Option<u32>) = if t.node == t.root {
+            let m = t.leaf_memo.as_ref()?;
+            if now.saturating_duration_since(m.at) > LEAF_MEMO_TTL {
+                return None;
+            }
+            (&m.text, m.caret)
+        } else if t.win.whole() {
+            (t.win.chars(), t.caret)
+        } else {
+            return None;
+        };
+        let new: Vec<char> = new.chars().collect();
+        if new.len() == old.len() {
+            return None;
+        }
+        let inserting = new.len() > old.len();
+        // The shorter text is the longer one with one run missing; find the run.
+        let (short, long) = if inserting {
+            (old, &new[..])
+        } else {
+            (&new[..], old)
+        };
+        let n = long.len() - short.len();
+        let fits = |at: usize| {
+            at + n <= long.len() && long[..at] == short[..at] && long[at + n..] == short[at..]
+        };
+        let pre = short.iter().zip(long).take_while(|(a, b)| a == b).count();
+        // The caret says where a typed or erased run sits when the text is ambiguous ("ll").
+        let hinted = caret.map(|c| c as usize).into_iter().flat_map(|c| {
+            if inserting {
+                [Some(c), None]
+            } else {
+                [c.checked_sub(n), Some(c)]
+            }
+        });
+        let at = hinted
+            .flatten()
+            .find(|&at| fits(at))
+            .or_else(|| fits(pre).then_some(pre))?;
+        let run: String = long[at..at + n].iter().collect();
+        if inserting {
+            // Only what a key just typed: an unrelated node that starts with the old text is not.
+            t.expect
+                .newest_age_ms(now_ms)
+                .is_some_and(|age| age <= LEAF_MEMO_MS)
+                .then_some(LeafDiff::Inserted {
+                    offset: to_u32(at),
+                    len: to_u32(n),
+                    text: run,
+                })
+        } else {
+            Some(LeafDiff::Removed {
+                offset: to_u32(at),
+                len: to_u32(n),
+                text: run,
+            })
+        }
+    }
+
     /// Does this machine speak `key` itself, so the generic key echo must stay silent? A typed
     /// character in an editable object is echoed from the key (TE-1); BackSpace and Delete are
     /// spoken from the deletion (TE-5), not by name.
@@ -888,9 +1030,38 @@ impl CaretState {
         if t.node == node {
             return self;
         }
+        // Leaving a leaf for the editable's root keeps what the leaf held; entering a leaf
+        // forgets it (the memo is only for the replacement event of the next leaf).
+        // Coming back to that same leaf a moment later (the root's churn comes between an edit
+        // and its caret event) restores its text as the window: the next Backspace has
+        // something to be diffed against.
+        let restore = if node == t.root {
+            None
+        } else {
+            t.leaf_memo
+                .take()
+                .filter(|m| m.node == node && now.saturating_duration_since(m.at) <= LEAF_MEMO_TTL)
+        };
+        if t.node != t.root && node == t.root && !t.kind.secret && t.win.whole() {
+            t.leaf_memo = Some(LeafMemo {
+                node: t.node,
+                text: t.win.chars().to_vec(),
+                caret: t.caret,
+                at: now,
+            });
+        }
         t.node = node;
         t.caret = None;
         t.win.invalidate();
+        if let Some(m) = restore {
+            let text: String = m.text.iter().collect();
+            t.win.fill(&TextWindowFill {
+                base: 0,
+                len: to_u32(m.text.len()),
+                text: Arc::from(text),
+                caret: None,
+            });
+        }
         t.sel.clear();
         t.absorb = None;
         t.own_moves.clear();

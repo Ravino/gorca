@@ -28,8 +28,8 @@ pub use presets::Presets;
 pub use save::{SaveError, save};
 pub use settings::{
     Apply, Backend, BoundaryMode, Caps, Confirmations, EchoSettings, EditingSettings,
-    InterruptPolicy, KeyScope, KeyboardSettings, Layout, ModeDefault, Overlay, Preset,
-    ProfilesSettings, Punct, SCHEMA, SETTINGS, SettingDef, SettingType, Settings, SpeechSettings,
-    TextSettings, Verbosity, VerbositySettings, WordLevel, defaults_toml, defaults_toml_commented,
-    resolve_language, sections,
+    IfCoveredPolicy, InterruptPolicy, ItemClick, KeyScope, KeyboardSettings, Layout, ModeDefault,
+    MouseSettings, Overlay, Preset, ProfilesSettings, Punct, SCHEMA, SETTINGS, SettingDef,
+    SettingType, Settings, SpeechSettings, TextSettings, Verbosity, VerbositySettings, WordLevel,
+    defaults_toml, defaults_toml_commented, resolve_language, sections,
 };

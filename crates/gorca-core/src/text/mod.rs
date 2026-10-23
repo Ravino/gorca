@@ -37,7 +37,7 @@ use crate::SpeechIntent;
 use crate::mode::Mode;
 use crate::present::message;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
-use caret::{CaretState, Cfg, Ctx, Edit, In, Kind, Out, Reply, Spell, Spoken};
+use caret::{CaretState, Cfg, Ctx, Edit, In, Kind, LeafDiff, Out, Reply, Spell, Spoken};
 use say_all::{Act, Run, SayAll, Target};
 
 /// Most parent hops followed to place a node inside the focused rich editable.
@@ -734,6 +734,8 @@ impl Reader {
             TextMsg::Edit { node, delta } => {
                 if self.term_is(node) {
                     self.term_edit(delta, fx);
+                } else if self.text_active() && self.leaf_replaced(node, &delta, fx) {
+                    // handled as the deletion it is
                 } else if self.text_active() && self.text_accepts(node, None, fx) {
                     let edit = match delta {
                         TextDelta::Insert { offset, len, text } => Edit::Insert {
@@ -759,6 +761,87 @@ impl Reader {
             TextMsg::Fetched { req, epoch, result } => self.on_text_fetched(req, epoch, result, fx),
             TextMsg::Progress(p) => self.say_all_progress(p, fx),
         }
+    }
+
+    /// A rich editable that rebuilds its text node on every edit (Lexical, Draft, Quill; Signal's
+    /// composer) announces the replacement as one insert of the whole text at 0 on a node the
+    /// mirror has never seen, and sends no delete: the text the machine last read, minus a run,
+    /// is what a Backspace or Delete took out. The tracking moves to the new node and the
+    /// removal is fed to the machine as the delete it is. False when the event is anything else.
+    fn leaf_replaced(&mut self, node: NodeKey, delta: &TextDelta, fx: &mut ReaderEffects) -> bool {
+        let TextDelta::Insert {
+            offset: 0, text, ..
+        } = delta
+        else {
+            return false;
+        };
+        let Some(t) = self.text.caret.tracked() else {
+            return false;
+        };
+        if !t.kind.editable
+            || !t.hosts
+            || t.node == node
+            || node == t.root
+            || node.app != t.root.app
+        {
+            return false;
+        }
+        let root = t.root;
+        let Some(new) = decode(text.as_ref()) else {
+            return false;
+        };
+        let now_ms = u64::try_from(
+            self.now
+                .saturating_duration_since(self.text.origin)
+                .as_millis(),
+        )
+        .unwrap_or(u64::MAX);
+        let Some(diff) = self.text.caret.leaf_diff(&new, self.now, now_ms) else {
+            return false;
+        };
+        if self.text_ancestry(root, node) == Ancestry::Outside {
+            return false;
+        }
+        self.text.stats.retargets += 1;
+        self.text_step(In::Retarget { node, at: None }, fx);
+        // The new node starts as the old text, so the machine applies the change to a window
+        // that holds what the user was typing in (the word before a separator, the next erase).
+        let mut old: Vec<char> = new.chars().collect();
+        match &diff {
+            LeafDiff::Removed { offset, text, .. } => {
+                let at = (*offset as usize).min(old.len());
+                old.splice(at..at, text.chars());
+            }
+            LeafDiff::Inserted { offset, len, .. } => {
+                let at = (*offset as usize).min(old.len());
+                old.drain(at..(at + *len as usize).min(old.len()));
+            }
+        }
+        let old: String = old.into_iter().collect();
+        self.text.caret.seed_leaf(&old, None);
+        // Where the caret lands after the change, for the caret event that follows it.
+        let (edit, caret) = match diff {
+            LeafDiff::Removed { offset, len, text } => (
+                Edit::Delete {
+                    offset,
+                    len,
+                    text: Some(text),
+                },
+                offset,
+            ),
+            LeafDiff::Inserted { offset, len, text } => (
+                Edit::Insert {
+                    offset,
+                    len,
+                    text: Some(text),
+                },
+                offset.saturating_add(len),
+            ),
+        };
+        self.text_step(In::Edit(edit), fx);
+        let now = self.now;
+        self.text.caret.leaf_erased(caret, now);
+        true
     }
 
     /// An editable root is tracked, has not yet learned whether it hosts paragraphs, and

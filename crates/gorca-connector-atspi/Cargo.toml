@@ -11,6 +11,7 @@ publish.workspace = true
 gorca-model = { workspace = true }
 gorca-rt = { workspace = true }
 gorca-connector-api = { workspace = true }
+gorca-output-api = { workspace = true }
 gorca-doc-source-api = { workspace = true }
 gorca-dbus = { workspace = true }
 gorca-fuse = { workspace = true }

@@ -1,0 +1,30 @@
+# Mouse emulation messages (ADR-0025 section 4).
+
+mouse-left-click = Left click
+mouse-right-click = Right click
+mouse-middle-click = Middle click
+mouse-left-locked = Left button locked
+mouse-left-unlocked = Left button unlocked
+mouse-right-locked = Right button locked
+mouse-right-unlocked = Right button unlocked
+mouse-lock-expired = {button} button released after 2 minutes
+mouse-button-left = Left
+mouse-button-right = Right
+mouse-moved = Mouse moved
+mouse-window-hidden = Window not visible
+mouse-no-location = No location
+mouse-covered = Covered by {window}
+mouse-covered-shell = Covered
+mouse-unavailable-helper = Mouse not available: the pointer service is not running
+mouse-unavailable-old = Mouse not available: the pointer service is too old
+mouse-unavailable-cap = Mouse not available: pointer permission is not granted. {hint}
+mouse-unavailable-denied = Mouse not available: gorca is not allowed by the pointer service
+mouse-unavailable-off = Mouse emulation is off
+mouse-locked-session = Not available while the screen is locked
+mouse-not-responding = Mouse not responding
+mouse-busy = Mouse busy
+mouse-nothing = Nothing under the mouse
+mouse-window = window
+mouse-position = {window}, {x}, {y}
+mouse-position-screen = Screen {x}, {y}, monitor {n}
+mouse-not-available-now = not available now

@@ -96,6 +96,10 @@ pub(super) enum Act {
     AppKeys(&'static [u32]),
     /// AT-SPI `GrabFocus` on the first node with this role and name fragment: what Tab ends in.
     Focus(i32, &'static str),
+    /// `GrabFocus` on the n-th (0-based) focusable node of the document in document order: what
+    /// the n-th Tab press ends in, whatever the node's name is (label-source tests: the name may
+    /// be empty, so it cannot be the key).
+    FocusNth(usize),
     /// AT-SPI `DoAction(0)` on that node: a click without moving the pointer.
     Do(i32, &'static str),
     /// Focus the document and press Ctrl+Home: a known cursor position for the next block.
@@ -507,6 +511,23 @@ fn act(w: &mut Web, doc: &DocRef, a: Act, node: &mut Option<String>) -> Result<(
             *node = Some(path);
             Ok((t, true))
         }
+        Act::FocusNth(i) => {
+            let r = w.ax.request(
+                "focusables",
+                &format!("\"bus\":\"{}\",\"root\":\"{}\"", w.bus, doc.path),
+                Duration::from_secs(30),
+            )?;
+            let path = r
+                .split("\"path\":\"")
+                .skip(1)
+                .nth(i)
+                .and_then(|t| t.split('"').next())
+                .map(str::to_owned)
+                .with_context(|| format!("focusable #{i} not found"))?;
+            let t = w.focus(&path)?;
+            *node = Some(path);
+            Ok((t, true))
+        }
         Act::Do(r, name) => {
             let path = find_role(w, &doc.path, r, name)?;
             w.unsettled = true;
@@ -586,7 +607,7 @@ fn run_step(w: &mut Web, doc: &DocRef, sc: &'static str, st: &Step) -> StepRes {
     }
     // A focus step is timed from the moment the focus event reached the bus, not from the
     // `GrabFocus` call: the browser's own work is not gorca's (as FM1).
-    if let (Act::Focus(..), Some(n)) = (st.act, node.as_deref())
+    if let (Act::Focus(..) | Act::FocusNth(_), Some(n)) = (st.act, node.as_deref())
         && let Some(arrival) = w.tap.first_after(FOCUS, &w.bus, Some(n), t_emit)
     {
         t_emit = arrival;

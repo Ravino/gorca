@@ -1119,6 +1119,7 @@ version = "0.0.0"
 dependencies = [
  "gorca-ingress",
  "gorca-model",
+ "gorca-output-api",
  "gorca-rt",
  "thiserror",
  "tokio",
@@ -1137,6 +1138,7 @@ dependencies = [
  "gorca-fuse",
  "gorca-ingress",
  "gorca-model",
+ "gorca-output-api",
  "gorca-rt",
  "gorca-sem-atspi",
  "gorca-testkit",
@@ -1207,6 +1209,7 @@ dependencies = [
  "gorca-model",
  "gorca-output-api",
  "gorca-rt",
+ "gorca-shell-helper",
  "gorca-speech",
  "gorca-speech-ssip",
  "gorca-speech-voicego",
@@ -1455,6 +1458,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gorca-shell-helper"
+version = "0.0.0"
+dependencies = [
+ "futures-lite",
+ "gorca-dbus",
+ "gorca-output-api",
+ "gorca-rt",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
 name = "gorca-speech"
 version = "0.0.0"
 dependencies = [
@@ -1507,6 +1524,7 @@ dependencies = [
  "gorca-fact-api",
  "gorca-ingress",
  "gorca-model",
+ "gorca-output-api",
  "gorca-rt",
  "libc",
  "serde",

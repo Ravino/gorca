@@ -980,11 +980,14 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
             &eff[ix(Group::NameFrom)],
             Slot::Val(Val::NameFrom(NameFrom::Content))
         );
-    let current_name_len = eff[ix(Group::Name)].text().map_or(0, |t| t.len());
+    let current_name = eff[ix(Group::Name)].text().map(Arc::clone);
     if (fillable(&eff, &layer, Group::Name) || engine_content_name)
         && role_in(profile.rules.content_named)
         && let Some(c) = name_from_content(nb.children, nb.more_children, &profile.limits)
-        && (!engine_content_name || c.name.len() > current_name_len)
+        && (!engine_content_name
+            || current_name
+                .as_deref()
+                .is_some_and(|own| crate::value::name_extends(own, &c.name)))
     {
         truncated.set(Group::Name, c.truncated);
         if T::ON {

@@ -8,7 +8,7 @@ use gorca_input_api::{
     ModeKind, Modifiers, TableKind, keypad_digit_keysym, keysym_of_code, modifier_keysym, sym,
 };
 
-use super::spec::CommandTable;
+use super::spec::{CommandTable, RuntimeGate};
 use super::table::CoreCmd;
 use crate::ext::{ExtCmdSpec, ExtCommands};
 
@@ -341,7 +341,26 @@ pub fn chord_grabs(
     mode: ModeKind,
     table: &KeysymTable,
 ) -> (Vec<Chord>, Vec<Chord>) {
-    let g = grabs_where(km, mode, table, |_| true);
+    let g = grabs_where(km, mode, table, |b| gate_of(b).is_none());
+    (g.plain, g.exact)
+}
+
+/// The runtime gate of a bound command, if it has one (ADR-0025 RG-1).
+fn gate_of(b: &Bound) -> Option<RuntimeGate> {
+    CoreCmd::from_id(b.cmd).and_then(|c| c.spec().gate)
+}
+
+/// The non-gorca chords of the commands behind `gate` (RG-1), `(plain, exact)`, compiled exactly
+/// like [`chord_grabs`]. They are grabbed only while the gate is open. Keypad chords are exact and
+/// Num Lock off only (RG-3): `KP_Divide` and `KP_Multiply` have one keysym in both Num Lock states,
+/// so the `(KP_Divide, 0)` grab plus its Caps Lock variant never matches with Num Lock on.
+pub fn gated_chord_grabs(
+    km: &CompiledKeymap,
+    mode: ModeKind,
+    table: &KeysymTable,
+    gate: RuntimeGate,
+) -> (Vec<Chord>, Vec<Chord>) {
+    let g = grabs_where(km, mode, table, |b| gate_of(b) == Some(gate));
     (g.plain, g.exact)
 }
 
@@ -349,7 +368,9 @@ pub fn chord_grabs(
 /// browse binding except Escape, which is grabbed only in auto focus mode.
 pub fn browse_grabs(km: &CompiledKeymap, table: &KeysymTable) -> (Vec<Chord>, Vec<Chord>) {
     let esc = CoreCmd::BrowseEscape.id();
-    let g = grabs_where(km, ModeKind::Browse, table, |b| b.cmd != esc);
+    let g = grabs_where(km, ModeKind::Browse, table, |b| {
+        b.cmd != esc && gate_of(b).is_none()
+    });
     (g.plain, g.exact)
 }
 
@@ -840,7 +861,13 @@ mod tests {
                         "quicknav.prev.article",
                     ]
                 };
-                if by_design.contains(&cmd.name()) {
+                // ADR-0025 QM-1: the middle click and the Orca-style item clicks ship unbound.
+                let mouse_unbound = [
+                    "mouse.middle_click",
+                    "mouse.left_click_item",
+                    "mouse.right_click_item",
+                ];
+                if by_design.contains(&cmd.name()) || mouse_unbound.contains(&cmd.name()) {
                     continue;
                 }
                 assert!(
@@ -1091,6 +1118,93 @@ mod tests {
         let (_, exact) = grabs("[keyboard]\npreset=\"orca\"\n");
         // review.toggle is KP_Subtract; KP_Home is review.prev_line.
         assert!(exact.iter().any(|c| c.keysym == KP_HOME));
+    }
+
+    const KP_DIVIDE: u32 = 0xffaf;
+    const KP_MULTIPLY: u32 = 0xffaa;
+
+    fn gated(text: &str) -> (Vec<Chord>, Vec<Chord>) {
+        let c = compiled(text);
+        gated_chord_grabs(
+            &c.keymap,
+            ModeKind::Focus,
+            &KeysymTable::us(),
+            RuntimeGate::Pointer,
+        )
+    }
+
+    #[test]
+    fn desktop_presets_gate_the_keypad_mouse_chords_num_lock_off_only() {
+        for preset in ["nvda", "orca"] {
+            let text = format!("[keyboard]\npreset=\"{preset}\"\nlayout=\"desktop\"\n");
+            let (plain, exact) = gated(&text);
+            assert!(plain.is_empty(), "{preset}: keypad chords are exact");
+            // KP_Divide and KP_Multiply, plain and with Shift, each with and without Caps Lock.
+            let mut want: Vec<(u32, Modifiers)> = Vec::new();
+            for sym in [KP_DIVIDE, KP_MULTIPLY] {
+                for m in [Modifiers::empty(), Modifiers::SHIFT] {
+                    for lock in [Modifiers::empty(), Modifiers::LOCK] {
+                        want.push((sym, m | lock));
+                    }
+                }
+            }
+            for (sym, m) in &want {
+                assert!(
+                    exact.iter().any(|c| c.keysym == *sym && c.modifiers == *m),
+                    "{preset}: missing {sym:#x} {m:?}"
+                );
+            }
+            assert_eq!(exact.len(), want.len(), "{preset}: {exact:?}");
+            // RG-3: never a Num Lock (Mod2) variant, so with Num Lock on the keypad types.
+            assert!(
+                exact.iter().all(|c| !c.modifiers.contains(Modifiers::MOD2)),
+                "{preset}: no Num Lock variant is grabbed"
+            );
+            // The ordinary grab set must not contain them: they are grabbed only while the gate is open.
+            let c = compiled(&text);
+            let (_, always) = chord_grabs(&c.keymap, ModeKind::Focus, &KeysymTable::us());
+            assert!(
+                always
+                    .iter()
+                    .all(|c| c.keysym != KP_DIVIDE && c.keysym != KP_MULTIPLY),
+                "{preset}: gated chords leaked into the always-on set"
+            );
+            let (qn, _) = browse_grabs(&c.keymap, &KeysymTable::us());
+            assert!(
+                qn.iter()
+                    .all(|c| c.keysym != KP_DIVIDE && c.keysym != KP_MULTIPLY)
+            );
+        }
+    }
+
+    #[test]
+    fn laptop_presets_have_no_gated_grab() {
+        for preset in ["nvda", "orca"] {
+            let text = format!("[keyboard]\npreset=\"{preset}\"\nlayout=\"laptop\"\n");
+            let (plain, exact) = gated(&text);
+            assert!(
+                plain.is_empty() && exact.is_empty(),
+                "{preset}: gorca+ chords need no grab (KM-4)"
+            );
+        }
+    }
+
+    #[test]
+    fn every_gated_command_is_a_mouse_command_and_presets_bind_them_conflict_free() {
+        for c in CoreCmd::ALL {
+            if c.spec().gate.is_some() {
+                assert!(c.name().starts_with("mouse."), "{}", c.name());
+                assert!(c.is_implemented());
+            }
+        }
+        // Loading each preset reports no diagnostic (no duplicate or unknown chord, KC checks).
+        for preset in ["nvda", "orca"] {
+            for layout in ["desktop", "laptop"] {
+                let text = format!("[keyboard]\npreset=\"{preset}\"\nlayout=\"{layout}\"\n");
+                let c = compiled(&text);
+                assert!(c.diags.is_empty(), "{preset}/{layout}: {:?}", c.diags);
+            }
+        }
     }
 
     #[test]

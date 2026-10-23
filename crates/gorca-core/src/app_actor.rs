@@ -173,6 +173,7 @@ fn fill_reply(r: Result<BackendReply, BackendError>) -> FillReply {
             | BackendReply::Unit(_)
             | BackendReply::Selections(_)
             | BackendReply::Format(_)
+            | BackendReply::Target(_)
             | BackendReply::Window(_),
         ) => FillReply::Err(FillError::Protocol),
         Err(e) => FillReply::Err(fill_error(&e)),

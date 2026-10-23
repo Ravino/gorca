@@ -274,6 +274,8 @@ struct Shared {
     app_policy: Option<Arc<dyn crate::builtin_ext::AppPolicy>>,
     /// The native terminal policy (ADR-0008 amendment 1), if the daemon installed one.
     term_provider: Option<Arc<dyn crate::TermProvider>>,
+    /// The pointer output (ADR-0025): the GNOME Shell helper client, when the daemon wires one.
+    pointer: Option<Arc<dyn gorca_output_api::PointerSink>>,
 }
 
 /// The document side of the core: the focus join, the directory of documents, the registry's
@@ -356,6 +358,7 @@ impl Core {
                 ext: None,
                 app_policy: None,
                 term_provider: None,
+                pointer: None,
             }),
             inbox,
             registrars: Vec::new(),
@@ -383,6 +386,23 @@ impl Core {
         if let Some(sh) = Arc::get_mut(&mut self.shared) {
             sh.term_provider = Some(provider);
         }
+        self
+    }
+
+    /// Wire the pointer output (ADR-0025 MO-4): its availability gates the keypad mouse chords, the
+    /// `mouse.*` commands run on it. Call before [`Core::run`].
+    #[must_use]
+    pub fn with_pointer(mut self, sink: Arc<dyn gorca_output_api::PointerSink>) -> Self {
+        let Some(sh) = Arc::get_mut(&mut self.shared) else {
+            // A silent no-op would leave the mouse keys without a sink.
+            tracing::error!("Core::with_pointer called after the shared state was cloned: ignored");
+            debug_assert!(
+                false,
+                "Core::with_pointer must run before anything clones the shared state"
+            );
+            return self;
+        };
+        sh.pointer = Some(sink);
         self
     }
 
@@ -1001,6 +1021,7 @@ async fn do_fetch(shared: Arc<Shared>, job: FetchJob) {
         | BackendReply::Unit(_)
         | BackendReply::Selections(_)
         | BackendReply::Format(_)
+        | BackendReply::Target(_)
         | BackendReply::Window(_) => {
             Err(BackendError::Protocol("unexpected reply kind".to_owned()))
         }
@@ -1103,6 +1124,14 @@ async fn reader_loop(
     let mut desktop_tasks: JoinSet<()> = JoinSet::new();
     // Text fetches, likewise: bounded, owned here, aborted with the loop (ADR-0007 TW-5).
     let mut text_tasks: JoinSet<()> = JoinSet::new();
+    // Pointer calls (ADR-0025): one task per request, bounded, plus the availability forwarder.
+    let mut pointer_tasks: JoinSet<()> = JoinSet::new();
+    if let Some(sink) = &shared.pointer {
+        pointer_tasks.spawn(forward_pointer_availability(
+            Arc::clone(sink),
+            shared.senders.control.clone(),
+        ));
+    }
     loop {
         let msg = tokio::select! {
             biased;
@@ -1114,6 +1143,7 @@ async fn reader_loop(
             Some(_) = review_tasks.join_next(), if !review_tasks.is_empty() => continue,
             Some(_) = desktop_tasks.join_next(), if !desktop_tasks.is_empty() => continue,
             Some(_) = text_tasks.join_next(), if !text_tasks.is_empty() => continue,
+            Some(_) = pointer_tasks.join_next(), if !pointer_tasks.is_empty() => continue,
             m = inbox.next() => match m {
                 Some(m) => m,
                 None => return,
@@ -1190,6 +1220,14 @@ async fn reader_loop(
                     // Deadlines within a millisecond share one wake; the set is bounded.
                     if timers.len() < MAX_TIMERS {
                         timers.insert(at);
+                    } else if let Some(last) = timers.last().copied()
+                        && at < last
+                    {
+                        // Full: the farthest deadline gives way to a nearer one. Every subsystem re-arms its own
+                        // pending deadline when the Reader timer fires (N1), so nothing due soon is ever lost,
+                        // in particular not the drag-lock release (ADR-0025 MI-6).
+                        timers.pop_last();
+                        timers.insert(at);
                     }
                 }
                 ReaderEffect::QueryActiveWindowFocus => {
@@ -1199,6 +1237,7 @@ async fn reader_loop(
                     shared.grabs.send_replace(set);
                 }
                 ReaderEffect::SpeechCtl(ctl) => shared.speech.control(ctl),
+                ReaderEffect::Pointer(req) => spawn_pointer(&mut pointer_tasks, shared, req),
                 ReaderEffect::Config(req) => send_config(shared, req),
                 ReaderEffect::Web(w) => exec_web(shared, w),
                 ReaderEffect::SayAllChunk { intent, first } => {
@@ -1215,7 +1254,8 @@ async fn reader_loop(
                 | ReaderEffect::ReviewBuild(_)
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
-                | ReaderEffect::ReviewAct { .. }) => spawn_review(&mut review_tasks, shared, e),
+                | ReaderEffect::ReviewAct { .. }
+                | ReaderEffect::PointerAt(_)) => spawn_review(&mut review_tasks, shared, e),
                 ReaderEffect::Desktop(d) => spawn_desktop(&mut desktop_tasks, shared, d),
             }
         }
@@ -1375,6 +1415,68 @@ const REVIEW_TASKS_MAX: usize = 32;
 /// has), never a review task refused.
 const DESKTOP_TASKS_MAX: usize = 16;
 
+/// Pointer requests in flight at once (ADR-0025 EX-3 bounds the sink's own queue; this bounds the tasks).
+const POINTER_TASKS_MAX: usize = 16;
+/// One pointer call (ADR-0025 EX-2).
+const POINTER_CALL: Duration = Duration::from_millis(150);
+
+/// Mirror the sink's availability watch into the Reader (the runtime gate, ADR-0025 RG-5).
+async fn forward_pointer_availability(
+    sink: Arc<dyn gorca_output_api::PointerSink>,
+    control: mpsc::Sender<crate::ControlMsg>,
+) {
+    let mut rx = sink.availability();
+    if let Some(h) = sink.permission_hint() {
+        let _ = control.send(crate::ControlMsg::PointerHint(h)).await;
+    }
+    loop {
+        let a = *rx.borrow_and_update();
+        let msg = crate::ControlMsg::Pointer(crate::PointerMsg::Avail(a));
+        if control.send(msg).await.is_err() {
+            return;
+        }
+        if rx.changed().await.is_err() {
+            return;
+        }
+    }
+}
+
+/// Run one pointer request against the sink; the answer goes back to the Reader as a message
+/// (EX-1: nothing here is on the key to speech path).
+fn spawn_pointer(tasks: &mut JoinSet<()>, shared: &Shared, req: crate::PointerReq) {
+    use gorca_output_api::{ButtonAct, PointerAvail, PointerError};
+    let reply =
+        move |result| crate::ControlMsg::PointerReply(crate::PointerReply { id: req.id, result });
+    let Some(sink) = shared.pointer.clone() else {
+        let r = Err(PointerError::Unavailable(PointerAvail::Absent));
+        let _ = shared.senders.control.try_send(reply(r));
+        return;
+    };
+    // The first task is the availability forwarder: it does not count.
+    if tasks.len() > POINTER_TASKS_MAX {
+        let _ = shared
+            .senders
+            .control
+            .try_send(reply(Err(PointerError::Busy)));
+        return;
+    }
+    let control = shared.senders.control.clone();
+    tasks.spawn(async move {
+        use crate::PointerDone as D;
+        let d = gorca_rt::Deadline(Instant::now() + POINTER_CALL);
+        let result = match req.op {
+            crate::PointerOp::Click(b, act) => sink.button(b, act, d).await.map(D::Outcome),
+            crate::PointerOp::Press(b) => sink.button(b, ButtonAct::Press, d).await.map(D::Outcome),
+            crate::PointerOp::Release(b) => {
+                sink.button(b, ButtonAct::Release, d).await.map(D::Outcome)
+            }
+            crate::PointerOp::ReleaseAll => sink.release_all(d).await.map(D::Released),
+            crate::PointerOp::Position => sink.position(d).await.map(D::Pos),
+        };
+        let _ = control.send(reply(result)).await;
+    });
+}
+
 fn review_has_room(review_tasks: &JoinSet<()>) -> bool {
     review_tasks.len() < REVIEW_TASKS_MAX
 }
@@ -1403,6 +1505,7 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         ReaderEffect::ReviewRevalidate { app, .. } => *app,
         ReaderEffect::ReviewStatusBar { root, .. } => root.app,
         ReaderEffect::ReviewAct { act, .. } => action_node(act).app,
+        ReaderEffect::PointerAt(r) => r.node.app,
         ReaderEffect::Speak(_)
         | ReaderEffect::Cue(_)
         | ReaderEffect::Fetch { .. }
@@ -1411,6 +1514,7 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         | ReaderEffect::QueryActiveWindowFocus
         | ReaderEffect::ArmTimer(_)
         | ReaderEffect::SetGrabSet(_)
+        | ReaderEffect::Pointer(_)
         | ReaderEffect::SpeechCtl(_)
         | ReaderEffect::TextFetch { .. }
         | ReaderEffect::SayAllChunk { .. }
@@ -1544,6 +1648,64 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
                 send(ReviewMsg::ActionDone { req, result });
             });
         }
+        ReaderEffect::PointerAt(req) => {
+            // Locate in the app (Interactive budget), then one call to the pointer sink (150 ms); the answer is
+            // a message, never a wait on the key path (EX-1).
+            let sink = shared.pointer.clone();
+            let control = shared.senders.control.clone();
+            set.spawn(async move {
+                use gorca_output_api::{PointerAvail, PointerError};
+                let result = async {
+                    let io = io.ok_or(PointerError::NoLocation)?;
+                    // Item clicks: the application's own action first (Orca's order); no pointer is needed for it.
+                    if let Some(item) = req.item {
+                        let action = match item {
+                            crate::ItemAction::Click => {
+                                gorca_connector_api::ActionReq::Click { node: req.node }
+                            }
+                            crate::ItemAction::ContextMenu => {
+                                gorca_connector_api::ActionReq::ContextMenu { node: req.node }
+                            }
+                        };
+                        if build::try_item_action(&io, action).await? {
+                            return Ok(crate::PointerDone::Acted);
+                        }
+                    }
+                    let sink = sink.ok_or(PointerError::Unavailable(PointerAvail::Absent))?;
+                    // An item outside the window has no location: scroll it into view once and look again.
+                    let target = match build::locate(&io, req.node, req.offset).await {
+                        Err(PointerError::NoLocation) if req.item.is_some() => {
+                            let scroll =
+                                gorca_connector_api::ActionReq::ScrollTo { node: req.node };
+                            if build::try_item_action(&io, scroll).await? {
+                                tokio::time::sleep(Duration::from_millis(60)).await;
+                                build::locate(&io, req.node, req.offset).await?
+                            } else {
+                                return Err(PointerError::NoLocation);
+                            }
+                        }
+                        other => other?,
+                    };
+                    let d = gorca_rt::Deadline(Instant::now() + POINTER_CALL);
+                    let opts = gorca_output_api::ClickOpts {
+                        if_covered: req.if_covered,
+                        ..gorca_output_api::ClickOpts::default()
+                    };
+                    match req.act {
+                        crate::AtAct::Move => sink.move_to(target, opts, d).await,
+                        crate::AtAct::Click(b) => sink.click_at(target, b, opts, d).await,
+                    }
+                    .map(crate::PointerDone::Outcome)
+                }
+                .await;
+                let _ = control
+                    .send(crate::ControlMsg::PointerReply(crate::PointerReply {
+                        id: req.id,
+                        result,
+                    }))
+                    .await;
+            });
+        }
         ReaderEffect::Speak(_)
         | ReaderEffect::Cue(_)
         | ReaderEffect::Fetch { .. }
@@ -1552,6 +1714,7 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         | ReaderEffect::QueryActiveWindowFocus
         | ReaderEffect::ArmTimer(_)
         | ReaderEffect::SetGrabSet(_)
+        | ReaderEffect::Pointer(_)
         | ReaderEffect::SpeechCtl(_)
         | ReaderEffect::TextFetch { .. }
         | ReaderEffect::SayAllChunk { .. }
@@ -1654,6 +1817,7 @@ fn spawn_text(
             | BackendReply::TextAttributes(_)
             | BackendReply::Hit(_)
             | BackendReply::Matches(_)
+            | BackendReply::Target(_)
             | BackendReply::Lines(_) => {
                 Err(BackendError::Protocol("unexpected reply kind".to_owned()))
             }
@@ -1669,6 +1833,8 @@ fn action_node(a: &gorca_connector_api::ActionReq) -> NodeKey {
         | ActionReq::SetCaret { node, .. }
         | ActionReq::Select { node }
         | ActionReq::ScrollTo { node }
+        | ActionReq::Click { node }
+        | ActionReq::ContextMenu { node }
         | ActionReq::SetValue { node, .. } => *node,
     }
 }

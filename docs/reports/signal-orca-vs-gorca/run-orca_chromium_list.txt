@@ -1,0 +1,14 @@
+settle  -       consumed=None  passed=None  focus-events=2 +0 document web name='Signal-like fixture' document web<panel<p; +1 button name='Contact 0, last message of contact 0, 10' butto
+prime   Shift   consumed=False passed=True  focus-events=1 +12 button name='Contact 0, last message of contact 0, 10' butto
+        ORCA  'left shift'
+down1   Down    consumed=False passed=True  focus-events=1 +11 button name='Contact 1, last message of contact 1, 10' butto
+down2   Down    consumed=False passed=True  focus-events=1 +11 button name='Contact 2, last message of contact 2, 10' butto
+        ORCA  'Contact 1, last message of contact 1, 10:01 button.'
+down3   Down    consumed=False passed=True  focus-events=1 +11 button name='Contact 3, last message of contact 3, 10' butto
+        ORCA  'Contact 2, last message of contact 2, 10:02 button.'
+        ORCA  'Contact 3, last message of contact 3, 10:03 button.'
+up1     Up      consumed=False passed=True  focus-events=1 +11 button name='Contact 2, last message of contact 2, 10' butto
+up2     Up      consumed=False passed=True  focus-events=1 +11 button name='Contact 1, last message of contact 1, 10' butto
+        ORCA  'Contact 2, last message of contact 2, 10:02 button.'
+        ORCA  'Contact 1, last message of contact 1, 10:01 button.'
+flush   -       consumed=None  passed=None  focus-events=1 (+0 

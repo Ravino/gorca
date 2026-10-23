@@ -185,6 +185,7 @@ fn subtree(r: BackendReply) -> Result<SnapshotBatch, BackendError> {
         | BackendReply::Unit(_)
         | BackendReply::Selections(_)
         | BackendReply::Format(_)
+        | BackendReply::Target(_)
         | BackendReply::Window(_) => {
             Err(BackendError::Protocol("unexpected reply kind".to_owned()))
         }
@@ -829,6 +830,58 @@ pub async fn revalidate(io: &ReviewIo, probe: Vec<ProbeItem>, clip: Rect) -> RrV
         RrVerdict::Changed { text_changed }
     } else {
         RrVerdict::Same
+    }
+}
+
+/// Where a pointer must go to hit `node` (or its character `offset`): the pointer resolver of the node's app
+/// (ADR-0025 2.4). Errors are the neutral pointer errors: "no location" for everything that means the node
+/// has no usable place on screen.
+pub async fn locate(
+    io: &ReviewIo,
+    node: NodeKey,
+    offset: Option<u32>,
+) -> Result<gorca_output_api::PointTarget, gorca_output_api::PointerError> {
+    use gorca_output_api::PointerError;
+    let r = with_deadline(
+        io.deadline(BudgetClass::Interactive),
+        io.call(BudgetClass::Interactive, BackendOp::Locate { node, offset }),
+    )
+    .await;
+    match r {
+        Ok(Ok(BackendReply::Target(t))) => Ok(t),
+        Ok(Ok(_)) => Err(PointerError::Failed("unexpected reply kind".to_owned())),
+        Ok(Err(BackendError::Timeout)) | Err(_) => Err(PointerError::Timeout),
+        Ok(Err(
+            BackendError::Gone
+            | BackendError::NotSupported
+            | BackendError::Unresolved
+            | BackendError::Busy
+            | BackendError::Protocol(_),
+        )) => Err(PointerError::NoLocation),
+    }
+}
+
+/// The application's own click (or context-menu) action. `Ok(true)`: done by the action. `Ok(false)`: the node
+/// has no such action (or the application refused it): use the pointer. Only a timeout is an error.
+pub async fn try_item_action(
+    io: &ReviewIo,
+    req: ActionReq,
+) -> Result<bool, gorca_output_api::PointerError> {
+    let r = with_deadline(
+        io.deadline(BudgetClass::Interactive),
+        io.call(BudgetClass::Interactive, BackendOp::Action(req)),
+    )
+    .await;
+    match r {
+        Ok(Ok(_)) => Ok(true),
+        Ok(Err(BackendError::Timeout)) | Err(_) => Err(gorca_output_api::PointerError::Timeout),
+        Ok(Err(
+            BackendError::NotSupported
+            | BackendError::Gone
+            | BackendError::Busy
+            | BackendError::Protocol(_)
+            | BackendError::Unresolved,
+        )) => Ok(false),
     }
 }
 

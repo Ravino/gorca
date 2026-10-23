@@ -250,3 +250,15 @@ cmd-profiles-edit-target-cycle = choose where changes are saved: application, si
 cmd-profiles-announce = report the active profile and where changes are saved
 cmd-profiles-suspend = turn profiles off or on
 cmd-browse-save-mode-default = save the current mode as the default for this application or site
+
+# Mouse emulation (ADR-0025).
+cmd-mouse-left-click = click the left mouse button at the mouse position
+cmd-mouse-right-click = click the right mouse button at the mouse position
+cmd-mouse-middle-click = click the middle mouse button at the mouse position
+cmd-mouse-left-click-item = click the review item with the left button
+cmd-mouse-right-click-item = click the review item with the right button
+cmd-mouse-left-lock-toggle = lock or unlock the left mouse button
+cmd-mouse-right-lock-toggle = lock or unlock the right mouse button
+cmd-mouse-route-to-review = move the mouse to the review position
+cmd-mouse-review-to-pointer = move the review cursor to the mouse
+cmd-mouse-say-position = say the mouse position

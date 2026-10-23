@@ -2279,4 +2279,10 @@ fn an_engine_content_name_of_a_container_gives_way_to_the_deeper_content_name_bu
         e.name.as_deref(),
         Some("Alice hello and more text than the subtree has")
     );
+    // One predicate with the readers (`name_extends`): a longer unrelated engine name stays, and
+    // so does a short one ("5" is a prefix of far too many texts).
+    let e = build(NameFrom::Content, "Quantity");
+    assert_eq!(e.name.as_deref(), Some("Quantity"));
+    let e = build(NameFrom::Content, "5");
+    assert_eq!(e.name.as_deref(), Some("5"));
 }

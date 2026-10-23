@@ -120,10 +120,13 @@ Helper-side rules (all handlers are a few Clutter calls plus validation, never a
 
 - **H-1 Rate limit.** Own token bucket for `pointer` methods: 20 tokens/s, burst 40; a call costs 1, a `count = 2`
   click costs 2. `GetPointer` shares the pointer bucket (reviewer F, 2026-10-19).
-- **H-1a Denied callers (C-6, also fixes v1).** One global bucket shared by all non-allow-listed senders (10 calls/s, burst 20) runs **before**
+- **H-1a Denied callers (C-6, also fixes v1).** A per-sender bucket (10 calls/s, burst 20) is the first gate for non-allow-listed senders and runs **before**
   `_authorize`; over it the call fails `rate:` with no `/proc` or config work. A negative authorization is cached per
-  sender until the sender vanishes or the config stamp changes, and `DENIED` is logged at most once per (sender,
-  stamp). Total sender-cache size stays bounded (v1: 256).
+  sender until the sender vanishes, the config stamp changes or 5 s pass, and `DENIED` is logged at most once per (sender,
+  stamp; lines are also limited globally to 1/s). Only an actual broker or `/proc` lookup (unknown sender, or a denial past its
+  5 s TTL) draws on one global lookup bucket (10/s, burst 20). A sender that is allowed never pays deny-path costs and is
+  never evicted from the identity cache; only denied/unknown entries are (oldest first, bound 512). Test: a flood of 60
+  denied connections does not change an allowed caller's authorization (`test_flood.py`).
 - **H-2 Validation.** Finite numbers only, |x|,|y| ≤ 65535; points outside the monitor union clamp (Clutter does it,
   `clamped` reports it).
 - **H-3 Held buttons, single holder (C-7d).** The device has at most one **holder** (a unique bus name). A `press`
@@ -205,8 +208,10 @@ window is on (a 2x laptop plus a 1x external screen: ratio 2 on both).
 
 Window matching (sink, pure function, table-tested):
 
-- **WM-1** Candidates: `GetWindows` rows that are visible, not minimized, with `pid == hint.pid`. If none (Flatpak:
-  the AT-SPI pid may be the a11y bus proxy's), all visible rows.
+- **WM-1** Candidates: `GetWindows` rows that are visible, not minimized, with `pid == hint.pid`. **No fallback** (security review,
+  2026-10-19): a process without a visible window is "No location"; a hostile application must not receive clicks meant for another.
+  Only a connector-verified proxy pid (`ToplevelHint::pid_is_proxy`, Flatpak) matches without the pid, and then only on an exact title,
+  an exact size and a single candidate.
 - **WM-2** Keep rows whose frame or buffer size matches `atspi_size / ratio` within ±2 px, with ratio = 1 for
   Wayland rows (`client-type`) and ratio = `x-scale` for X11 rows; this also picks `origin`.
 - **WM-3** Tie-break: equal title, then the focused window, then the topmost. Still ambiguous or empty ⇒
@@ -638,3 +643,112 @@ MO-1a and MO-2 run in parallel; MO-4 (NVDA click at pointer) is useful on its ow
 | S-6 | Pick-based occlusion cost | `get_actor_at_pos(REACTIVE)` plus the owner walk: p50 99 us, p99 351 us, max 3.0 ms (600 calls, 6 app windows). Whole handler (validation, family, pick, injection, audit) with `GORCA_TRACE`: PointerMove p50 0.37-0.49 ms p99 3.3-4.0 ms, PointerClickAt p50 0.44-0.83 ms p99 1.1-4.8 ms, GetPointer p50 0.3 ms p99 2.7-3.2 ms; client round trip p50 2.5-2.7 ms (load 14.5). M-7 (p99 <= 1 ms) is **not met under this load** with tracing on; re-measure on a quiet host. The pick API exists in 48.7 so the stacking fallback is unused. Overview, notification banners, attached `NORMAL`-type windows over a parent and other app windows all pick as non-family (`refused-occluded`). |
 
 **M-7 re-measure (2026-10-19 19:31, after review fixes F-1..F-3).** Host load average 8.8-9.9 (not quiet; CPU PSI some avg10 2%), RT kernel, no governor change, `GORCA_TRACE=1`, 6 app windows, 300 calls each at 60 ms spacing, handler time inside the Shell: PointerMove p50 0.27 ms p99 0.96 ms (max 1.6), PointerClickAt p50 0.32 ms p99 1.04 ms (max 1.3), GetPointer p50 0.22 ms p99 0.70 ms. M-7 (p99 <= 1 ms) is met within noise for move/get and at the limit for click; the first measurement (load 14.5, pick logged inside the handler) gave p99 3-5 ms and is kept above as the loaded number. `bench_pointer.py` reproduces it.
+
+## 15. Implementation status
+
+- MO-0, MO-1a/1b (helper v2), MO-2 (`gorca-shell-helper`, `PointerSink`): merged.
+- **MO-3 (key gating):** `RuntimeGate` in `CmdSpec` (RG-1); `gated_chord_grabs` and `ModeKeys::{gated, open_gates}` (RG-1, RG-3: the
+  gated keypad chords are the exact `(KP_Divide|KP_Multiply, [Shift] [Caps])` set, never a Num Lock variant; laptop presets have none);
+  `PointerGate` (RG-4, RG-5: closes at once, opens after 2 s and at most once per 2 s, `Unresponsive` keeps it open, C-3) in the
+  Reader, fed by `ControlMsg::Pointer(PointerMsg::{Avail, Enabled})`; a gate flip is one `SetGrabSet` effect, i.e. one generation of
+  the existing session's coalesced `SetKeyGrabs` (no `GrabKeyboard`, no reconnect, so the Mutter 48.7 NULL-modifiers rules of
+  `docs/reports/shell-segfault-20261019.md` are untouched); RG-6 relies on the existing `Ambiguous` classification; RG-7 learn-mode note.
+  The ten `mouse.*` commands exist and answer "not available / not responding / off"; the click path is MO-4. The daemon does not feed
+  `PointerMsg` yet, so in a running gorca the gate stays closed and the keypad types.
+- **MO-4 (click at the pointer, locks):** `mouse.enabled` is a Base key (`[mouse] enabled`, default true). The Reader never does
+  pointer I/O: a command is a `ReaderEffect::Pointer(PointerReq)`, the runtime runs it on the `PointerSink` (150 ms per call, at
+  most 16 tasks) and the answer returns as `ControlMsg::PointerReply`. `Holds` (one pure `Hold` per lockable button): press and
+  release are confirmed by the `held` mask of the reply, the lock is released by gorca at 120 s (`Left button released after 2
+  minutes`), a failed or timed-out request leaves the button `Unknown` and the next toggle sends `ReleaseAll`, losing the helper
+  or `mouse.enabled = false` drops the state (the latter first sends a best-effort `ReleaseAll`). `mouse.say_position` says the
+  window-relative position once and the screen position twice (window titles need the MO-5a matcher). The route and item-click
+  commands answer "No location" until MO-5. The daemon wires a `ShellHelperClient` on its own session-bus connection
+  (`--no-pointer` disables) and releases held buttons on shutdown.
+- E2E: `contrib/gnome-shell-extension/test-rust-client.sh` runs the Rust client (examples/pointer_cli) against the real helper in a
+  private shell with a GTK4 oracle: 10/10 (click L/M/R at the pointer, position, drag lock press and release, release on shutdown,
+  another holder refused, double click).
+- **MO-5a (a): window matcher** in `gorca-shell-helper` (`matcher.rs`, WM-1..4, table-tested) and `PointerSink::{click_at, move_to}` for
+  `PointTarget::Window` (GetWindows + GetMonitors + the match inside one call, same deadline; no unique match is "No location", never a
+  guess). Verified end to end by `contrib/gnome-shell-extension/test-mapping.sh SCALE`: AT-SPI extents of a real "Target" widget and of the
+  toplevel become a `ToplevelHint` and a point, the Rust client matches and clicks, and the widget fires: GTK4, GTK3, GTK3 under XWayland,
+  Firefox, Chromium, Electron at monitor scale 1, 1.25 and 2 (21/21). Not yet: the connector-side `PointerResolver` (node and text offset to
+  `ToplevelHint` + point), `route_to_review` and the item clicks (MO-5a (b), MO-5b).
+
+
+### 15.2 MO-5b (item clicks) and resolver visibility fixes (L-1..L-3)
+
+- **Item clicks** (`mouse.left_click_item`, `mouse.right_click_item`, unbound by default): Orca's order. The application's own action first
+  (`ActionReq::Click`: first of `click`, `press`, `jump`, `open`, `activate`; `ActionReq::ContextMenu`: `show-context-menu`, `menu`), found by
+  `Action.GetName(i)` (not `NActions`). No action, or the application refused it: locate the node and click it with the pointer
+  (`if_covered` decides a covered target). An item the resolver cannot place gets one `Component.ScrollTo(ANYWHERE)` and a second locate,
+  then "No location". Speech follows the outcome ("Left click", "Right click", "Covered", "No location", "Window not visible").
+  The action path needs no pointer service. Settings: `mouse.item_click` (`action_first` | `pointer`), `mouse.if_covered` (`refuse` | `click`),
+  `mouse.announce_move`.
+- **Gecko quirk (action names)**: a Firefox button can answer `NActions = 0` and empty `GetName(i)` at some moments while `DoAction(0)` presses it
+  (and `GetName(0)` is "press" at others). A click, never a context menu, therefore falls back to action 0 when the interface answers but
+  gives no name. The first `DoAction` after accessibility start-up is occasionally dropped by Gecko without an error; the end-to-end test
+  retries it (an item click has no reliable confirmation from the application).
+- **Resolver visibility (review L-1..L-3)**: the node must be `SHOWING`; its rectangle is clipped to the toplevel and to every scrolling
+  ancestor (scroll pane, viewport, document, inline frame) on the way up, which also clips Chromium/Electron device-pixel rectangles (the
+  ancestors are in the children's space, so no scale is needed; the logical toplevel is not used for them); the application's own hit test
+  (`Component.GetAccessibleAtPoint`, repeated on every answer because GTK3 answers one level) must end on the node, inside it, or on an ancestor
+  of it (Gecko and GTK3 tell nothing more precise at times), never on another branch. Chromium/Electron are exempt (quirk `blink-hit-test`):
+  their answer is an unrelated page node. A text offset with an empty character rectangle (end of line, empty line) aims at its line's
+  rectangle, then at the previous character, and is "No location" otherwise; only an empty text uses the node's extents. Decision for scrolled
+  out items: "No location" from the resolver, then one `ScrollTo` and a second locate for item clicks only (the user asked to act on that item);
+  route to review never scrolls.
+
+## 16. Backends (owner direction 2026-10-19: pointer support is a core API with pluggable backends)
+
+The core (Reader, commands, the connector-side resolver) depends only on `gorca-output-api::{PointerSink, PointerAvail, PointerError,
+PointerOutcome, PointerPos, PointTarget, ToplevelHint, ChildSpace, Button, ButtonAct, ClickOpts}` and on the connector operation
+`BackendOp::Locate`. Nothing GNOME- or Mutter-specific crosses that boundary: Meta windows, the frame/buffer rectangles, XWayland's
+`x-scale`, the helper's capabilities and allow-list, the unique-name pinning and the helper's wire format all live in
+`gorca-shell-helper` (and the `gorca-helper@gorca` extension). A backend for MATE, Cinnamon, X11 (XTest), libei or Newton is one more
+crate implementing `PointerSink`; the core, the commands and the resolver do not change.
+
+Contract of a backend (what `PointerSink` implementations must guarantee):
+
+1. **Availability** (`availability()`): a `watch` of [`PointerAvail`]. Map the backend's own states onto it: `Absent` (no service),
+   `Squatted` (the service is not who it must be), `Denied`, `TooOld`, `NoCap` (allowed but without pointer permission),
+   `Unresponsive` (three deadline misses; the gate stays open, C-3) and `Ready`. Changes must be pushed, not polled by the core.
+   `permission_hint()` may add what the user must do to get permission.
+2. **Never block, always a deadline.** Every method takes a `Deadline` and returns by then; a hung service degrades only pointer emulation.
+   Requests are queued boundedly; while one is overdue nothing else is dispatched (EX-3).
+3. **Nothing is injected after the deadline.** The backend passes the deadline to its service so that a call the service runs late does
+   nothing (`outcome = Expired`), and reports it.
+4. **Targets.** `PointTarget::Stage` is a point in the compositor's logical space. `PointTarget::Window` is a point in a toplevel's own
+   AT-SPI coordinate space plus the toplevel's pid, title, origin, size and `ChildSpace`; the backend maps it to its windowing system
+   (this is WM-1..4 for GNOME: no fallback to other processes' windows, exact title/size/one candidate for a verified proxy pid, ambiguity
+   is "No location", never a guess). Anything it cannot map uniquely is `PointerError::NoLocation`.
+5. **Guards.** A click lands inside the target window or not at all (`RefusedOutside`); a covered point is `RefusedOccluded` unless the
+   caller asked `IfCovered::Proceed`; a stage target never lands inside an application window; nothing is injected while the session is
+   locked (`Locked`).
+6. **Buttons.** `Button` is logical (the backend swaps for a left-handed user). `press`/`release` are confirmed by the `held` mask of the
+   reply. One holder at a time (`Busy` for others). `release_all` releases what this client holds; a held button is released when the
+   client shuts down, vanishes, loses permission, or after at most 125 s (gorca releases at 120 s).
+7. **Safety of the channel.** The backend verifies that it talks to the real service (no name squatting), rate limits, validates
+   coordinates, and never injects without a user command (MI-1).
+8. **Errors** are the neutral `PointerError` variants (`Locked`, `Busy`, `RateLimited`, `NoWindow`, `NoLocation`, `Timeout`,
+   `NotResponding`, `Denied`, `Unavailable`, `BadArgs`, `Failed`), each of which the Reader turns into one spoken sentence.
+
+The connector side is symmetric: `BackendOp::Locate { node, offset }` answers with a `PointTarget` built from the toolkit's own extents
+(AT-SPI today, `gorca-connector-atspi`; AccessKit bounds for Newton) and never contains compositor coordinates.
+
+### 15.1 MO-5a part 2 (resolver, route to review) and review fixes
+
+- **Resolver** (`gorca-connector-atspi`, `fetch/locate.rs`, `BackendOp::Locate { node, offset }` -> `BackendReply::Target(PointTarget)`): the
+  character's rectangle (`Text.GetRangeExtents`, with the toolkit's coordinate quirk) or the node's extents, the toplevel (first ancestor that
+  is a frame/window/dialog; ancestors in other bus names are never followed), its title, extents and `ACTIVE` state, the registration's pid, and
+  the Chromium/Electron device-pixel quirk (`Toolkit::children_in_device_pixels`). The point is the centre of the visible part (clipped to the
+  toplevel; outside it is "no location"). `locate_object` runs the same code for tools. Verified end to end by `MODE=test_resolver
+  contrib/gnome-shell-extension/test-mapping.sh SCALE` (the real resolver on GTK4, GTK3, GTK3/XWayland, Firefox, Chromium, Electron at scale 1,
+  1.25 and 2: 21/21 with the window matcher and the real helper).
+- **`mouse.route_to_review`**: the review position (a text zone gives the character, an object its centre; outside review the focused object)
+  is located in its app and the pointer sink moves there (`ReaderEffect::PointerAt`, `if_covered = Proceed`, "Mouse moved" and "Covered" on
+  the answer). Runtime path tested with a scripted app and a mock sink (`tests/pointer.rs`).
+- **Matcher review fixes** (reviewer W-1, W-2): no fallback to other processes; the target's own window being minimized or on another
+  workspace is `PointerError::NotVisible` ("Window not visible"), never a substitute; focus breaks a tie between identical windows only when
+  the AT-SPI toplevel is `ACTIVE` (`ToplevelHint::active`), else "No location". Helper (R-1): `PointerRelease` is charged to the general bucket
+  only. Messages are backend-neutral ("the pointer service"); the permission hint comes from `PointerSink::permission_hint`.
+

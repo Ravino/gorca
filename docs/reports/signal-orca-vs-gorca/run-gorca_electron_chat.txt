@@ -1,0 +1,41 @@
+settle  -       consumed=None  passed=None  focus-events=1 (+0 
+prime   Shift   consumed=False passed=True  focus-events=1 +11 table row name='' table row<article<list item<list (+0 child
+        PAUSE self
+        CANCEL self
+        RESUME self
+        SPEAK Signal-like fixture, React to message, row
+        STOP  self
+        SPEAK Signal-like fixture, React to message, row
+up1     Up      consumed=False passed=True  focus-events=1 +12 table row name='' table row<article<list item<list (+0 child
+        STOP  self
+        SPEAK React to message, row
+up2     Up      consumed=False passed=True  focus-events=1 +11 table row name='' table row<article<list item<list (+0 child
+        STOP  self
+        SPEAK React to message, row
+up3     Up      consumed=False passed=True  focus-events=1 +11 table row name='' table row<article<list item<list (+0 child
+        STOP  self
+        SPEAK React to message, row
+up4     Up      consumed=False passed=True  focus-events=1 +12 table row name='' table row<article<list item<list (+0 child
+        STOP  self
+        SPEAK React to message, row
+down1   Down    consumed=False passed=True  focus-events=1 +11 table row name='' table row<article<list item<list (+0 child
+        STOP  self
+        SPEAK React to message, row
+down2   Down    consumed=False passed=True  focus-events=1 +12 table row name='' table row<article<list item<list (+0 child
+        STOP  self
+        SPEAK React to message, row
+home    Home    consumed=False passed=True  focus-events=1 +50 table row name='' table row<article<list item<list (+28 chil
+        STOP  self
+        SPEAK React to message, row
+end     End     consumed=False passed=True  focus-events=1 +39 table row name='' table row<article<list item<list (+25 chil
+        STOP  self
+        SPEAK React to message, row
+tab     Tab     consumed=False passed=True  focus-events=1 +22 entry name='Send a message' entry<section<section<section (+
+        STOP  self
+        SPEAK Send a message, edit
+        STOP  self
+        SPEAK blank
+enter   Return  consumed=False passed=True  focus-events=1 (+2 
+        STOP  self
+        SPEAK new line
+flush   -       consumed=None  passed=None  focus-events=1 (+0 

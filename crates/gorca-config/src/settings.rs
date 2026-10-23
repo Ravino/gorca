@@ -580,6 +580,86 @@ impl Default for EditingSettings {
     }
 }
 
+/// What an item click (`mouse.left_click_item`, `mouse.right_click_item`) tries first (`[mouse] item_click`).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum ItemClick {
+    /// The application's own click or context-menu action, then the pointer if it has none (Orca's order).
+    #[default]
+    ActionFirst,
+    /// Always the pointer (apps whose actions misbehave).
+    Pointer,
+}
+
+impl ItemClick {
+    pub const NAMES: &'static str = "\"action_first\" or \"pointer\"";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "action_first" => Some(ItemClick::ActionFirst),
+            "pointer" => Some(ItemClick::Pointer),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            ItemClick::ActionFirst => "action_first",
+            ItemClick::Pointer => "pointer",
+        }
+    }
+}
+
+/// What an item click does when something covers the target (`[mouse] if_covered`).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum IfCoveredPolicy {
+    /// Say what covers it and click nothing.
+    #[default]
+    Refuse,
+    /// Click whatever is at that point.
+    Click,
+}
+
+impl IfCoveredPolicy {
+    pub const NAMES: &'static str = "\"refuse\" or \"click\"";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "refuse" => Some(IfCoveredPolicy::Refuse),
+            "click" => Some(IfCoveredPolicy::Click),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            IfCoveredPolicy::Refuse => "refuse",
+            IfCoveredPolicy::Click => "click",
+        }
+    }
+}
+
+/// Mouse emulation (ADR-0025 2.8).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MouseSettings {
+    /// Master switch: false closes the pointer gate, so the keypad keys type.
+    pub enabled: bool,
+    pub item_click: ItemClick,
+    pub if_covered: IfCoveredPolicy,
+    /// Say "Mouse moved" after routing the pointer to the review position.
+    pub announce_move: bool,
+}
+
+impl Default for MouseSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            item_click: ItemClick::ActionFirst,
+            if_covered: IfCoveredPolicy::Refuse,
+            announce_move: true,
+        }
+    }
+}
+
 /// Caret and text presentation (ADR-0007 section 12).
 #[derive(Clone, Debug, Eq, PartialEq)]
 // One switch and two durations; a state enum would not be clearer.
@@ -676,6 +756,7 @@ pub struct Settings {
     pub text: TextSettings,
     pub browse: BrowseSettings,
     pub terminal: TerminalSettings,
+    pub mouse: MouseSettings,
     pub verbosity: VerbositySettings,
     pub profiles: ProfilesSettings,
 }
@@ -879,6 +960,19 @@ const fn classify(section: &str, key: &str) -> (KeyScope, bool, bool) {
         } else {
             (KeyScope::App, true, false)
         }
+    } else if same(section, "mouse") {
+        // ADR-0025 2.8: the master switch is a Base key (never inside a profile, no row sets it); the item-click
+        // policy is per application (a vendor row may set it for an app whose actions misbehave); the covered
+        // policy is the user's; the move announcement is presentation.
+        if same(key, "enabled") {
+            (KeyScope::Base, false, false)
+        } else if same(key, "item_click") {
+            (KeyScope::App, true, false)
+        } else if same(key, "if_covered") {
+            (KeyScope::App, false, false)
+        } else {
+            (KeyScope::Focus, true, false)
+        }
     } else if same(section, "text") || same(section, "verbosity") {
         // Presentation.
         (KeyScope::Focus, true, false)
@@ -1078,6 +1172,20 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     row("terminal", "prompt_regex", SettingType::Str, "\"\""),
     row("terminal", "secret_regex", SettingType::Str, "\"\""),
+    row("mouse", "enabled", SettingType::Bool, "true"),
+    row(
+        "mouse",
+        "item_click",
+        SettingType::Enum(ItemClick::NAMES),
+        "\"action_first\"",
+    ),
+    row(
+        "mouse",
+        "if_covered",
+        SettingType::Enum(IfCoveredPolicy::NAMES),
+        "\"refuse\"",
+    ),
+    row("mouse", "announce_move", SettingType::Bool, "true"),
     row(
         "verbosity",
         "level",
@@ -1232,6 +1340,26 @@ static DOCS: &[(&str, &str, &str)] = &[
         "editing",
         "word",
         "How coarse a word is: fine (letters and digits, each punctuation mark apart), medium (option tokens like --color=auto, identifiers and file names stay whole; slashes and other punctuation separate), coarse (everything between blanks); auto lets the application decide (terminals use medium).",
+    ),
+    (
+        "mouse",
+        "enabled",
+        "Mouse emulation with the keypad keys (click, lock, route). When false the keypad types its characters.",
+    ),
+    (
+        "mouse",
+        "item_click",
+        "What the item-click commands try first: \"action_first\" uses the application's own click (or context-menu) action and falls back to the pointer when it has none, \"pointer\" always uses the pointer.",
+    ),
+    (
+        "mouse",
+        "if_covered",
+        "What an item click does when another window, a banner or a dialog covers the item: \"refuse\" says what covers it, \"click\" clicks whatever is there.",
+    ),
+    (
+        "mouse",
+        "announce_move",
+        "Say \"Mouse moved\" after the mouse is routed to the review position.",
     ),
     (
         "text",
@@ -1455,6 +1583,7 @@ mod tests {
             "text",
             "browse",
             "terminal",
+            "mouse",
             "verbosity",
             "profiles",
         ];
@@ -1491,6 +1620,7 @@ mod tests {
                 "text",
                 "browse",
                 "terminal",
+                "mouse",
                 "verbosity",
                 "profiles"
             ]
