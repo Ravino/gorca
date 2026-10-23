@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Telegram Web</title>
+<style>
+  /* DOM shaped like web.telegram.org/k (morethanwords/tweb, read 2026-10-24). Chat rows are
+     a.chatlist-chat[href="#id"] inside ul.chatlist[role=presentation] (a virtual list, rows absolutely
+     positioned). The history is div.scrollable[role=region][aria-label="Message history"] > .bubbles-inner >
+     .bubbles-date-group > .bubbles-group > div.bubble[role=article][data-mid]; with ?a11y=1 (Modes.a11y)
+     the region and every bubble get tabindex=0. The composer is a contenteditable div[role=textbox] whose
+     placeholder is a CSS attr() (no DOM). A hidden div[role=status] is the connection announcer.
+     ?f= flags are shared with the A fixture (model.js), plus: net = the announcer flips Connecting/empty every 6 s. */
+  html, body { margin: 0; height: 100%; font: 15px sans-serif; }
+  #page { display: flex; height: 100vh; }
+  #column-left { width: 340px; border-right: 1px solid #ccc; display: flex; flex-direction: column; }
+  .sidebar-header { padding: 8px; display: flex; gap: 8px; }
+  .chatlist-container { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+  .scrollable { overflow: auto; height: 100%; position: relative; }
+  ul.chatlist { margin: 0; padding: 0; list-style: none; position: relative; }
+  a.chatlist-chat { position: absolute; left: 0; right: 0; height: 72px; box-sizing: border-box; display: flex; gap: 10px; padding: 8px; color: inherit; text-decoration: none; }
+  a.chatlist-chat.active { background: #3390ec; color: #fff; }
+  .dialog-avatar { width: 48px; height: 48px; border-radius: 50%; background: #79b; flex: none; }
+  .dialog-title, .dialog-subtitle { display: flex; gap: 6px; align-items: center; }
+  .user-title { flex: 1; font-weight: bold; }
+  .user-caption { flex: 1; min-width: 0; }
+  .badge { background: #3390ec; color: #fff; border-radius: 10px; min-width: 20px; text-align: center; font-size: 12px; }
+  #column-center { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .chat-info { padding: 8px 12px; border-bottom: 1px solid #ccc; }
+  .bubbles { flex: 1; min-height: 0; }
+  .bubbles-date-group { position: relative; }
+  .bubble.service { text-align: center; position: sticky; top: 4px; z-index: 2; }
+  .bubble.service .service-msg { background: #0006; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 13px; }
+  .bubble { padding: 3px 12px; }
+  .bubble.is-out { text-align: right; }
+  .bubble-content { display: inline-block; background: #eef; border-radius: 8px; padding: 4px 8px; max-width: 70%; text-align: left; }
+  .bubble.is-out .bubble-content { background: #dfd; }
+  .name { font-weight: bold; font-size: 13px; color: #36a; }
+  .time { float: right; margin-left: 10px; font-size: 11px; color: #888; user-select: none; }
+  .bubble:focus { outline: 2px solid #3390ec; }
+  .input-message-container { border-top: 1px solid #ccc; padding: 8px 12px; }
+  .input-message-input { min-height: 22px; outline: none; }
+  .input-message-input:empty::before { content: attr(data-placeholder); color: #999; }
+  .announcer { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .empty { padding: 40px; text-align: center; color: #888; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="announcer" id="announce" role="status"></div>
+<div id="page">
+  <div id="column-left">
+    <div class="sidebar-header"><button class="btn-icon sidebar-tools-button" role="button" aria-label="Open menu"><span class="tgico">&#9776;</span></button>
+      <input class="input-search-input" type="text" placeholder="Search" aria-label="Search"></div>
+    <div class="chatlist-container"><div class="scrollable scrollable-y" id="chatscroll"><ul class="chatlist virtual-chatlist" role="presentation" id="chatlist"></ul></div></div>
+  </div>
+  <div id="column-center">
+    <div class="empty" id="no-chat">Select a chat to start messaging</div>
+    <div id="chat" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="chat-info"><span class="peer-title" id="hdr-name"></span> <span class="info" id="hdr-status">online</span></div>
+      <div class="bubbles"><div class="scrollable scrollable-y" id="scroll" role="region" aria-label="Message history"><div class="bubbles-inner" id="inner"></div></div></div>
+      <div class="input-message-container">
+        <div class="input-message-input" id="input" contenteditable="true" role="textbox" dir="auto" data-placeholder="Message" aria-label="Message"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="model.js"></script>
+<script>
+const { Q, F, chats, history, newMessage } = TG;
+const A11Y = location.search.indexOf("a11y=1") > 0;
+const $ = (id) => document.getElementById(id);
+const ROW = 72, WIN = 22;
+let order = chats.slice(), open = null;
+if (A11Y) $("scroll").tabIndex = 0;
+
+// ------------------------------------------------------------------ chat list: links, absolutely positioned, windowed
+const rows = new Map();
+function chatNode(c) {
+  const a = document.createElement("a");
+  a.className = "chatlist-chat chatlist-chat-bigger row-big"; a.href = "#" + c.id; a.dataset.peerId = c.id;
+  a.innerHTML = '<div class="dialog-avatar" role="img"></div><div class="user-caption"><p class="dialog-title"><span class="user-title"><span class="peer-title"></span></span><span class="dialog-title-details"><span class="message-time"></span></span></p>' +
+    '<p class="dialog-subtitle"><span class="user-last-message"></span><span class="dialog-subtitle-badge-wrapper"></span></p></div>';
+  a.addEventListener("click", (e) => { e.preventDefault(); openChat(c); });
+  return a;
+}
+function paintChat(a, c, idx) {
+  a.style.top = idx * ROW + "px";
+  a.classList.toggle("active", open === c);
+  const q = (s) => a.querySelector(s);
+  q(".dialog-avatar").setAttribute("aria-label", c.name);
+  q(".peer-title").textContent = c.name;
+  q(".message-time").textContent = c.time;
+  q(".user-last-message").textContent = c.last;
+  const slot = q(".dialog-subtitle-badge-wrapper");
+  if (c.unread) {
+    let b = slot.firstChild;
+    if (!b) { b = document.createElement("div"); b.className = "dialog-subtitle-badge badge badge-24 unread"; slot.append(b); }
+    if (b.textContent !== String(c.unread)) b.textContent = c.unread;
+  } else if (slot.firstChild) slot.firstChild.remove();
+}
+function renderChatList() {
+  const sc = $("chatscroll"), ul = $("chatlist");
+  ul.style.height = order.length * ROW + "px";
+  const first = Math.max(0, Math.floor(sc.scrollTop / ROW) - 3);
+  const ids = order.slice(first, first + WIN), keep = new Set(ids.map((c) => c.id));
+  for (const [id, a] of rows) if (!keep.has(id)) { a.remove(); rows.delete(id); }
+  let prev = null;
+  ids.forEach((c, i) => {
+    let a = rows.get(c.id);
+    if (!a) { a = chatNode(c); rows.set(c.id, a); }
+    paintChat(a, c, first + i);
+    const want = prev ? prev.nextSibling : ul.firstChild;
+    if (a !== want) ul.insertBefore(a, want);
+    prev = a;
+  });
+}
+$("chatscroll").addEventListener("scroll", () => requestAnimationFrame(renderChatList));
+
+// ------------------------------------------------------------------ bubbles
+let lo = 0, hi = 0;
+const nodes = new Map();
+function bubble(m) {
+  const b = document.createElement("div");
+  b.className = "bubble " + (m.out ? "is-out" : "is-in"); b.dataset.mid = m.id; b.setAttribute("role", "article");
+  if (A11Y) b.tabIndex = 0;
+  b.innerHTML = '<div class="bubble-content-wrapper"><div class="bubble-content">' + (m.out ? "" : '<div class="name"><span class="peer-title"></span></div>') +
+    '<div class="message"><span class="text"></span><span class="time"><span class="inner"></span></span></div></div></div>';
+  if (!m.out) b.querySelector(".peer-title").textContent = m.sender;
+  b.querySelector(".text").textContent = m.text; b.querySelector(".inner").textContent = m.time;
+  return b;
+}
+function dateGroup(day) {
+  const g = document.createElement("div");
+  g.className = "bubbles-date-group"; g.dataset.day = day;
+  g.innerHTML = '<div class="bubble service is-date"><div class="bubble-content"><div class="service-msg"></div></div></div><div class="bubbles-group"></div>';
+  g.querySelector(".service-msg").textContent = day;
+  return g;
+}
+function put(a, b, atStart) {
+  const h = history(open), inner = $("inner");
+  const list = []; for (let i = a; i < b; i++) list.push(h[i]);
+  if (atStart) list.reverse();
+  for (const m of list) {
+    const el = bubble(m); nodes.set(m.id, el);
+    let g = atStart ? inner.firstElementChild : inner.lastElementChild;
+    if (!g || g.dataset.day !== m.day) { g = dateGroup(m.day); atStart ? inner.insertBefore(g, inner.firstChild) : inner.append(g); }
+    const grp = g.querySelector(".bubbles-group");
+    atStart ? grp.insertBefore(el, grp.firstChild) : grp.append(el);
+  }
+}
+function prune() { document.querySelectorAll(".bubbles-date-group").forEach((g) => { if (!g.querySelector(".bubble[data-mid]")) g.remove(); }); }
+let loading = false;
+$("scroll").addEventListener("scroll", () => {
+  const s = $("scroll");
+  if (!open || loading) return;
+  if (s.scrollTop < 150 && lo > 0) {
+    loading = true;
+    // K: the older page arrives asynchronously after a fetch; the offset is restored from an anchor bubble
+    setTimeout(() => {
+      const anchor = $("inner").querySelector(".bubble[data-mid]"), t0 = anchor.getBoundingClientRect().top;
+      const a = Math.max(0, lo - 30); put(a, lo, true); lo = a;
+      s.scrollTop += anchor.getBoundingClientRect().top - t0;
+      while (hi - lo > 120) { const m = history(open)[--hi]; const n = nodes.get(m.id); if (n) { n.remove(); nodes.delete(m.id); } }
+      prune(); loading = false;
+    }, 120);
+  } else if (s.scrollHeight - s.scrollTop - s.clientHeight < 150 && hi < history(open).length) {
+    loading = true;
+    setTimeout(() => {
+      const b = Math.min(history(open).length, hi + 30); put(hi, b, false); hi = b;
+      while (hi - lo > 120) { const m = history(open)[lo++]; const n = nodes.get(m.id); if (n) { n.remove(); nodes.delete(m.id); } }
+      prune(); loading = false;
+    }, 120);
+  }
+});
+function openChat(c) {
+  open = c; c.unread = 0; location.hash = c.id;
+  $("no-chat").classList.add("hidden"); $("chat").classList.remove("hidden");
+  $("hdr-name").textContent = c.name;
+  $("inner").textContent = ""; nodes.clear();
+  const h = history(c); hi = h.length; lo = Math.max(0, hi - 40);
+  put(lo, hi, false);
+  $("scroll").scrollTop = $("scroll").scrollHeight;
+  renderChatList();
+  setTimeout(() => $("input").focus(), 150);
+}
+function incoming(c, out, text) {
+  const m = newMessage(c, out, text);
+  if (c !== open) { c.unread++; c.last = m.text; renderChatList(); return; }
+  const s = $("scroll"), atBottom = s.scrollHeight - s.scrollTop - s.clientHeight < 80;
+  if (hi === history(c).length - 1) { put(hi, hi + 1, false); hi++; }
+  if (atBottom || out) s.scrollTop = s.scrollHeight;
+  c.last = m.text; renderChatList();
+}
+const input = $("input");
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault(); const t = input.textContent.trim();
+    if (t && open) { incoming(open, true, t); input.textContent = ""; }
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && open) { open = null; $("chat").classList.add("hidden"); $("no-chat").classList.remove("hidden"); renderChatList(); document.activeElement && document.activeElement.blur(); }
+});
+
+renderChatList();
+if (F.has("churn")) setInterval(() => {
+  const i = 2 + Math.floor(Math.random() * 10), c = order[i];
+  c.last = TG.WORDS[Math.floor(Math.random() * TG.WORDS.length)]; c.unread++; c.time = TG.fmt(12 * 60 + Math.floor(Math.random() * 59));
+  order.splice(i, 1); order.splice(2, 0, c); renderChatList();
+}, 2000);
+if (F.has("typing")) setInterval(() => { const s = $("hdr-status"); s.textContent = s.textContent === "online" ? "typing..." : "online"; }, 1500);
+if (F.has("incoming")) setInterval(() => { if (open) incoming(open, false); }, 3000);
+if (F.has("flood")) setTimeout(() => { let n = 0; const t = setInterval(() => { if (open) incoming(open, false, "flood " + (++n)); if (n >= 30) clearInterval(t); }, 65); }, 5000);
+if (F.has("net")) { let on = false; setInterval(() => { on = !on; $("announce").textContent = on ? "Connecting" : ""; }, 6000); }
+</script>
+</body>
+</html>

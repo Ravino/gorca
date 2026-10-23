@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Telegram Web</title>
+<style>
+  /* DOM shaped like web.telegram.org/a (Ajaxy/telegram-tt, read 2026-10-24): a div soup with almost no ARIA.
+     Chat rows are ListItem > div.ListItem-button[role=button][tabindex=0], absolutely positioned inside a
+     scroll container that only renders a window of the list (InfiniteScroll + Teact keyed fast lists).
+     Messages are plain divs (no role, no tabindex, no live region anywhere in the app). The composer is a
+     contenteditable div[role=textbox] with its placeholder in a SIBLING span. */
+  html, body { margin: 0; height: 100%; font: 15px sans-serif; }
+  #App { display: flex; height: 100vh; }
+  #LeftColumn { width: 340px; border-right: 1px solid #ccc; display: flex; flex-direction: column; }
+  .search { padding: 8px; }
+  .TabList { display: flex; gap: 8px; padding: 4px 8px; }
+  .Tab { padding: 4px 8px; cursor: pointer; }
+  .chat-list { flex: 1; min-height: 0; overflow: auto; position: relative; }
+  .chat-list .inner { position: relative; }
+  .ListItem.Chat { position: absolute; left: 0; right: 0; height: 72px; box-sizing: border-box; }
+  .ListItem-button { display: flex; height: 100%; padding: 8px; gap: 10px; box-sizing: border-box; cursor: pointer; }
+  .ListItem.selected .ListItem-button { background: #3390ec; color: #fff; }
+  .Avatar { width: 48px; height: 48px; border-radius: 50%; background: #7b9; display: flex; align-items: center; justify-content: center; color: #fff; }
+  .info { flex: 1; min-width: 0; }
+  .info-row, .subtitle { display: flex; gap: 6px; align-items: center; }
+  .info-row h3 { margin: 0; font-size: 16px; flex: 1; }
+  .subtitle .last-message { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .ChatBadge { background: #3390ec; color: #fff; border-radius: 10px; min-width: 20px; text-align: center; font-size: 12px; }
+  #MiddleColumn { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .MiddleHeader { padding: 8px 12px; border-bottom: 1px solid #ccc; }
+  .MiddleHeader h3 { margin: 0; font-size: 16px; }
+  .MessageList { flex: 1; min-height: 0; overflow: auto; position: relative; }
+  .message-date-group { position: relative; }
+  .sticky-date { position: sticky; top: 4px; text-align: center; z-index: 2; }
+  .sticky-date span { background: #0006; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 13px; }
+  .Message { padding: 4px 12px; }
+  .Message.own { text-align: right; }
+  .message-content { display: inline-block; background: #eef; border-radius: 8px; padding: 4px 8px; max-width: 70%; text-align: left; }
+  .Message.own .message-content { background: #dfd; }
+  .message-title { font-weight: bold; font-size: 13px; color: #36a; }
+  .MessageMeta { float: right; margin-left: 10px; font-size: 11px; color: #888; user-select: none; }
+  .backwards-trigger, .forwards-trigger { height: 1px; }
+  .live-tail { min-height: 1px; }
+  .empty { padding: 40px; text-align: center; color: #888; }
+  .Composer { border-top: 1px solid #ccc; padding: 8px 12px; position: relative; }
+  #editable-message-text { min-height: 22px; outline: none; }
+  .placeholder-text { position: absolute; left: 12px; top: 8px; color: #999; pointer-events: none; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="App">
+  <div id="LeftColumn">
+    <div class="search"><input type="text" id="telegram-search-input" placeholder="Search" autocomplete="off"></div>
+    <div class="TabList"><div class="Tab">All</div><div class="Tab">Unread</div></div>
+    <div class="chat-list custom-scroll" id="chat-list"><div class="inner" id="chat-inner"></div></div>
+  </div>
+  <div id="MiddleColumn">
+    <div class="empty" id="no-chat">Select a chat to start messaging</div>
+    <div id="chat-pane" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="MiddleHeader"><div class="ChatInfo"><div class="info"><div class="title"><h3 class="fullName" id="hdr-name"></h3></div><span class="status" id="hdr-status">online</span></div></div></div>
+      <div class="MessageList custom-scroll" id="msglist"><div class="messages-container" id="msgs"></div></div>
+      <div class="Composer">
+        <div id="editable-message-text" contenteditable="true" role="textbox" dir="auto" tabindex="0" aria-label="Message"></div>
+        <span class="placeholder-text" id="ph" dir="auto">Message</span>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="model.js"></script>
+<script>
+const { Q, F, chats, history, newMessage } = TG;
+const $ = (id) => document.getElementById(id);
+const ROW = 72, WIN = 22;
+let order = chats.slice();               // display order (pinned first, then by recency)
+let open = null;                         // the open chat
+
+// ------------------------------------------------------------------ chat list (windowed, keyed, absolute)
+const rows = new Map();                  // chat id -> node
+function chatNode(c, idx) {
+  const el = document.createElement("div");
+  el.className = "ListItem Chat chat-item-clickable private";
+  el.innerHTML = '<div class="ListItem-button" role="button" tabindex="0">' +
+    '<div class="status status-clickable"><div class="avatar-wrapper"><div class="Avatar"></div></div></div>' +
+    '<div class="info"><div class="info-row"><div class="title"><h3 class="fullName"></h3></div><div class="separator"></div>' +
+    '<div class="LastMessageMeta"><span class="time"></span></div></div>' +
+    '<div class="subtitle"><div class="last-message"></div><div class="ChatBadge-transition"></div></div></div></div>';
+  el.dataset.id = c.id;
+  const btn = el.firstChild;
+  btn.addEventListener("click", () => openChat(c));
+  btn.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.stopPropagation(); openChat(c); } });
+  return el;
+}
+function paintChat(el, c, idx) {
+  el.style.top = idx * ROW + "px";
+  el.classList.toggle("selected", open === c);
+  const q = (s) => el.querySelector(s);
+  q(".Avatar").textContent = c.name.slice(0, 2).toUpperCase();
+  q("h3").textContent = c.name;
+  q(".time").textContent = c.time;
+  q(".last-message").textContent = c.last;
+  const slot = q(".ChatBadge-transition");
+  const want = c.unread ? String(c.unread) : "";
+  if (want) {
+    let b = slot.firstChild;
+    if (!b) { b = document.createElement("div"); b.className = "ChatBadge unread"; slot.append(b); }
+    if (b.textContent !== want) b.textContent = want;
+  } else if (slot.firstChild) slot.firstChild.remove();
+}
+function renderChatList() {
+  const list = $("chat-list"), inner = $("chat-inner");
+  inner.style.height = order.length * ROW + "px";
+  const first = Math.max(0, Math.floor(list.scrollTop / ROW) - 3);
+  const ids = order.slice(first, first + WIN);
+  const keep = new Set(ids.map((c) => c.id));
+  for (const [id, el] of rows) if (!keep.has(id)) { el.remove(); rows.delete(id); }
+  let prev = null;
+  ids.forEach((c, i) => {
+    let el = rows.get(c.id);
+    if (!el) { el = chatNode(c); rows.set(c.id, el); }
+    paintChat(el, c, first + i);
+    // teactOrderKey: DOM order follows list order; only move a node when it is out of place
+    const want = prev ? prev.nextSibling : inner.firstChild;
+    if (el !== want) inner.insertBefore(el, want);
+    prev = el;
+  });
+}
+$("chat-list").addEventListener("scroll", () => requestAnimationFrame(renderChatList));
+
+// ------------------------------------------------------------------ message list (windowed, prepend on scroll up)
+let lo = 0, hi = 0;                      // window into history(open)
+const mnodes = new Map();
+function msgNode(m) {
+  const el = document.createElement("div");
+  el.className = "Message message-list-item" + (m.out ? " own" : "");
+  el.id = "message-" + m.id;
+  el.dataset.messageId = m.id;
+  el.innerHTML = '<div class="message-content-wrapper"><div class="message-content text" dir="auto">' +
+    (m.out ? "" : '<div class="message-title"><span class="message-title-name"></span></div>') +
+    '<div class="text-content" dir="auto"></div><span class="MessageMeta"><span class="message-time"></span></span></div></div>';
+  if (!m.out) el.querySelector(".message-title-name").textContent = m.sender;
+  el.querySelector(".text-content").textContent = m.text;
+  el.querySelector(".message-time").textContent = m.time;
+  return el;
+}
+function dateGroup(day) {
+  const g = document.createElement("div");
+  g.className = "message-date-group"; g.dataset.day = day;
+  g.innerHTML = '<div class="sticky-date"><span dir="auto"></span></div><div class="sender-group-container"></div>';
+  g.querySelector("span").textContent = day;
+  return g;
+}
+function buildWindow() {
+  const msgs = $("msgs"); msgs.textContent = ""; mnodes.clear();
+  const bt = document.createElement("div"); bt.className = "backwards-trigger"; bt.id = "bt"; msgs.append(bt);
+  const tail = document.createElement("div"); tail.className = "live-tail"; tail.id = "tail"; msgs.append(tail);
+  const ft = document.createElement("div"); ft.className = "forwards-trigger"; ft.id = "ft"; msgs.append(ft);
+  observe();
+}
+function putRange(a, b, atStart) {
+  const h = history(open), tail = $("tail");
+  const frag = [];
+  for (let i = a; i < b; i++) frag.push(h[i]);
+  if (atStart) frag.reverse();
+  for (const m of frag) {
+    const el = msgNode(m); mnodes.set(m.id, el);
+    let g;
+    if (atStart) g = $("msgs").querySelector(".message-date-group");
+    else { g = tail.previousElementSibling; if (g && !g.classList.contains("message-date-group")) g = null; }
+    if (!g || g.dataset.day !== m.day) {
+      const ng = dateGroup(m.day);
+      if (atStart) $("msgs").insertBefore(ng, $("bt").nextSibling); else tail.parentNode.insertBefore(ng, tail);
+      g = ng;
+    }
+    const cont = g.querySelector(".sender-group-container");
+    if (atStart) cont.insertBefore(el, cont.firstChild); else cont.append(el);
+  }
+}
+let io = null;
+function observe() {
+  if (io) io.disconnect();
+  io = new IntersectionObserver((es) => {
+    for (const e of es) if (e.isIntersecting) { if (e.target.id === "bt") loadOlder(); else loadNewer(); }
+  }, { root: $("msglist"), rootMargin: "200px" });
+  io.observe($("bt")); io.observe($("ft"));
+}
+function loadOlder() {
+  if (!open || lo === 0) return;
+  const list = $("msglist"), before = list.scrollHeight, top = list.scrollTop;
+  const a = Math.max(0, lo - 30);
+  putRange(a, lo, true); lo = a;
+  if (!F.has("noscrollfix")) list.scrollTop = top + (list.scrollHeight - before);   // A restores the offset
+  while (hi - lo > 120) { const m = history(open)[--hi]; const n = mnodes.get(m.id); if (n) { n.remove(); mnodes.delete(m.id); } }
+  prune();
+}
+function loadNewer() {
+  if (!open || hi >= history(open).length) return;
+  const b = Math.min(history(open).length, hi + 30);
+  putRange(hi, b, false); hi = b;
+  while (hi - lo > 120) { const m = history(open)[lo++]; const n = mnodes.get(m.id); if (n) { n.remove(); mnodes.delete(m.id); } }
+  prune();
+}
+function prune() { document.querySelectorAll(".message-date-group").forEach((g) => { if (!g.querySelector(".Message")) g.remove(); }); }
+
+function openChat(c) {
+  open = c; c.unread = 0;
+  history(c);
+  $("no-chat").classList.add("hidden"); $("chat-pane").classList.remove("hidden");
+  $("hdr-name").textContent = c.name;
+  const h = history(c);
+  hi = h.length; lo = Math.max(0, hi - 40);
+  buildWindow();
+  putRange(lo, hi, false);
+  const list = $("msglist"); list.scrollTop = list.scrollHeight;
+  renderChatList();
+  // A focuses the composer when a chat opens
+  setTimeout(() => { $("editable-message-text").focus(); }, 150);
+}
+function closeChat() {
+  open = null;
+  $("chat-pane").classList.add("hidden"); $("no-chat").classList.remove("hidden");
+  renderChatList();
+  if (document.activeElement) document.activeElement.blur();
+}
+function appendIncoming(c, out, text) {
+  const m = newMessage(c, out, text);
+  if (c !== open) { c.unread++; c.last = m.text; renderChatList(); return; }
+  const list = $("msglist");
+  const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+  if (hi === history(c).length - 1) { putRange(hi, hi + 1, false); hi++; }
+  if (atBottom || out) list.scrollTop = list.scrollHeight;
+  c.last = m.text; renderChatList();
+}
+
+// ------------------------------------------------------------------ composer
+const ed = $("editable-message-text");
+ed.addEventListener("input", () => { $("ph").classList.toggle("hidden", ed.textContent.length > 0); });
+ed.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    const t = ed.textContent.trim();
+    if (t && open) { appendIncoming(open, true, t); ed.textContent = ""; $("ph").classList.remove("hidden"); }
+  }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && open) closeChat(); });
+
+// ------------------------------------------------------------------ timers
+renderChatList();
+if (F.has("churn")) setInterval(() => {
+  const i = 2 + Math.floor(Math.random() * 10), c = order[i];
+  c.last = TG.WORDS[Math.floor(Math.random() * TG.WORDS.length)]; c.unread++; c.time = TG.fmt(12 * 60 + Math.floor(Math.random() * 59));
+  order.splice(i, 1); order.splice(2, 0, c); renderChatList();
+}, 2000);
+if (F.has("typing")) setInterval(() => { const s = $("hdr-status"); s.textContent = s.textContent === "online" ? "typing..." : "online"; }, 1500);
+if (F.has("incoming")) setInterval(() => { if (open) appendIncoming(open, false); }, 3000);
+if (F.has("flood")) setTimeout(() => { let n = 0; const t = setInterval(() => { if (open) appendIncoming(open, false, "flood " + (++n)); if (n >= 30) clearInterval(t); }, 65); }, 5000);
+</script>
+</body>
+</html>
