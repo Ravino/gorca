@@ -830,6 +830,45 @@ impl Reader {
     }
 
     /// The browse state machine, for tests and the debug probe.
+    /// The transport key of the node a pointer should aim at for the browse cursor: the nearest
+    /// interactive node at or above it (a run inside a link gives the link), else a keyed leaf
+    /// text or heading node. The climb stops at the first container (document, section,
+    /// paragraph, landmark, list, table, group): its centre is empty page space, so the answer is
+    /// `None` and the caller refuses. A read of the published mirror snapshot: no wait, no IPC.
+    pub(crate) fn web_cursor_key(&self) -> Option<NodeKey> {
+        let b = self.web.as_ref()?;
+        let WebMode::Browse { doc, cur, .. } = b.mode else {
+            return None;
+        };
+        let h = b.docs.get(doc)?;
+        let local = h.read.with(|d| {
+            let mut leaf = None;
+            let mut n = Some(cur.node);
+            // The depth bound keeps a corrupt parent chain from looping.
+            for _ in 0..64 {
+                let Some(id) = n else { break };
+                let v = d.node(id)?;
+                let local = v.meta.and_then(|m| m.local);
+                match pointer_class(v.role) {
+                    PointerClass::Interactive => {
+                        if local.is_some() {
+                            return local;
+                        }
+                    }
+                    PointerClass::Leaf => {
+                        if leaf.is_none() {
+                            leaf = local;
+                        }
+                    }
+                    PointerClass::Container => break,
+                }
+                n = d.parent(id);
+            }
+            leaf
+        })?;
+        Some(NodeKey { app: h.app, local })
+    }
+
     pub fn web_mode(&self) -> WebMode {
         self.web.as_ref().map_or(WebMode::Inactive, |w| w.mode)
     }
@@ -3696,5 +3735,63 @@ mod overlay_tests {
         assert_eq!(out.description.as_deref(), Some("Opens a menu"));
         assert!(out.states.contains(StateSet::HAS_POPUP));
         assert!(!out.states.contains(StateSet::FOCUSED));
+    }
+}
+
+/// What a pointer click on a web node's centre can hit.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum PointerClass {
+    /// A control: its centre is the control.
+    Interactive,
+    /// Text or an image: small, its centre is the item.
+    Leaf,
+    /// Holds other things: its centre may be empty space.
+    Container,
+}
+
+fn pointer_class(role: Role) -> PointerClass {
+    match role {
+        Role::Link
+        | Role::Button
+        | Role::ToggleButton
+        | Role::CheckBox
+        | Role::RadioButton
+        | Role::ComboBox
+        | Role::TextEntry
+        | Role::PasswordEntry
+        | Role::SpinButton
+        | Role::Slider
+        | Role::MenuItem
+        | Role::Tab
+        | Role::TreeItem => PointerClass::Interactive,
+        Role::Heading | Role::StaticText | Role::Label | Role::Image | Role::ProgressBar => {
+            PointerClass::Leaf
+        }
+        Role::Unknown
+        | Role::Application
+        | Role::Window
+        | Role::Dialog
+        | Role::Panel
+        | Role::Document
+        | Role::DocumentWeb
+        | Role::Paragraph
+        | Role::List
+        | Role::ListItem
+        | Role::Table
+        | Role::Row
+        | Role::Cell
+        | Role::ColumnHeader
+        | Role::RowHeader
+        | Role::Menu
+        | Role::MenuBar
+        | Role::Popover
+        | Role::TabList
+        | Role::Tree
+        | Role::Toolbar
+        | Role::StatusBar
+        | Role::Separator
+        | Role::Terminal
+        | Role::Landmark
+        | Role::Alert => PointerClass::Container,
     }
 }

@@ -3736,3 +3736,100 @@ fn an_announcement_expires() {
     let fx = r.key(CoreCmd::BrowseActivate);
     assert!(!click_of(&fx), "a late refresh is a new change");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Pointer routing follows the browse cursor, never the focus
+
+/// Put the browse cursor on the document node that came from source node `src_id`.
+fn place_cursor(r: &mut Rig, src_id: u64) {
+    let node = r
+        .reader
+        .web
+        .as_ref()
+        .unwrap()
+        .docs
+        .get(DocId(1))
+        .unwrap()
+        .read
+        .with(|d| {
+            d.preorder()
+                .find(|n| {
+                    d.node(*n)
+                        .and_then(|v| v.meta)
+                        .is_some_and(|m| m.src == Some(SrcNodeId(src_id)))
+                })
+                .unwrap()
+        });
+    let b = r.reader.web.as_mut().unwrap();
+    b.mode = WebMode::Browse {
+        doc: DocId(1),
+        cur: WebCursor { node, local: 0 },
+        scope: Scope::Document,
+        sticky: false,
+    };
+}
+
+#[test]
+fn a_run_inside_a_link_routes_to_the_link_not_the_focus() {
+    let mut r = rig();
+    r.focus(1002);
+    place_cursor(&mut r, 7);
+    assert!(matches!(r.reader.mode(), Mode::Browse { .. }));
+    assert_eq!(r.reader.review_target(), Some((nk(1006), None)));
+}
+
+#[test]
+fn a_keyless_run_under_a_paragraph_has_no_target() {
+    let mut r = rig();
+    r.focus(1002);
+    place_cursor(&mut r, 5);
+    assert_eq!(r.reader.review_target(), None);
+}
+
+#[test]
+fn the_cursor_on_the_document_has_no_target() {
+    let mut r = rig();
+    r.focus(1002);
+    place_cursor(&mut r, 1);
+    assert_eq!(r.reader.review_target(), None);
+}
+
+#[test]
+fn the_cursor_on_a_button_routes_to_the_button() {
+    let mut r = rig();
+    make_control(&mut r, Role::Button, "Play", StateSet::empty(), 3);
+    r.focus(1002);
+    place_cursor(&mut r, 6);
+    assert_eq!(r.reader.review_target(), Some((nk(1006), None)));
+    place_cursor(&mut r, 7);
+    assert_eq!(r.reader.review_target(), Some((nk(1006), None)));
+}
+
+#[test]
+fn a_run_inside_a_heading_routes_to_the_heading() {
+    let mut r = rig();
+    r.focus(1006);
+    place_cursor(&mut r, 3);
+    assert_eq!(r.reader.review_target(), Some((nk(1002), None)));
+}
+
+#[test]
+fn focus_mode_review_target_is_the_focus_node() {
+    let mut r = rig();
+    r.focus(1014);
+    assert!(matches!(r.reader.mode(), Mode::Focus));
+    assert_eq!(r.reader.review_target(), Some((nk(1014), None)));
+}
+
+#[test]
+fn browse_review_target_is_none_when_the_lookup_fails() {
+    let mut r = rig();
+    r.focus(1006);
+    assert!(r.reader.review_target().is_some());
+    // The document is gone from the directory: no fallback to the focus node.
+    if let Some(b) = r.reader.web.as_ref() {
+        b.docs.remove(DocId(1));
+    }
+    assert!(matches!(r.reader.mode(), Mode::Browse { .. }));
+    assert_eq!(r.reader.review_target(), None);
+}
