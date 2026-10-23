@@ -494,10 +494,10 @@ are those of `xtask/legacy.allow`; they move only by a `docs/decisions.md` row.
 
 | Surface | Slice | Window ends (expiry) |
 |---|---|---|
-| Focus, change (P1, P4) | M22b1 slice 5 | 2026-12-15 |
-| Browse, quick-nav, say-all (P2, P3) | M22b2 | 2027-01-31 |
-| Review, object nav (P8, P9) | M22b3 | 2027-02-28 |
-| Window, notification, info, explain, extensions, carriers (P5-P7, P11) | M22b4 | 2027-03-31 |
+| Focus, change (P1, P4) | M22b1 slice 5 | 2026-11-07 |
+| Browse, quick-nav, say-all (P2, P3) | M22b2 | 2026-11-21 |
+| Review, object nav (P8, P9) | M22b3 | 2026-11-28 |
+| Window, notification, info, explain, extensions, carriers (P5-P7, P11) | M22b4 | 2026-12-12 |
 
 Exit gates, all required before the cut-over commit:
 1. **Diff**: M-13 holds, 0 differences outside dated `deviations.toml` rows on the fixtures and

@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 /// The latest date any allowlist row may carry: the end of the last M22b slice (b4).
-pub const LAST_EXPIRY: Date = Date(2027, 3, 31);
+pub const LAST_EXPIRY: Date = Date(2026, 12, 12);
 
 /// Repo-relative allowlist file.
 const ALLOW_FILE: &str = "xtask/legacy.allow";
@@ -600,10 +600,10 @@ mod tests {
 
     #[test]
     fn no_row_may_outlive_the_last_slice() {
-        let allow = [row("present-focus", F, 1, Date(2027, 4, 1))];
+        let allow = [row("present-focus", F, 1, Date(2026, 12, 13))];
         let v = judge(&[hit("present-focus", F, 3)], &allow, TODAY);
         assert_eq!(v.len(), 1, "{v:?}");
-        assert!(v[0].contains("after 2027-03-31"));
+        assert!(v[0].contains("after 2026-12-12"));
     }
 
     #[test]
