@@ -553,8 +553,10 @@ fn is_group(v: &gorca_doc::web::NodeView<'_>) -> bool {
     let Some(m) = v.meta else { return false };
     let attr = |k| m.attrs.iter().find(|(a, _)| *a == k).map(|(_, t)| &**t);
     attr(TAG) == Some("fieldset")
-        || attr(XML_ROLES)
-            .is_some_and(|r| r.split_whitespace().any(|t| matches!(t, "group" | "radiogroup")))
+        || attr(XML_ROLES).is_some_and(|r| {
+            r.split_whitespace()
+                .any(|t| matches!(t, "group" | "radiogroup"))
+        })
 }
 
 fn role_states(d: &WebDoc, id: DocNodeId) -> (Role, StateSet) {
@@ -877,8 +879,7 @@ fn overlay_from_meta(
     let final_name = name.as_deref().or(snap.name.as_deref());
     let eff_desc = description.as_deref().or(snap.description.as_deref());
     let drop_description = eff_desc.is_some()
-        && (description_used
-            || crate::aria::speakable_description(eff_desc, final_name).is_none());
+        && (description_used || crate::aria::speakable_description(eff_desc, final_name).is_none());
     if drop_description {
         description = None;
     }
@@ -3742,6 +3743,76 @@ mod overlay_tests {
             sem: e,
             ..NodeMeta::default()
         }
+    }
+
+    fn text_entry(description: Option<&str>, placeholder: Option<&str>) -> Arc<SemEntry> {
+        Arc::new(SemEntry {
+            sem: gorca_model::sem::Semantics {
+                text: Some(Arc::new(SemText {
+                    description: description.map(Arc::from),
+                    placeholder: placeholder.map(Arc::from),
+                    ..SemText::default()
+                })),
+                ..Default::default()
+            },
+            ..SemEntry::default()
+        })
+    }
+
+    #[test]
+    fn a_nameless_field_is_named_by_its_description_then_its_placeholder() {
+        let both = meta(Some(text_entry(
+            Some("Mike help"),
+            Some("name@example.com"),
+        )));
+        let out = overlay_from_meta(&snap(Role::TextEntry, None), &both, &no_legacy()).unwrap();
+        assert_eq!(out.name.as_deref(), Some("Mike help"));
+        // The description became the name: it is not said a second time.
+        assert_eq!(out.description, None);
+        let ph = meta(Some(text_entry(None, Some("Zero aria-placeholder"))));
+        let out = overlay_from_meta(&snap(Role::TextEntry, None), &ph, &no_legacy()).unwrap();
+        assert_eq!(out.name.as_deref(), Some("Zero aria-placeholder"));
+        // A named field keeps its name; roles that are not fields are left alone.
+        assert!(
+            overlay_from_meta(&snap(Role::TextEntry, Some("Email")), &ph, &no_legacy()).is_none()
+        );
+        assert!(overlay_from_meta(&snap(Role::Paragraph, None), &ph, &no_legacy()).is_none());
+    }
+
+    #[test]
+    fn a_description_that_repeats_the_name_is_dropped() {
+        let m = meta(Some(text_entry(Some("email"), None)));
+        // Nothing to add: the repeat is not carried over.
+        assert!(
+            overlay_from_meta(&snap(Role::TextEntry, Some("Email")), &m, &no_legacy()).is_none()
+        );
+    }
+
+    #[test]
+    fn a_focusable_editable_section_is_a_text_entry_unless_the_author_set_a_role() {
+        let mut s = (*snap(Role::Panel, None)).clone();
+        s.states |= StateSet::EDITABLE | StateSet::FOCUSABLE;
+        let s = Arc::new(s);
+        let out = overlay_from_meta(&s, &meta(None), &no_legacy()).unwrap();
+        assert_eq!(out.role, Role::TextEntry);
+        let mut roled = meta(None);
+        roled.attrs = vec![(
+            gorca_doc_source_api::web_attrs::XML_ROLES,
+            Arc::from("group"),
+        )]
+        .into();
+        assert!(overlay_from_meta(&s, &roled, &no_legacy()).is_none());
+        // Named from its placeholder like any field.
+        let named = overlay_from_meta(
+            &s,
+            &meta(Some(text_entry(None, Some("Message")))),
+            &no_legacy(),
+        )
+        .unwrap();
+        assert_eq!(
+            (named.role, named.name.as_deref()),
+            (Role::TextEntry, Some("Message"))
+        );
     }
 
     #[test]

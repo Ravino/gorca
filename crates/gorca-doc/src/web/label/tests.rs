@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![allow(clippy::panic, clippy::unwrap_used, clippy::indexing_slicing)]
+#![allow(
+    clippy::panic,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    clippy::unnecessary_wraps
+)]
 
 use std::sync::Arc;
 
@@ -79,6 +84,9 @@ fn the_text_on_the_line_above_labels_a_control_that_starts_its_line() {
         choose(&p, &near).as_deref(),
         Some("Romeo unassociated sibling")
     );
+    // Line boxes that overlap by 1 px are still adjacent (Chromium).
+    let touching = [r(10, 40, 200, 24), r(10, 24, 180, 17)];
+    assert!(choose(&p, &touching).is_some());
     // A paragraph 60 px higher is not its label.
     let far = [r(10, 120, 200, 24), r(10, 18, 180, 18)];
     assert_eq!(choose(&p, &far), None);

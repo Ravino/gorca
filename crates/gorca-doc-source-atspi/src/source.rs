@@ -2281,18 +2281,20 @@ impl AtspiDocSource {
     }
 
     /// IR-4: a heuristic join is confirmed when the object still exists with the same role.
-    /// The screen rectangles of `nodes` (`Component.GetExtents`), one call each, in order and
-    /// never past `deadline`. A node that is unknown, whose call fails or whose box is negative
-    /// has `None`. Few nodes (a focus), so the calls are not spread over tasks.
+    /// The screen rectangles of `probes` (`Component.GetExtents` of the object, or
+    /// `Text.GetRangeExtents` of the run inside its container when the node is a text run with
+    /// no object), one call each, in order and never past `deadline`. A node that is unknown,
+    /// whose call fails or whose box is negative has `None`. Few nodes (a focus), so the calls
+    /// are not spread over tasks.
     async fn extents(
         &self,
         live: &Live,
-        nodes: &[SrcNodeId],
+        probes: &[gorca_doc_source_api::ExtentProbe],
         deadline: Deadline,
     ) -> SmallVec<[Option<gorca_model::Rect>; 6]> {
         let mut out = SmallVec::new();
-        for n in nodes {
-            out.push(self.extent(live, *n, deadline).await);
+        for p in probes {
+            out.push(self.extent(live, p, deadline).await);
         }
         out
     }
@@ -2300,12 +2302,65 @@ impl AtspiDocSource {
     async fn extent(
         &self,
         live: &Live,
-        node: SrcNodeId,
+        probe: &gorca_doc_source_api::ExtentProbe,
         deadline: Deadline,
     ) -> Option<gorca_model::Rect> {
+        let own = live
+            .ident
+            .path_of(probe.node)
+            .and_then(|p| live.paths.path_of(p));
+        let m = match own {
+            Some(path) if !crate::runs::is_run(probe.node) => {
+                self.app
+                    .call(
+                        self.app.next_lane(),
+                        deadline,
+                        &path,
+                        COMPONENT,
+                        "GetExtents",
+                        &(0u32,),
+                    )
+                    .await
+            }
+            _ => {
+                let path = live
+                    .ident
+                    .path_of(probe.parent)
+                    .and_then(|p| live.paths.path_of(p))?;
+                let (a, b) = (
+                    i32::try_from(probe.range.start).ok()?,
+                    i32::try_from(probe.range.end).ok()?,
+                );
+                self.app
+                    .call(
+                        self.app.next_lane(),
+                        deadline,
+                        &path,
+                        TEXT,
+                        "GetRangeExtents",
+                        &(a, b, 0u32),
+                    )
+                    .await
+            }
+        }
+        .ok()?;
+        let (x, y, w, h): (i32, i32, i32, i32) = m.body().deserialize().ok()?;
+        if w > 0 && h > 0 {
+            return Some(gorca_model::Rect {
+                x,
+                y,
+                w: u32::try_from(w).ok()?,
+                h: u32::try_from(h).ok()?,
+            });
+        }
+        // The engine could not place the run (Gecko answers an empty box for a range it has not
+        // laid out for the reader): the container's own box is the best that is left.
+        if probe.node == probe.parent {
+            return None;
+        }
         let path = live
             .ident
-            .path_of(node)
+            .path_of(probe.parent)
             .and_then(|p| live.paths.path_of(p))?;
         let m = self
             .app

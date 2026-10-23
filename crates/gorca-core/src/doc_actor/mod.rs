@@ -1099,14 +1099,30 @@ fn spawn_label(
             return None;
         }
         let plan = label::plan(d, node, role)?;
+        let src_of = |n| d.node(n).and_then(|v| v.meta).and_then(|m| m.src);
         let srcs = plan
             .probes()
             .into_iter()
-            .map(|n| d.node(n).and_then(|v| v.meta).and_then(|m| m.src))
-            .collect::<Option<smallvec::SmallVec<[SrcNodeId; 6]>>>()?;
+            .map(|n| {
+                let node = src_of(n)?;
+                // A text run is measured inside its container when it has no object.
+                let (parent, range) = match label::hyper_range(d, n) {
+                    Some((p, a, b)) => (src_of(p).unwrap_or(node), a..b),
+                    None => (node, 0..0),
+                };
+                Some(gorca_doc_source_api::ExtentProbe {
+                    node,
+                    parent,
+                    range,
+                })
+            })
+            .collect::<Option<smallvec::SmallVec<[_; 6]>>>()?;
         Some((plan, srcs))
     });
-    let Some((plan, srcs)) = planned else { return };
+    let Some((plan, srcs)) = planned else {
+        tracing::info!(target: "gorca_phase", phase = "web_label", outcome = "no_plan");
+        return;
+    };
     let requests = a.requests.clone();
     let notices = a.notices.clone();
     let doc = a.spec_doc;
@@ -1126,9 +1142,18 @@ fn spawn_label(
         let Ok(Ok(Ok(rects))) =
             tokio::time::timeout(LABEL_DEADLINE + Duration::from_millis(30), rx).await
         else {
+            tracing::info!(target: "gorca_phase", phase = "web_label", outcome = "no_rects");
             return;
         };
-        if let Some(text) = label::choose(&plan, &rects) {
+        let chosen = label::choose(&plan, &rects);
+        tracing::info!(
+            target: "gorca_phase",
+            phase = "web_label",
+            outcome = if chosen.is_some() { "label" } else { "far" },
+            cands = plan.cands.len(),
+            rects = ?rects,
+        );
+        if let Some(text) = chosen {
             let _ = notices.try_send(DocNotice::Label {
                 doc,
                 req,

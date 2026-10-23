@@ -170,10 +170,10 @@ impl DocSource for ScriptedDocSource {
                             DocRequest::Extents { nodes, reply, .. } => {
                                 let out = {
                                     let map = rects.lock().unwrap_or_else(PoisonError::into_inner);
-                                    nodes.iter().map(|n| map.get(n).copied()).collect()
+                                    nodes.iter().map(|n| map.get(&n.node).copied()).collect()
                                 };
                                 let _ = reply.send(Ok(out));
-                                Seen::Extents(nodes.to_vec())
+                                Seen::Extents(nodes.iter().map(|n| n.node).collect())
                             }
                             DocRequest::Prioritize { .. } | DocRequest::DriftCheck => Seen::Other,
                         };

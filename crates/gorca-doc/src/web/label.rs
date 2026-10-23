@@ -28,6 +28,9 @@ use super::doc::WebDoc;
 const NEAR_LEFT: i64 = 75;
 const NEAR_RIGHT: i64 = 25;
 const NEAR_VERTICAL: i64 = 20;
+/// Boxes of adjacent lines may overlap by a pixel or two (Chromium rounds line boxes outward);
+/// Orca's `0 <= distance` allows for it here.
+const SLACK: i64 = 3;
 /// "Desperate times call for desperate measures": the left rule again, wider.
 const FAR_LEFT: i64 = 200;
 
@@ -166,11 +169,35 @@ fn items(d: &WebDoc, a: u32, b: u32) -> Vec<(DocNodeId, String)> {
     out
 }
 
+/// Where the text node `id` sits in its parent's text, as scalar offsets, assuming the Firefox
+/// shape (the parent holds the text of its runs with one object marker per real child):
+/// `(parent, start, end)`. `None` for a node without a parent.
+pub fn hyper_range(d: &WebDoc, id: DocNodeId) -> Option<(DocNodeId, u32, u32)> {
+    let parent = d.parent(id)?;
+    let mut at = 0u32;
+    for c in d.children(parent) {
+        let v = d.node(c)?;
+        let is_run = v.role == Role::StaticText && d.child_count(c) == Some(0);
+        let len = if is_run {
+            u32::try_from(v.text.map_or(0, |t| t.chars().count())).ok()?
+        } else {
+            1
+        };
+        if c == id {
+            return Some((parent, at, at.saturating_add(len)));
+        }
+        at = at.saturating_add(len);
+    }
+    None
+}
+
 /// Collapse white space, drop object markers and icon glyphs, cap the length.
 fn clean(s: &str) -> Option<String> {
     let kept: String = s
         .chars()
-        .filter(|c| !gorca_model::text::is_icon_glyph(*c) && !gorca_model::text::is_object_marker(*c))
+        .filter(|c| {
+            !gorca_model::text::is_icon_glyph(*c) && !gorca_model::text::is_object_marker(*c)
+        })
         .collect();
     let one = kept.split_whitespace().collect::<Vec<_>>().join(" ");
     let one: String = one.chars().take(LABEL_CHARS).collect();
@@ -234,10 +261,11 @@ pub fn plan(d: &WebDoc, ctl: DocNodeId, role: Role) -> Option<Plan> {
 
     // Above and below: the control starts its line, the neighbouring line is one text node.
     let first_on_line = items(d, ls, s.max(ls)).is_empty();
-    if first_on_line && ls > 0 {
-        if let Some(c) = one_line(d, ls.saturating_sub(1), Side::Above) {
-            cands.push(c);
-        }
+    if first_on_line
+        && ls > 0
+        && let Some(c) = one_line(d, ls.saturating_sub(1), Side::Above)
+    {
+        cands.push(c);
     }
     if first_on_line && allows_below(role) {
         let (_, le2) = d.line_range(body);
@@ -248,11 +276,7 @@ pub fn plan(d: &WebDoc, ctl: DocNodeId, role: Role) -> Option<Plan> {
         }
     }
 
-    (!cands.is_empty()).then_some(Plan {
-        ctl,
-        role,
-        cands,
-    })
+    (!cands.is_empty()).then_some(Plan { ctl, role, cands })
 }
 
 /// The line containing `offset` as a candidate when it is one text node of plain text.
@@ -307,7 +331,7 @@ pub fn choose(plan: &Plan, rects: &[Option<Rect>]) -> Option<String> {
     let left = |limit: i64| {
         find(Side::Left).and_then(|(c, r)| {
             let dist = i64::from(ctl.x) - right_edge(r);
-            (r.x <= ctl.x && (0..=limit).contains(&dist) && same_row(ctl, r))
+            (r.x <= ctl.x && (-SLACK..=limit).contains(&dist) && same_row(ctl, r))
                 .then(|| c.text.clone())
         })
     };
@@ -330,7 +354,7 @@ pub fn choose(plan: &Plan, rects: &[Option<Rect>]) -> Option<String> {
         && let Some((c, r)) = find(Side::Above)
     {
         let dist = i64::from(ctl.y) - bottom_edge(r);
-        if (0..=NEAR_VERTICAL).contains(&dist) && r.x <= ctl.x {
+        if (-SLACK..=NEAR_VERTICAL).contains(&dist) && r.x <= ctl.x {
             found = Some(c.text.clone());
         }
     }
@@ -339,7 +363,7 @@ pub fn choose(plan: &Plan, rects: &[Option<Rect>]) -> Option<String> {
         && let Some((c, r)) = find(Side::Below)
     {
         let dist = i64::from(r.y) - bottom_edge(ctl);
-        if (0..=NEAR_VERTICAL).contains(&dist) {
+        if (-SLACK..=NEAR_VERTICAL).contains(&dist) {
             found = Some(c.text.clone());
         }
     }
