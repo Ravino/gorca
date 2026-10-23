@@ -182,3 +182,66 @@ priced with `spawn_blocking`, a strawman (see §3).
 3. WQ-1..WQ-3 (batch call cost, fuel calibration per code shape, import charging cost) before B-1..B-5
    numbers are frozen.
 4. Math MQ-1 must take H-4's selector rule as an axiom.
+
+---
+
+## r3 (2026-10-24, main 1853506a): plugin actors (B'), §2.4.6
+
+Verdict: **ACCEPT WITH CHANGES.** The actor runner behind `WLaneRunner`, one admission path, the
+`slot_epoch` stale-reply rule and the busy/coalesce rule are sound, and the r1 H-3 concern (fuel is
+not wall) is now bounded on the writer by the deadline. The deadline arithmetic and the wait
+primitive need fixing before M18a-0 numbers mean anything.
+
+### R3-1 (High) The 0.3 ms deadline overshoots by the timer slack; the gates cannot pass on timeout
+A futex/park with timeout on a SCHED_OTHER thread is subject to the thread's timer slack, 50 µs by
+default (`/proc/self/timerslack_ns` = 50000 on this host). With an adversarial plugin that always
+runs out the clock, every focus change waits 0.3 ms + up to 50 µs + wake latency, so stall p99
+≤ 0.31 ms fails by construction and max ≤ 0.35 ms is at the edge before scheduler noise.
+Fix: `prctl(PR_SET_TIMERSLACK, 1)` on writer threads (or spin the last ~20 µs), and state it in §2.4.6.
+
+### R3-2 (High) The stall is not bounded by D: snapshot and fuse are outside it (PF-8)
+`D = send time + 0.3 ms`, but step (2), building one `FrozenRows` per plugin batch, happens before
+the send, and fusing comes after the wait. PF-8's row ("added delay at most D") is therefore false
+as written. Fix: either define `D` from the start of the writer turn, with the snapshot charged
+inside it, or give the snapshot and fuse their own measured budget and state the PF-8 bound as
+`snapshot + D + fuse`. The gates must say which interval "stall" measures. Do not adopt the WQ-6
+"lazy" snapshot (imports read live S0 and flag stale): it makes the plugin thread read writer state
+concurrently, which breaks PF-1/PF-2's structural argument and I-P8's "never touches writer state".
+
+### R3-3 (Medium) The wait primitive is unspecified and the obvious one panics
+Replies go to "the writer's own mailbox". If the writer is a tokio task, a synchronous wait on a
+tokio mpsc (`blocking_recv`) panics inside a runtime, and a park blocks the tokio worker together
+with the tasks in its local queue. Fix: specify an atomic countdown + futex per handoff (replies
+still delivered through the mailbox and drained after the wait), return early when the count hits 0,
+and document that the writer's worker is blocked for at most D. Alternative that removes the I-P8
+exception: an async select on (countdown notify | high-resolution `timerfd` deadline via `AsyncFd`),
+which has microsecond resolution and does not park the worker; the "~1 ms timer wheel" argument
+applies only to `tokio::time`.
+
+### R3-4 (Medium) Cascade bounds for I-P8
+Within one writer the wait is bounded and busy plugins are skipped, so a storm self-limits per
+actor. Two gaps: (a) a flapping-focus app can make its writer wait D on every turn (≤ 3.3k
+turns/s); add a cap (at most one interactive wait per writer per N ms, otherwise background only);
+(b) on a Firefox focus change both the app actor (K1) and the document actor (K2) may wait in
+series on the same keypress path, giving 2·D. Specify a single wait per keypress path or a shared
+deadline across writers. With these, the exception is acceptable as documented.
+
+### R3-5 (Medium) The gates are weaker for B' than for A, and per-plugin 90 % is lax
+A had to reach facts at first utterance ≥ 99 %; B' passes at 97 %, and any single plugin at 90 %
+(one focus change in ten speaks without, for example, the Signal message name). Fix: for the benign
+fixture (P-2 + dummies, quiet host) require ≥ 99 % overall and ≥ 97 % per plugin; keep 97/90 only for
+the adversarial mix. Interactive jobs should also pre-empt a running background job of the same
+actor (send `Cancel`, re-queue its nodes), otherwise a long background batch turns into `pa_busy`
+on every focus change and per-plugin coverage collapses. Make max a quiet-host gate and report
+loaded-host max separately, because max is dominated by preemption, not by design.
+
+### PF-1..PF-8 under asynchronous delivery
+PF-1..PF-7 hold as argued in the §2.4.6 table: the view is immutable, admission stays on the
+writer, the token (t, R, M, g) plus `slot_epoch` rejects stale and dead-incarnation replies, and the
+rank does not depend on arrival order. PF-8 holds only with R3-1 and R3-2 fixed.
+
+### MQ-4
+Not needed before M18a. The serial-equivalent grant is safe (fits B-2 even on one thread); its cost
+is OutOfFuel on plugins that would have fitted in parallel, which the per-plugin first-utterance gate
+will show. Keep MQ-4 as fallback step (i), triggered only if that gate fails with OutOfFuel as the
+cause.
