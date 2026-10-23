@@ -215,15 +215,7 @@ impl ShadowActor {
             &s.legacy,
             &tokens,
             &self.deviations,
-            DiffCtx {
-                surface: "focus",
-                entry_has_value_text: s
-                    .entry
-                    .sem
-                    .text
-                    .as_deref()
-                    .is_some_and(|t| t.value_text.as_deref().is_some_and(|v| !v.is_empty())),
-            },
+            DiffCtx::for_entry("focus", &s.entry),
         );
         match &outcome {
             DiffOutcome::Equal => bump(&self.stats.equal),
@@ -340,7 +332,10 @@ mod tests {
             vec![tok(SegmentKind::Text, "OK"), tok(SegmentKind::Role, role)],
         );
         assert_eq!(a.process(&ok), Some(DiffOutcome::Equal));
-        let bad = sample(e, vec![tok(SegmentKind::Text, "OK")]);
+        let bad = sample(
+            e,
+            vec![tok(SegmentKind::Text, "OK"), tok(SegmentKind::Role, "link")],
+        );
         assert!(matches!(
             a.process(&bad),
             Some(DiffOutcome::Different { .. })

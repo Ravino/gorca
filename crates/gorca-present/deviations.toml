@@ -7,7 +7,25 @@
 #            is closed or the row is renewed with a new reason
 
 [[deviation]]
-id = "value-not-fused"
+id = "field-contents-not-fused"
 surface = "focus"
-reason = "A numeric AT-SPI Value range (current value) is spoken by the legacy presenter; the fused entry carries aria-valuetext only, so a node without value_text lacks it."
-until = "2026-11-07"
+reason = "The legacy presenter speaks a field's contents as its value. Contents are text-layer data (they change per keystroke), not a fused group; the text layer speaks them. Closes when the focus switch moves the contents field into the compose row (slice 5)."
+until = "2026-12-15"
+
+[[deviation]]
+id = "content-derived-name"
+surface = "focus"
+reason = "The fused name of a list row, tab or similar is derived from its content (ProvCode::Derived); the legacy snapshot carries no name and speaks the role alone. The fused result is the intended improvement."
+until = "2026-12-15"
+
+[[deviation]]
+id = "pressed-without-toggle"
+surface = "focus"
+reason = "The legacy presenter says pressed for a native tab whose AT-SPI state set has PRESSED; the model says it is not a toggle (agreement deviation pressed-without-toggle) and selected already carries the meaning."
+until = "2026-12-15"
+
+[[deviation]]
+id = "role-from-model"
+surface = "focus"
+reason = "The legacy role mapping gave Unknown (no role word) for nodes whose fused role is known (landmark, popover, slider, panel); the model's word is the intended improvement."
+until = "2026-12-15"

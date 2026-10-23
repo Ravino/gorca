@@ -976,8 +976,10 @@ mod tests {
         let mut total = std::time::Duration::ZERO;
         for i in 0..N {
             let t = Instant::now();
-            f.reader
-                .shadow_focus(crate::present::PresentContext::Focus, &snap, &u, false);
+            let sample =
+                f.reader
+                    .shadow_focus(crate::present::PresentContext::Focus, &snap, &u, false);
+            f.reader.shadow_offer(sample);
             total += t.elapsed();
             if i % 32 == 31 {
                 actor.drain_pending();

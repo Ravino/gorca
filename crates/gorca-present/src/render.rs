@@ -50,12 +50,14 @@ pub struct RenderOpts {
 fn pairs(args: &[Arg]) -> SmallVec<[(&str, I18nArg<'_>); 4]> {
     args.iter()
         .take(ext::MAX_REF_ARGS)
-        .map(|a| {
+        .filter_map(|a| {
             let v = match &a.val {
                 ArgVal::Num(n) => I18nArg::Num(*n),
                 ArgVal::Text(t) => I18nArg::Str(t),
+                // An argument kind of a newer host: left out.
+                ArgVal::Opaque { .. } => return None,
             };
-            (&*a.name, v)
+            Some((&*a.name, v))
         })
         .collect()
 }

@@ -600,22 +600,22 @@ impl Reader {
         }
     }
 
-    /// M22b1 shadow mode: offer the legacy presenter's focus tokens and the fused entry to
-    /// `gorca-present`. Only a cheap clone of the tokens and one `try_send`; never waits.
+    /// M22b1 shadow mode, step 1: take the legacy presenter's raw focus tokens and the fused
+    /// entry (Arc clones only, before policy and lead-in edit the utterance). Nothing is sent
+    /// here; `shadow_offer` does that after the speech effect is issued (R-1: off the
+    /// keypress-to-speech path).
     pub(crate) fn shadow_focus(
         &self,
         ctx: PresentContext,
         snap: &NodeSnapshot,
         u: &gorca_model::Utterance,
         from_cache: bool,
-    ) {
+    ) -> Option<gorca_present::FocusSample> {
         use gorca_present::{FocusSample, LegacyToken, SkipWhy};
-        let Some(h) = &self.present_shadow else {
-            return;
-        };
+        let h = self.present_shadow.as_ref()?;
         if ctx != PresentContext::Focus {
             h.skipped(SkipWhy::Context);
-            return;
+            return None;
         }
         let web = crate::aria::Node {
             role: snap.role,
@@ -625,13 +625,13 @@ impl Reader {
         .is_web();
         if web {
             h.skipped(SkipWhy::Web);
-            return;
+            return None;
         }
         let Some(entry) = &snap.sem.entry else {
             h.skipped(SkipWhy::NoEntry);
-            return;
+            return None;
         };
-        h.offer(FocusSample {
+        Some(FocusSample {
             node: snap.key,
             entry: Arc::clone(entry),
             legacy: u
@@ -645,7 +645,14 @@ impl Reader {
             may_refine: from_cache || u.may_refine,
             secret: snap.role == Role::PasswordEntry,
             description_pause: self.cmd.effective.browse.description_pause,
-        });
+        })
+    }
+
+    /// Step 2: hand the sample to the shadow actor (one `try_send`, never waits).
+    pub(crate) fn shadow_offer(&self, sample: Option<gorca_present::FocusSample>) {
+        if let (Some(h), Some(sample)) = (&self.present_shadow, sample) {
+            h.offer(sample);
+        }
     }
 
     /// Step `Presented` for the snapshot's node and, if that produced the `Speak` effect, build
@@ -677,7 +684,7 @@ impl Reader {
                     PresentContext::Focus
                 };
                 let mut u = self.presenters.present(ctx, snap, id, epoch);
-                self.shadow_focus(ctx, snap, &u, from_cache);
+                let shadow = self.shadow_focus(ctx, snap, &u, from_cache);
                 if !self.cmd.effective.browse.description_pause {
                     crate::aria::strip_pause(&mut u);
                 }
@@ -726,6 +733,8 @@ impl Reader {
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                     self.web_label_arm(snap, fx);
                 }
+                // After the speech effect: the shadow is off the latency path.
+                self.shadow_offer(shadow);
                 fx.push(ReaderEffect::FocusSettled { node: snap.key });
                 self.name_retry_arm(snap, epoch, fx);
                 if self.selection_node != Some(snap.key) {

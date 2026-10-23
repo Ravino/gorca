@@ -91,3 +91,116 @@ No `unwrap`/`expect` outside tests; `try_send` with counted Full/Closed; cancell
 actor panic stays in its task; shadow off by default and the tests prove speech is unchanged;
 `legacy_family` is exhaustive with the "place new roles here" arm; no AT-SPI types in `ir.rs`
 (`NodeKey`, `GroupMask`, `MsgId` are model/i18n types).
+
+---
+
+# Round 2: PresIr v1 freeze + slice 2 (0e437add, 2026-10-24)
+
+Scope: `git diff main...0e437add`. Ran `cargo test -p gorca-present-ir` (10 passed) and
+`cargo test -p gorca-present` (37 passed). `cargo tree -p gorca-present-ir`: gorca-model,
+gorca-i18n, smallvec, thiserror, bitflags only (no tokio). The connector replay test was not run
+(out of the allowed scope); the "364 equal / 11 allowed / 0 different" figure is unverified here.
+
+## Verdict: BLOCK the v1 freeze on three cheap contract items (F-1..F-3); slice-2 code may merge
+
+P-1..P-5 from round 1 have landed (Msg args, Ext refs, Opaque, key strings, flags/lang, ExtKinds,
+redaction, Unknown reason). What remains are things that cannot be changed after v1 without a
+version bump, and they cost about an hour now.
+
+## Findings, ranked
+
+**F-1 (High, freeze). `LangId` means a UI catalog index, not a content language.**
+`gorca-present-ir/src/lib.rs` `LangId` doc: "`Lang` index + 1"; `gorca-i18n/src/lang.rs:20`
+`Lang` is `{En, Ru}`. A field's `lang` exists for page/app content language (an HTML `lang="de"`
+paragraph read with a German voice, as NVDA does in Firefox). A catalog index cannot express `de`,
+and the wire form is unspecified (the same build-order trap that P-2 fixed for `MsgId`). Changing
+the meaning later is a semantic break of v1. Fix: define `LangId` as a host-interned BCP-47 tag
+(interner beside `ExtKinds`), wire form = the tag string, unknown tag = absent; doc + one test. No
+shape change.
+
+**F-2 (Medium, freeze). `ArgVal` is a closed enum with no open arm.**
+`ArgVal::{Num, Text}` has no `Unknown`/`Opaque`; adding `Float`, `Date` or a nested `Msg` later
+(Fluent supports them) breaks every exhaustive match and the wire decoder. Every other kind in v1
+is open; this one is not. Fix: `ArgVal::Opaque { code: u16 }` (renders as nothing, passes
+through), plus a code table and a round-trip test.
+
+**F-3 (Medium, freeze). The shape test checks field names, not types or all records.**
+`shape_of_the_records_is_frozen` binds every field to `_`: `sem_rev: u32 -> u64`, `group: u8 -> u16`,
+`LangId(u16) -> u32` or `Origin.via` width changes all pass. `Arg`, `ArgVal`, `FlatSpan`, `LangId`,
+`FieldFlags`, `IrFlags` and the `Reason` payloads are not covered. Fix: typed bindings
+(`sem_rev: _s` then `let _: u32 = _s;`), exhaustive matches over `Reason` and `ArgVal`, and
+`size_of` equalities (not `<=`) for `Field` (56) and `Content` (24).
+
+**F-4 (Medium). `ExtKinds` has no per-namespace quota and trusts the caller's namespace.**
+`alloc(ns, name)` takes `ns: &str`; one add-on can allocate all 32,768 codes (`EXT_BASE..=0xFFFF`)
+and every other add-on gets `Full`; nothing binds `ns` to the calling add-on, so it can claim
+`telegram:unread`. Not wired yet, so not exploitable today. Fix before M18a-6: the host passes the
+manifest id (never guest input), a per-namespace cap (for example 256), and a test.
+
+**F-5 (Medium, deviation scope). `role-from-model` has no gate at all.**
+`diff.rs` `explain(RoleFromModel)` fires whenever the legacy utterance has no role token and the
+new one has exactly one; `DiffCtx` is not consulted. It therefore hides any new role word, including
+the questionable ones the reason itself lists ("slider" for a `Scrollbar`, "popover" for a
+`Tooltip`). Fix: gate on a `SemRole` allow-list in `DiffCtx` (the roles behind the 11 nodes).
+
+**F-6 (Medium, deviation scope). `field-contents-not-fused` covers spin buttons and combo boxes.**
+`field_role` = `Class::Field` = `Combobox | TextBox | SearchBox | PasswordBox | SpinButton`. Text
+contents are only fetched for `TextEntry`/`PasswordEntry` (`fetch/strategy.rs:322`). A spin button
+gets a numeric value (`strategy.rs:308`) that `range_value_text` now fuses; if that path regresses,
+the legacy "5" goes missing on the new side and this row hides it, which is the round-1 masking
+problem again. Fix: gate on `TextBox | SearchBox | PasswordBox`.
+
+**F-7 (Low-Medium, role words). Switch says "toggle button", then "checked" or "not pressed".**
+GTK4 `GtkSwitch` is `ATSPI_ROLE_SWITCH` (`refs/gtk/gtk/a11y/gtkatspiutils.c:245`) -> `SemRole::Switch`
+-> `RoleToggleButton`, `Class::Toggle`. On: `check == On` speaks "checked"; off: speaks
+"not pressed". The vocabulary is mixed; Orca says "switch" with "on"/"off". This matches legacy
+(no regression) but is now locked in by `every_role_word_agrees_with_the_legacy_family_unless_improved`.
+The same holds for Scrollbar -> "slider", Tooltip -> "popover", Meter -> "progress bar". Fix in
+slice 3: add `role-switch` and `role-scroll-bar`, a `Class::Switch` using `state-on`/`state-off`,
+and widen the test's allow-list. Toggle button for a `Button` with a press state and "label" for
+`StaticText`/`Caption` are correct. The table is exhaustive, has no `_` arm, and `UNMAPPED` is
+checked against it over the whole registry.
+
+**F-8 (Low). `pressed-without-toggle` is not scoped to tabs.** It is gated only on
+`press == NotToggle && check == NotCheckable`. A model regression that drops `Press` on a role whose
+legacy word stays the same would be hidden. Fix: also require `SemRole::Tab` and a `selected` token
+on the new side, as the reason claims.
+
+**F-9 (Low). Expiry is enforced only by a unit test.** `Deviations::builtin()` keeps honouring
+expired rows at run time. The test does fail after 2026-12-15 (lexical ISO compare, verified by
+`expiry_compares_iso_dates`). Suggest also logging expired ids in the shadow summary. Also, the
+slice-2 acceptance criterion "no `native.*` rows left" is not met as written: 4 `focus` rows remain.
+The orchestrator should amend the plan row, not leave it silently.
+
+**F-10 (Low). Open-kind aliasing.** `Reason::Unknown(2).code() == 2` decodes back as `BrowseLine`;
+`Content::from_wire_msg` returns `Opaque { code: 1 }`, whose `code()` claims "msg" with no key, so a
+re-encoder emits a malformed msg. Fix: never construct `Unknown`/`Opaque` with a known code
+(`from_code` is the only constructor; an unknown key maps to a reserved code such as `0xFFFF`).
+
+**F-11 (Low). Redaction is not structural.** `redacted()` is opt-in, and it keeps `span` on a secret
+field, which leaks the secret's length. Fix: a `Redacted<PresIr>` newtype as the only type the
+plugin/braille/log sinks accept, with the span cleared.
+
+**F-12 (Low). `Allowed(id)` reports only the first classifier used**, so `allowed` stats
+under-count rows that co-fire (for example pressed-without-toggle + role-from-model on tabs).
+
+## Overhead (M-6, Δp99 ≤ 0.1 ms)
+Acceptable for shadow mode. A mean of 281 ns is 0.3 % of the budget. The 29 µs worst case is one
+sample's maximum at load 7, not a p99, so it does not threaten the budget. However:
+- `shadow_focus` runs **before** the utterance is spoken (`gorca-core/src/present/flow.rs:680`),
+  so it sits on the keypress-to-speech path. Moving it after the speak effect takes it off that
+  path for free.
+- The timed region excludes the `is_web` check and the sample construction, and the producer is a
+  plain thread, not the current-thread Reader lane.
+Still to measure: p99/p99.9 of the offer on the Reader lane; the e2e Δp99 interleaved on/off
+(slice 5, GTK4 + Firefox); pool CPU contention from compose under a 10k/s storm with the shadow on;
+`dropped_full` in the 1 h live soak.
+
+## Checked and fine
+No `unwrap`/`expect` outside tests (the only one is `unreachable!` in the shape test). No new
+blocking calls; `try_send` only. `gorca-present-ir` is tokio-free; the connector depends on
+`gorca-present`/`gorca-core` only as dev-dependencies. The IR has no backend types.
+`range_value_text` drops a non-finite min or max the same way legacy `snapshot()` does (parity),
+and a toolkit `valuetext` wins over the number. The classifiers require the whole difference to be
+explained before `Allowed`. Edits are ops in ADR-0026 (`present.edit`), so `Opaque` carrying no
+payload is acceptable: the host keeps the original field.

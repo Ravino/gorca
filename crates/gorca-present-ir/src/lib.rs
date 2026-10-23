@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! `PresIr`: the presentation intermediate representation (ADR-0022 section 2.5).
 //!
-//! **Draft v0** (`PRES_IR_VERSION = 0`). The reviewer blocked the slice 1 freeze
-//! (`docs/reports/m22b1-review.md` P-1..P-5); this is the corrected draft. The freeze to version 1
-//! happens at the end of M22b1 slice 2. This crate is pure data: no runtime, no connector types,
-//! so the plugin API crate may depend on it.
+//! **Frozen at version 1** (`PRES_IR_VERSION = 1`, end of M22b1 slice 2). The slice 1 draft was
+//! blocked by review (`docs/reports/m22b1-review.md` P-1..P-5); the corrected shape was exercised by
+//! the native corpus replay (0 differences outside `deviations.toml`). This crate is pure data: no
+//! runtime, no connector types, so the plugin API crate may depend on it. A change that is not an
+//! append of a code (a reshaped record, a removed or reordered field) bumps the version and amends
+//! ADR-0022; the `shape_*` tests below fail to compile or run on such a change.
 //!
 //! Rules that survive the freeze (they are about the wire, not only about Rust):
 //!
@@ -35,8 +37,8 @@ use gorca_model::sem::GroupMask;
 use gorca_model::{NodeKey, SegmentKind};
 use smallvec::SmallVec;
 
-/// Version of the record shapes below. 0 = draft, 1 = frozen (M22b1 slice 2).
-pub const PRES_IR_VERSION: u32 = 0;
+/// Version of the record shapes below. 1 = frozen (M22b1 slice 2).
+pub const PRES_IR_VERSION: u32 = 1;
 
 /// Why an utterance is composed (ADR-0022 section 2.5). Codes are append-only; an unknown code
 /// is carried as [`Reason::Unknown`] and passed through.
@@ -162,48 +164,78 @@ impl FieldKind {
     }
 }
 
-/// Why `ExtKinds::alloc` refused.
+/// Why `ExtKinds` refused.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ExtKindError {
     /// The add-on code range is used up.
     #[error("the add-on field kind range is full")]
     Full,
+    /// This namespace has used its quota.
+    #[error("the namespace has used its field kind quota")]
+    Quota,
     /// The namespace or name is empty or too long.
     #[error("empty or over-long field kind namespace or name")]
     BadName,
 }
 
+/// A namespace bound by the host to one add-on (its manifest id). Only the host can make one
+/// ([`ExtKinds::bind`]); the guest-facing allocation takes this token, never a string, so an add-on
+/// cannot claim another add-on's namespace.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExtNs(Arc<str>);
+
+impl ExtNs {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Host-side allocator of add-on `FieldKind` codes, one per (namespace, name). Idempotent; codes
-/// are stable for the process lifetime. A guest names a kind; it never picks the number.
+/// are stable for the process lifetime. A guest names a kind; it never picks the number, and each
+/// namespace has a quota so one add-on cannot use up the range.
 #[derive(Debug, Default)]
 pub struct ExtKinds {
     by_name: HashMap<(Arc<str>, Arc<str>), FieldKind>,
+    used: HashMap<Arc<str>, usize>,
     next: u16,
 }
 
 impl ExtKinds {
     /// Longest namespace or name.
     pub const MAX_NAME: usize = 64;
+    /// Kinds one namespace may allocate.
+    pub const NS_QUOTA: usize = 256;
 
     pub fn new() -> ExtKinds {
         ExtKinds::default()
     }
 
+    /// Bind `manifest_id` (host knowledge, never guest input) as a namespace token.
+    ///
+    /// # Errors
+    /// [`ExtKindError::BadName`] for an empty or over-long id.
+    pub fn bind(&self, manifest_id: &str) -> Result<ExtNs, ExtKindError> {
+        if manifest_id.is_empty() || manifest_id.len() > Self::MAX_NAME {
+            return Err(ExtKindError::BadName);
+        }
+        Ok(ExtNs(Arc::from(manifest_id)))
+    }
+
     /// The code of (`ns`, `name`), allocating it on first use.
     ///
     /// # Errors
-    /// [`ExtKindError`] for an empty or long name, or when the range is full.
-    pub fn alloc(&mut self, ns: &str, name: &str) -> Result<FieldKind, ExtKindError> {
-        if ns.is_empty()
-            || name.is_empty()
-            || ns.len() > Self::MAX_NAME
-            || name.len() > Self::MAX_NAME
-        {
+    /// [`ExtKindError`] for an empty or long name, the namespace quota, or a full range.
+    pub fn alloc(&mut self, ns: &ExtNs, name: &str) -> Result<FieldKind, ExtKindError> {
+        if name.is_empty() || name.len() > Self::MAX_NAME {
             return Err(ExtKindError::BadName);
         }
-        let key: (Arc<str>, Arc<str>) = (Arc::from(ns), Arc::from(name));
+        let key: (Arc<str>, Arc<str>) = (Arc::clone(&ns.0), Arc::from(name));
         if let Some(k) = self.by_name.get(&key) {
             return Ok(*k);
+        }
+        let used = self.used.get(&ns.0).copied().unwrap_or(0);
+        if used >= Self::NS_QUOTA {
+            return Err(ExtKindError::Quota);
         }
         let code = FieldKind::EXT_BASE
             .checked_add(self.next)
@@ -211,6 +243,7 @@ impl ExtKinds {
         self.next = self.next.checked_add(1).ok_or(ExtKindError::Full)?;
         let kind = FieldKind(code);
         self.by_name.insert(key, kind);
+        self.used.insert(Arc::clone(&ns.0), used + 1);
         Ok(kind)
     }
 
@@ -244,9 +277,61 @@ impl Origin {
     pub const NO_GROUP: u8 = 0xFF;
 }
 
-/// An interned language (`Lang` index + 1; absent = the UI language).
+/// A host-interned content language. It names the language of a field's *content* (an HTML
+/// `lang="de"` paragraph, an application's declared language) as a BCP-47 tag, and is **not** an
+/// index into the UI catalog. The number is meaningful only inside one host process; on the wire a
+/// language travels as its tag string ([`LangTags::tag`] / [`LangTags::intern`]). Absent = the UI
+/// language. An unparsable or unknown tag is absent, never an error.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct LangId(pub u16);
+
+/// Host-side interner of content-language tags.
+#[derive(Debug, Default)]
+pub struct LangTags {
+    tags: Vec<Arc<str>>,
+}
+
+impl LangTags {
+    /// Most distinct tags held (a hostile page cannot grow the table).
+    pub const MAX_TAGS: usize = 1024;
+    /// Longest accepted tag (RFC 5646 recommends supporting at least 35 characters).
+    pub const MAX_LEN: usize = 35;
+
+    pub fn new() -> LangTags {
+        LangTags::default()
+    }
+
+    /// Intern `tag` (case-folded to lower case, `_` read as `-`). `None` for a tag that is empty,
+    /// too long, not ASCII alphanumeric subtags, or when the table is full.
+    pub fn intern(&mut self, tag: &str) -> Option<LangId> {
+        let t = tag.trim();
+        let ok = !t.is_empty()
+            && t.len() <= Self::MAX_LEN
+            && t.split(['-', '_']).all(|sub| {
+                (1..=8).contains(&sub.len()) && sub.bytes().all(|b| b.is_ascii_alphanumeric())
+            });
+        if !ok {
+            return None;
+        }
+        let norm = t.replace('_', "-").to_ascii_lowercase();
+        if let Some(i) = self.tags.iter().position(|x| **x == *norm) {
+            return u16::try_from(i + 1).ok().map(LangId);
+        }
+        if self.tags.len() >= Self::MAX_TAGS {
+            return None;
+        }
+        self.tags.push(Arc::from(norm));
+        u16::try_from(self.tags.len()).ok().map(LangId)
+    }
+
+    /// The tag string of `id` (the wire form), `None` for an id this table did not hand out.
+    pub fn tag(&self, id: LangId) -> Option<&str> {
+        usize::from(id.0)
+            .checked_sub(1)
+            .and_then(|i| self.tags.get(i))
+            .map(|t| &**t)
+    }
+}
 
 /// Per-field flags. Reserved bits are zero and preserved by editors.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
@@ -295,6 +380,22 @@ pub struct Arg {
 pub enum ArgVal {
     Num(i64),
     Text(Arc<str>),
+    /// An argument kind of a newer host (a float, a date, a nested message): kept as is, the
+    /// argument is left out when formatting. Codes: 0 num, 1 text; anything else is opaque.
+    Opaque {
+        code: u16,
+    },
+}
+
+impl ArgVal {
+    /// The wire kind code.
+    pub const fn code(&self) -> u16 {
+        match self {
+            ArgVal::Num(_) => 0,
+            ArgVal::Text(_) => 1,
+            ArgVal::Opaque { code } => *code,
+        }
+    }
 }
 
 impl Arg {
@@ -335,6 +436,9 @@ pub enum Content {
 }
 
 impl Content {
+    /// The opaque code of a message whose key this host does not know (never a kind code).
+    pub const UNKNOWN_KEY: u16 = 0xFFFF;
+
     /// A core word without arguments.
     pub fn word(id: MsgId) -> Content {
         Content::Msg {
@@ -382,7 +486,9 @@ impl Content {
     pub fn from_wire_msg(key: &str, args: Vec<Arg>) -> Content {
         match MsgId::from_key(key) {
             Some(id) => Content::msg(id, args),
-            None => Content::Opaque { code: 1 },
+            None => Content::Opaque {
+                code: Content::UNKNOWN_KEY,
+            },
         }
     }
 }
@@ -565,7 +671,9 @@ mod tests {
         assert_eq!(Content::from_wire_msg(key, vec![]), c);
         assert_eq!(
             Content::from_wire_msg("no-such-key-from-a-newer-host", vec![]),
-            Content::Opaque { code: 1 }
+            Content::Opaque {
+                code: Content::UNKNOWN_KEY
+            }
         );
         assert_eq!(c.code(), 1);
         assert_eq!(Content::Text("x".into()).code(), 0);
@@ -580,16 +688,68 @@ mod tests {
     }
 
     #[test]
-    fn add_on_field_kinds_are_host_allocated_per_namespace() {
+    fn add_on_field_kinds_are_host_allocated_per_bound_namespace() {
         let mut k = ExtKinds::new();
-        let a = k.alloc("telegram", "unread").expect("alloc");
-        let b = k.alloc("signal", "unread").expect("alloc");
+        let tg = k.bind("telegram").expect("bind");
+        let sg = k.bind("signal").expect("bind");
+        let a = k.alloc(&tg, "unread").expect("alloc");
+        let b = k.alloc(&sg, "unread").expect("alloc");
         assert_ne!(a, b, "the same name in two namespaces never merges");
-        assert_eq!(k.alloc("telegram", "unread"), Ok(a), "idempotent");
+        assert_eq!(k.alloc(&tg, "unread"), Ok(a), "idempotent");
         assert!(a.is_extension() && b.is_extension());
-        assert_eq!(k.alloc("", "x"), Err(ExtKindError::BadName));
-        assert_eq!(k.alloc("a", &"n".repeat(65)), Err(ExtKindError::BadName));
+        assert_eq!(k.bind(""), Err(ExtKindError::BadName));
+        assert_eq!(k.alloc(&tg, ""), Err(ExtKindError::BadName));
+        assert_eq!(k.alloc(&tg, &"n".repeat(65)), Err(ExtKindError::BadName));
         assert_eq!(k.rows().len(), 2);
+    }
+
+    #[test]
+    fn one_namespace_cannot_use_up_the_range() {
+        let mut k = ExtKinds::new();
+        let greedy = k.bind("greedy").expect("bind");
+        for i in 0..ExtKinds::NS_QUOTA {
+            assert!(k.alloc(&greedy, &format!("k{i}")).is_ok());
+        }
+        assert_eq!(k.alloc(&greedy, "one-more"), Err(ExtKindError::Quota));
+        // An existing name is still served, and another namespace is unaffected.
+        assert!(k.alloc(&greedy, "k0").is_ok());
+        let other = k.bind("other").expect("bind");
+        assert!(k.alloc(&other, "x").is_ok());
+    }
+
+    #[test]
+    fn a_content_language_is_an_interned_bcp47_tag_that_travels_as_a_string() {
+        let mut t = LangTags::new();
+        let de = t.intern("de").expect("de");
+        let de_ch = t.intern("de_CH").expect("de-CH");
+        assert_ne!(de, de_ch);
+        assert_eq!(t.tag(de), Some("de"));
+        assert_eq!(
+            t.tag(de_ch),
+            Some("de-ch"),
+            "case-folded, underscore read as a hyphen"
+        );
+        assert_eq!(t.intern("DE"), Some(de), "interning is idempotent");
+        assert_eq!(t.intern(""), None);
+        assert_eq!(t.intern("not a tag"), None);
+        assert_eq!(t.intern(&"a".repeat(36)), None);
+        assert_eq!(t.tag(LangId(0)), None);
+        assert_eq!(
+            t.tag(LangId(999)),
+            None,
+            "an id this table did not hand out is absent"
+        );
+        // `ru` is not special: a content language is not a UI catalog index.
+        assert_eq!(t.intern("ru").and_then(|id| t.tag(id)), Some("ru"));
+    }
+
+    #[test]
+    fn an_unknown_argument_kind_is_opaque_and_keeps_its_code() {
+        assert_eq!(ArgVal::Num(1).code(), 0);
+        assert_eq!(ArgVal::Text("x".into()).code(), 1);
+        let o = ArgVal::Opaque { code: 9 };
+        assert_eq!(o.code(), 9);
+        assert_eq!(o.clone(), o);
     }
 
     #[test]
@@ -631,6 +791,113 @@ mod tests {
     }
 
     #[test]
+    fn shape_of_the_records_is_frozen() {
+        // Every record is destructured exhaustively and each binding is pinned to its type: a new,
+        // removed or renamed field, or a widened integer, fails to compile. That is the signal to
+        // bump PRES_IR_VERSION and amend ADR-0022.
+        let f = Field::new(
+            FieldKind::NAME,
+            Content::Text("x".into()),
+            Origin::default(),
+        );
+        let Field {
+            kind,
+            flags,
+            lang,
+            content,
+            origin,
+            span,
+        } = f;
+        let _: FieldKind = kind;
+        let _: FieldFlags = flags;
+        let _: Option<LangId> = lang;
+        let _: Content = content;
+        let _: Option<FlatSpan> = span;
+        let Origin { row, group, via } = origin;
+        let _: RowId = row;
+        let _: u8 = group;
+        let _: u32 = via;
+        let ir = PresIr::new(Reason::Focus, node(), 0, SmallVec::new());
+        let PresIr {
+            reason,
+            node: n,
+            sem_rev,
+            may_refine,
+            flags,
+            fields,
+        } = ir;
+        let _: Reason = reason;
+        let _: NodeKey = n;
+        let _: u32 = sem_rev;
+        let _: bool = may_refine;
+        let _: IrFlags = flags;
+        let _: SmallVec<[Field; 6]> = fields;
+        let Arg { name, val } = Arg::num("n", 1);
+        let _: Arc<str> = name;
+        let _: ArgVal = val;
+        let FlatSpan { start, end } = FlatSpan { start: 0, end: 1 };
+        let _: (u32, u32) = (start, end);
+        let LangId(l) = LangId(1);
+        let _: u16 = l;
+        let RowId(r) = RowId(1);
+        let _: u16 = r;
+        let FieldFlags(ff) = FieldFlags::NONE;
+        let _: u16 = ff;
+        let IrFlags(irf) = IrFlags::NONE;
+        let _: u16 = irf;
+        let FieldKind(k) = FieldKind::NAME;
+        let _: u16 = k;
+        let ExtRef { ns, key, args } = *match Content::ext("a", "b", vec![]) {
+            Content::Ext(r) => r,
+            Content::Text(_) | Content::Msg { .. } | Content::Opaque { .. } => {
+                unreachable!("built as Ext above")
+            }
+        };
+        let _: (Arc<str>, Arc<str>, Box<[Arg]>) = (ns, key, args);
+        // The variants of the open enums, exhaustively (no wildcard).
+        let _ = |r: Reason| match r {
+            Reason::Focus
+            | Reason::FocusAncestor
+            | Reason::BrowseLine { entered: _ }
+            | Reason::QuickNav
+            | Reason::SayAll
+            | Reason::Review
+            | Reason::Change { changed: _ }
+            | Reason::ListEntry
+            | Reason::WhereAmI
+            | Reason::Unknown(_) => (),
+        };
+        let _ = |a: ArgVal| match a {
+            ArgVal::Num(_) | ArgVal::Text(_) | ArgVal::Opaque { code: _ } => (),
+        };
+        // Exact sizes, not bounds: any growth is a deliberate decision.
+        if cfg!(target_pointer_width = "64") {
+            assert_eq!(std::mem::size_of::<Field>(), 56);
+            assert_eq!(std::mem::size_of::<Content>(), 24);
+        }
+        assert_eq!(PRES_IR_VERSION, 1);
+    }
+
+    #[test]
+    fn an_unregistered_field_kind_and_opaque_content_pass_through_unchanged() {
+        let odd = Field::new(
+            FieldKind(0x7123),
+            Content::Opaque { code: 40 },
+            Origin::default(),
+        );
+        let ir = PresIr::new(
+            Reason::Unknown(77),
+            node(),
+            3,
+            [odd.clone()].into_iter().collect(),
+        );
+        assert_eq!(ir.redacted(), ir, "nothing secret: the copy is identical");
+        assert_eq!(ir.fields[0], odd);
+        assert_eq!(FieldKind(0x7123).name(), None);
+        assert!(!ir.reason.editable());
+    }
+
+    #[test]
     fn record_sizes_budget() {
         // Re-budgeted for flags (2 B), lang (4 B) and the boxed message arguments: a field is
         // copied into hook inputs. Measured 56 B (was 48 B in the first draft): kind 2, flags 2,
@@ -638,7 +905,7 @@ mod tests {
         let f = std::mem::size_of::<Field>();
         let c = std::mem::size_of::<Content>();
         eprintln!("size_of Field = {f} B, Content = {c} B");
-        assert!(c <= 32, "{c}");
+        assert!(c <= 24, "{c}");
         assert!(f <= 56, "{f}");
     }
 }
