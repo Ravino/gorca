@@ -31,6 +31,7 @@ pub const SHADOW_QUEUE: usize = 64;
 
 /// One focus utterance of the legacy presenter, with the entry it should have been made from.
 #[derive(Clone, Debug)]
+#[allow(clippy::struct_excessive_bools)] // one flag per fact of the legacy call site
 pub struct FocusSample {
     pub node: NodeKey,
     pub entry: Arc<SemEntry>,

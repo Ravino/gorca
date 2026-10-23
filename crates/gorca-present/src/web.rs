@@ -70,27 +70,44 @@ fn role_word(role: SemRole, press: Press, named: bool) -> Option<M> {
 }
 
 /// Roles that are never "unavailable" in web content (static structure: Gecko reports no
-/// Sensitive on it). The legacy presenter's `never_disabled` set, through the legacy family.
-fn never_disabled(role: SemRole) -> bool {
-    use gorca_model::Role as R;
+/// Sensitive on it).
+const fn never_disabled(role: SemRole) -> bool {
     matches!(
-        role.legacy_family(),
-        R::DocumentWeb
-            | R::Document
-            | R::Heading
-            | R::Paragraph
-            | R::Image
-            | R::List
-            | R::ListItem
-            | R::Table
-            | R::Row
-            | R::Cell
-            | R::ColumnHeader
-            | R::RowHeader
-            | R::Landmark
-            | R::StaticText
-            | R::Separator
-    ) || matches!(role, SemRole::Form)
+        role,
+        SemRole::Document
+            | SemRole::DocumentWeb
+            | SemRole::Heading
+            | SemRole::Paragraph
+            | SemRole::Img
+            | SemRole::List
+            | SemRole::Listbox
+            | SemRole::Feed
+            | SemRole::DescriptionList
+            | SemRole::ListItem
+            | SemRole::Option
+            | SemRole::Term
+            | SemRole::Definition
+            | SemRole::Table
+            | SemRole::Grid
+            | SemRole::TreeGrid
+            | SemRole::Row
+            | SemRole::Cell
+            | SemRole::GridCell
+            | SemRole::ColumnHeader
+            | SemRole::RowHeader
+            | SemRole::Region
+            | SemRole::Banner
+            | SemRole::Complementary
+            | SemRole::ContentInfo
+            | SemRole::Main
+            | SemRole::Navigation
+            | SemRole::Search
+            | SemRole::Article
+            | SemRole::StaticText
+            | SemRole::Caption
+            | SemRole::Separator
+            | SemRole::Form
+    )
 }
 
 /// How the checked state is said for a role.
@@ -239,7 +256,7 @@ pub(crate) fn web_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> Pre
     if !(menu_item && popup.is_some()) {
         match sem.expand {
             Expand::Expanded => {
-                fields.push(word(FieldKind::STATE, M::StateExpanded, Group::Expand))
+                fields.push(word(FieldKind::STATE, M::StateExpanded, Group::Expand));
             }
             Expand::Collapsed => {
                 fields.push(word(FieldKind::STATE, M::StateCollapsed, Group::Expand));

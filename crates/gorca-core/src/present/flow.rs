@@ -600,6 +600,17 @@ impl Reader {
         }
     }
 
+    /// Whether the shadow compares this node on the web surface (one place for the legacy test,
+    /// deleted with the shadow hook).
+    fn shadow_node_is_web(snap: &NodeSnapshot) -> bool {
+        crate::aria::Node {
+            role: snap.role,
+            states: snap.states,
+            attrs: &snap.attrs,
+        }
+        .is_web()
+    }
+
     /// M22b1 shadow mode, step 1: take the legacy presenter's raw focus tokens and the fused
     /// entry (Arc clones only, before policy and lead-in edit the utterance). Nothing is sent
     /// here; `shadow_offer` does that after the speech effect is issued (R-1: off the
@@ -617,12 +628,7 @@ impl Reader {
             h.skipped(SkipWhy::Context);
             return None;
         }
-        let web = crate::aria::Node {
-            role: snap.role,
-            states: snap.states,
-            attrs: &snap.attrs,
-        }
-        .is_web();
+        let web = Self::shadow_node_is_web(snap);
         let Some(entry) = &snap.sem.entry else {
             h.skipped(SkipWhy::NoEntry);
             return None;
@@ -658,12 +664,7 @@ impl Reader {
         use gorca_present::{ChangeSample, LegacyToken};
         self.present_shadow.as_ref()?;
         let (old_e, new_e) = (old.sem.entry.as_ref()?, new.sem.entry.as_ref()?);
-        let web = crate::aria::Node {
-            role: new.role,
-            states: new.states,
-            attrs: &new.attrs,
-        }
-        .is_web();
+        let web = Self::shadow_node_is_web(new);
         Some(ChangeSample {
             node: new.key,
             old: Arc::clone(old_e),
