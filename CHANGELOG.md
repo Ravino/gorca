@@ -8,6 +8,46 @@ since the project started on 2026-10-12. The detailed record is `docs/decisions.
 
 ## [Unreleased]
 
+### Newest changes (2026-10-19 to 2026-10-23)
+
+Added
+
+- Mouse emulation through the `gorca-helper` GNOME Shell extension (opt-in: the `pointer`
+  capability in the helper allow-list). See [the mouse guide](docs/user-guide/mouse.md).
+  - NVDA-style keypad keys on the desktop presets (Num Lock off) and gorca chords on the laptop
+    presets: left and right click at the pointer, drag lock for each button with automatic release
+    after 120 seconds, move the pointer to the review position, move the review cursor to the
+    pointer, and say the pointer position.
+  - Item clicks (`mouse.left_click_item`, `mouse.right_click_item`, unbound by default) that use the
+    application's own action first and the pointer second.
+  - Safe clicks at monitor scales 1, 1.25 and 2 in GTK 3, GTK 4, XWayland, Firefox, Chromium and
+    Electron: visibility, hit-test and occlusion checks, and a deadline and expiry on every call.
+- Configuration profiles: per-application settings that are created by edits, a rule that
+  profiles override only keys of the global settings, and chords to save, save to global, cycle,
+  switch off, choose the edit target and announce. See [the profiles guide](docs/user-guide/profiles.md).
+- Web-app modes: browse mode works in Chrome, Chromium and Electron applications, and
+  gorca+Space (gorca+A in the Orca presets) is a sticky focus mode there, so arrow keys go to the
+  application. A built-in row turns browse mode off for the Visual Studio Code family.
+
+Fixed
+
+- Firefox: gorca+Space after a window is activated no longer says "not in a web page".
+- Firefox: Enter clicks only the item that was announced; if the item changed, the first Enter
+  announces it and the next one clicks.
+- Firefox: Ctrl+C copies the page selection when a text field holds the focus.
+- Chromium and Electron editors (Signal-style composers): Backspace and Delete runs are heard, and
+  typing is echoed once.
+- Mutter 48.7 crash mitigation: gorca can no longer trigger the `rebuild_all_grabbed_modifiers`
+  crash when the keyboard monitor connection is slow (see the earlier entry below).
+
+Known issues
+
+- Firefox sometimes drops the first click after start-up (an item click succeeded on the first
+  try in 9 of 12 measured runs); the second click works.
+- Chromium and Electron: the application hit test is skipped for item clicks.
+- `browse.mode_default` is saved but not yet applied when a document first gets focus, and there
+  is no built-in Signal row yet.
+
 ### Added
 
 Phase 1 (foundation)
