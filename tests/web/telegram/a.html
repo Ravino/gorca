@@ -125,6 +125,8 @@ function renderChatList() {
     prev = el;
   });
 }
+// ?dbg=1: the document title carries the window (lo) and the scroll offset so a driver can read page truth
+if (Q.get("dbg")) setInterval(() => { const l = $("msglist"); document.title = "T lo=" + lo + " hi=" + hi + " st=" + Math.round(l ? l.scrollTop : -1); }, 200);
 $("chat-list").addEventListener("scroll", () => requestAnimationFrame(renderChatList));
 
 // ------------------------------------------------------------------ message list (windowed, prepend on scroll up)

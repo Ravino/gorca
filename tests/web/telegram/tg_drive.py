@@ -71,6 +71,11 @@ def focused():
     return (n.get_role_name(), (n.get_name() or "")[:40]) if n else None
 
 
+def doc_title():
+    d = walk(lambda n: n.get_role_name() == "document web")
+    return d.get_name() if d else None
+
+
 def count_rows():
     """How many chat rows exist in the page's a11y tree right now (the windowed list)."""
     c = [0]
@@ -174,21 +179,23 @@ elif SCEN == "scrollup":
     open_first_chat()
     step("esc 1", ESC, wait=1.0)
     allsaid = []
-    for i in range(70):
-        s = step(f"up {i+1}", UP, wait=0.35, settle=0.25, show=(i < 3 or i % 10 == 0))
+    for i in range(150):
+        s = step(f"up {i+1}", UP, wait=0.3, settle=0.2, show=(i < 2 or i % 25 == 0))
+        if i % 25 == 0:
+            print("   page:", doc_title(), flush=True)
         allsaid += s
     seq = nums(allsaid)
     print("sequence:", seq, flush=True)
     steps = [b - a for a, b in zip(seq, seq[1:])]
     bad = [(i, a, b) for i, (a, b) in enumerate(zip(seq, seq[1:])) if b - a != -1]
-    verdict(len(seq) >= 60, "scrollup spoke a message number for most arrows", f"{len(seq)}/70")
+    verdict(len(seq) >= 45, "scrollup spoke message numbers across the prepend (about 3 stops per message)", f"{len(seq)}/150")
     verdict(not bad, "scrollup never skipped, repeated or jumped", f"anomalies={bad[:6]}")
 
 elif SCEN == "listscroll":
     # Down through more rows than the windowed chat list renders (22 of 300)
     allsaid = []
-    for i in range(60):
-        allsaid += step(f"down {i+1}", DOWN, wait=0.3, settle=0.2, show=(i % 6 == 0))
+    for i in range(120):
+        allsaid += step(f"down {i+1}", DOWN, wait=0.3, settle=0.2, show=(i % 12 == 0))
     names = [s for s in allsaid]
     print("rows spoken:", names[-8:], flush=True)
     last = names[-1] if names else ""
@@ -224,8 +231,8 @@ elif SCEN == "flood":
 
 elif SCEN == "churn":
     # f=churn: the list re-sorts every 2 s while the cursor rests on a row
-    for i in range(5):
-        step(f"down {i+1}", DOWN)
+    for i in range(28):
+        step(f"down {i+1}", DOWN, wait=0.3, settle=0.15, show=(i % 9 == 0))
     n = spoken_len()
     time.sleep(7)
     said = spoken_since(n)
