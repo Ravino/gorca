@@ -5,7 +5,7 @@ The session was stopped for the owner's move. These notes are what is needed to 
 ## In main
 - M22b1 cut-over is done. Focus and change speak through `gorca-present` / PresIr v1. The tag `legacy/focus-last` marks the last legacy commit, and the legacy focus/change paths are deleted.
 - Owner build: `gorca 210e3d29`.
-- M22b2 work is merged: browse and quick-nav go through gorca-present. The legacy browse path still exists. The `browse` and `quicknav` gates PASS on main (en+ru, 0 unclassified).
+- M22b2 cut-over DONE (tag `legacy/browse-last`): browse, quick-nav and say-all speak through gorca-present; legacy browse paths deleted. Pushed to GitHub as 96c2b391. legacy.allow: 44 rows, 101 uses.
 - Hardened cut-over gate (`xtask cutover <surface>`), determinism property tests, and the no-legacy rule (`xtask legacy`, 58 rows).
 - Web fixes:
   - re-anchor after a removed pane;
