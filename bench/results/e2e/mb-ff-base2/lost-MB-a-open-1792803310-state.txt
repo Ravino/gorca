@@ -1,0 +1,28 @@
+9154059849141 said "MB Menu buttons — Mozilla Firefox, MB Menu buttons, document"
+9154091127624 said "browse mode, heading level 1, Menu buttons"
+9155001145102 said "Actions menu, button, collapsed, submenu"
+9155134029344 said "MB Menu buttons — Mozilla Firefox, panel"
+bus 4 /org/a11y/atspi/accessible/2 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/62 TextChanged:insert
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/59 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:insert/system
+bus 2 /org/a11y/atspi/accessible/63 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/68 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/69 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/70 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/74 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/75 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/79 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/63 Focus:
+bus 1 /org/a11y/atspi/accessible/63 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/85 TextCaretMoved:
+bus 3 /org/a11y/atspi/accessible/85 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/86 Focus:
+bus 1 /org/a11y/atspi/accessible/86 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/90 StateChanged:focused

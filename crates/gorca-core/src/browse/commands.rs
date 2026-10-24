@@ -1673,6 +1673,44 @@ impl Reader {
         true
     }
 
+    /// Whether the document mirror holds `node` (a freshly inserted subtree is not there yet).
+    pub(crate) fn web_knows(&self, node: NodeKey) -> bool {
+        self.web
+            .as_ref()
+            .is_some_and(|b| b.join.get(node).is_some())
+    }
+
+    /// The menu (role and name) a web menu item is entered through, when focus comes from
+    /// outside that menu: `from` (the node presented before) is neither the menu nor one of its
+    /// items. `None` for anything else, so a move between items speaks the item alone.
+    pub(crate) fn web_menu_entered(
+        &self,
+        item: NodeKey,
+        from: Option<NodeKey>,
+    ) -> Option<(Role, Arc<str>)> {
+        let b = self.web.as_ref()?;
+        let (doc, id) = b.join.get(item)?;
+        let h = b.docs.get(doc)?;
+        let came_from = from.and_then(|f| b.join.get(f)).filter(|(d, _)| *d == doc);
+        h.read.with(|d| {
+            if d.node(id)?.role != Role::MenuItem {
+                return None;
+            }
+            let menu = d.parent(id)?;
+            let v = d.node(menu)?;
+            if !matches!(v.role, Role::Menu | Role::MenuBar) {
+                return None;
+            }
+            if let Some((_, f)) = came_from
+                && (f == menu || d.parent(f) == Some(menu))
+            {
+                return None;
+            }
+            let name = v.name.filter(|n| !n.is_empty())?;
+            Some((v.role, Arc::from(name)))
+        })
+    }
+
     /// A cold focus on a mirrored web node: its snapshot from the document mirror (role, states,
     /// name, value), so the first focus into a field is spoken at once and the fetch only
     /// confirms it (the mirror knows the node: this is what the page last told us).

@@ -1,0 +1,51 @@
+9154059849141 said "MB Menu buttons — Mozilla Firefox, MB Menu buttons, document"
+9154091127624 said "browse mode, heading level 1, Menu buttons"
+9155001145102 said "Actions menu, button, collapsed, submenu"
+9155134029344 said "MB Menu buttons — Mozilla Firefox, panel"
+9159044100746 said "Sort menu, button, collapsed, submenu"
+9159179153387 said "Sort, menu"
+9160677068405 said "Sort by date, menu item"
+9160807685509 said "browse mode, Sort menu, button, expanded, submenu"
+9160812110014 said "collapsed"
+9160941726446 said "Fresh menu, button, collapsed, submenu"
+9161077866402 said "Fresh, menu"
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/62 TextChanged:insert
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/59 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:insert/system
+bus 2 /org/a11y/atspi/accessible/63 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/68 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/69 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/70 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/74 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/75 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/79 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/63 Focus:
+bus 1 /org/a11y/atspi/accessible/63 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/85 TextCaretMoved:
+bus 3 /org/a11y/atspi/accessible/85 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/86 Focus:
+bus 1 /org/a11y/atspi/accessible/86 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/90 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/87 Focus:
+bus 1 /org/a11y/atspi/accessible/87 StateChanged:focused
+bus 4 /org/a11y/atspi/accessible/83 TextChanged:insert/system
+bus 1 /org/a11y/atspi/accessible/94 Focus:
+bus 1 /org/a11y/atspi/accessible/94 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/93 Focus:
+bus 1 /org/a11y/atspi/accessible/95 Focus:
+bus 1 /org/a11y/atspi/accessible/95 StateChanged:focused
+bus 4 /org/a11y/atspi/accessible/83 TextChanged:delete/system
+bus 1 /org/a11y/atspi/accessible/87 Focus:
+bus 1 /org/a11y/atspi/accessible/87 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/88 Focus:
+bus 1 /org/a11y/atspi/accessible/88 StateChanged:focused
+bus 4 /org/a11y/atspi/accessible/89 TextChanged:insert/system
+bus 1 /org/a11y/atspi/accessible/98 Focus:
+bus 1 /org/a11y/atspi/accessible/98 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/97 Focus:

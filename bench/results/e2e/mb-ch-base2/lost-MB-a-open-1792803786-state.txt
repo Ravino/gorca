@@ -1,0 +1,10 @@
+9629253786747 said "MB Menu buttons, document"
+9629285608595 said "browse mode, heading level 1, Menu buttons"
+9629592567716 said "Actions menu, button, collapsed, submenu"
+9630676754391 said "Copy link, menu item"
+bus 2 /org/a11y/atspi/accessible/6 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/7 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/6 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/192 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/192 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/197 StateChanged:focused

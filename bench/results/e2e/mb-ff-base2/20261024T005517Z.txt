@@ -1,0 +1,39 @@
+# e2e-m8 mb-ff-base2
+# utc=2026-10-24T00:55:17Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=14.87 14.37 14.36 6/1696 711132
+# git_rev=9608b743
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=mb-ff-base2
+# reader=daemon:<repo>/.claude/worktrees/agent-a51de0fae27782a41/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=9.43 13.38 14.04 15/1795 707564
+# loadavg_end=14.87 14.37 14.36 5/1696 711129
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-MB MB.a.open P0 FAIL: heard "MB Menu buttons — Mozilla Firefox, panel" 
+# note1=M8-MB MB.a.down P0 FAIL: heard "" 
+# note2=M8-MB MB.a.esc P0 FAIL: heard "" 
+# note3=M8-MB MB.b.open P0 FAIL: heard "Sort, menu" 
+# note4=M8-MB MB.c.open P0 FAIL: heard "Fresh, menu" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-MB.fail                 daemon/voicego            5            5            5  1 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-MB.gap                  daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-MB.p0_not_pass          daemon/voicego            5            5            5  1                  info   [steps]
+M8-MB.pass                 daemon/voicego            6            6            6  1                  info   [steps]
+M8-MB.steps                daemon/voicego           11           11           11  1                  info   [steps]
+M8-MB.xfail                daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-MB.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

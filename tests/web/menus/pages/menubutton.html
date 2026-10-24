@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MB Menu buttons</title>
+<style>
+  [hidden] { display: none; }
+  ul[role=menu] { list-style: none; padding: 4px; margin: 4px 0; border: 1px solid #888; width: 12em; }
+  [role=menuitem] { padding: 2px 6px; }
+  [role=menuitem]:focus, [aria-current=true] { background: #cde; outline: none; }
+</style>
+</head>
+<body>
+<h1>Menu buttons</h1>
+<p>Three menu-button patterns. A moves focus into the menu (roving focus); B keeps focus on the button and
+points at the active item with aria-activedescendant; C inserts a fresh menu subtree on every open.</p>
+
+<div>
+  <button id="a-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="a-menu">Actions menu</button>
+  <ul id="a-menu" role="menu" aria-label="Actions" hidden>
+    <li role="menuitem" tabindex="-1">Copy link</li>
+    <li role="menuitem" tabindex="-1">Paste text</li>
+    <li role="menuitem" tabindex="-1">Delete item</li>
+  </ul>
+</div>
+
+<div>
+  <button id="b-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="b-menu">Sort menu</button>
+  <ul id="b-menu" role="menu" aria-label="Sort" hidden>
+    <li id="b-1" role="menuitem">Sort by name</li>
+    <li id="b-2" role="menuitem">Sort by date</li>
+    <li id="b-3" role="menuitem">Sort by size</li>
+  </ul>
+</div>
+
+<div>
+  <button id="c-btn" aria-haspopup="true" aria-expanded="false">Fresh menu</button>
+  <div id="c-host"></div>
+</div>
+
+<p id="after">After the menus.</p>
+
+<script>
+function items(menu) { return Array.from(menu.querySelectorAll('[role=menuitem]')); }
+
+// A: focus moves into the menu.
+const aBtn = document.getElementById('a-btn'), aMenu = document.getElementById('a-menu');
+function aOpen() { aMenu.hidden = false; aBtn.setAttribute('aria-expanded', 'true'); items(aMenu)[0].focus(); }
+function aClose() { aMenu.hidden = true; aBtn.setAttribute('aria-expanded', 'false'); aBtn.focus(); }
+aBtn.addEventListener('click', () => (aMenu.hidden ? aOpen() : aClose()));
+aMenu.addEventListener('keydown', (e) => {
+  const it = items(aMenu), i = it.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown') { it[(i + 1) % it.length].focus(); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { it[(i + it.length - 1) % it.length].focus(); e.preventDefault(); }
+  else if (e.key === 'Escape') { aClose(); e.preventDefault(); }
+});
+
+// B: focus stays on the button, aria-activedescendant names the active item.
+const bBtn = document.getElementById('b-btn'), bMenu = document.getElementById('b-menu');
+let bIdx = -1;
+function bSet(i) {
+  const it = items(bMenu);
+  it.forEach((x) => x.removeAttribute('aria-current'));
+  bIdx = i;
+  if (i < 0) { bBtn.removeAttribute('aria-activedescendant'); return; }
+  it[i].setAttribute('aria-current', 'true');
+  bBtn.setAttribute('aria-activedescendant', it[i].id);
+}
+function bOpen() { bMenu.hidden = false; bBtn.setAttribute('aria-expanded', 'true'); bSet(0); }
+function bClose() { bMenu.hidden = true; bBtn.setAttribute('aria-expanded', 'false'); bSet(-1); }
+bBtn.addEventListener('click', () => (bMenu.hidden ? bOpen() : bClose()));
+bBtn.addEventListener('keydown', (e) => {
+  if (bMenu.hidden) return;
+  const n = items(bMenu).length;
+  if (e.key === 'ArrowDown') { bSet((bIdx + 1) % n); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { bSet((bIdx + n - 1) % n); e.preventDefault(); }
+  else if (e.key === 'Escape') { bClose(); e.preventDefault(); }
+});
+
+// C: a fresh subtree on every open, focus into its first item.
+const cBtn = document.getElementById('c-btn'), cHost = document.getElementById('c-host');
+function cOpen() {
+  const m = document.createElement('div');
+  m.setAttribute('role', 'menu'); m.setAttribute('aria-label', 'Fresh');
+  ['Mute chat', 'Pin chat', 'Leave chat'].forEach((t) => {
+    const i = document.createElement('div');
+    i.setAttribute('role', 'menuitem'); i.tabIndex = -1; i.textContent = t; m.appendChild(i);
+  });
+  cHost.appendChild(m);
+  cBtn.setAttribute('aria-expanded', 'true');
+  m.firstChild.focus();
+}
+function cClose() { cHost.textContent = ''; cBtn.setAttribute('aria-expanded', 'false'); cBtn.focus(); }
+cBtn.addEventListener('click', () => (cHost.firstChild ? cClose() : cOpen()));
+cHost.addEventListener('keydown', (e) => { if (e.key === 'Escape') { cClose(); e.preventDefault(); } });
+
+</script>
+</body>
+</html>
