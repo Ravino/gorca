@@ -94,6 +94,8 @@ pub use health::{
     SLOW_RECOVERY, SLOW_WINDOW,
 };
 pub use mode::{BaseMode, GatedGrabs, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, WebCursor};
+#[cfg(feature = "cutover-probe")]
+pub use present::cutover_probe_tests::legacy_change_tokens;
 pub use present::log_states as snapshot_state_names;
 pub use present::value_text;
 pub use present::{

@@ -31,6 +31,16 @@ fn key(i: u64) -> NodeKey {
 /// The recorded pages of one engine as snapshots (document order, parents first), the way the
 /// connector decodes a full fetch: role, states, name, description, attributes.
 pub(crate) fn page(engine: &str, name: &str) -> Option<Vec<Arc<NodeSnapshot>>> {
+    page_with(engine, name, &|_| {})
+}
+
+/// [`page`] with a hook that may edit each raw node before it is decoded (the cut-over gate's
+/// state-change corpus flips states this way).
+pub(crate) fn page_with(
+    engine: &str,
+    name: &str,
+    edit: &dyn Fn(&mut RawNode),
+) -> Option<Vec<Arc<NodeSnapshot>>> {
     let text = std::fs::read_to_string(root().join(engine).join(format!("{name}.jsonl"))).ok()?;
     let mut out = Vec::new();
     for line in text.lines() {
@@ -67,7 +77,7 @@ pub(crate) fn page(engine: &str, name: &str) -> Option<Vec<Arc<NodeSnapshot>>> {
             .and_then(|p| u64::try_from(p).ok())
             .map(key);
         let borrowed = || pairs.iter().map(|(k, v)| (k.as_str(), v.as_str()));
-        let raw = RawNode {
+        let mut raw = RawNode {
             role: u32::try_from(role).unwrap_or(0),
             state_words: words,
             name: Some(s("name")),
@@ -83,6 +93,7 @@ pub(crate) fn page(engine: &str, name: &str) -> Option<Vec<Arc<NodeSnapshot>>> {
                 | PropMask::PARENT,
             ..RawNode::default()
         };
+        edit(&mut raw);
         out.push(snapshot(key(i), &raw, Instant::now()));
     }
     Some(out)

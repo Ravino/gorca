@@ -1136,6 +1136,7 @@ dependencies = [
  "gorca-dbus",
  "gorca-doc-source-api",
  "gorca-fuse",
+ "gorca-i18n",
  "gorca-ingress",
  "gorca-model",
  "gorca-output-api",
@@ -3264,6 +3265,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "cargo_metadata",
+ "toml_edit",
 ]
 
 [[package]]

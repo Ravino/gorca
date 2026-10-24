@@ -618,3 +618,41 @@ structural/presentation split of `StateSet` (8.1) lands in b4 at the latest.
   is empty at the end of b4. **M-14b**: provisional-label cost in B-FUSE within M-11. **M-14c**:
   PV-1 test: no published node without an entry under the F1-F10 shuffles.
 * Open: QO-6, the `StructState` shape and entries for lazily cached ancestors (inventory gaps 1, 2).
+
+### 8.9 The cut-over gate (owner rule, 2026-10-24)
+
+Before a surface moves to `gorca-present` (PresIr v1) the difference between old and new output on
+every recorded corpus is zero, and whatever remains is an explained epoch change. The gate is one
+command per surface (`focus`, `change`, `browse`, `quicknav`, `review`, `window`, `notification`,
+`explain`): `cargo run -p xtask -- cutover <surface>` (`xtask/src/cutover.rs`).
+
+* **Replay.** The test `cutover_gate_tests::cutover_emit` (`gorca-connector-atspi`) feeds every
+  family of `tests/fixtures/sem` (`gtk3`, `gtk4`, `firefox`, `chromium`, `electron`, `telegram`;
+  the list and its dated waivers are `tests/fixtures/sem/cutover-corpora.toml`) through the real
+  fusion writer, the legacy presenter and `gorca-present`, and writes one canonical record per
+  node. `change` has no recorded state-change corpus, so its replay flips one state (or the name)
+  of every focusable node, one case at a time, and compares `legacy change` with `compose_change`.
+  `xtask` runs the test binary inside `tests/harness/run-isolated.sh` (private buses, no display),
+  never in the live session.
+* **Classification.** EQUAL (identical tokens, in order; "silent" when both say nothing), INTENDED
+  (a `deviations.toml` row for exactly this surface, not expired, with a reason and an `epoch`
+  tag) or UNCLASSIFIED (everything else, including order-only differences and a row that is
+  expired, untagged or reasonless). The gate passes only with 0 UNCLASSIFIED, a non-empty replay,
+  every required family covered (a family with no fixtures needs a dated, reasoned waiver, which
+  the report prints) and determinism.
+* **Determinism.** The replay runs twice plainly and once with a seeded shuffle of the arrival
+  order and batching (siblings keep their relative order, because the child index is data); the
+  three record files must be byte-identical. Fused values are a function of the final state
+  (section 2.2), so any difference is a finding: a nondeterministic fusion or presenter fails the
+  gate.
+* **Report.** The terminal table and `bench/results/cutover/<surface>-<date>.md` (first line
+  `result: PASS|FAIL`, rev, input hash, load, governor, per-family table, intended rows,
+  grouped unclassified differences, plus a `.unclassified.tsv`). A later report never overwrites an
+  earlier one; failing reports stay. A surface whose path does not exist yet reports FAIL by design.
+* **CI hook.** `cargo xtask legacy` (rule 12, part of `cargo xtask deps`) also fails when no
+  `xtask/legacy.allow` row names the slice that switches a surface (that surface is cut over) and
+  `bench/results/cutover/` has no git-tracked PASS report for it whose `rev` is an ancestor of
+  `HEAD`. A cut-over commit therefore ships its passing report, and the legacy deletion that
+  empties the slice's rows cannot land without one. `cargo xtask cutover --check` runs only this.
+* **Order of events for a surface:** gate PASS, commit the report, tag main `legacy/<surface>-last`
+  (annotated), delete the legacy path and its rows (this section, 8.3), run the tests.

@@ -2,6 +2,7 @@
 //! Repository automation. `cargo xtask deps` enforces the ADR-0001 section 11 dependency rules
 //! over `cargo metadata`; see [`deps`].
 
+mod cutover;
 mod deps;
 mod entryrule;
 mod envrule;
@@ -52,6 +53,14 @@ fn main() -> ExitCode {
                 }
             }
         }
+        Some("cutover") => match cutover::run(args) {
+            Ok(true) => ExitCode::SUCCESS,
+            Ok(false) => ExitCode::FAILURE,
+            Err(e) => {
+                eprintln!("xtask cutover: {e:#}");
+                ExitCode::from(2)
+            }
+        },
         Some("strings") => match strings::run(args.next().as_deref() == Some("--update")) {
             Ok(true) => ExitCode::SUCCESS,
             Ok(false) => ExitCode::FAILURE,
@@ -70,13 +79,13 @@ fn main() -> ExitCode {
         },
         Some(other) => {
             eprintln!(
-                "unknown xtask command `{other}`\n\nusage: cargo xtask deps | legacy [--print] | strings [--update] | build-ext [--dest DIR]"
+                "unknown xtask command `{other}`\n\nusage: cargo xtask deps | legacy [--print] | strings [--update] | build-ext [--dest DIR] | cutover <surface>|--check"
             );
             ExitCode::from(2)
         }
         None => {
             eprintln!(
-                "usage: cargo xtask deps | legacy [--print] | strings [--update] | build-ext [--dest DIR]"
+                "usage: cargo xtask deps | legacy [--print] | strings [--update] | build-ext [--dest DIR] | cutover <surface>|--check"
             );
             ExitCode::from(2)
         }
