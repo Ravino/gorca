@@ -3,7 +3,9 @@
 //! of `gorca-present`, compared as (kind, literal).
 
 use gorca_model::SegmentKind;
-use gorca_model::sem::{Check, Group, Press, ProvCode, SemEntry, SemRole};
+use gorca_model::sem::{Avail, Check, Group, Press, ProvCode, Select, SemEntry, SemRole};
+
+use gorca_i18n::Lang;
 
 use crate::deviations::Deviations;
 use crate::render::Token;
@@ -62,6 +64,18 @@ pub enum Classifier {
     GroupingWord,
     /// A role the web table has no word for: the legacy mapping spoke one from the engine role.
     RoleNotInTable,
+    /// The legacy presenter said "unavailable" for static structure the model never disables.
+    UnavailableStatic,
+    /// A role word the model improves where the legacy mapping used a coarser one (a fixed list
+    /// of (role, legacy word, model word) pairs).
+    RoleWordImproved,
+    /// A very long name: the legacy and the model cut it at different lengths.
+    NameCapDiffers,
+    /// A flip of selection on a node the model says cannot be selected (a menu item, a button).
+    SelectNotApplicable,
+    /// A switch is never half-checked; the legacy presenter said "half pressed" for the mixed
+    /// state the engine reported on it.
+    MixedSwitchIgnored,
     /// The model says the field is read only; the legacy snapshot's state set did not.
     ReadOnlyFromModel,
     /// The fused value (`aria-valuetext`, `aria-valuenow`) is spoken where the legacy snapshot of
@@ -137,8 +151,22 @@ pub const VALUE_ROLES: &[SemRole] = &[
     SemRole::Combobox,
 ];
 
+/// (role, legacy word, model word) pairs accepted by `role-word-improved`.
+pub fn role_word_pairs(lang: Lang) -> [(SemRole, &'static str, &'static str); 5] {
+    use gorca_i18n::MsgId as M;
+    let t = |id| gorca_i18n::t_in(lang, id);
+    [
+        (SemRole::Option, t(M::RolePanel), t(M::RoleListItem)),
+        (SemRole::Feed, t(M::RolePanel), t(M::RoleList)),
+        (SemRole::Definition, t(M::RoleParagraph), t(M::RoleListItem)),
+        // A layout table (presentation role) is not a table for the user.
+        (SemRole::Presentation, t(M::RoleTable), t(M::RolePanel)),
+        (SemRole::AlertDialog, t(M::RoleAlert), t(M::RoleDialog)),
+    ]
+}
+
 impl Classifier {
-    pub const ALL: [Classifier; 10] = [
+    pub const ALL: [Classifier; 15] = [
         Classifier::FieldContentsNotFused,
         Classifier::ContentDerivedName,
         Classifier::PressedWithoutToggle,
@@ -149,6 +177,11 @@ impl Classifier {
         Classifier::RoleNotInTable,
         Classifier::ValueFromAttrs,
         Classifier::ReadOnlyFromModel,
+        Classifier::UnavailableStatic,
+        Classifier::RoleWordImproved,
+        Classifier::NameCapDiffers,
+        Classifier::SelectNotApplicable,
+        Classifier::MixedSwitchIgnored,
     ];
 
     pub const fn id(self) -> &'static str {
@@ -163,12 +196,18 @@ impl Classifier {
             Classifier::RoleNotInTable => "role-not-in-table",
             Classifier::ValueFromAttrs => "value-from-attrs",
             Classifier::ReadOnlyFromModel => "read-only-from-model",
+            Classifier::UnavailableStatic => "unavailable-static",
+            Classifier::RoleWordImproved => "role-word-improved",
+            Classifier::NameCapDiffers => "name-cap-differs",
+            Classifier::SelectNotApplicable => "select-not-applicable",
+            Classifier::MixedSwitchIgnored => "mixed-switch-ignored",
         }
     }
 }
 
 /// What the diff needs to know about the comparison besides the tokens.
 #[derive(Copy, Clone, Debug)]
+#[allow(clippy::struct_excessive_bools)] // one model fact per bit
 pub struct DiffCtx<'a> {
     /// The surface being compared (`deviations.toml` `surface`).
     pub surface: &'a str,
@@ -178,6 +217,14 @@ pub struct DiffCtx<'a> {
     pub name_derived: bool,
     /// The model says the node is neither checkable nor a toggle.
     pub untoggled: bool,
+    /// The model says the node has no pressed state (`Press::NotToggle`).
+    pub not_toggle: bool,
+    /// The model says the node cannot be selected (`Select::NotSelectable`).
+    pub not_selectable: bool,
+    /// The model says availability does not apply to the node (`Avail::NotApplicable`, SM-5).
+    pub avail_na: bool,
+    /// The UI language the classifiers' catalog words are taken in (the language `render` used).
+    pub lang: Lang,
 }
 
 impl DiffCtx<'static> {
@@ -187,18 +234,26 @@ impl DiffCtx<'static> {
         role: SemRole::Unknown,
         name_derived: false,
         untoggled: false,
+        not_toggle: false,
+        not_selectable: false,
+        avail_na: false,
+        lang: Lang::En,
     };
 }
 
 impl<'a> DiffCtx<'a> {
     /// The facts of `entry` that decide which classifiers may apply.
-    pub fn for_entry(surface: &'a str, entry: &SemEntry) -> DiffCtx<'a> {
+    pub fn for_entry(surface: &'a str, entry: &SemEntry, lang: Lang) -> DiffCtx<'a> {
         DiffCtx {
             surface,
             role: entry.sem.role,
             name_derived: entry.prov.get(Group::Name) == Some(ProvCode::Derived),
             untoggled: entry.sem.press == Press::NotToggle
                 && entry.sem.check == Check::NotCheckable,
+            not_toggle: entry.sem.press == Press::NotToggle,
+            not_selectable: entry.sem.select == Select::NotSelectable,
+            avail_na: entry.sem.avail == Avail::NotApplicable,
+            lang,
         }
     }
 }
@@ -240,6 +295,11 @@ fn difference<'a>(a: &[Key<'a>], b: &[Key<'a>]) -> (Vec<Key<'a>>, Vec<Key<'a>>) 
     (only_a, only_b)
 }
 
+/// Whether `surface` is one of the state-change surfaces.
+fn is_change(surface: &str) -> bool {
+    surface.starts_with("change")
+}
+
 fn count_kind(keys: &[Key<'_>], kind: SegmentKind) -> usize {
     keys.iter().filter(|(k, _)| *k == kind_code(kind)).count()
 }
@@ -252,6 +312,51 @@ fn take(keys: &mut Vec<Key<'_>>, pred: impl Fn(&Key<'_>) -> bool) -> bool {
         }
         None => false,
     }
+}
+
+/// True for the characters a bullet or dash marker is made of.
+fn is_bullet_char(c: char) -> bool {
+    matches!(
+        c,
+        '*' | '-'
+            | '+'
+            | '>'
+            | '\u{2022}'
+            | '\u{25E6}'
+            | '\u{25AA}'
+            | '\u{25AB}'
+            | '\u{2023}'
+            | '\u{00B7}'
+            | '\u{2013}'
+            | '\u{2014}'
+            | '\u{25CF}'
+            | '\u{25CB}'
+            | '\u{25A0}'
+            | '\u{25A1}'
+            | '\u{2043}'
+    )
+}
+
+/// `legacy` is `new` with a list marker in front: the removed prefix, trimmed, is bullets only
+/// ("\u{2022} Alpha") or a number closed by a dot or parenthesis ("3. Beta", "(3) Beta"). A dropped
+/// word ("Delete all" to "all") or a bare number ("2 apples") is not a marker.
+fn is_marker_stripped(legacy: &str, new: &str) -> bool {
+    if new.is_empty() {
+        return false;
+    }
+    let Some(prefix) = legacy.strip_suffix(new) else {
+        return false;
+    };
+    let marker = prefix.trim();
+    if marker.is_empty() {
+        return false;
+    }
+    if marker.chars().all(is_bullet_char) {
+        return true;
+    }
+    let body = marker.trim_start_matches('(');
+    let rest = body.trim_start_matches(|c: char| c.is_ascii_digit());
+    rest.len() < body.len() && matches!(rest, "." | ")")
 }
 
 /// Try to explain part of the difference with `c`; true when it removed something.
@@ -281,18 +386,41 @@ fn explain<'a>(
                 count_kind(only_new, SegmentKind::Text) == 1 && take(only_new, text)
             } else {
                 // The legacy name was a different join of the same content.
-                count_kind(only_legacy, SegmentKind::Text) == 1
-                    && count_kind(only_new, SegmentKind::Text) == 1
-                    && take(only_legacy, text)
-                    && take(only_new, text)
+                let squash = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+                let text_code = kind_code(SegmentKind::Text);
+                let pair = only_legacy.iter().position(|a| {
+                    a.0 == text_code
+                        && only_new
+                            .iter()
+                            .any(|b| b.0 == text_code && squash(a.1) == squash(b.1))
+                });
+                match pair {
+                    Some(i) => {
+                        let a = only_legacy.remove(i);
+                        take(only_new, |b| b.0 == text_code && squash(a.1) == squash(b.1));
+                        true
+                    }
+                    None => false,
+                }
             }
         }
         Classifier::PressedWithoutToggle => {
-            let pressed = gorca_i18n::t(gorca_i18n::MsgId::StatePressed);
-            ctx.untoggled
-                && ctx.role == SemRole::Tab
+            use gorca_i18n::MsgId as M;
+            let (pressed, not_pressed) = (
+                gorca_i18n::t_in(ctx.lang, M::StatePressed),
+                gorca_i18n::t_in(ctx.lang, M::StateNotPressed),
+            );
+            let state = kind_code(SegmentKind::State);
+            // Focus: a tab. A change: any node the model gives no pressed state (the engine
+            // flipped PRESSED on a check box or a tab; the model keeps check and selection).
+            let applies = if is_change(ctx.surface) {
+                ctx.not_toggle
+            } else {
+                ctx.untoggled && ctx.role == SemRole::Tab
+            };
+            applies
                 && take(only_legacy, |k| {
-                    k.0 == kind_code(SegmentKind::State) && k.1 == pressed
+                    k.0 == state && (k.1 == pressed || k.1 == not_pressed)
                 })
         }
         Classifier::MarkerStrippedName => {
@@ -301,12 +429,12 @@ fn explain<'a>(
                 a.0 == text
                     && only_new
                         .iter()
-                        .any(|b| b.0 == text && a.1.len() > b.1.len() && a.1.ends_with(b.1))
+                        .any(|b| b.0 == text && is_marker_stripped(a.1, b.1))
             });
             match pair {
                 Some(i) => {
                     let a = only_legacy.remove(i);
-                    take(only_new, |b| b.0 == text && a.1.ends_with(b.1));
+                    take(only_new, |b| b.0 == text && is_marker_stripped(a.1, b.1));
                     true
                 }
                 None => false,
@@ -314,8 +442,8 @@ fn explain<'a>(
         }
         Classifier::StaticTextWord => {
             let (label, text) = (
-                gorca_i18n::t(gorca_i18n::MsgId::RoleLabel),
-                gorca_i18n::t(gorca_i18n::MsgId::RoleStaticText),
+                gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::RoleLabel),
+                gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::RoleStaticText),
             );
             let word =
                 |k: &Key<'_>| k.0 == kind_code(SegmentKind::Role) && (k.1 == label || k.1 == text);
@@ -326,8 +454,8 @@ fn explain<'a>(
                 && take(only_new, word)
         }
         Classifier::GroupingWord => {
-            let panel = gorca_i18n::t(gorca_i18n::MsgId::RolePanel);
-            let group = gorca_i18n::t(gorca_i18n::MsgId::AriaGroup);
+            let panel = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::RolePanel);
+            let group = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::AriaGroup);
             let role = kind_code(SegmentKind::Role);
             matches!(ctx.role, SemRole::Group | SemRole::RadioGroup)
                 && only_legacy.iter().any(|k| k.0 == role && k.1 == panel)
@@ -347,8 +475,77 @@ fn explain<'a>(
                 && count_kind(only_new, SegmentKind::Value) == 1
                 && take(only_new, kind(SegmentKind::Value))
         }
+        Classifier::UnavailableStatic => {
+            use gorca_i18n::MsgId as M;
+            let (un, av) = (
+                gorca_i18n::t_in(ctx.lang, M::StateUnavailable),
+                gorca_i18n::t_in(ctx.lang, M::StateAvailable),
+            );
+            let state = kind_code(SegmentKind::State);
+            // Focus: a few static roles. A change: whatever the model says availability does not
+            // apply to (SM-5: static structure is never "unavailable").
+            let applies = if is_change(ctx.surface) {
+                ctx.avail_na
+            } else {
+                matches!(
+                    ctx.role,
+                    SemRole::Generic | SemRole::Group | SemRole::Presentation | SemRole::Article
+                )
+            };
+            applies && take(only_legacy, |k| k.0 == state && (k.1 == un || k.1 == av))
+        }
+        Classifier::SelectNotApplicable => {
+            use gorca_i18n::MsgId as M;
+            let (sel, not_sel) = (
+                gorca_i18n::t_in(ctx.lang, M::StateSelected),
+                gorca_i18n::t_in(ctx.lang, M::StateNotSelected),
+            );
+            let state = kind_code(SegmentKind::State);
+            ctx.not_selectable
+                && take(only_legacy, |k| {
+                    k.0 == state && (k.1 == sel || k.1 == not_sel)
+                })
+        }
+        Classifier::MixedSwitchIgnored => {
+            let half = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::StateHalfPressed);
+            let state = kind_code(SegmentKind::State);
+            ctx.role == SemRole::Switch && take(only_legacy, |k| k.0 == state && k.1 == half)
+        }
+        Classifier::RoleWordImproved => {
+            let role = kind_code(SegmentKind::Role);
+            role_word_pairs(ctx.lang)
+                .iter()
+                .find(|(r, l, n)| {
+                    *r == ctx.role
+                        && only_legacy.iter().any(|k| k.0 == role && k.1 == *l)
+                        && only_new.iter().any(|k| k.0 == role && k.1 == *n)
+                })
+                .is_some_and(|(_, l, n)| {
+                    take(only_legacy, |k| k.0 == role && k.1 == *l)
+                        && take(only_new, |k| k.0 == role && k.1 == *n)
+                })
+        }
+        Classifier::NameCapDiffers => {
+            let text = kind_code(SegmentKind::Text);
+            let common =
+                |a: &str, b: &str| a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count();
+            let pair = only_legacy.iter().position(|a| {
+                a.0 == text
+                    && only_new
+                        .iter()
+                        .any(|b| b.0 == text && a.1 != b.1 && common(a.1, b.1) >= 200)
+            });
+            match pair {
+                Some(i) => {
+                    let a = only_legacy.remove(i);
+                    take(only_new, |b| b.0 == text && common(a.1, b.1) >= 200);
+                    true
+                }
+                None => false,
+            }
+        }
         Classifier::ReadOnlyFromModel => {
-            let ro = gorca_i18n::t(gorca_i18n::MsgId::StateReadOnly);
+            let ro = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::StateReadOnly);
             matches!(
                 ctx.role,
                 SemRole::TextBox | SemRole::SearchBox | SemRole::PasswordBox | SemRole::Checkbox
@@ -373,33 +570,46 @@ pub fn diff(
     allowed: &Deviations,
     ctx: DiffCtx<'_>,
 ) -> DiffOutcome {
+    diff_report(legacy, new, allowed, ctx).0
+}
+
+/// Like [`diff`], and also every classifier that fired, in `Classifier::ALL` order (not only the
+/// first). The `Allowed` id is the first of them. Several can fire on one comparison; the list is
+/// what per-row hit counts must read.
+pub fn diff_report(
+    legacy: &[LegacyToken],
+    new: &[Token],
+    allowed: &Deviations,
+    ctx: DiffCtx<'_>,
+) -> (DiffOutcome, Vec<&'static str>) {
     let (la, lb) = (keys_legacy(legacy), keys_new(new));
     if la == lb {
-        return DiffOutcome::Equal;
+        return (DiffOutcome::Equal, Vec::new());
     }
     let (mut sa, mut sb) = (la.clone(), lb.clone());
     sa.sort_unstable();
     sb.sort_unstable();
     if sa == sb {
-        return DiffOutcome::OrderOnly;
+        return (DiffOutcome::OrderOnly, Vec::new());
     }
     let (mut only_legacy, mut only_new) = difference(&sa, &sb);
-    let mut used: Option<&'static str> = None;
+    let mut used: Vec<&'static str> = Vec::new();
     for c in Classifier::ALL {
         if !allowed.allows(c.id(), ctx.surface) {
             continue;
         }
         if explain(c, &ctx, &mut only_legacy, &mut only_new, &sa, &sb) {
-            used.get_or_insert(c.id());
+            used.push(c.id());
         }
     }
-    match used {
+    let outcome = match used.first() {
         Some(id) if only_legacy.is_empty() && only_new.is_empty() => DiffOutcome::Allowed(id),
         Some(_) | None => DiffOutcome::Different {
             legacy_only: u32::try_from(only_legacy.len()).unwrap_or(u32::MAX),
             new_only: u32::try_from(only_new.len()).unwrap_or(u32::MAX),
         },
-    }
+    };
+    (outcome, used)
 }
 
 #[cfg(test)]
@@ -536,18 +746,26 @@ mod tests {
             d(&legacy, &new, derived),
             DiffOutcome::Allowed("content-derived-name")
         );
-        // A different join of the same content (the legacy name had other spacing) is explained
-        // by derivation too, but only when the entry says the name was derived.
-        let legacy2 = [
-            l(SegmentKind::Text, "Beta"),
+        // A different join of the same content (other spacing) is explained too, but only when
+        // the entry says the name was derived; a different name is not.
+        let respaced = [
+            l(SegmentKind::Text, "Al pha"),
             l(SegmentKind::Role, "list item"),
         ];
         assert_eq!(
-            d(&legacy2, &new, derived),
+            d(&respaced, &new, derived),
             DiffOutcome::Allowed("content-derived-name")
         );
         assert!(matches!(
-            d(&legacy2, &new, DiffCtx::FOCUS),
+            d(&respaced, &new, DiffCtx::FOCUS),
+            DiffOutcome::Different { .. }
+        ));
+        let other = [
+            l(SegmentKind::Text, "Beta"),
+            l(SegmentKind::Role, "list item"),
+        ];
+        assert!(matches!(
+            d(&other, &new, derived),
             DiffOutcome::Different { .. }
         ));
     }
@@ -600,6 +818,125 @@ mod tests {
         });
         assert!(matches!(
             d(&[l(SegmentKind::State, pressed)], &[], btn),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn the_narrow_web_rows_are_gated_per_cause() {
+        let un = gorca_i18n::t(gorca_i18n::MsgId::StateUnavailable);
+        let leg = [l(SegmentKind::Role, "panel"), l(SegmentKind::State, un)];
+        let new = [n(SegmentKind::Role, "panel")];
+        let web = |role| DiffCtx {
+            surface: "focus-web",
+            role,
+            ..DiffCtx::FOCUS
+        };
+        let gen_ = web(SemRole::Generic);
+        assert_eq!(
+            d(&leg, &new, gen_),
+            DiffOutcome::Allowed("unavailable-static")
+        );
+        let btn = web(SemRole::Button);
+        assert!(matches!(d(&leg, &new, btn), DiffOutcome::Different { .. }));
+        // Role word pairs only for their own role.
+        let l2 = [l(SegmentKind::Role, "panel")];
+        let n2 = [n(SegmentKind::Role, "list")];
+        let feed = web(SemRole::Feed);
+        assert_eq!(
+            d(&l2, &n2, feed),
+            DiffOutcome::Allowed("role-word-improved")
+        );
+        assert!(matches!(d(&l2, &n2, btn), DiffOutcome::Different { .. }));
+        // Names that agree for 200 characters and then differ in length.
+        let long_a = "x".repeat(260);
+        let long_b = "x".repeat(300);
+        assert_eq!(
+            d(
+                &[l(SegmentKind::Text, &long_a)],
+                &[n(SegmentKind::Text, &long_b)],
+                btn
+            ),
+            DiffOutcome::Allowed("name-cap-differs")
+        );
+        let short_a = "x".repeat(20);
+        let short_b = "y".repeat(20);
+        assert!(matches!(
+            d(
+                &[l(SegmentKind::Text, &short_a)],
+                &[n(SegmentKind::Text, &short_b)],
+                DiffCtx::FOCUS
+            ),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn the_change_rows_are_gated_by_what_the_model_says() {
+        use gorca_i18n::MsgId as M;
+        let t = gorca_i18n::t;
+        let ch = |f: &dyn Fn(&mut DiffCtx<'static>)| {
+            let mut c = DiffCtx {
+                surface: "change-web",
+                ..DiffCtx::FOCUS
+            };
+            f(&mut c);
+            c
+        };
+        let none: [Token; 0] = [];
+        let un = [l(SegmentKind::State, t(M::StateUnavailable))];
+        // Availability does not apply: allowed; applies: a real difference.
+        assert_eq!(
+            d(&un, &none, ch(&|c| c.avail_na = true)),
+            DiffOutcome::Allowed("unavailable-static")
+        );
+        assert!(matches!(
+            d(&un, &none, ch(&|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // Pressed on a node without a pressed state; not pressed too; a toggle is a difference.
+        let pr = [l(SegmentKind::State, t(M::StatePressed))];
+        assert_eq!(
+            d(&pr, &none, ch(&|c| c.not_toggle = true)),
+            DiffOutcome::Allowed("pressed-without-toggle")
+        );
+        let npr = [l(SegmentKind::State, t(M::StateNotPressed))];
+        assert_eq!(
+            d(&npr, &none, ch(&|c| c.not_toggle = true)),
+            DiffOutcome::Allowed("pressed-without-toggle")
+        );
+        assert!(matches!(
+            d(&pr, &none, ch(&|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // Selection on a node that cannot be selected.
+        let sel = [l(SegmentKind::State, t(M::StateSelected))];
+        assert_eq!(
+            d(&sel, &none, ch(&|c| c.not_selectable = true)),
+            DiffOutcome::Allowed("select-not-applicable")
+        );
+        assert!(matches!(
+            d(&sel, &none, ch(&|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // A mixed switch.
+        let half = [l(SegmentKind::State, t(M::StateHalfPressed))];
+        assert_eq!(
+            d(&half, &none, ch(&|c| c.role = SemRole::Switch)),
+            DiffOutcome::Allowed("mixed-switch-ignored")
+        );
+        assert!(matches!(
+            d(&half, &none, ch(&|c| c.role = SemRole::Button)),
+            DiffOutcome::Different { .. }
+        ));
+        // The same facts on the focus surface do not widen the focus rows.
+        let focus_web = DiffCtx {
+            surface: "focus-web",
+            avail_na: true,
+            ..DiffCtx::FOCUS
+        };
+        assert!(matches!(
+            d(&un, &none, focus_web),
             DiffOutcome::Different { .. }
         ));
     }

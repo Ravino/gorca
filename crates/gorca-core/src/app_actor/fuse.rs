@@ -250,7 +250,13 @@ fn build_ivm(tables: Option<SemTables>) -> Ivm<QuirkSet, NoPatches> {
             }
         }
     }
-    Ivm::new(profile, quirks, NoPatches)
+    let mut ivm = Ivm::new(profile, quirks, NoPatches);
+    // Production only: tests and replays keep the drain purely work-based (the published stream
+    // is the same either way).
+    if !cfg!(test) {
+        ivm.set_sync_valve(Some(gorca_fuse::SYNC_WALL_VALVE));
+    }
+    ivm
 }
 
 fn load(t: SemTables, profile: &mut Profile) -> Result<QuirkSet, gorca_fuse::QuirkError> {
@@ -721,14 +727,15 @@ impl FuseWriter {
             let Some(a) = self.pop_awaiting() else {
                 break;
             };
-            if self.ivm.is_dirty(a.idx) {
-                self.push_awaiting(a);
-                continue;
-            }
             if self.index.get(&a.key) != Some(&a.idx) {
                 continue;
             }
-            let Some(entry) = self.ivm.entry_view(a.idx) else {
+            // PV-1: a node still waiting for its fusion gets its provisional entry now; the real
+            // fusion publishes later and `refresh` replaces it.
+            let Some(entry) = self.ivm.entry_or_provisional(a.idx) else {
+                if self.ivm.is_dirty(a.idx) {
+                    self.push_awaiting(a);
+                }
                 continue;
             };
             if cfg!(any(debug_assertions, feature = "legacy-agree")) {

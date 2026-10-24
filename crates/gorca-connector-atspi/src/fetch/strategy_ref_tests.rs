@@ -356,6 +356,10 @@ fn id_of(reply: &str) -> u64 {
 
 const LABEL: u32 = 29;
 const BUTTON: u32 = 43;
+const PANEL: u32 = 39;
+const ALERT: u32 = 2;
+const COMBO_BOX: u32 = 11;
+const DIALOG: u32 = 16;
 
 fn add(r: &mut Rig, parent: u64, role: u32, name: &str, extra: &str) -> u64 {
     let body = format!(
@@ -392,6 +396,41 @@ fn an_unnamed_node_is_named_by_its_label_children() {
         add(&mut r, b, LABEL, "Open", "");
         add(&mut r, b, LABEL, "Files", "");
         assert_eq!(name_of(&r, b).await.as_deref(), Some("Open Files"));
+    });
+}
+
+/// a4: a container role never takes a name from its subtree (accname 2F applies to roles that
+/// allow name from content). A nameless panel (a focused scroll container) stays nameless; its
+/// `labelled_by` target still names it.
+#[test]
+fn a_nameless_panel_is_not_named_by_its_content() {
+    run(async {
+        let Some(mut r) = rig(TREE).await else { return };
+        let p = add(&mut r, 1, PANEL, "", "");
+        add(&mut r, p, LABEL, "Alice", "");
+        add(&mut r, p, LABEL, "Bob", "");
+        assert!(name_of(&r, p).await.is_none_or(|n| n.is_empty()));
+        let label = add(&mut r, 1, LABEL, "Chats", "");
+        let named = add(&mut r, 1, PANEL, "", &format!(",\"labelled_by\":{label}"));
+        assert_eq!(name_of(&r, named).await.as_deref(), Some("Chats"));
+    });
+}
+
+/// a4 review: roles that really are named by their label children keep the fallback (GTK4
+/// drop-down, dialog, alert).
+#[test]
+fn dialogs_alerts_and_drop_downs_keep_their_content_names() {
+    run(async {
+        let Some(mut r) = rig(TREE).await else { return };
+        for role in [ALERT, COMBO_BOX, DIALOG] {
+            let n = add(&mut r, 1, role, "", "");
+            add(&mut r, n, LABEL, "Save changes?", "");
+            assert_eq!(
+                name_of(&r, n).await.as_deref(),
+                Some("Save changes?"),
+                "raw role {role}"
+            );
+        }
     });
 }
 

@@ -130,6 +130,9 @@ pub enum DocCtl {
         node: DocNodeId,
         role: gorca_model::Role,
     },
+    /// The label the layout inference chose for `node` (sent by the label task to its own
+    /// actor): admitted to fusion as the lowest-trust S4 fact.
+    LabelFact { node: DocNodeId, text: Arc<str> },
     /// An `atspi` fact about a node of this document (SM-8): the app actor fetched it (a focus
     /// fetch of a web node) and the document, the node's single writer, fuses it. `issued_at` is
     /// [`DocHandle::timeline`] read when the fetch was issued, so a fact never overwrites what a
@@ -353,6 +356,7 @@ pub fn prepare(
         orphans: Arc::clone(&handle.orphans),
         repair_flag: Arc::clone(&handle.repair_flag),
         timeline: Arc::clone(&handle.timeline),
+        ctl_weak: handle.ctl.downgrade(),
     };
     let fut = run(spec, writer, shared, ctl_rx, ev_rx);
     (handle, fut)
@@ -400,6 +404,8 @@ struct Actor {
     timeline: Arc<std::sync::atomic::AtomicU64>,
     /// Nodes whose fused entry changed and whose meta is not patched yet (a fact arrived).
     pending_changed: Vec<SrcNodeId>,
+    /// The actor's own control queue, for tasks it spawned (weak: they never keep it open).
+    ctl_weak: mpsc::WeakSender<DocCtl>,
 }
 
 type RepairRx = oneshot::Receiver<Result<RepairReport, SourceError>>;
@@ -545,6 +551,15 @@ impl Actor {
         self.fuse.as_ref().is_some_and(|f| f.pending() > 0)
     }
 
+    /// The source's id of a mirror node (the key fusion is addressed by).
+    fn src_of(&mut self, id: DocNodeId) -> Option<SrcNodeId> {
+        self.writer
+            .doc()
+            .node(id)
+            .and_then(|v| v.meta)
+            .and_then(|m| m.src)
+    }
+
     /// A fact about one of this document's nodes (a focus fetch the app actor forwarded).
     fn on_fact(&mut self, local: LocalId, rec: &SrcRecord, issued_at: u64) {
         if self.fuse.is_none() {
@@ -556,16 +571,28 @@ impl Actor {
         if doc != self.spec_doc {
             return;
         }
-        let Some(src) = self
-            .writer
-            .doc()
-            .node(id)
-            .and_then(|v| v.meta)
-            .and_then(|m| m.src)
-        else {
+        let Some(src) = self.src_of(id) else {
             return;
         };
         let fused = self.fuse.as_mut().and_then(|f| f.fact(src, rec, issued_at));
+        if let Some(changed) = fused {
+            self.pending_changed.extend(changed);
+            if !self.pending_changed.is_empty() {
+                self.flush();
+            }
+        }
+    }
+
+    /// The layout inference chose `text` for the nameless control `node`: admit it to fusion as
+    /// the lowest-trust S4 fact (C3b). The fused entry then carries the name, hedged and tainted.
+    fn on_label_fact(&mut self, node: DocNodeId, text: &str) {
+        if self.fuse.is_none() {
+            return;
+        }
+        let Some(src) = self.src_of(node) else {
+            return;
+        };
+        let fused = self.fuse.as_mut().and_then(|f| f.infer_label(src, text));
         if let Some(changed) = fused {
             self.pending_changed.extend(changed);
             if !self.pending_changed.is_empty() {
@@ -781,11 +808,16 @@ impl Actor {
 
 const MAX_PENDING_NOTICES: usize = 8;
 
+/// Pause before a fusion slice that ran out of budget continues. The engine's aging bound (8
+/// budget-cut runs, about 32 ms) assumes `run` is re-armed within 4 ms while `pending > 0`.
+const FUSE_RESUME: Duration = Duration::from_millis(1);
+const _: () = assert!(FUSE_RESUME.as_millis() <= 4);
+
 /// Ready shortly when the fusion stage still owes work; never ready otherwise. Interactive
 /// messages are served between the slices (the select is biased towards them).
 async fn fuse_wait(pending: bool) {
     if pending {
-        tokio::time::sleep(Duration::from_millis(1)).await;
+        tokio::time::sleep(FUSE_RESUME).await;
     } else {
         std::future::pending::<()>().await;
     }
@@ -807,6 +839,7 @@ struct Shared {
     orphans: Arc<Orphans>,
     repair_flag: Arc<std::sync::atomic::AtomicU8>,
     timeline: Arc<std::sync::atomic::AtomicU64>,
+    ctl_weak: mpsc::WeakSender<DocCtl>,
 }
 
 async fn run(
@@ -821,6 +854,7 @@ async fn run(
         orphans,
         repair_flag,
         timeline,
+        ctl_weak,
     } = shared;
     let DocActorSpec {
         doc,
@@ -885,6 +919,7 @@ async fn run(
         fuse,
         timeline,
         pending_changed: Vec::new(),
+        ctl_weak,
     };
     let mut repair_rx: Option<RepairRx> = None;
 
@@ -958,6 +993,7 @@ async fn run(
                         label_task = spawn_label(&a, req, node, role);
                     }
                     DocCtl::Fact { local, rec, issued_at } => a.on_fact(local, &rec, issued_at),
+                    DocCtl::LabelFact { node, text } => a.on_label_fact(node, &text),
                     DocCtl::Select { req, node, act } => {
                         if actions.len() < MAX_ACTIONS {
                             // One selection at a time, in request order (ADR-0021 I-3): this
@@ -1129,6 +1165,7 @@ fn spawn_label(
     };
     let requests = a.requests.clone();
     let notices = a.notices.clone();
+    let ctl = a.ctl_weak.clone();
     let doc = a.spec_doc;
     Some(tokio::spawn(async move {
         let (reply, rx) = oneshot::channel();
@@ -1161,15 +1198,49 @@ fn spawn_label(
             rects = ?rects,
         );
         if let Some(text) = chosen {
+            let text: Arc<str> = Arc::from(text);
+            // The fact goes to the actor first: its entry then carries the label for the next
+            // presentation; the notice is the legacy refine path (deleted with the cut-over).
+            if let Some(ctl) = ctl.upgrade() {
+                let _ = ctl.try_send(DocCtl::LabelFact {
+                    node,
+                    text: Arc::clone(&text),
+                });
+            }
             let _ = notices.try_send(DocNotice::Label {
                 doc,
                 req,
                 node,
-                text: Arc::from(text),
+                text,
             });
         }
     }))
 }
+
+/// The source id a scroll request is addressed to: the nearest ancestor-or-self that the
+/// transport can address. A text run is a mirror leaf with no object of its own (its id is
+/// synthesised, the source answers `Gone`), and the browse cursor sits on runs, so the page never
+/// followed it. Scrolling the owner of the run brings the run into view.
+pub(crate) fn scroll_src(
+    d: &gorca_doc::web::WebDoc,
+    node: DocNodeId,
+) -> Option<gorca_model::SrcNodeId> {
+    let mut at = Some(node);
+    // The depth bound keeps a corrupt parent chain from looping.
+    for _ in 0..SCROLL_CLIMB_MAX {
+        let n = at?;
+        if let Some(m) = d.node(n).and_then(|v| v.meta)
+            && m.local.is_some()
+        {
+            return m.src;
+        }
+        at = d.parent(n);
+    }
+    None
+}
+
+/// Ancestors tried when addressing a scroll.
+const SCROLL_CLIMB_MAX: u32 = 8;
 
 /// IR-5: the action goes to the source that declared it, by the source's own node id.
 fn spawn_action(
@@ -1193,8 +1264,22 @@ fn spawn_action(
     let src_of = |d: &gorca_doc::web::WebDoc, n: DocNodeId| {
         d.node(n).and_then(|v| v.meta).and_then(|m| m.src)
     };
-    let src = a.read.with(|d| src_of(d, node));
+    let src = a.read.with(|d| {
+        if matches!(
+            act,
+            DocAction::ScrollIntoView | DocAction::ScrollToOffset(_)
+        ) {
+            return scroll_src(d, node);
+        }
+        src_of(d, node)
+    });
     let Some(src) = src else {
+        if matches!(
+            act,
+            DocAction::ScrollIntoView | DocAction::ScrollToOffset(_)
+        ) {
+            tracing::debug!(target: "gorca_phase", phase = "web_scroll", ok = false, why = "no_src");
+        }
         fail(a);
         if matches!(act, DocAction::Click | DocAction::ClickAnnounced { .. }) {
             // A node the source never issued an id for (a synthetic container) cannot be
@@ -1248,6 +1333,7 @@ fn spawn_action(
         | DocAction::ClickAnnounced { .. }
         | DocAction::ReleaseField
         | DocAction::ScrollIntoView
+        | DocAction::ScrollToOffset(_)
         | DocAction::SetCaret(_)
         | DocAction::SetSourceSelection(_)
         | DocAction::ClearSelection) => other,
@@ -1256,6 +1342,10 @@ fn spawn_action(
     let notices = a.notices.clone();
     let doc = a.spec_doc;
     let is_focus = matches!(act, DocAction::Focus);
+    let is_scroll = matches!(
+        act,
+        DocAction::ScrollIntoView | DocAction::ScrollToOffset(_)
+    );
     let is_click = matches!(act, DocAction::Click | DocAction::ClickAnnounced { .. });
     set.spawn(async move {
         // Wait for the selection request before this one; `done` is dropped at the end, which
@@ -1286,6 +1376,9 @@ fn spawn_action(
             None
         };
         let ok = matches!(result, Some(Ok(())));
+        if is_scroll {
+            tracing::debug!(target: "gorca_phase", phase = "web_scroll", ok, result = ?result);
+        }
         if is_focus && !ok {
             let _ = notices.try_send(DocNotice::FocusFailed { doc });
         }

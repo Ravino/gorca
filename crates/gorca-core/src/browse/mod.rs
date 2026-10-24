@@ -578,6 +578,24 @@ pub struct BrowseState {
     /// Bare quick-navigation keys are grabbed (gorca+Shift+Space turns them off).
     pub single_letter: bool,
     pub restore_until: Option<(Instant, u32)>,
+    /// The cursor node's ancestors (nearest first) as of the last mirror change that found the
+    /// node attached: where to re-anchor when the page removes the node's whole subtree.
+    /// Each entry: an ancestor and the sibling that follows, under it, the child on the path to
+    /// the cursor (the first place after the removed node in document order).
+    pub cursor_chain: SmallVec<[(DocNodeId, Option<DocNodeId>); 8]>,
+    /// The cursor was re-anchored after the page removed its pane: Tab with no target after the
+    /// cursor still acts inside the page (it focuses the document) instead of leaving for the
+    /// browser chrome. Cleared by the next cursor move.
+    pub tab_fallback: bool,
+    /// When the last scroll request went out: an edge hit right after it means the page is
+    /// loading more (a virtual list), not that the content ends.
+    pub last_scroll: Option<Instant>,
+    /// An edge was hit right after a scroll request: when the document text has grown past the
+    /// recorded length within the window, a virtual list really is loading (said once).
+    pub edge_wait: Option<(Instant, u32)>,
+    /// The DOM id of the item (message, row) the cursor is in, and the cursor's offset from the
+    /// item's start: the item is tracked, not the row object the page happens to reuse for it.
+    pub cursor_item: Option<(Arc<str>, u32)>,
     /// Latest scroll request: sent after a pause so held keys do not flood the page (LP-6).
     pub scroll_due: Option<(Instant, DocId, DocNodeId, u32)>,
     /// When the browser last reported `load-complete`, by document root (page auto-read): the
@@ -712,6 +730,11 @@ impl BrowseState {
             counters: BrowseCounters::default(),
             last_off: 0,
             restore_until: None,
+            cursor_chain: SmallVec::new(),
+            tab_fallback: false,
+            last_scroll: None,
+            edge_wait: None,
+            cursor_item: None,
             displaced: None,
             armed_click: None,
             focus_key: None,

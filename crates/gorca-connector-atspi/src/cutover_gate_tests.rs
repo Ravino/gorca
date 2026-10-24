@@ -217,6 +217,8 @@ fn focus_records(family: &Family, seed: u64, dev: &Deviations, out: &mut Vec<Rec
                 may_refine: false,
                 web: web_run,
                 skip_selected: false,
+                hedge_inferred: false,
+                lang: gorca_present::Lang::En,
             };
             let Ok(ir) = compose(entry, s.key, Reason::Focus, ctx) else {
                 out.push(Record {
@@ -235,10 +237,16 @@ fn focus_records(family: &Family, seed: u64, dev: &Deviations, out: &mut Vec<Rec
                 &ir,
                 RenderOpts {
                     description_pause: web_run,
+                    ..RenderOpts::default()
                 },
             );
             let surface = if web_run { "focus-web" } else { "focus" };
-            let d = diff(&legacy, &tokens, dev, DiffCtx::for_entry(surface, entry));
+            let d = diff(
+                &legacy,
+                &tokens,
+                dev,
+                DiffCtx::for_entry(surface, entry, gorca_present::Lang::En),
+            );
             let (outcome, deviation) = classify(&d, legacy.is_empty(), tokens.is_empty());
             out.push(Record {
                 corpus: label.clone(),
@@ -441,16 +449,24 @@ fn compare_change(
         may_refine: false,
         web: web_run,
         skip_selected: false,
+        hedge_inferred: false,
+        lang: gorca_present::Lang::En,
     };
     let ir = compose_change(oe, ne, n.key, ctx);
     let tokens = render(
         &ir,
         RenderOpts {
             description_pause: false,
+            ..RenderOpts::default()
         },
     );
     let surface = if web_run { "change-web" } else { "change" };
-    let d = diff(&legacy, &tokens, dev, DiffCtx::for_entry(surface, ne));
+    let d = diff(
+        &legacy,
+        &tokens,
+        dev,
+        DiffCtx::for_entry(surface, ne, gorca_present::Lang::En),
+    );
     let (outcome, deviation) = classify(&d, legacy.is_empty(), tokens.is_empty());
     out.push(Record {
         corpus: label.to_owned(),

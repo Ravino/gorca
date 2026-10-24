@@ -1,0 +1,47 @@
+package gorca:ext@0.10.0;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// M18a-0 SUBSET of wit/gorca-ext-0.10/plugin.wit: the rules interface only.
+
+interface rules {
+  use types.{node-ref, epoch, selector-id};
+
+  /// Why a node is in a batch (registry codes, neutral names): attach (first sight at scope
+  /// attach), added (new watch match), changed (an observed value in the call's read classes),
+  /// structure (observed parent or children changed), text (observed text changed), rebound
+  /// (anchor rebound), ttl (an inferred fact expires), epoch (settings change or reload).
+  /// Never the plugin's own facts or any fused change (ADR-0026 §2.4.1).
+  type cause-code = u8;
+
+  record dirty {
+    node: node-ref,
+    /// The manifest `[[watch]]` selector that matched on the observed view (the core
+    /// prefilters; a plugin is never called for a node no watch selector matches).
+    watch: selector-id,
+    cause: cause-code,
+  }
+
+  record rule-ctx {
+    epoch: epoch,
+    /// True when the batch is the focus chain or active descendant of a focus change (the
+    /// interactive slice, ADR-0026 §2.4.2): the fuel grant is small and shared.
+    interactive: bool,
+  }
+
+  /// Once per scope instance, eagerly at scope attach on the background lane (B-1 budget),
+  /// followed by a `derive` of every currently watched node.
+  attach: func(ctx: rule-ctx);
+  /// Up to 64 dirty nodes per call. The plugin asserts or retracts facts through `facts`
+  /// (at most 256 facts per call).
+  derive: func(ctx: rule-ctx, batch: list<dirty>);
+  /// Watched nodes that left the scope (at most 64 per call, background lane, B-1 budget);
+  /// their handles are dead after this call.
+  removed: func(nodes: list<node-ref>);
+}
+
+world bakeoff-rules {
+  import model;
+  import facts;
+  import diag;
+
+  export rules;
+}

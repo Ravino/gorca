@@ -1368,6 +1368,7 @@ fn a_shallow_change_is_fused_within_a_few_runs_while_a_deep_leaf_keeps_changing(
         write: write_from_toy(Group::Description, &json!("Required")),
     }]);
     let mut fused_at = None;
+    // Aging has two clocks: 1024 fusions, or 8 budget-cut runs (here every run is cut).
     for k in 0..40u64 {
         e.apply([Input::Obs {
             node: nid(49),
@@ -1388,7 +1389,10 @@ fn a_shallow_change_is_fused_within_a_few_runs_while_a_deep_leaf_keeps_changing(
         }
     }
     let k = fused_at.expect("node 1 starved");
-    assert!(k <= 6, "aging should serve it within a few runs, took {k}");
+    assert!(
+        k <= 8 + 4 + 2,
+        "aging should serve it after 8 cut runs and a slot, took {k}"
+    );
 }
 
 #[test]
@@ -1744,43 +1748,56 @@ fn priority_classes_are_dependency_ordered() {
 }
 
 #[test]
-fn aging_never_takes_the_only_slot_of_a_one_call_run_while_priority_work_waits() {
+fn aging_takes_a_fixed_quarter_of_the_fusions_and_never_two_in_a_row_while_priority_work_waits() {
     let mut e = star(60);
-    // An old backlog (aged past AGE_RUNS) and a growing fusion count, so aging has credit.
+    // An old backlog (aged past AGE_FUSIONS) and a growing fusion count, so aging has credit.
     for i in 1..=60 {
         dirty_description(&mut e, i, 10);
     }
-    for _ in 0..8 {
-        e.run(Budget::calls(4));
-    }
     e.set_focus_chain(&[nid(3), nid(0)]);
-    for k in 0..24u64 {
+    let mut served = 0;
+    let mut missed_in_a_row = 0;
+    for k in 0..1200u64 {
+        if k == 1024 + 8 {
+            (served, missed_in_a_row) = (0, 0);
+        }
         dirty_description(&mut e, 3, 100 + k);
         assert!(e.is_dirty(nid(3)));
         let rep = e.run(Budget::calls(1));
         assert_eq!(rep.fuse_calls, 1);
-        assert!(
-            !e.is_dirty(nid(3)),
-            "run {k}: the single fusion went to the backlog, not to the focused node"
-        );
+        if e.is_dirty(nid(3)) {
+            missed_in_a_row += 1;
+            assert!(
+                missed_in_a_row <= 1,
+                "run {k}: aging took two slots in a row"
+            );
+        } else {
+            served += 1;
+            missed_in_a_row = 0;
+        }
     }
+    assert!(
+        served >= 126,
+        "the focused node got {served} of 168 fusions, aging gets a quarter"
+    );
 }
 
 #[test]
-fn the_synchronous_drain_stops_at_its_time_bound_and_carries_the_rest() {
-    let mut e = star(40);
-    let window: Vec<_> = (1..=30).map(nid).collect();
+fn the_synchronous_drain_stops_at_its_work_cap_and_carries_the_rest() {
+    let mut e = star(100);
+    let cap = e.profile().limits.max_sync_drain;
+    let window: Vec<_> = (1..=cap + 30).map(nid).collect();
     e.set_focus_chain(&[nid(1), nid(0)]);
     e.set_visible(&window);
     e.run(Budget::UNLIMITED);
-    // A zero time bound: the drain takes one fusion (progress is guaranteed) and carries the rest.
-    e.set_sync_drain_time(std::time::Duration::ZERO);
-    e.bump_global();
-    let left = (0..=30).filter(|i| e.is_dirty(nid(*i))).count();
+    // The drain takes at most `cap` fusions and carries the rest, whatever the machine speed.
+    let published = e.bump_global().len();
+    assert!(published <= cap, "{published} > cap {cap}");
+    let left = (0..=cap + 30).filter(|i| e.is_dirty(nid(*i))).count();
     assert!(left > 0, "the rest stays dirty in front for the next run");
     // The next run finishes it, and the result equals a from-scratch fusion.
     e.run(Budget::UNLIMITED);
-    assert!((0..=30).all(|i| !e.is_dirty(nid(i))));
+    assert!((0..=cap + 30).all(|i| !e.is_dirty(nid(i))));
     assert!(e.verify().is_ok());
 }
 
@@ -2285,4 +2302,78 @@ fn an_engine_content_name_of_a_container_gives_way_to_the_deeper_content_name_bu
     assert_eq!(e.name.as_deref(), Some("Quantity"));
     let e = build(NameFrom::Content, "5");
     assert_eq!(e.name.as_deref(), Some("5"));
+}
+
+/// PV-1 (ADR-0022 section 8.3): a node that waits for its fusion still has an entry, made at once
+/// from its registers; the first real fusion replaces it, and a node that is not alive has none.
+#[test]
+fn a_node_waiting_for_its_fusion_has_a_provisional_entry() {
+    use gorca_model::sem::ProvCode;
+    let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], toy_rules());
+    profile.default_role = SemRole::Generic;
+    let mut e = Ivm::new(profile, NoQuirks, NoPatches);
+    e.add_node(nid(0), None).unwrap();
+    // Not alive yet: nothing to show.
+    assert!(e.entry_or_provisional(nid(0)).is_none());
+    e.apply([
+        Input::Life {
+            node: nid(0),
+            src: PrimarySlot::P0,
+            seq: 1,
+            alive: true,
+        },
+        Input::Obs {
+            node: nid(0),
+            src: PrimarySlot::P0,
+            seq: 2,
+            write: write_from_toy(Group::Role, &json!("button")),
+        },
+        Input::Obs {
+            node: nid(0),
+            src: PrimarySlot::P0,
+            seq: 2,
+            write: write_from_toy(Group::Name, &json!("Save")),
+        },
+    ]);
+    // Dirty, never run: the published entry does not exist, the provisional one does.
+    assert!(e.entry_view(nid(0)).is_none());
+    let p = e.entry_or_provisional(nid(0)).expect("a provisional entry");
+    assert_eq!(p.sem.role, SemRole::Button);
+    assert_eq!(p.name.as_deref(), Some("Save"));
+    assert_eq!(p.sem_rev, 0, "revision 0 marks a provisional entry");
+    assert_eq!(p.prov.get(Group::Name), Some(ProvCode::Provisional));
+    assert_eq!(p.prov.get(Group::Role), Some(ProvCode::Provisional));
+    // The real fusion replaces it: same words, real provenance, a revision.
+    e.run(Budget::UNLIMITED);
+    let r = e.entry_or_provisional(nid(0)).expect("fused");
+    assert_eq!(r.name.as_deref(), Some("Save"));
+    assert!(r.sem_rev > 0);
+    assert_ne!(r.prov.get(Group::Name), Some(ProvCode::Provisional));
+    assert_eq!(r.sem.role, p.sem.role);
+}
+
+#[test]
+fn a_backlog_node_is_served_within_eight_cut_runs_under_a_steady_priority_trickle() {
+    let mut e = star(60);
+    e.set_focus_chain(&[nid(3), nid(0)]);
+    dirty_description(&mut e, 40, 10);
+    assert!(e.priority_class(nid(40)) >= 3, "a backlog node");
+    let mut served_at = None;
+    for k in 0..200u64 {
+        // A higher-priority change every run keeps class 0 busy, and every run is budget-cut.
+        dirty_description(&mut e, 3, 100 + k);
+        let rep = e.run(Budget::calls(1));
+        assert_eq!(rep.fuse_calls, 1);
+        if rep.published.iter().any(|p| p.node.0 == 40) {
+            served_at = Some(k);
+            break;
+        }
+    }
+    let k = served_at.expect("the backlog node starved");
+    // Eligible after 8 cut runs, taken at the next aging slot (one fusion in four).
+    assert!(k <= 8 + 4, "took {k} runs: 8 cut runs plus one aging slot");
+    assert!(
+        k >= 8,
+        "{k}: it must not jump the queue before the second clock"
+    );
 }

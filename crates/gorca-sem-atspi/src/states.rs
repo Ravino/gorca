@@ -448,6 +448,11 @@ pub fn map_states(
 }
 
 fn map_check(role: SemRole, s: StateBits) -> Check {
+    // A progress bar with no value is indeterminate: the mixed state, so the "indeterminate"
+    // word comes from the same group as a tri-state check box's.
+    if matches!(role, SemRole::ProgressBar | SemRole::Meter) && s.has(bit::INDETERMINATE) {
+        return Check::Mixed;
+    }
     let optional = check_optional(role);
     if !check_intrinsic(role) && !optional {
         return Check::NotCheckable;

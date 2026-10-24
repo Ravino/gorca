@@ -14,8 +14,9 @@
 //!   code it does not know passes the item through **unedited** and never traps (`Reason::Unknown`,
 //!   `Content::Opaque`, an unregistered `FieldKind`). Adding a kind is therefore not a break.
 //! * **Words travel as catalog key strings** (`MsgId::key`), never as the build-order `MsgId`
-//!   number, which moves when a key is added. `Content::from_wire_msg` resolves a key; an unknown key
-//!   becomes `Content::Opaque`.
+//!   number, which moves when a key is added. `Content::from_wire_msg` resolves a key; an unknown
+//!   key is kept whole as `Content::UnknownMsg`, which **re-encodes as kind 1 (a message) with its
+//!   original key and arguments**, so forwarding an IR is lossless; it renders as nothing.
 //! * **No prose with numbers baked in.** "2 of 5" is `Content::Msg { id, args }` with numeric
 //!   arguments, so speech and braille format separately.
 //! * **Add-on text is a catalog reference** (`Content::Ext { ns, key, args }`), resolved through the
@@ -63,8 +64,23 @@ pub enum Reason {
     },
     ListEntry,
     WhereAmI,
-    /// A reason of a newer host: edits must leave the IR unedited.
-    Unknown(u16),
+    /// A reason of a newer host: edits must leave the IR unedited. The code is never a registered
+    /// one (`0..=8`): [`UnknownReason`] has a private field and is made only by
+    /// [`Reason::unknown`] or [`Reason::from_code`], which map a registered code to its own
+    /// variant.
+    Unknown(UnknownReason),
+}
+
+/// The code of a reason this host does not know. Cannot be built directly: the code is never one
+/// of the registered ones.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct UnknownReason(u16);
+
+impl UnknownReason {
+    /// The wire code.
+    pub const fn code(self) -> u16 {
+        self.0
+    }
 }
 
 impl Reason {
@@ -80,7 +96,7 @@ impl Reason {
             Reason::Change { .. } => 6,
             Reason::ListEntry => 7,
             Reason::WhereAmI => 8,
-            Reason::Unknown(c) => c,
+            Reason::Unknown(u) => u.0,
         }
     }
 
@@ -99,8 +115,15 @@ impl Reason {
             },
             7 => Reason::ListEntry,
             8 => Reason::WhereAmI,
-            c => Reason::Unknown(c),
+            c => Reason::Unknown(UnknownReason(c)),
         }
+    }
+
+    /// The reason of a wire code with no payload: a registered code gives its own variant, any
+    /// other code is [`Reason::Unknown`]. Never builds an `Unknown` that collides with a registered
+    /// code.
+    pub const fn unknown(code: u16) -> Reason {
+        Reason::from_code(code, false, 0)
     }
 
     /// Whether a hook may edit an IR of this reason (an unknown reason is passed through).
@@ -129,6 +152,9 @@ impl FieldKind {
     pub const ROLE_DESCRIPTION: FieldKind = FieldKind(12);
     /// A label inferred from layout (lowest-trust fused fallback, C3b / M22b).
     pub const INFERRED_LABEL: FieldKind = FieldKind(13);
+    /// Plain text from a producer outside `compose` (a window title, a mode word, a line behind a
+    /// web focus); the producer is in `Origin::via`. Appended to the v1 registry in slice 4.
+    pub const TEXT: FieldKind = FieldKind(14);
     /// First host-allocated add-on code.
     pub const EXT_BASE: u16 = 0x8000;
 
@@ -152,6 +178,7 @@ impl FieldKind {
             11 => "shortcut",
             12 => "role-description",
             13 => "inferred-label",
+            14 => "text",
             _ => return None,
         })
     }
@@ -389,13 +416,27 @@ pub enum ArgVal {
     Num(i64),
     Text(Arc<str>),
     /// An argument kind of a newer host (a float, a date, a nested message): kept as is, the
-    /// argument is left out when formatting. Codes: 0 num, 1 text; anything else is opaque.
+    /// argument is left out when formatting. Codes: 0 num, 1 text; anything else is opaque. The
+    /// variant cannot be built outside this crate: use [`ArgVal::opaque`], which rejects 0 and 1.
+    #[non_exhaustive]
     Opaque {
         code: u16,
     },
 }
 
 impl ArgVal {
+    /// The first code available to an opaque argument kind.
+    pub const FIRST_OPAQUE_CODE: u16 = 2;
+
+    /// An argument of a newer host's kind; `None` when `code` is a registered kind code (0, 1).
+    pub const fn opaque(code: u16) -> Option<ArgVal> {
+        if code < Self::FIRST_OPAQUE_CODE {
+            None
+        } else {
+            Some(ArgVal::Opaque { code })
+        }
+    }
+
     /// The wire kind code.
     pub const fn code(&self) -> u16 {
         match self {
@@ -430,6 +471,14 @@ pub struct ExtRef {
     pub args: Box<[Arg]>,
 }
 
+/// A core-shaped message whose key this host does not know (a newer host's): the key and the
+/// arguments are kept whole, the field renders as nothing, and the wire form is a `Msg`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UnknownMsg {
+    pub key: Arc<str>,
+    pub args: Box<[Arg]>,
+}
+
 /// The content of a field. Wire kinds: 0 text, 1 msg, 2 ext; any other code is [`Content::Opaque`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Content {
@@ -439,13 +488,27 @@ pub enum Content {
     Msg { id: MsgId, args: Box<[Arg]> },
     /// An add-on catalog message.
     Ext(Box<ExtRef>),
-    /// Content of a newer host: kept as is, renders as nothing.
+    /// A message with a key this host does not know: key and arguments kept whole (wire kind 1),
+    /// renders as nothing.
+    UnknownMsg(Box<UnknownMsg>),
+    /// Content of a newer host: kept as is, renders as nothing. Never a kind code (0, 1, 2): the
+    /// variant cannot be built outside this crate, use [`Content::opaque`].
+    #[non_exhaustive]
     Opaque { code: u16 },
 }
 
 impl Content {
-    /// The opaque code of a message whose key this host does not know (never a kind code).
-    pub const UNKNOWN_KEY: u16 = 0xFFFF;
+    /// The first code available to an opaque content kind.
+    pub const FIRST_OPAQUE_CODE: u16 = 3;
+
+    /// Content of a newer host's kind; `None` when `code` is a registered kind code (0, 1, 2).
+    pub const fn opaque(code: u16) -> Option<Content> {
+        if code < Self::FIRST_OPAQUE_CODE {
+            None
+        } else {
+            Some(Content::Opaque { code })
+        }
+    }
 
     /// A core word without arguments.
     pub fn word(id: MsgId) -> Content {
@@ -476,27 +539,31 @@ impl Content {
     pub const fn code(&self) -> u16 {
         match self {
             Content::Text(_) => 0,
-            Content::Msg { .. } => 1,
+            Content::Msg { .. } | Content::UnknownMsg(_) => 1,
             Content::Ext(_) => 2,
             Content::Opaque { code } => *code,
         }
     }
 
-    /// The catalog key of a core message: the wire form of a word.
-    pub fn msg_key(&self) -> Option<&'static str> {
+    /// The catalog key of a message: the wire form of a word (a core key, or the key of an
+    /// [`Content::UnknownMsg`]).
+    pub fn msg_key(&self) -> Option<&str> {
         match self {
             Content::Msg { id, .. } => Some(id.key()),
+            Content::UnknownMsg(u) => Some(&u.key),
             Content::Text(_) | Content::Ext(_) | Content::Opaque { .. } => None,
         }
     }
 
-    /// A core message from its wire key. An unknown key (a newer host's) is opaque, not an error.
+    /// A core message from its wire key. An unknown key (a newer host's) is kept whole as
+    /// [`Content::UnknownMsg`], not an error.
     pub fn from_wire_msg(key: &str, args: Vec<Arg>) -> Content {
         match MsgId::from_key(key) {
             Some(id) => Content::msg(id, args),
-            None => Content::Opaque {
-                code: Content::UNKNOWN_KEY,
-            },
+            None => Content::UnknownMsg(Box::new(UnknownMsg {
+                key: Arc::from(key),
+                args: args.into_boxed_slice(),
+            })),
         }
     }
 }
@@ -629,7 +696,7 @@ impl std::ops::Deref for Redacted {
 
 /// Registry rows (name, code) of the core `FieldKind` codes.
 pub fn field_kind_rows() -> Vec<(&'static str, u32)> {
-    (1..=13u16)
+    (1..=14u16)
         .filter_map(|c| FieldKind(c).name().map(|n| (n, u32::from(c))))
         .collect()
 }
@@ -666,9 +733,10 @@ mod tests {
             ("shortcut", 11),
             ("role-description", 12),
             ("inferred-label", 13),
+            ("text", 14),
         ];
         assert_eq!(field_kind_rows(), want);
-        assert_eq!(FieldKind(14).name(), None);
+        assert_eq!(FieldKind(15).name(), None);
         assert!(FieldKind(0x8000).is_extension());
         assert!(!FieldKind::INFERRED_LABEL.is_extension());
     }
@@ -694,7 +762,7 @@ mod tests {
             assert_eq!(Reason::from_code(r.code(), true, 0b101), r);
         }
         let u = Reason::from_code(999, false, 0);
-        assert_eq!(u, Reason::Unknown(999));
+        assert_eq!(u, Reason::unknown(999));
         assert_eq!(u.code(), 999);
         assert!(!u.editable() && Reason::Focus.editable());
     }
@@ -705,12 +773,10 @@ mod tests {
         let key = c.msg_key().expect("a core message has a key");
         assert_eq!(key, "state-checked");
         assert_eq!(Content::from_wire_msg(key, vec![]), c);
-        assert_eq!(
-            Content::from_wire_msg("no-such-key-from-a-newer-host", vec![]),
-            Content::Opaque {
-                code: Content::UNKNOWN_KEY
-            }
-        );
+        let kept = Content::from_wire_msg("no-such-key-from-a-newer-host", vec![Arg::num("n", 1)]);
+        assert_eq!(kept.msg_key(), Some("no-such-key-from-a-newer-host"));
+        assert_eq!(kept.code(), 1);
+        assert!(matches!(&kept, Content::UnknownMsg(u) if u.args.len() == 1));
         assert_eq!(c.code(), 1);
         assert_eq!(Content::Text("x".into()).code(), 0);
         assert_eq!(Content::ext("a", "b", vec![]).code(), 2);
@@ -920,7 +986,10 @@ mod tests {
         let _: u16 = k;
         let ExtRef { ns, key, args } = *match Content::ext("a", "b", vec![]) {
             Content::Ext(r) => r,
-            Content::Text(_) | Content::Msg { .. } | Content::Opaque { .. } => {
+            Content::Text(_)
+            | Content::Msg { .. }
+            | Content::UnknownMsg(_)
+            | Content::Opaque { .. } => {
                 unreachable!("built as Ext above")
             }
         };
@@ -963,7 +1032,7 @@ mod tests {
             Origin::default(),
         );
         let ir = PresIr::new(
-            Reason::Unknown(77),
+            Reason::unknown(77),
             node(),
             3,
             [odd.clone()].into_iter().collect(),

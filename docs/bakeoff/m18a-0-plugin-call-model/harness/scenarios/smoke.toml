@@ -1,0 +1,6 @@
+name = "smoke"
+kind = "focus"
+desc = "short end-to-end pass for harness bring-up (not a gating scenario)"
+samples = 3000
+warmup = 300
+nodes = 1024

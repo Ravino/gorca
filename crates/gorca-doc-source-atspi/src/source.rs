@@ -337,6 +337,10 @@ fn map_dbus(e: &DbusError) -> SourceError {
 /// Like [`map_dbus`] for a call that targets one object: a bus error that says the object does
 /// not exist (the browser released it, the page replaced the node) is `Gone`, which the caller
 /// may answer by re-resolving the node.
+/// `ATSPI_SCROLL_ANYWHERE`: scroll the least that brings the object into view (a cursor that is
+/// already visible does not move the page; `TOP_LEFT` would pin every line to the top edge).
+const SCROLL_ANYWHERE: u32 = 6;
+
 fn map_target_err(e: &DbusError) -> SourceError {
     if let DbusError::Zbus(z) = e {
         let text = z.to_string();
@@ -1868,8 +1872,50 @@ impl AtspiDocSource {
             }
             DocAction::ScrollIntoView => {
                 self.app
-                    .call(lane, deadline, &path, COMPONENT, "ScrollTo", &(0u32,))
+                    .call(
+                        lane,
+                        deadline,
+                        &path,
+                        COMPONENT,
+                        "ScrollTo",
+                        &(SCROLL_ANYWHERE,),
+                    )
                     .await
+            }
+            DocAction::ScrollToOffset(o) => {
+                // The character range, not the whole owner: an owner taller than the viewport
+                // would otherwise jump to an edge. An owner without a Text interface scrolls
+                // as a whole.
+                let o = i32::try_from(*o).unwrap_or(i32::MAX);
+                let end = o.saturating_add(1);
+                let ranged = self
+                    .app
+                    .call(
+                        lane,
+                        deadline,
+                        &path,
+                        TEXT,
+                        "ScrollSubstringTo",
+                        &(o, end, SCROLL_ANYWHERE),
+                    )
+                    .await;
+                match ranged {
+                    Ok(m) if !matches!(wire::parse_u32(m.body().data().bytes()), Ok(0)) => {
+                        return Ok(());
+                    }
+                    Ok(_) | Err(_) => {
+                        self.app
+                            .call(
+                                lane,
+                                deadline,
+                                &path,
+                                COMPONENT,
+                                "ScrollTo",
+                                &(SCROLL_ANYWHERE,),
+                            )
+                            .await
+                    }
+                }
             }
             DocAction::SetCaret(o) => {
                 let o = i32::try_from(*o).unwrap_or(i32::MAX);

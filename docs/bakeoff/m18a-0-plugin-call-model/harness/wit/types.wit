@@ -1,0 +1,121 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// DRAFT (paper only, ADR-0026 r2). Not built, not linked. The shipped contract stays
+// crates/gorca-ext-api/wit/gorca-ext.wit (0.3.0) until M18a-1 freezes this package.
+// Replaces the unshipped 0.9.0 draft (ADR-0026 §8).
+//
+// Rules this package follows (ADR-0019 V-1..V-8, ADR-0024 §2.10, ADR-0026 §2.3):
+// - No connector type or connector vocabulary crosses the boundary: no AT-SPI path, bus name,
+//   interface, event name or role enum, no AccessKit node id. Everything is a registry code or
+//   a host-minted handle, so the same plugin works over AT-SPI and over Newton/AccessKit.
+// - Growing vocabularies are numeric codes with append-only registries (roles, groups, actions,
+//   presentation fields, reasons, causes). An unknown code means "unknown", never a trap.
+// - Records are frozen per major. Anything that grows is read through accessor functions.
+// - Every string and list the guest passes is length-checked by the host before it is copied
+//   (ADR-0026 §2.5.3); the caps are stated next to each function.
+package gorca:ext@0.10.0;
+
+interface types {
+  /// A node of the instance's scope. Opaque and unforgeable: minted by the host for this
+  /// instance only (index, generation and a keyed MAC, ADR-0026 §2.3.3). A handle that is
+  /// forged, from another instance or scope, or of a node that is gone reads `none`, and
+  /// effects on it are dropped and counted; it never reads another node.
+  type node-ref = u64;
+
+  /// A host-minted anchor (DOM id, structural path or region) of a node, from `model.anchor-of`.
+  /// Opaque and unforgeable like `node-ref`. The guest never computes anchor hashes.
+  type anchor-ref = u64;
+
+  /// Speech epoch at the time of the call (ADR-0019 I-4).
+  type epoch = u64;
+
+  /// Registry codes, generated from `gorca-model` (single source of truth, ADR-0024 L-1).
+  type role-code = u16;
+  /// Bit 15 set = evidence group (ADR-0024 W-3).
+  type group-code = u16;
+  type action-code = u16;
+  type category-code = u16;
+  /// Presentation field kinds (`PresIr` fields, ADR-0022 §2.5).
+  type field-code = u16;
+  /// Presentation reasons: focus, change; browse-line, quick-nav, say-all, list-entry and
+  /// where-am-i once M22b2 is merged; review once M22b3 is merged (ADR-0026 §2.9 M18a-5).
+  type reason-code = u8;
+  /// Index of a selector declared in the plugin's manifest (`[[selector]]`, ADR-0019 §4.4).
+  type selector-id = u16;
+
+  record set-pos { index: u32, count: u32 }
+
+  record grid-pos { row: u32, col: u32, row-span: u32, col-span: u32 }
+
+  /// Window-relative logical pixels (whatever origin the connector can report for the
+  /// window; never screen-absolute).
+  record rect { x: s32, y: s32, w: u32, h: u32 }
+
+  /// The value of one fused group, in the shape its registry row names. New groups reuse these
+  /// shapes, so a new group is a registry append, never a type change.
+  variant prop-value {
+    /// Fetched, no value (ADR-0022 A6). `none` around a prop-value means Unknown.
+    absent,
+    /// Enumerated groups: role, check, press, expand, current, invalid, popup, live,
+    /// orientation, sort.
+    code(u16),
+    /// Bit-set groups: flags, avail.
+    bits(u64),
+    /// Integer groups: level.
+    number(u32),
+    /// Text groups: name, description, role description, value text, placeholder.
+    /// At most 1 KiB, both directions (checked before copy).
+    text(string),
+    position(set-pos),
+    grid(grid-pos),
+    /// Evidence only (layout boxes).
+    area(rect),
+    /// Evidence only (flags such as css-hidden).
+    truth(bool),
+  }
+
+  /// Text a plugin wants spoken or shown: a message of its own catalog (ADR-0010) or a literal.
+  /// `id` and each arg at most 1 KiB; at most 8 args.
+  record msg-ref { id: string, args: list<tuple<string, string>> }
+
+  variant text {
+    msg(msg-ref),
+    /// At most 1 KiB.
+    literal(string),
+  }
+
+  /// One node of a batched read (`model.subtree`). Frozen; everything else via accessors.
+  record view-node {
+    node: node-ref,
+    /// Index of the parent inside the same list; none for the root of the batch.
+    parent-index: option<u16>,
+    depth: u8,
+    role: role-code,
+    /// The `flags` group bits plus the core's state registry bits (focused, selected, ...).
+    states: u64,
+    /// Name in the view of the call's lane (ADR-0026 §2.3.2). Withheld without `read-names`.
+    name: option<string>,
+    /// Own text, at most 512 scalars. Withheld without `read-text`, and always for secrets.
+    text: option<string>,
+    child-count: u32,
+  }
+
+  /// Provenance of one group of the fused entry (ADR-0024 §2.10, W-2): registry codes, not enums.
+  record prov-info {
+    layer: u8,
+    class: u8,
+    hedge: u8,
+    taint: u8,
+  }
+
+  /// Identity of the application the scope belongs to, as the core verified it.
+  record app-info {
+    /// The core's application identity (ADR-0016 matcher key), normalised across connectors:
+    /// the AT-SPI application name and the Newton/Wayland app id of one application map to the
+    /// same value. One scope per application, never one per connector (ADR-0026 §2.3.1).
+    name: string,
+    /// Toolkit or engine class code: gtk3, gtk4, gecko, blink, qt, st, unknown, ...
+    engine: u16,
+    /// True when the connector verified the identity (e.g. the GNOME Shell).
+    verified: bool,
+  }
+}

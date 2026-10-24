@@ -496,7 +496,8 @@ impl Info {
             | ProvCode::Derived
             | ProvCode::ObservedPrimary
             | ProvCode::Patch
-            | ProvCode::User => false,
+            | ProvCode::User
+            | ProvCode::Provisional => false,
         }
     }
 }

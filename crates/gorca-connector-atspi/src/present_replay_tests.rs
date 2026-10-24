@@ -36,6 +36,8 @@ pub(crate) struct Replay {
     pub different: u64,
     /// (legacy tokens, new tokens) of each differing node, with a count and one example.
     pub table: BTreeMap<String, (u64, String)>,
+    /// Allowed differences by deviation row id.
+    pub allowed_by: BTreeMap<&'static str, u64>,
 }
 
 fn show<'a>(it: impl Iterator<Item = (gorca_model::SegmentKind, &'a str)>) -> String {
@@ -84,6 +86,8 @@ pub(crate) fn replay(
             may_refine: false,
             web: is_web,
             skip_selected: false,
+            hedge_inferred: false,
+            lang: gorca_present::Lang::En,
         };
         let Ok(ir) = compose(entry, s.key, Reason::Focus, ctx) else {
             continue;
@@ -92,13 +96,21 @@ pub(crate) fn replay(
             &ir,
             RenderOpts {
                 description_pause: web_run,
+                ..RenderOpts::default()
             },
         );
-        let ctx = DiffCtx::for_entry(if web_run { "focus-web" } else { "focus" }, entry);
+        let ctx = DiffCtx::for_entry(
+            if web_run { "focus-web" } else { "focus" },
+            entry,
+            gorca_present::Lang::En,
+        );
         match diff(&legacy, &tokens, dev, ctx) {
             DiffOutcome::Equal => out.equal += 1,
             DiffOutcome::OrderOnly => out.order_only += 1,
-            DiffOutcome::Allowed(_) => out.allowed += 1,
+            DiffOutcome::Allowed(id) => {
+                out.allowed += 1;
+                *out.allowed_by.entry(id).or_default() += 1;
+            }
             DiffOutcome::Different { .. } => {
                 out.different += 1;
                 let sig = format!(
@@ -205,6 +217,7 @@ fn print_table(title: &str, r: &Replay) {
          different {} skipped {} no-entry {}",
         r.nodes, r.equal, r.order_only, r.allowed, r.different, r.skipped_web, r.skipped_no_entry
     );
+    eprintln!("  allowed by row: {:?}", r.allowed_by);
     let mut rows: Vec<_> = r.table.iter().collect();
     rows.sort_by_key(|(_, (n, _))| std::cmp::Reverse(*n));
     for (sig, (n, ex)) in rows.iter().take(40) {
@@ -212,10 +225,8 @@ fn print_table(title: &str, r: &Replay) {
     }
 }
 
-/// Differences outside `deviations.toml` the web replay shows (17 of 2239, 2026-10-24: option
-/// checked, feed and definition words, indeterminate progress bars, read-only checkboxes, long
-/// names); it only goes down, to zero before the web cut-over.
-const WEB_DIFFERENT_CEILING: u64 = 17;
+/// Differences outside `deviations.toml` the web replay shows: none (was 17 of 2239).
+const WEB_DIFFERENT_CEILING: u64 = 0;
 
 #[test]
 fn the_web_corpus_replays_through_both_presenters() {
@@ -227,9 +238,20 @@ fn the_web_corpus_replays_through_both_presenters() {
         "the web corpus was not replayed ({compared})"
     );
     assert!(
-        r.different <= WEB_DIFFERENT_CEILING,
+        r.different == WEB_DIFFERENT_CEILING,
         "{} differences",
         r.different
+    );
+    // A row nothing in the corpus needs is dead weight (the dated list only shrinks): every
+    // `focus-web` row must have a witness here.
+    let unwitnessed: Vec<_> = Deviations::builtin()
+        .ids_for("focus-web")
+        .into_iter()
+        .filter(|id| !r.allowed_by.contains_key(id.as_str()))
+        .collect();
+    assert!(
+        unwitnessed.is_empty(),
+        "rows with no witness: {unwitnessed:?}"
     );
 }
 

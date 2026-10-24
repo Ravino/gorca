@@ -17,6 +17,7 @@ pub mod change;
 pub mod compose;
 pub mod deviations;
 pub mod diff;
+pub mod edit;
 /// The IR records live in `gorca-present-ir` (no runtime), re-exported here.
 pub use gorca_present_ir as ir;
 pub mod render;
@@ -27,13 +28,15 @@ mod web;
 pub use change::{changed_groups, compose_change};
 pub use compose::{ComposeCtx, ComposeError, ReportFlags, compose};
 pub use deviations::{Deviations, DeviationsError};
-pub use diff::{DiffCtx, DiffOutcome, LegacyToken, diff};
+pub use diff::{DiffCtx, DiffOutcome, LegacyToken, diff, diff_report};
+pub use edit::{IrEdit, apply as apply_edits, fields_from_tokens, kind_of_token};
+pub use gorca_i18n::Lang;
 pub use ir::{
     Arg, ArgVal, Content, ExtKindError, ExtKinds, ExtNs, ExtRef, Field, FieldFlags, FieldKind,
     FlatSpan, IrFlags, LangId, LangTags, Origin, PRES_IR_VERSION, PresIr, Reason, Redacted, RowId,
 };
 pub use render::{RenderOpts, Token, TokenText, render};
 pub use shadow::{
-    ChangeSample, FocusSample, SHADOW_QUEUE, ShadowActor, ShadowHandle, ShadowSnapshot, SkipWhy,
-    channel, channel_with,
+    ChangeSample, FocusSample, SHADOW_QUEUE, ShadowActor, ShadowHandle, ShadowMsg, ShadowSnapshot,
+    SkipWhy, channel, channel_with,
 };

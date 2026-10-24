@@ -1,0 +1,3 @@
+name = "memory-1-10-50"
+kind = "memory"
+counts = [1, 10, 50]

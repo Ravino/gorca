@@ -160,12 +160,8 @@ pub(crate) fn web_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> Pre
     let mut fields: SmallVec<[Field; 6]> = SmallVec::new();
 
     let name = entry.name.as_ref().filter(|s| !s.is_empty());
-    if let Some(name) = name {
-        fields.push(Field::new(
-            FieldKind::NAME,
-            Content::Text(Arc::clone(name)),
-            origin(Group::Name),
-        ));
+    if let Some(f) = crate::compose::name_field(entry, ctx, ROW_WEB_FOCUS) {
+        fields.push(f);
     }
     if let Some(w) = role_word(role, sem.press, name.is_some()) {
         fields.push(word(FieldKind::ROLE, w, Group::Role));

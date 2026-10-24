@@ -31,3 +31,17 @@ name = "gecko.menu-setpos"
 roles = ["menuitem", "menuitemcheckbox", "menuitemradio"]
 action = "unknown-group"
 group = "setpos"
+
+# A focusable, editable generic element is a `contenteditable` host (a chat composer, Telegram's
+# phone field): a text box, not a panel. The engines export it with no role of its own, so the
+# role stays generic; an author role (role="group", ...) is a different SemRole and not touched.
+# Moved here from the Reader's `editable_section` overlay (M22b1 slice 4).
+[[rule]]
+id = 4
+name = "web.contenteditable-host"
+roles = ["generic"]
+requires-flags = ["editable", "focusable"]
+forbids-flags = ["read-only"]
+action = "role-remap"
+from = "generic"
+to = "textbox"

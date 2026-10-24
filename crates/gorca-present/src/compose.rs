@@ -6,8 +6,10 @@
 //! not web content). Field order is the legacy presenter's, so the shadow diff is meaningful:
 //! name, role, states, value, help text.
 
+use gorca_i18n::Lang;
 use gorca_i18n::MsgId as M;
 use gorca_model::NodeKey;
+use gorca_model::sem::ProvCode;
 use gorca_model::sem::{
     Avail, Check, Expand, Group, Invalid, Press, Select, SemEntry, SemFlags, SemRole,
 };
@@ -15,7 +17,9 @@ use smallvec::SmallVec;
 
 use std::sync::Arc;
 
-use crate::ir::{Content, Field, FieldFlags, FieldKind, IrFlags, Origin, PresIr, Reason, RowId};
+use crate::ir::{
+    Arg, Content, Field, FieldFlags, FieldKind, IrFlags, Origin, PresIr, Reason, RowId,
+};
 use crate::roles::{Class, native_role};
 
 /// Rule row of the native focus utterance.
@@ -28,6 +32,7 @@ pub struct ReportFlags(pub u32);
 
 /// Everything `compose` needs besides the entry.
 #[derive(Copy, Clone, Debug)]
+#[allow(clippy::struct_excessive_bools)] // one fact per bit of the call site
 pub struct ComposeCtx {
     pub flags: ReportFlags,
     /// The entry was composed from stale data.
@@ -36,6 +41,10 @@ pub struct ComposeCtx {
     pub web: bool,
     /// A change in a switcher: being selected is not news (`Reason::Change` only).
     pub skip_selected: bool,
+    /// `browse.hedge_inferred`: a name inferred from the layout is said as "probably ...".
+    pub hedge_inferred: bool,
+    /// The UI language the words that are baked into arguments (a negation) are taken in.
+    pub lang: Lang,
 }
 
 /// Why a composition did not happen.
@@ -59,6 +68,30 @@ fn word(kind: FieldKind, id: M, group: Group) -> Field {
 }
 
 /// What a mixed (tri-state) value says for a role class.
+/// The name field of an entry. A name the layout inference gave (provenance `Inferred`, the S4
+/// lowest-trust fact) is an `INFERRED_LABEL` field, and `hedge_inferred` says it as "probably ...".
+pub(crate) fn name_field(entry: &SemEntry, ctx: ComposeCtx, row: RowId) -> Option<Field> {
+    let name = entry.name.as_ref().filter(|s| !s.is_empty())?;
+    let origin = Origin {
+        row,
+        group: Group::Name.slot(),
+        via: 0,
+    };
+    if entry.prov.get(Group::Name) != Some(ProvCode::Inferred) {
+        return Some(Field::new(
+            FieldKind::NAME,
+            Content::Text(Arc::clone(name)),
+            origin,
+        ));
+    }
+    let content = if ctx.hedge_inferred {
+        Content::msg(M::HedgeProbably, vec![Arg::text("text", name)])
+    } else {
+        Content::Text(Arc::clone(name))
+    };
+    Some(Field::new(FieldKind::INFERRED_LABEL, content, origin))
+}
+
 const fn tri_state_word(class: Class) -> Option<M> {
     match class {
         Class::Checkable => Some(M::StateHalfChecked),
@@ -89,7 +122,7 @@ pub fn compose(
         | Reason::Change { .. }
         | Reason::ListEntry
         | Reason::WhereAmI
-        | Reason::Unknown(_) => Err(ComposeError::Unsupported(reason.code())),
+        | Reason::Unknown { .. } => Err(ComposeError::Unsupported(reason.code())),
     }
 }
 
@@ -99,12 +132,8 @@ fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
     let class = info.class;
     let mut fields: SmallVec<[Field; 6]> = SmallVec::new();
 
-    if let Some(name) = entry.name.as_ref().filter(|s| !s.is_empty()) {
-        fields.push(Field::new(
-            FieldKind::NAME,
-            Content::Text(Arc::clone(name)),
-            origin(Group::Name),
-        ));
+    if let Some(f) = name_field(entry, ctx, ROW_NATIVE_FOCUS) {
+        fields.push(f);
     }
     if let Some(role_word) = info.word {
         fields.push(word(FieldKind::ROLE, role_word, Group::Role));
@@ -226,6 +255,8 @@ mod tests {
         may_refine: false,
         web: false,
         skip_selected: false,
+        hedge_inferred: false,
+        lang: gorca_i18n::Lang::En,
     };
 
     fn entry(role: SemRole, name: &str) -> SemEntry {
@@ -265,6 +296,42 @@ mod tests {
             off.fields.last().map(|f| f.content.clone()),
             Some(Content::word(M::StateNotChecked))
         );
+    }
+
+    #[test]
+    fn an_inferred_name_is_its_own_field_kind_and_hedges_on_request() {
+        let mut e = entry(SemRole::TextBox, "First name");
+        e.prov.set(Group::Name, ProvCode::Inferred);
+        let plain = compose(&e, key(), Reason::Focus, CTX).expect("focus");
+        assert_eq!(plain.fields[0].kind, FieldKind::INFERRED_LABEL);
+        assert_eq!(
+            plain.fields[0].content,
+            Content::Text(Arc::from("First name"))
+        );
+        let hedged = ComposeCtx {
+            hedge_inferred: true,
+            ..CTX
+        };
+        let ir = compose(&e, key(), Reason::Focus, hedged).expect("focus");
+        let words = crate::render::render(&ir, crate::render::RenderOpts::default());
+        assert_eq!(
+            words[0].text.as_str(),
+            gorca_i18n::tf(
+                M::HedgeProbably,
+                &[("text", gorca_i18n::Arg::Str("First name"))]
+            )
+        );
+        assert!(words[0].text.as_str().contains("First name"));
+        // The same through the web row, and an observed name is never hedged.
+        let web = ComposeCtx {
+            web: true,
+            ..hedged
+        };
+        let ir = compose(&e, key(), Reason::Focus, web).expect("focus");
+        assert_eq!(ir.fields[0].kind, FieldKind::INFERRED_LABEL);
+        e.prov.set(Group::Name, ProvCode::ObservedPrimary);
+        let ir = compose(&e, key(), Reason::Focus, hedged).expect("focus");
+        assert_eq!(ir.fields[0].kind, FieldKind::NAME);
     }
 
     #[test]
@@ -377,7 +444,7 @@ mod tests {
     fn an_unknown_reason_has_no_row() {
         let e = entry(SemRole::Button, "OK");
         assert_eq!(
-            compose(&e, key(), Reason::Unknown(999), CTX),
+            compose(&e, key(), Reason::unknown(999), CTX),
             Err(ComposeError::Unsupported(999))
         );
     }
