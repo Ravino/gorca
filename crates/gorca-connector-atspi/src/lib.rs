@@ -28,6 +28,8 @@
 //! `gorca-model`, `gorca-rt`, `atspi`, `zbus`.
 
 mod connector;
+#[cfg(test)]
+mod cutover_gate_tests;
 mod decode;
 mod doc_source;
 mod enablement;

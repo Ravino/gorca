@@ -302,3 +302,17 @@ surface = "quicknav"
 epoch = "m22b2"
 reason = "A name longer than the page string cap is cut by the normaliser (see the browse row)."
 until = "2026-11-21"
+
+[[deviation]]
+id = "role-word-improved"
+surface = "window"
+epoch = "m22b4"
+reason = "An ARIA alertdialog is a dialog on every engine. The legacy role mapping gave Blink an alert role for it, so its window lead-in said alert; the fused role is AlertDialog and says dialog, like Gecko."
+until = "2026-12-12"
+
+[[deviation]]
+id = "role-word-improved"
+surface = "notification"
+epoch = "m22b4"
+reason = "An ARIA alertdialog is a dialog on every engine (see the window row)."
+until = "2026-12-12"

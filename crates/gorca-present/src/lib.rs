@@ -15,6 +15,7 @@
 pub mod browse;
 pub mod change;
 pub mod compose;
+pub mod desktop;
 pub mod deviations;
 pub mod diff;
 pub mod edit;
@@ -28,6 +29,7 @@ pub use change::{changed_groups, compose_change};
 pub use compose::{
     ComposeCtx, ComposeError, LABEL_CAP, ReportFlags, compose, name_is_blank, one_line_label,
 };
+pub use desktop::{compose_notice, compose_window, notice_has_words};
 pub use deviations::{Deviations, DeviationsError};
 pub use diff::{DiffCtx, DiffOutcome, LegacyToken, diff, diff_report};
 pub use edit::{IrEdit, apply as apply_edits, fields_from_tokens, kind_of_token};

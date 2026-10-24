@@ -334,7 +334,7 @@ fn gen_content(r: &mut Rng, canonical: bool) -> Content {
 }
 
 fn gen_reason(r: &mut Rng, canonical: bool) -> Reason {
-    match r.below(12) {
+    match r.below(14) {
         0 => Reason::Focus,
         1 => Reason::FocusAncestor,
         2 => Reason::BrowseLine {
@@ -348,10 +348,12 @@ fn gen_reason(r: &mut Rng, canonical: bool) -> Reason {
         },
         7 => Reason::ListEntry,
         8 => Reason::WhereAmI,
+        9 => Reason::Window,
+        10 => Reason::Notice,
         _ => Reason::unknown(if canonical {
-            9 + r.u16() % 0xFFF0
+            11 + r.u16() % 0xFFF0
         } else {
-            r.u16() % 12
+            r.u16() % 14
         }),
     }
 }

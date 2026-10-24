@@ -432,7 +432,7 @@ fn p2_6_the_extension_catalogs_are_an_explicit_snapshot_of_render() {
     assert_eq!(with(&after), vec![(0, "hi 2".to_owned())], "immutable");
 }
 
-/// P2.7 only `Focus` has a rule row in `compose`; every other reason is the same typed error,
+/// P2.7 `Focus`, `Window` and `Notice` have a rule row in `compose`; every other reason is the same typed error,
 /// whatever the entry (so a replay gate sees one deterministic "unsupported", never a panic).
 #[test]
 fn p2_7_unsupported_reasons_are_a_stable_typed_error() {
@@ -440,7 +440,7 @@ fn p2_7_unsupported_reasons_are_a_stable_typed_error() {
         let mut r = Rng::new(seed);
         let e = gen_entry(&mut r);
         let ctx = gen_ctx(&mut r);
-        for code in 1..=12u16 {
+        for code in (1..=8u16).chain(11..=12) {
             let reason = Reason::from_code(code, true, 3);
             let a = compose(&e, key(), reason, ctx).map(|_| ());
             assert_eq!(a, compose(&e, key(), reason, ctx).map(|_| ()));
