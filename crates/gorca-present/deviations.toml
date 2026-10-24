@@ -176,3 +176,17 @@ surface = "change"
 epoch = "m22b1"
 reason = "A GTK3 toggle button exports its on state as checked; the legacy change presenter said checked or not checked. The model keeps it as the button's pressed state and says pressed or not pressed, as the focus row and Orca do."
 until = "2026-11-07"
+
+[[deviation]]
+id = "name-whitespace"
+surface = "focus"
+epoch = "m22b1"
+reason = "A name is spoken as a one-line label whatever its source: runs of white space collapse to one space. The legacy name kept the engine's spacing (a list marker with its trailing spaces)."
+until = "2026-11-07"
+
+[[deviation]]
+id = "name-whitespace"
+surface = "focus-web"
+epoch = "m22b1"
+reason = "A name is spoken as a one-line label whatever its source: runs of white space collapse to one space. The legacy name kept the engine's spacing (a list marker with its trailing spaces)."
+until = "2026-11-07"

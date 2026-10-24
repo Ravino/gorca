@@ -58,6 +58,8 @@ pub enum Classifier {
     RoleFromModel,
     /// The fused name drops a list marker or bullet the legacy name carried (quirk row).
     MarkerStrippedName,
+    /// The fused name is a one-line label: the legacy name carried runs of white space.
+    NameWhitespace,
     /// Static text: the engine's `label` and `static` roles are one model role.
     StaticTextWord,
     /// A fieldset or group: the model says "grouping" where the legacy mapping said "panel".
@@ -169,12 +171,13 @@ pub fn role_word_pairs(lang: Lang) -> [(SemRole, &'static str, &'static str); 5]
 }
 
 impl Classifier {
-    pub const ALL: [Classifier; 16] = [
+    pub const ALL: [Classifier; 17] = [
         Classifier::FieldContentsNotFused,
         Classifier::ContentDerivedName,
         Classifier::PressedWithoutToggle,
         Classifier::RoleFromModel,
         Classifier::MarkerStrippedName,
+        Classifier::NameWhitespace,
         Classifier::StaticTextWord,
         Classifier::GroupingWord,
         Classifier::RoleNotInTable,
@@ -195,6 +198,7 @@ impl Classifier {
             Classifier::PressedWithoutToggle => "pressed-without-toggle",
             Classifier::RoleFromModel => "role-from-model",
             Classifier::MarkerStrippedName => "marker-stripped-name",
+            Classifier::NameWhitespace => "name-whitespace",
             Classifier::StaticTextWord => "static-text-word",
             Classifier::GroupingWord => "grouping-word",
             Classifier::RoleNotInTable => "role-not-in-table",
@@ -437,6 +441,25 @@ fn explain<'a>(
                     let a = only_legacy.remove(i);
                     take(only_new, |b| b.0 == text && is_marker_stripped(a.1, b.1));
                     true
+                }
+                None => false,
+            }
+        }
+        Classifier::NameWhitespace => {
+            let text = kind_code(SegmentKind::Text);
+            let collapsed = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+            let pair = only_legacy.iter().position(|a| {
+                a.0 == text
+                    && a.1 != collapsed(a.1)
+                    && only_new
+                        .iter()
+                        .any(|b| b.0 == text && b.1 == collapsed(a.1))
+            });
+            match pair {
+                Some(i) => {
+                    let a = only_legacy.remove(i);
+                    let want = collapsed(a.1);
+                    take(only_new, |b| b.0 == text && b.1 == want)
                 }
                 None => false,
             }
@@ -1002,6 +1025,24 @@ mod tests {
             ),
             DiffOutcome::Different { .. }
         ));
+    }
+
+    #[test]
+    fn collapsed_white_space_in_a_name_is_allowed_and_a_changed_word_is_not() {
+        let legacy = [l(SegmentKind::Text, "\u{2022}  ")];
+        let new = [n(SegmentKind::Text, "\u{2022}")];
+        assert_eq!(
+            d(&legacy, &new, DiffCtx::FOCUS),
+            DiffOutcome::Allowed("name-whitespace")
+        );
+        let other = [n(SegmentKind::Text, "Alpha")];
+        assert!(matches!(
+            d(&legacy, &other, DiffCtx::FOCUS),
+            DiffOutcome::Different { .. }
+        ));
+        // Equal text is not a deviation at all.
+        let same = [l(SegmentKind::Text, "\u{2022}")];
+        assert_eq!(d(&same, &new, DiffCtx::FOCUS), DiffOutcome::Equal);
     }
 
     #[test]

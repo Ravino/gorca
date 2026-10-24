@@ -1085,7 +1085,6 @@ fn marker_stripped_name_rejects_a_dropped_word() {
     }
     for (old, new) in [
         ("Alpha", "Alpha"),
-        (" Alpha", "Alpha"),
         ("2 apples", "apples"),
         // An ordinal is information the name keeps.
         ("3. Beta", "Beta"),
