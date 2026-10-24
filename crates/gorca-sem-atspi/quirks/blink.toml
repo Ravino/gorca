@@ -5,7 +5,21 @@
 # the normaliser knows is the role the node should have. Native elements it exports weakly
 # (code, time, mark, figure, fieldset) are refined by tag in the normaliser (HTML-AAM), not here.
 #
-# No Blink role rewrite is needed on the corpus, so this table is empty on purpose. The known
+# The only Blink role rewrite is the contenteditable host below. The other known
 # Blink differences are handled elsewhere: placeholder key `placeholder` and `level=1` on list
 # items in the normaliser, `INVALID_ENTRY` only (no kind) as an `inexpressible` row, an empty
 # figure name as an S3 derived rule.
+
+# A focusable, editable generic element is a `contenteditable` host (a chat composer, Telegram's
+# phone field): a text box, not a panel. The engines export it with no role of its own, so the
+# role stays generic; an author role (role="group", ...) is a different SemRole and not touched.
+# Moved here from the Reader's `editable_section` overlay (M22b1 slice 4).
+[[rule]]
+id = 1
+name = "web.contenteditable-host"
+roles = ["generic"]
+requires-flags = ["editable", "focusable"]
+forbids-flags = ["read-only"]
+action = "role-remap"
+from = "generic"
+to = "textbox"

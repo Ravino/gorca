@@ -727,14 +727,15 @@ impl FuseWriter {
             let Some(a) = self.pop_awaiting() else {
                 break;
             };
-            if self.ivm.is_dirty(a.idx) {
-                self.push_awaiting(a);
-                continue;
-            }
             if self.index.get(&a.key) != Some(&a.idx) {
                 continue;
             }
-            let Some(entry) = self.ivm.entry_view(a.idx) else {
+            // PV-1: a node still waiting for its fusion gets its provisional entry now; the real
+            // fusion publishes later and `refresh` replaces it.
+            let Some(entry) = self.ivm.entry_or_provisional(a.idx) else {
+                if self.ivm.is_dirty(a.idx) {
+                    self.push_awaiting(a);
+                }
                 continue;
             };
             if cfg!(any(debug_assertions, feature = "legacy-agree")) {

@@ -30,3 +30,4 @@ battery-pending = ожидает зарядки
 battery-time = осталось {dur}
 battery-hm = {h} ч {m} мин
 battery-m = {m} мин
+hedge-probably = вероятно {text}

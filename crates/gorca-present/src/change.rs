@@ -260,6 +260,7 @@ mod tests {
         may_refine: false,
         web: false,
         skip_selected: false,
+        hedge_inferred: false,
         lang: gorca_i18n::Lang::En,
     };
 

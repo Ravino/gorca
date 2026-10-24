@@ -152,6 +152,9 @@ impl FieldKind {
     pub const ROLE_DESCRIPTION: FieldKind = FieldKind(12);
     /// A label inferred from layout (lowest-trust fused fallback, C3b / M22b).
     pub const INFERRED_LABEL: FieldKind = FieldKind(13);
+    /// Plain text from a producer outside `compose` (a window title, a mode word, a line behind a
+    /// web focus); the producer is in `Origin::via`. Appended to the v1 registry in slice 4.
+    pub const TEXT: FieldKind = FieldKind(14);
     /// First host-allocated add-on code.
     pub const EXT_BASE: u16 = 0x8000;
 
@@ -175,6 +178,7 @@ impl FieldKind {
             11 => "shortcut",
             12 => "role-description",
             13 => "inferred-label",
+            14 => "text",
             _ => return None,
         })
     }
@@ -692,7 +696,7 @@ impl std::ops::Deref for Redacted {
 
 /// Registry rows (name, code) of the core `FieldKind` codes.
 pub fn field_kind_rows() -> Vec<(&'static str, u32)> {
-    (1..=13u16)
+    (1..=14u16)
         .filter_map(|c| FieldKind(c).name().map(|n| (n, u32::from(c))))
         .collect()
 }
@@ -729,9 +733,10 @@ mod tests {
             ("shortcut", 11),
             ("role-description", 12),
             ("inferred-label", 13),
+            ("text", 14),
         ];
         assert_eq!(field_kind_rows(), want);
-        assert_eq!(FieldKind(14).name(), None);
+        assert_eq!(FieldKind(15).name(), None);
         assert!(FieldKind(0x8000).is_extension());
         assert!(!FieldKind::INFERRED_LABEL.is_extension());
     }

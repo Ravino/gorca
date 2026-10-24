@@ -183,6 +183,7 @@ pub fn get_value(s: &Settings, key: KeyId) -> Value {
         ("text", "caret_late_ms") => Value::Int(i64::from(s.text.caret_late_ms)),
         ("browse", "say_all_on_load") => Value::Bool(s.browse.say_all_on_load),
         ("browse", "description_pause") => Value::Bool(s.browse.description_pause),
+        ("browse", "hedge_inferred") => Value::Bool(s.browse.hedge_inferred),
         ("browse", "enabled") => Value::Bool(s.browse.enabled),
         ("browse", "mode_default") => Value::Str(s.browse.mode_default.name().to_owned()),
         ("terminal", "settle_ms") => Value::Int(i64::from(s.terminal.settle_ms)),
@@ -273,6 +274,7 @@ pub fn set_value(s: &mut Settings, key: KeyId, v: &Value) -> bool {
         ("text", "caret_late_ms") => put!(s.text.caret_late_ms, int_u32(v)),
         ("browse", "say_all_on_load") => put!(s.browse.say_all_on_load, boolean(v)),
         ("browse", "description_pause") => put!(s.browse.description_pause, boolean(v)),
+        ("browse", "hedge_inferred") => put!(s.browse.hedge_inferred, boolean(v)),
         ("browse", "enabled") => put!(s.browse.enabled, boolean(v)),
         ("browse", "mode_default") => {
             put!(s.browse.mode_default, text(v).and_then(ModeDefault::parse))

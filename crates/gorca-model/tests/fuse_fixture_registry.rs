@@ -60,11 +60,15 @@ fn x32_header_tables_equal_the_rust_registries() {
     }
     groups.extend(rows(registry::evidence()));
     assert_eq!(table(t, "group_codes"), groups, "group_codes");
+    // `Provisional` (PV-1, M22b1 slice 4) was appended after the corpus was generated: the oracle
+    // never produces it (it is made by `Ivm::entry_or_provisional`, outside FUSE).
+    let mut prov = rows(registry::prov_codes());
     assert_eq!(
-        table(t, "prov_codes"),
-        rows(registry::prov_codes()),
-        "prov_codes"
+        prov.remove("Provisional"),
+        Some(8),
+        "appended after the oracle's eight"
     );
+    assert_eq!(table(t, "prov_codes"), prov, "prov_codes");
     assert_eq!(
         table(t, "conf_codes"),
         rows(registry::conf_classes()),

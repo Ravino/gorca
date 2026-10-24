@@ -103,17 +103,69 @@ until = "2026-11-07"
 [[deviation]]
 id = "unavailable-static"
 surface = "focus-web"
+epoch = "m22b1"
 reason = "The legacy presenter said unavailable for a generic panel or group; the model never disables static structure (SM-5)."
 until = "2026-11-07"
 
 [[deviation]]
 id = "role-word-improved"
 surface = "focus-web"
+epoch = "m22b1"
 reason = "Pairs gated per role: option panel to list item, feed panel to list, definition paragraph to list item, layout table to panel, alert dialog alert to dialog."
 until = "2026-11-07"
 
 [[deviation]]
 id = "name-cap-differs"
 surface = "focus-web"
+epoch = "m22b1"
 reason = "A name over 200 characters: the legacy cut and the model cut differ in length, the first 200 characters agree."
+until = "2026-11-07"
+
+[[deviation]]
+id = "unavailable-static"
+surface = "change"
+epoch = "m22b1"
+reason = "SM-5: availability does not apply to static structure (documents, panels, lists, rows, cells, separators, labels); the model never says it is unavailable. The legacy presenter said it for any node whose sensitive state flipped."
+until = "2026-11-07"
+
+[[deviation]]
+id = "pressed-without-toggle"
+surface = "change"
+epoch = "m22b1"
+reason = "The model keeps check and selection for a node whose engine flipped PRESSED (a check box, a radio button, a tab, a switch); only a toggle button has a pressed state, so nothing is said."
+until = "2026-11-07"
+
+[[deviation]]
+id = "select-not-applicable"
+surface = "change"
+epoch = "m22b1"
+reason = "The model says the node cannot be selected (a menu item, a button, a panel); the legacy presenter said selected for any flipped selection state."
+until = "2026-11-07"
+
+[[deviation]]
+id = "unavailable-static"
+surface = "change-web"
+epoch = "m22b1"
+reason = "SM-5: availability does not apply to static structure (documents, panels, lists, rows, cells, separators, labels); the model never says it is unavailable. The legacy presenter said it for any node whose sensitive state flipped."
+until = "2026-11-07"
+
+[[deviation]]
+id = "pressed-without-toggle"
+surface = "change-web"
+epoch = "m22b1"
+reason = "The model keeps check and selection for a node whose engine flipped PRESSED (a check box, a radio button, a tab, a switch); only a toggle button has a pressed state, so nothing is said."
+until = "2026-11-07"
+
+[[deviation]]
+id = "select-not-applicable"
+surface = "change-web"
+epoch = "m22b1"
+reason = "The model says the node cannot be selected (a menu item, a button, a panel); the legacy presenter said selected for any flipped selection state."
+until = "2026-11-07"
+
+[[deviation]]
+id = "mixed-switch-ignored"
+surface = "change-web"
+epoch = "m22b1"
+reason = "ARIA gives a switch no mixed state; the model ignores it, the legacy presenter said half pressed."
 until = "2026-11-07"

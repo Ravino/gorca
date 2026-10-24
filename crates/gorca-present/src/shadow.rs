@@ -272,6 +272,7 @@ impl ShadowActor {
             may_refine: s.may_refine,
             web: s.web,
             skip_selected: false,
+            hedge_inferred: false,
             lang,
         };
         let ir = match compose(&s.entry, s.node, Reason::Focus, ctx) {
@@ -329,6 +330,7 @@ impl ShadowActor {
             may_refine: false,
             web: s.web,
             skip_selected: s.skip_selected,
+            hedge_inferred: false,
             lang,
         };
         let ir = compose_change(&s.old, &s.new, s.node, ctx);

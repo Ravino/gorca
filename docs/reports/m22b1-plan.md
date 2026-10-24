@@ -176,3 +176,38 @@ them outlives the cut-over.
   rejects the neighbouring case. The widest honest classes are static text (the engine's label vs
   static distinction is not in the model) and derived names (intended improvement).
 * All deviation rows end 2026-11-07 (owner: upper bounds, cut-over as soon as ready).
+
+## Slice 4 result and the focus/change cut-over recipe (2026-10-24)
+
+Done (each its own commit): **C3b inferred label** is an S4 lowest-trust fact (`LABEL_SOURCE`, T3,
+`Basis::VisRev`, TTL 5 min) written by the document actor into fusion; the entry carries it as
+`Inferred` provenance, hedged and tainted; `compose` emits an `INFERRED_LABEL` field and says
+"probably ..." when `browse.hedge_inferred` is on (default off). **Contenteditable host** is the
+quirk row `web.contenteditable-host` (`role-remap` with `requires-flags` / `forbids-flags`, a data
+condition), in the gecko and blink tables. **Provisional entries (PV-1)**: `Ivm::entry_or_provisional`
+and `ProvCode::Provisional`; the document stage and the app actor attach a provisional entry at once, the real fusion
+replaces it (`refresh`). **IR edits** (`gorca_present::edit`: silence, replace, set value, drop kind,
+prepend, append; fixed order; `fields_from_tokens` for producers outside `compose`) and the `TEXT`
+field kind (append to the v1 registry). The gate: `cargo xtask cutover focus` and `change` PASS on
+the three recorded families (all deviation rows carry the `m22b1` epoch).
+
+No `legacy.allow` row is lowered by slice 4: it adds the replacement for each legacy use; the uses
+themselves go in the same commit as the switch, below.
+
+**Cut-over commit (after the owner's tag `legacy/focus-last` and the reviewer), in one commit:**
+1. `present_with`: ext presenter segments -> `fields_from_tokens`; else `compose(entry)` with
+   `ComposeCtx { web, hedge_inferred: settings, may_refine }`; policy verdict -> `IrEdit`; window
+   lead-in and web extras (still segments from browse/window) -> `Prepend`/`Append`; `drop_web_unavailable`
+   -> `DropKind(STATE)` gated by the web-app set; `strip_pause` is the render option; then `render` ->
+   `Utterance`. The Reader's input is the fused node: no `Option<SemEntry>` branch (PV-1).
+2. `present_change` sites -> `compose_change` + render (four sites + two refine sites).
+3. Delete: `present_focus`, `present_selected_item`, `present_with`, `present_web`, `present_change`,
+   `changed`, `spoken_states`, the `aria.rs` focus users, the shadow hook, `GORCA_PRESENT_SHADOW`,
+   `CoreConfig::present_shadow`, `FocusSample`/`ChangeSample` and the shadow actor, `shadow_node_is_web`,
+   `web_overlay`/`overlay_from_meta`/`legacy_name`/`Legacy`/`editable_section`/`web_label_arm`/
+   `web_label_done`/`DocNotice::Label`; `lib.rs` re-exports. Rows to remove from `legacy.allow`:
+   every `M22b1-5` row (24 rows / 56 uses on 2026-10-24).
+4. Keep the replay corpora as golden tests of `compose`; `deviations.toml` focus and change rows
+   become documentation of intended wording (the gate keeps them dated).
+5. Gates: full workspace tests, `cargo xtask cutover --check`, e2e M8 and the M-6 bench (interleaved
+   on/off is impossible after deletion: compare against the tagged `legacy/focus-last` build).

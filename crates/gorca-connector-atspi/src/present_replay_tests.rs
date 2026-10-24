@@ -86,6 +86,7 @@ pub(crate) fn replay(
             may_refine: false,
             web: is_web,
             skip_selected: false,
+            hedge_inferred: false,
             lang: gorca_present::Lang::En,
         };
         let Ok(ir) = compose(entry, s.key, Reason::Focus, ctx) else {
