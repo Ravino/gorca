@@ -43,6 +43,12 @@ GTK3_PAGES = {
 }
 TELEGRAM_PAGES = {"a": "a.html", "k": "k.html", "echo": "echo.html"}
 
+GTK_VALUE_CASES = ["value-scale", "value-spin", "value-progress", "value-level", "select-combo",
+                   "expand-tree", "disable-row", "disable-tab"]
+WEB_VALUE_CASES = ["value-range", "value-number", "value-progress", "value-meter", "value-aria-slider",
+                   "value-aria-spin", "value-aria-progress", "select-collapsed", "expand-details",
+                   "expand-tree", "expand-menu", "disable-tab", "disable-option", "disable-select-option",
+                   "disable-treeitem", "select-listbox"]
 CASES = ["check", "mixed", "toggle", "press", "expand", "disable", "select", "rename"]
 
 
@@ -163,6 +169,59 @@ def focus_electron(out):
         shutil.rmtree(prof, ignore_errors=True)
 
 
+SIGNAL_VIEWS = ["conversations", "chat", "compose", "search"]
+
+
+def focus_electron_fixture(out):
+    """The Signal-shaped fixture app (tools/sem-capture/signal-fixture) under Electron, one page per
+    view. The real Signal cannot be taken past its link screen without registering a phone number,
+    and the owner's account is never used. The Electron binary is not in the repo: SC_ELECTRON_DIR
+    (default ~/.cache/electron-probe) holds dist2/signal-desktop, as tests/web/chr0/signal_cmp does."""
+    bus, root = private_bus()
+    import pwd
+    real_home = pwd.getpwuid(os.getuid()).pw_dir  # HOME is private inside the world
+    exe = os.path.join(os.environ.get("SC_ELECTRON_DIR", os.path.join(real_home, ".cache", "electron-probe")),
+                       "dist2", "signal-desktop")
+    if not os.access(exe, os.X_OK):
+        sys.exit("no Electron binary at %s (set SC_ELECTRON_DIR)" % exe)
+    appdir = os.path.join(HERE, "signal-fixture")
+    ver = subprocess.run([exe, "--version"], capture_output=True, text=True).stdout.strip()
+    for view in SIGNAL_VIEWS:
+        prof = tempfile.mkdtemp(prefix="signalfx.", dir=root)
+        argv = [exe, "--no-sandbox", "--disable-gpu", "--ozone-platform=wayland", "--force-renderer-accessibility",
+                "--user-data-dir=" + os.path.join(prof, "data"), appdir, "?view=" + view]
+        proc = start(argv)
+        try:
+            d, p, appname = wait_app(bus, "signal-desktop", tries=240)
+            sub = None
+            for _ in range(120):
+                sub = C.find_doc(bus, d, p, "Signal")
+                if sub:
+                    break
+                time.sleep(0.5)
+            if not sub:
+                sys.exit("fixture document never appeared")
+            n = C.quiesce(bus, sub[0], sub[1], deadline=60)
+            time.sleep(3)
+            nodes = []
+            for _ in range(40):  # the app root answers late on a loaded host
+                nodes = C.walk_subtree(bus, d, p)  # the whole app: window chrome and menu bar included
+                if len(nodes) > 20:
+                    break
+                time.sleep(1.0)
+            if len(nodes) <= 20:
+                sys.exit("electron/signal-%s: tree never became readable (%d nodes, process exit %r)"
+                         % (view, len(nodes), proc.poll()))
+            hdr = header("electron", "Electron " + ver + " (signal-fixture)", appname, "signal-" + view,
+                         "Signal", nodes, n)
+            write_page(out, "signal-" + view, hdr, nodes)
+            print("electron/signal-%s: %d nodes" % (view, len(nodes)), file=sys.stderr)
+        finally:
+            C.kill_group(proc)
+            shutil.rmtree(prof, ignore_errors=True)
+            time.sleep(2)
+
+
 def find_named(nodes, name):
     for nd in nodes:
         if nd.get("name") == name:
@@ -175,17 +234,18 @@ def press(bus, nd):
     return r is True
 
 
-def change(family, out):
+def change(family, out, page="change", cases=None, settle=1.0):
     bus, root = private_bus()
     prof = None
     if family in ("gtk3", "gtk4"):
         major = family[-1]
-        proc = start([PY, os.path.join(HERE, "change_gallery.py"), major])
-        d, p, appname = wait_app(bus, "change_gallery")
+        gallery = "change_gallery" if page == "change" else "value_gallery"
+        proc = start([PY, os.path.join(HERE, gallery + ".py"), major])
+        d, p, appname = wait_app(bus, gallery)
         time.sleep(2)
         sub, title, engine, ver = (d, p), "", family, gtk_version(major)
     else:
-        html = os.path.join(ROOT, "tests/fixtures/sem-change/pages/change.html")
+        html = os.path.join(ROOT, "tests/fixtures/sem-change/pages/%s.html" % page)
         proc, prof = C.launch(family, html, root)
         title = C.title_of(html)
         d, p, appname = wait_app(bus, "firefox" if family == "firefox" else "chrom")
@@ -201,13 +261,14 @@ def change(family, out):
     try:
         C.quiesce(bus, sub[0], sub[1])
         time.sleep(2)
-        for case in CASES:
+        default = CASES if page == "change" else (GTK_VALUE_CASES if family.startswith("gtk") else WEB_VALUE_CASES)
+        for case in (cases or default):
             before = C.walk_subtree(bus, sub[0], sub[1])
             trig = find_named(before, "do:" + case)
             if not trig or not press(bus, trig):
                 print("%s/%s: trigger missing or refused" % (family, case), file=sys.stderr)
                 continue
-            time.sleep(1.0)
+            time.sleep(settle)
             C.quiesce(bus, sub[0], sub[1], need=2, step=0.5, deadline=15)
             after = C.walk_subtree(bus, sub[0], sub[1])
             write_page(out + "/" + family, case + ".before", header(engine, ver, appname, case + ".before", title, before, len(before)), before)
@@ -224,12 +285,17 @@ def main():
     ap.add_argument("mode", choices=["focus", "change"])
     ap.add_argument("--family", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--page", default="change", help="change: tests/fixtures/sem-change/pages/<page>.html (browsers), "
+                    "change_gallery.py (change) or value_gallery.py (values) for GTK")
+    ap.add_argument("--settle", type=float, default=1.0, help="seconds to wait after the trigger (change mode)")
+    ap.add_argument("--cases", default="", help="comma separated case names (default: the page's own list)")
     a = ap.parse_args()
     if a.mode == "focus":
-        {"gtk3": focus_gtk3, "telegram": focus_telegram, "electron": focus_electron}[a.family](
-            os.path.join(a.out, a.family))
+        fam = {"gtk3": focus_gtk3, "telegram": focus_telegram, "electron": focus_electron,
+               "electron-fixture": focus_electron_fixture}[a.family]
+        fam(os.path.join(a.out, "electron" if a.family == "electron-fixture" else a.family))
     else:
-        change(a.family, a.out)
+        change(a.family, a.out, a.page, [c for c in a.cases.split(',') if c] or None, a.settle)
 
 
 if __name__ == "__main__":

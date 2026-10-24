@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Signal</title>
+<style>
+  html, body { margin: 0; height: 100%; font-family: sans-serif; }
+  #app { display: flex; height: 100vh; }
+  #left { width: 340px; border-right: 1px solid #888; display: flex; flex-direction: column; }
+  #right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .conv { display: block; width: 100%; text-align: left; padding: 8px; border: 0; border-bottom: 1px solid #ddd; background: none; font: inherit; }
+  .msg-row { padding: 6px 10px; border-bottom: 1px solid #eee; }
+  #composer { border: 1px solid #888; margin: 8px; padding: 6px; min-height: 2em; }
+</style></head>
+<body>
+<!--
+  A Signal Desktop shaped fixture app (no account, no network): the ARIA structure follows the live
+  tree and the renderer bundle as documented in docs/reports/signal-orca-vs-gorca.md (sections 2
+  and 3) and tests/web/chr0/pages/signal-like.html. Every name and text is synthetic. The view is
+  chosen by ?view= : conversations (list, no chat open), chat (a conversation with the message
+  list and the composer), compose (composer with a draft and the send button), search (results).
+-->
+<div id="app-container"><div id="app">
+<div id="left">
+  <nav>
+    <button type="button" aria-label="Menu">menu</button>
+    <div role="tablist" aria-orientation="vertical">
+      <div role="tab" id="tab-chats" aria-selected="true" aria-controls="panel-chats" tabindex="0">Chats</div>
+      <div role="tab" id="tab-calls" aria-selected="false" tabindex="-1">Calls</div>
+      <div role="tab" id="tab-stories" aria-selected="false" tabindex="-1">Stories</div>
+      <div role="tab" id="tab-settings" aria-selected="false" tabindex="-1">Settings</div>
+    </div>
+  </nav>
+  <div role="tabpanel" id="panel-chats" aria-labelledby="tab-chats" style="display:flex;flex-direction:column;flex:1;min-height:0">
+    <div><nav aria-label="Left pane header">
+      <h1 aria-live="assertive" aria-relevant="additions text">Chats</h1>
+      <button type="button" aria-label="Compose new message">compose</button>
+      <button type="button" aria-label="Chat actions" aria-haspopup="menu" aria-expanded="false">actions</button>
+      <nav><div><i></i><input type="text" aria-label="Search" placeholder="Search" id="search"></div></nav>
+    </nav></div>
+    <div id="leftbody" aria-live="polite" aria-relevant="additions text" role="presentation" style="overflow:auto;flex:1"></div>
+  </div>
+</div>
+<div id="right"></div>
+</div></div>
+<script>
+"use strict";
+var view = (/[?&]view=([a-z]+)/.exec(location.search) || [0, "conversations"])[1];
+var names = ["Alex Morgan", "Note to Self", "Family", "Priya Shah", "Work chat", "Sam Rivera", "Book club", "Dana Lee"];
+var lasts = ["See you at 6", "Buy milk", "Dinner on Sunday?", "Sent a photo", "Standup moved to 10", "Thanks!", "Chapter 7 next week", "Call me when free"];
+var times = ["10:42", "9:15", "Yesterday", "Yesterday", "Mon", "Mon", "Sun", "Oct 20"];
+var unread = [2, 0, 5, 0, 1, 0, 0, 0];
+
+function el(tag, attrs, html) {
+  var e = document.createElement(tag);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  if (html) e.innerHTML = html;
+  return e;
+}
+
+// ---- left body: conversation grid, or search results ----
+var lb = document.getElementById("leftbody");
+if (view === "search") {
+  document.getElementById("search").value = "dinner";
+  var res = el("div", { role: "presentation" });
+  res.appendChild(el("h2", {}, "Contacts"));
+  var ul = el("div", { role: "listbox", "aria-label": "Contacts" });
+  [["Family", "group"], ["Dana Lee", "contact"]].forEach(function (c, i) {
+    var o = el("div", { role: "option", "aria-selected": i === 0 ? "true" : "false", tabindex: i === 0 ? "0" : "-1" });
+    o.innerHTML = '<div><span>' + c[0] + '</span><span>' + c[1] + '</span></div>';
+    ul.appendChild(o);
+  });
+  res.appendChild(ul);
+  res.appendChild(el("h2", {}, "Messages"));
+  var ml = el("div", { role: "listbox", "aria-label": "Messages" });
+  ["Dinner on Sunday?", "Dinner was great", "Who cooks dinner?"].forEach(function (t, i) {
+    var o = el("div", { role: "option", "aria-selected": "false", tabindex: "-1" });
+    o.innerHTML = '<div><span>' + names[i] + '</span><time>10:0' + i + '</time></div><div>' + t + '</div>';
+    ml.appendChild(o);
+  });
+  res.appendChild(ml);
+  lb.appendChild(res);
+} else {
+  var grid = el("div", { role: "grid", "aria-label": "Conversations" });
+  var rows = el("div", { role: "row" });
+  names.forEach(function (n, i) {
+    var r = el("span", { role: "row" });
+    var cell = el("span", { role: "gridcell" });
+    var label = n + (unread[i] ? ", " + unread[i] + " unread" : "") + ", " + lasts[i] + ", " + times[i];
+    var b = el("button", { type: "button", class: "conv", tabindex: i === 0 ? "0" : "-1", "aria-label": label });
+    b.innerHTML = '<div><div><div class="avatar"></div>' + (unread[i] ? '<span aria-hidden="true">' + unread[i] + '</span>' : '') +
+      '</div><div><span>' + n + '</span><time datetime="2026-10-24T10:4' + i + '">' + times[i] + '</time></div><div><span>' + lasts[i] + '</span></div></div>';
+    cell.appendChild(b); r.appendChild(cell); rows.appendChild(r);
+  });
+  grid.appendChild(rows);
+  lb.appendChild(grid);
+}
+
+// ---- right pane ----
+var right = document.getElementById("right");
+if (view === "conversations" || view === "search") {
+  right.innerHTML = '<div role="presentation"><h2>Welcome to Signal</h2><p>Select a conversation to start chatting.</p></div>';
+} else {
+  var head = el("div", { class: "ConversationView__header" });
+  head.innerHTML = '<button type="button" aria-label="Back">back</button><h2>Alex Morgan</h2>' +
+    '<button type="button" aria-label="Video call">video</button><button type="button" aria-label="Voice call">call</button>' +
+    '<button type="button" aria-label="More actions" aria-haspopup="menu" aria-expanded="false">more</button>';
+  right.appendChild(head);
+  var pane = el("div", { class: "ConversationView__pane", style: "display:flex;flex-direction:column;flex:1;min-height:0" });
+  var tl = el("div", { "aria-live": "polite", class: "ConversationView__timeline", style: "flex:1;display:flex;min-height:0" });
+  var tlp = el("div", { role: "presentation", tabindex: "-1", id: "timeline", style: "flex:1;display:flex;min-height:0" });
+  var main = el("main", { style: "overflow:auto;flex:1" });
+  var list = el("div", { role: "list" });
+  var msgs = [
+    ["Alex Morgan", "Are we still on for tonight?", "10:31", "Message"],
+    ["Me", "Yes, see you at 6.", "10:32", "Message"],
+    ["Alex Morgan", "Great. I booked the corner table.", "10:33", "Message"],
+    ["Alex Morgan", "Photo of the menu", "10:34", "Message with attachment"],
+    ["Me", "Looks good, I will have the pasta.", "10:36", "Message"],
+    ["Alex Morgan", "https://example.org/menu  Menu - Corner Table", "10:37", "Message with link preview"],
+    ["Me", "Running a few minutes late.", "10:40", "Message"],
+    ["Alex Morgan", "No problem, take your time.", "10:42", "Message"]
+  ];
+  var idx = 0;
+  function sep(text) {
+    var d = el("div", { role: "listitem" });
+    d.appendChild(el("div", { role: "separator", "aria-label": text }, '<time>' + text + '</time>'));
+    list.appendChild(d);
+  }
+  sep("Today");
+  msgs.forEach(function (m) {
+    if (idx === 6) {
+      var u = el("div", { role: "listitem" });
+      u.appendChild(el("div", { role: "status" }, "2 unread messages"));
+      list.appendChild(u);
+    }
+    var li = el("div", { role: "listitem", "data-message-id": "m" + idx });
+    var art = el("div", { role: "article", "aria-labelledby": "message-accessibility-contents:m" + idx, "aria-roledescription": m[3] });
+    var row = el("div", { class: "module-message msg-row", tabindex: "0", role: "row", "data-message-id": "m" + idx });
+    var outer = el("div");
+    var cont = el("div", { id: "message-accessibility-contents:m" + idx, role: "row", tabindex: "-1" });
+    var extra = "";
+    if (m[3].indexOf("attachment") >= 0) extra = '<div><img alt="Attached image, menu.jpg" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="></div>';
+    if (m[3].indexOf("link") >= 0) extra = '<div><a href="https://example.org/menu">Menu - Corner Table</a></div>';
+    cont.innerHTML = '<div class="author"><span>' + m[0] + '</span></div><div dir="auto">' + extra +
+      '<div class="module-message__text">' + m[1] + '</div><div><time>' + m[2] + '</time>' +
+      (m[0] === "Me" ? '<span role="img" aria-label="Read">read</span>' : '') + '</div></div>';
+    var react = el("button", { type: "button", "aria-label": "React to message", tabindex: "-1" }, "react");
+    var reply = el("button", { type: "button", "aria-label": "Reply to message", tabindex: "-1" }, "reply");
+    outer.appendChild(cont); outer.appendChild(react); outer.appendChild(reply);
+    if (idx === 2) outer.appendChild(el("button", { type: "button", "aria-label": "1 reaction: thumbs up, from Me", tabindex: "-1" }, "+1"));
+    row.appendChild(outer); art.appendChild(row); li.appendChild(art); list.appendChild(li);
+    idx++;
+  });
+  main.appendChild(list); tlp.appendChild(main); tl.appendChild(tlp); pane.appendChild(tl);
+  pane.appendChild(el("div", { role: "status", "aria-live": "polite" }, view === "compose" ? "" : "Alex Morgan is typing"));
+  var tools = el("div", { role: "toolbar", "aria-label": "Composer tools" },
+    '<button type="button" aria-label="Add attachment">+</button><button type="button" aria-label="Emoji">:)</button>' +
+    '<button type="button" aria-label="Stickers">st</button>');
+  var comp = el("div", { id: "composer", role: "textbox", "aria-multiline": "true", "aria-label": "Send a message", contenteditable: "true", tabindex: "0", "data-supertab": "true" });
+  if (view === "compose") comp.textContent = "On my way, see you in ten minutes";
+  var send = view === "compose"
+    ? el("button", { type: "button", "aria-label": "Send message" }, "send")
+    : el("button", { type: "button", "aria-label": "Record voice note" }, "mic");
+  pane.appendChild(tools); pane.appendChild(comp); pane.appendChild(send);
+  right.appendChild(pane);
+  window.addEventListener("load", function () {
+    setTimeout(function () {
+      var target = view === "compose" ? comp : list.querySelector('[data-message-id="m7"] .msg-row');
+      if (target) target.focus();
+    }, 500);
+  });
+}
+</script>
+</body>
+</html>
