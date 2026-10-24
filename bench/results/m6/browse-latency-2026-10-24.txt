@@ -1,0 +1,24 @@
+Preparing worktree (detached HEAD 19c79c71)
+Updating files:  60% (8404/13949)Updating files:  61% (8509/13949)Updating files:  62% (8649/13949)Updating files:  63% (8788/13949)Updating files:  64% (8928/13949)Updating files:  65% (9067/13949)Updating files:  66% (9207/13949)Updating files:  67% (9346/13949)Updating files:  68% (9486/13949)Updating files:  69% (9625/13949)Updating files:  70% (9765/13949)Updating files:  71% (9904/13949)Updating files:  72% (10044/13949)Updating files:  73% (10183/13949)Updating files:  74% (10323/13949)Updating files:  75% (10462/13949)Updating files:  76% (10602/13949)Updating files:  77% (10741/13949)Updating files:  78% (10881/13949)Updating files:  79% (11020/13949)Updating files:  80% (11160/13949)Updating files:  81% (11299/13949)Updating files:  82% (11439/13949)Updating files:  83% (11578/13949)Updating files:  84% (11718/13949)Updating files:  85% (11857/13949)Updating files:  86% (11997/13949)Updating files:  87% (12136/13949)Updating files:  88% (12276/13949)Updating files:  89% (12415/13949)Updating files:  90% (12555/13949)Updating files:  91% (12694/13949)Updating files:  92% (12834/13949)Updating files:  93% (12973/13949)Updating files:  94% (13113/13949)Updating files:  95% (13252/13949)Updating files:  96% (13392/13949)Updating files:  97% (13531/13949)Updating files:  98% (13671/13949)Updating files:  99% (13810/13949)Updating files: 100% (13949/13949)Updating files: 100% (13949/13949), done.
+governor: performance load: 7.01 8.97 9.58
+round 1 done
+round 2 done
+round 3 done
+round 4 done
+round 5 done
+series                                     legacy p99      new p99      delta
+10000 BR1 next char                            4223ns       4721ns      498ns ok
+10000 BR1 next line                            6350ns       6851ns      501ns ok
+10000 BR1 next page                           23669ns      22853ns     -816ns ok
+10000 BR1 next word                            5195ns       5555ns      360ns ok
+10000 W1 next heading                          5348ns       5790ns      442ns ok
+10000 W1 next link                             4266ns       4499ns      233ns ok
+10000 top/bottom                              10075ns      10064ns      -11ns ok
+100000 BR1 next char                           4016ns       4538ns      522ns ok
+100000 BR1 next line                           5343ns       5750ns      407ns ok
+100000 BR1 next page                          20765ns      22358ns     1593ns ok
+100000 BR1 next word                           5034ns       5345ns      311ns ok
+100000 W1 next heading                         5439ns       5893ns      454ns ok
+100000 W1 next link                            3842ns       4205ns      363ns ok
+100000 top/bottom                              8108ns       9705ns     1597ns ok
+browse latency: PASS

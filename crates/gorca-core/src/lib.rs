@@ -28,7 +28,6 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 
 mod app_actor;
-mod aria;
 mod browse;
 mod builtin_ext;
 mod commands;

@@ -906,10 +906,12 @@ fn the_change_utterance_of_every_recorded_state_flip_is_golden() {
     check("change", "ru", gorca_present::Lang::Ru);
 }
 
-/// The records the cut-over gate compared when it passed (`cargo xtask cutover focus` / `change`,
-/// 8 of 8 families, en and ru): a golden file that holds fewer has lost coverage.
-const GATE_FOCUS_RECORDS: usize = 6497;
-const GATE_CHANGE_RECORDS: usize = 3750;
+/// The records the goldens hold per language. The cut-over gate compared 6497 (focus) and 3750
+/// (change) when it passed (`cargo xtask cutover focus` / `change`, 8 of 8 families, en and ru);
+/// the rest are the web pages recorded after it (M8b widgets and forms, error messages). A golden
+/// file that holds fewer has lost coverage.
+const GATE_FOCUS_RECORDS: usize = 6969;
+const GATE_CHANGE_RECORDS: usize = 4154;
 
 #[test]
 fn the_goldens_hold_every_record_the_gate_compared() {

@@ -1,0 +1,57 @@
+39137684081703 said "M8 Telegram voice message — Mozilla Firefox, M8 Telegram voice message, document"
+39137780573328 said "browse mode, heading level 1, Chat with Alice"
+39138740054417 said "Chat with Alice"
+39139079038225 said "M8 Telegram voice message — Mozilla Firefox, panel"
+39139447145397 said "browse mode, button"
+39141412093227 said "Play audio, button"
+39141551555542 said "Play icon label, button"
+39141686962851 said "Svg title play, button"
+39141823796622 said "Play by title, button"
+39145831462683 said "Voice message six 0:21, button"
+39147837278580 said "0:30, button"
+39149898737569 said "Play eight 0:44, button"
+39150048568146 said "Play eight, button"
+39152051921530 said "button"
+39154067512899 said "Play late ten, button"
+39156138949856 said "button"
+39156142281695 said "Play after 0, button"
+bus 4 /org/a11y/atspi/accessible/59 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/59 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/62 TextChanged:insert
+bus 4 /org/a11y/atspi/accessible/60 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:insert/system
+bus 2 /org/a11y/atspi/accessible/69 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/71 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/73 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/76 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/77 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/78 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/79 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/69 Focus:
+bus 1 /org/a11y/atspi/accessible/69 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/131 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/95 Focus:
+bus 1 /org/a11y/atspi/accessible/95 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/99 Focus:
+bus 1 /org/a11y/atspi/accessible/99 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/101 Focus:
+bus 1 /org/a11y/atspi/accessible/101 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/103 Focus:
+bus 1 /org/a11y/atspi/accessible/103 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/105 Focus:
+bus 1 /org/a11y/atspi/accessible/105 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/107 Focus:
+bus 1 /org/a11y/atspi/accessible/107 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/109 Focus:
+bus 1 /org/a11y/atspi/accessible/109 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/111 Focus:
+bus 1 /org/a11y/atspi/accessible/111 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/124 Focus:
+bus 1 /org/a11y/atspi/accessible/124 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/112 Focus:
+bus 1 /org/a11y/atspi/accessible/112 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/114 Focus:
+bus 1 /org/a11y/atspi/accessible/114 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/116 Focus:
+bus 1 /org/a11y/atspi/accessible/116 StateChanged:focused

@@ -360,9 +360,28 @@ pub(super) fn flag(a: Aspect, role: Role, detail: &str) {
     );
 }
 
+#[cfg(test)]
+thread_local! {
+    static SUPPRESSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `f` without the agreement check (test documents whose entries come from their legacy
+/// fields cannot disagree with themselves in a way that means anything).
+#[cfg(test)]
+pub(crate) fn unchecked<R>(f: impl FnOnce() -> R) -> R {
+    let was = SUPPRESSED.with(|c| c.replace(true));
+    let r = f();
+    SUPPRESSED.with(|c| c.set(was));
+    r
+}
+
 /// Compare one node's legacy values with its fused entry: count, log (capped) and, in a debug
 /// build, assert on a disagreement that is not a listed deviation.
 pub fn check(n: &SrcNode, flags: NodeFlags, level: u8, e: &SemEntry) {
+    #[cfg(test)]
+    if SUPPRESSED.with(std::cell::Cell::get) {
+        return;
+    }
     CHECKED.fetch_add(1, Ordering::Relaxed);
     for a in compare(n, flags, level, e) {
         note(n, a, e);

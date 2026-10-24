@@ -43,9 +43,8 @@ const EXEMPT: &[&str] = &[
     "crates/gorca-connector-atspi/src/cutover_gate_tests.rs",
     // Test-only module (`#[cfg(test)] mod golden_tests`): `GORCA_BLESS=1` rewrites the golden files.
     "crates/gorca-connector-atspi/src/golden_tests.rs",
-    // Test-only module (`#[cfg(test)] mod gate_tests` of browse): the gate passes surface, output
-    // path, language and shuffle seed in by environment, because `xtask cutover` runs the test binary.
-    "crates/gorca-core/src/browse/gate_tests.rs",
+    // Test-only module (`#[cfg(test)] mod golden_tests` of browse): `GORCA_BLESS=1` rewrites the files.
+    "crates/gorca-core/src/browse/golden_tests.rs",
     "xtask/",
 ];
 

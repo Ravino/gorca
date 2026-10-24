@@ -13,7 +13,6 @@
 pub mod commands;
 pub mod cursor;
 pub mod forms;
-pub mod ir;
 pub mod present;
 pub mod sayall;
 pub mod selmirror;
@@ -775,7 +774,7 @@ impl BrowseState {
 mod tests;
 
 #[cfg(test)]
-mod latency;
+mod golden_tests;
 
 #[cfg(test)]
-mod gate_tests;
+mod latency;

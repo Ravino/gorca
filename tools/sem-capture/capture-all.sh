@@ -14,6 +14,8 @@ ROOT=$(cd "$HERE/../.." && pwd)
 FX=$ROOT/tests/fixtures/sem
 # M8 corpus pages captured next to the A2 pages (page name gets an "m8-" prefix)
 M8PAGES="forms tables landmarks live hidden quicknav flat shadow chatlist iframes"
+# M8b pages (APG widgets, forms with error messages), captured as "m8b-<page>"
+M8BPAGES="widgets forms"
 
 if [ "${1:-}" = "__inner" ]; then
   shift
@@ -26,9 +28,9 @@ if [ "${1:-}" = "__inner" ]; then
         timeout -k 5 180 /usr/bin/python3 -I "$HERE/capture.py" --engine gtk4 --page "$pg" --out "$OUT/gtk4" || rc=1
       done
     else
-      for f in "$FX"/pages/*.html $(for m in $M8PAGES; do echo "$ROOT/tests/web/m8/pages/$m.html"; done); do
+      for f in "$FX"/pages/*.html $(for m in $M8PAGES; do echo "$ROOT/tests/web/m8/pages/$m.html"; done) $(for m in $M8BPAGES; do echo "$ROOT/tests/web/m8b/pages/$m.html"; done); do
         pg=$(basename "$f" .html)
-        case "$f" in */tests/web/m8/pages/*) pg="m8-$pg" ;; esac
+        case "$f" in */tests/web/m8/pages/*) pg="m8-$pg" ;; */tests/web/m8b/pages/*) pg="m8b-$pg" ;; esac
         [ -n "$PAGES" ] && ! echo " $PAGES " | grep -q " $pg " && continue
         early=""
         # Firefox 153 ESR dies about a second after a date/time/datetime-local input is exposed:

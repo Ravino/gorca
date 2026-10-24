@@ -13,20 +13,6 @@
 # path it exercises).
 
 
-aria-module | crates/gorca-core/src/lib.rs | 1 | 2026-11-21 | M22b2
-aria-words | crates/gorca-core/src/browse/commands.rs | 1 | 2026-11-21 | M22b2
-aria-words | crates/gorca-core/src/browse/present.rs | 13 | 2026-11-21 | M22b2
-attrs-field | crates/gorca-core/src/aria.rs | 1 | 2026-11-21 | M22b2
-attrs-field | crates/gorca-core/src/browse/commands.rs | 3 | 2026-11-21 | M22b2
-attrs-field | crates/gorca-core/src/browse/present.rs | 4 | 2026-11-21 | M22b2
-meta-field | crates/gorca-core/src/browse/commands.rs | 3 | 2026-11-21 | M22b2
-meta-field | crates/gorca-core/src/browse/present.rs | 10 | 2026-11-21 | M22b2
-role-spoken | crates/gorca-core/src/browse/present.rs | 3 | 2026-11-21 | M22b2
-state-words | crates/gorca-core/src/aria.rs | 1 | 2026-11-21 | M22b2
-state-words | crates/gorca-core/src/browse/present.rs | 1 | 2026-11-21 | M22b2
-web-attrs | crates/gorca-core/src/aria.rs | 6 | 2026-11-21 | M22b2
-web-attrs | crates/gorca-core/src/browse/commands.rs | 2 | 2026-11-21 | M22b2
-web-attrs | crates/gorca-core/src/browse/present.rs | 5 | 2026-11-21 | M22b2
 
 role-spoken | crates/gorca-core/src/review/cluster.rs | 1 | 2026-11-28 | M22b3
 role-spoken | crates/gorca-core/src/present/utterance.rs | 1 | 2026-11-28 | M22b3

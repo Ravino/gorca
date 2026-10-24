@@ -1,0 +1,50 @@
+# e2e-m8 b2-m8-ff-fltg
+# utc=2026-10-24T10:03:39Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=7.22 7.48 8.05 1/1763 2079817
+# git_rev=960ced6f
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=b2-m8-ff-fltg
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/ab23-gorca-final2
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# quick=false
+# loadavg_before=5.59 7.62 8.23 3/1788 2074842
+# loadavg_end=7.22 7.48 8.05 1/1763 2079814
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-MB MB.b.open P0 FAIL: heard "Sort, menu" 
+# note1=M8-MB MB.a.open P0 FAIL: heard "Actions, menu" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-FL.fail                 daemon/voicego            0            0            0  3 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-FL.gap                  daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-FL.p0_not_pass          daemon/voicego            0            0            0  3                  info   [steps]
+M8-FL.pass                 daemon/voicego           11           11           11  3                  info   [steps]
+M8-FL.steps                daemon/voicego           11           11           11  3                  info   [steps]
+M8-FL.xfail                daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-FL.xpass                daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-TG.fail                 daemon/voicego            0            0            0  3 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-TG.gap                  daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-TG.p0_not_pass          daemon/voicego            0            0            0  3                  info   [steps]
+M8-TG.pass                 daemon/voicego           27           27           27  3                  info   [steps]
+M8-TG.steps                daemon/voicego           27           27           27  3                  info   [steps]
+M8-TG.xfail                daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-TG.xpass                daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-MB.fail                 daemon/voicego            1            0            1  3 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-MB.gap                  daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-MB.p0_not_pass          daemon/voicego            1            0            1  3                  info   [steps]
+M8-MB.pass                 daemon/voicego           10           10           11  3                  info   [steps]
+M8-MB.steps                daemon/voicego           11           11           11  3                  info   [steps]
+M8-MB.xfail                daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-MB.xpass                daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]

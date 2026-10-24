@@ -327,6 +327,37 @@ chromium/disabled	65	focus	focus-web	Role:абзац
 chromium/disabled	66	focus	focus-web	Text:Order | Role:кнопка | State:недоступно
 chromium/disabled	67	focus	focus-web	Text:Terms | Role:ссылка | State:недоступно
 chromium/disabled	68	focus	focus-web	Text:Terms | Role:текст
+chromium/errors	0	focus	focus-web	Text:SEM errors | Role:документ
+chromium/errors	1	focus	focus-web	Role:ориентир
+chromium/errors	2	focus	focus-web	Text:Fields with error messages | Role:заголовок | Text:уровень 1
+chromium/errors	3	focus	focus-web	Text:Fields with error messages | Role:текст
+chromium/errors	4	focus	focus-web	Role:абзац
+chromium/errors	5	focus	focus-web	Role:текст
+chromium/errors	6	focus	focus-web	Text:Email | Role:текст
+chromium/errors	7	focus	focus-web	Text:Email | Role:поле ввода | State:неверный ввод
+chromium/errors	8	focus	focus-web	Role:панель
+chromium/errors	9	focus	focus-web	Text:Enter an address like name@example.org | Role:текст
+chromium/errors	10	focus	focus-web	Role:абзац
+chromium/errors	11	focus	focus-web	Role:текст
+chromium/errors	12	focus	focus-web	Text:Age | Role:текст
+chromium/errors	13	focus	focus-web	Text:Age | Role:поле ввода | State:неверный ввод | Description:Whole years, digits only
+chromium/errors	14	focus	focus-web	Role:панель
+chromium/errors	15	focus	focus-web	Text:Whole years, digits only | Role:текст
+chromium/errors	16	focus	focus-web	Role:абзац
+chromium/errors	17	focus	focus-web	Role:текст
+chromium/errors	18	focus	focus-web	Text:Postal code | Role:текст
+chromium/errors	19	focus	focus-web	Text:Postal code | Role:поле ввода | State:обязательное
+chromium/errors	20	focus	focus-web	Role:абзац
+chromium/errors	21	focus	focus-web	Role:текст
+chromium/errors	22	focus	focus-web	Text:Password | Role:текст
+chromium/errors	23	focus	focus-web	Text:Password | Role:поле ввода пароля | State:неверный ввод | Description:At least eight characters
+chromium/errors	24	focus	focus-web	Role:панель
+chromium/errors	25	focus	focus-web	Text:At least eight characters | Role:текст
+chromium/errors	26	focus	focus-web	Role:текст
+chromium/errors	27	focus	focus-web	Role:панель
+chromium/errors	28	focus	focus-web	Text:Too short | Role:текст
+chromium/errors	29	focus	focus-web	Role:уведомление
+chromium/errors	30	focus	focus-web	Text:2 fields need attention | Role:текст
 chromium/exotic-color	0	focus	focus-web	Text:SEM exotic-color | Role:документ
 chromium/exotic-color	1	focus	focus-web	Role:ориентир
 chromium/exotic-color	2	focus	focus-web	Text:Exotic input color | Role:заголовок | Text:уровень 1
@@ -1300,6 +1331,256 @@ chromium/m8-tables	135	focus	focus-web	Text:After tables | Role:заголово
 chromium/m8-tables	136	focus	focus-web	Text:After tables | Role:текст
 chromium/m8-tables	137	focus	focus-web	Role:абзац
 chromium/m8-tables	138	focus	focus-web	Text:Last paragraph. | Role:текст
+chromium/m8b-forms	0	focus	focus-web	Text:M8b Forms | Role:документ
+chromium/m8b-forms	1	focus	focus-web	Text:M8b form states | Role:заголовок | Text:уровень 1
+chromium/m8b-forms	2	focus	focus-web	Text:M8b form states | Role:текст
+chromium/m8b-forms	3	focus	focus-web	Text:Signup | Role:ориентир
+chromium/m8b-forms	4	focus	focus-web	Role:абзац
+chromium/m8b-forms	5	focus	focus-web	Role:текст
+chromium/m8b-forms	6	focus	focus-web	Text:Email address | Role:текст
+chromium/m8b-forms	7	focus	focus-web	Text:Email address | Role:поле ввода | State:неверный ввод
+chromium/m8b-forms	8	focus	focus-web	Role:панель
+chromium/m8b-forms	9	focus	focus-web	Text:Enter an address like name@example.com | Role:текст
+chromium/m8b-forms	10	focus	focus-web	Role:абзац
+chromium/m8b-forms	11	focus	focus-web	Role:текст
+chromium/m8b-forms	12	focus	focus-web	Text:User name | Role:текст
+chromium/m8b-forms	13	focus	focus-web	Text:User name | Role:поле ввода | Description:At least six characters
+chromium/m8b-forms	14	focus	focus-web	Role:панель
+chromium/m8b-forms	15	focus	focus-web	Text:At least six characters | Role:текст
+chromium/m8b-forms	16	focus	focus-web	Role:абзац
+chromium/m8b-forms	17	focus	focus-web	Role:текст
+chromium/m8b-forms	18	focus	focus-web	Text:Password field | Role:текст
+chromium/m8b-forms	19	focus	focus-web	Text:Password field | Role:поле ввода | State:неверный ввод | Description:Use a long password
+chromium/m8b-forms	20	focus	focus-web	Role:панель
+chromium/m8b-forms	21	focus	focus-web	Text:Use a long password | Role:текст
+chromium/m8b-forms	22	focus	focus-web	Role:абзац
+chromium/m8b-forms	23	focus	focus-web	Role:текст
+chromium/m8b-forms	24	focus	focus-web	Text:Required name | Role:текст
+chromium/m8b-forms	25	focus	focus-web	Text:Required name | Role:поле ввода | State:обязательное
+chromium/m8b-forms	26	focus	focus-web	Role:текст
+chromium/m8b-forms	27	focus	focus-web	Text:Aria required name | Role:текст
+chromium/m8b-forms	28	focus	focus-web	Text:Aria required name | Role:поле ввода | State:обязательное
+chromium/m8b-forms	29	focus	focus-web	Role:абзац
+chromium/m8b-forms	30	focus	focus-web	Role:текст
+chromium/m8b-forms	31	focus	focus-web	Text:Read only name | Role:текст
+chromium/m8b-forms	32	focus	focus-web	Text:Read only name | Role:поле ввода | State:недоступно | State:только чтение
+chromium/m8b-forms	33	focus	focus-web	Role:текст
+chromium/m8b-forms	34	focus	focus-web	Text:Native read only | Role:текст
+chromium/m8b-forms	35	focus	focus-web	Text:Native read only | Role:поле ввода | State:недоступно | State:только чтение
+chromium/m8b-forms	36	focus	focus-web	Role:абзац
+chromium/m8b-forms	37	focus	focus-web	Role:текст
+chromium/m8b-forms	38	focus	focus-web	Text:Disabled name | Role:текст
+chromium/m8b-forms	39	focus	focus-web	Text:Disabled name | Role:поле ввода | State:недоступно
+chromium/m8b-forms	40	focus	focus-web	Text:Aria disabled button | Role:кнопка | State:недоступно
+chromium/m8b-forms	41	focus	focus-web	Text:Native disabled button | Role:кнопка | State:недоступно
+chromium/m8b-forms	42	focus	focus-web	Role:абзац
+chromium/m8b-forms	43	focus	focus-web	Text:Accept terms | Role:флажок | State:не отмечено | State:неверный ввод | Description:You must accept to continue
+chromium/m8b-forms	44	focus	focus-web	Role:текст
+chromium/m8b-forms	45	focus	focus-web	Role:панель
+chromium/m8b-forms	46	focus	focus-web	Text:You must accept to continue | Role:текст
+chromium/m8b-forms	47	focus	focus-web	Text:Size | Role:группа | State:обязательное
+chromium/m8b-forms	48	focus	focus-web	Text:Small size | Role:радиокнопка | State:отмечено
+chromium/m8b-forms	49	focus	focus-web	Text:Large size | Role:радиокнопка | State:не отмечено
+chromium/m8b-forms	50	focus	focus-web	Role:абзац
+chromium/m8b-forms	51	focus	focus-web	Role:текст
+chromium/m8b-forms	52	focus	focus-web	Text:Colour pick | Role:текст
+chromium/m8b-forms	53	focus	focus-web	Text:Colour pick | Role:комбинированный список | State:свёрнуто | Description:Pick one
+chromium/m8b-forms	54	focus	focus-web	Role:меню
+chromium/m8b-forms	55	focus	focus-web	Text:Red | Role:пункт меню
+chromium/m8b-forms	56	focus	focus-web	Text:Green | Role:пункт меню
+chromium/m8b-forms	57	focus	focus-web	Role:панель
+chromium/m8b-forms	58	focus	focus-web	Text:Pick one | Role:текст
+chromium/m8b-forms	59	focus	focus-web	Role:абзац
+chromium/m8b-forms	60	focus	focus-web	Role:текст
+chromium/m8b-forms	61	focus	focus-web	Text:Notes area | Role:текст
+chromium/m8b-forms	62	focus	focus-web	Text:Notes area | Role:поле ввода | Description:Optional notes
+chromium/m8b-forms	63	focus	focus-web	Role:панель
+chromium/m8b-forms	64	focus	focus-web	Text:Optional notes | Role:текст
+chromium/m8b-forms	65	focus	focus-web	Role:абзац
+chromium/m8b-forms	66	focus	focus-web	Text:Submit form | Role:кнопка | Description:Sends the signup
+chromium/m8b-forms	67	focus	focus-web	Role:панель
+chromium/m8b-forms	68	focus	focus-web	Text:Sends the signup | Role:текст
+chromium/m8b-forms	69	focus	focus-web	Role:абзац
+chromium/m8b-forms	70	focus	focus-web	Text:End of forms page. | Role:текст
+chromium/m8b-widgets	0	focus	focus-web	Text:M8b Widgets | Role:документ
+chromium/m8b-widgets	1	focus	focus-web	Text:M8b APG widgets | Role:заголовок | Text:уровень 1
+chromium/m8b-widgets	2	focus	focus-web	Text:M8b APG widgets | Role:текст
+chromium/m8b-widgets	3	focus	focus-web	Text:Primary | Role:ориентир
+chromium/m8b-widgets	4	focus	focus-web	Role:список
+chromium/m8b-widgets	5	focus	focus-web	Text:• Home link | Role:элемент списка
+chromium/m8b-widgets	6	focus	focus-web	Text:• | Role:текст
+chromium/m8b-widgets	7	focus	focus-web	Text:Home link | Role:ссылка
+chromium/m8b-widgets	8	focus	focus-web	Text:Home link | Role:текст
+chromium/m8b-widgets	9	focus	focus-web	Text:• Docs link | Role:элемент списка
+chromium/m8b-widgets	10	focus	focus-web	Text:• | Role:текст
+chromium/m8b-widgets	11	focus	focus-web	Text:Docs link | Role:ссылка
+chromium/m8b-widgets	12	focus	focus-web	Text:Docs link | Role:текст
+chromium/m8b-widgets	13	focus	focus-web	Text:Names | Role:ориентир
+chromium/m8b-widgets	14	focus	focus-web	Text:Names | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	15	focus	focus-web	Text:Names | Role:текст
+chromium/m8b-widgets	16	focus	focus-web	Role:абзац
+chromium/m8b-widgets	17	focus	focus-web	Text:Close dialog | Role:кнопка
+chromium/m8b-widgets	18	focus	focus-web	Text:Search the site | Role:кнопка
+chromium/m8b-widgets	19	focus	focus-web	Text:Save draft | Role:кнопка
+chromium/m8b-widgets	20	focus	focus-web	Text:Send message | Role:кнопка
+chromium/m8b-widgets	21	focus	focus-web	Role:панель
+chromium/m8b-widgets	22	focus	focus-web	Text:Send | Role:текст
+chromium/m8b-widgets	23	focus	focus-web	Role:текст
+chromium/m8b-widgets	24	focus	focus-web	Role:панель
+chromium/m8b-widgets	25	focus	focus-web	Text:message | Role:текст
+chromium/m8b-widgets	26	focus	focus-web	Text:Title only | Role:кнопка
+chromium/m8b-widgets	27	focus	focus-web	Text:Read more about pandas | Role:ссылка
+chromium/m8b-widgets	28	focus	focus-web	Text:Read more | Role:текст
+chromium/m8b-widgets	29	focus	focus-web	Role:текст
+chromium/m8b-widgets	30	focus	focus-web	Text:Company logo | Role:изображение
+chromium/m8b-widgets	31	focus	focus-web	Role:абзац
+chromium/m8b-widgets	32	focus	focus-web	Role:панель
+chromium/m8b-widgets	33	focus	focus-web	Text:Shipping | Role:текст
+chromium/m8b-widgets	34	focus	focus-web	Role:текст
+chromium/m8b-widgets	35	focus	focus-web	Role:панель
+chromium/m8b-widgets	36	focus	focus-web	Text:address | Role:текст
+chromium/m8b-widgets	37	focus	focus-web	Text:Shipping address | Role:поле ввода
+chromium/m8b-widgets	38	focus	focus-web	Text:Quantity | Role:поле ввода
+chromium/m8b-widgets	39	focus	focus-web	Text:Tabs demo | Role:ориентир
+chromium/m8b-widgets	40	focus	focus-web	Text:Tabs | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	41	focus	focus-web	Text:Tabs | Role:текст
+chromium/m8b-widgets	42	focus	focus-web	Text:Entertainment | Role:панель вкладок
+chromium/m8b-widgets	43	focus	focus-web	Text:Nils Frahm | Role:вкладка | State:выделено
+chromium/m8b-widgets	44	focus	focus-web	Text:Agnes Obel | Role:вкладка
+chromium/m8b-widgets	45	focus	focus-web	Text:Joke | Role:вкладка
+chromium/m8b-widgets	46	focus	focus-web	Text:Nils Frahm | Role:страница свойств
+chromium/m8b-widgets	47	focus	focus-web	Role:абзац
+chromium/m8b-widgets	48	focus	focus-web	Text:Nils Frahm is a German musician. | Role:текст
+chromium/m8b-widgets	49	focus	focus-web	Text:Switch demo | Role:ориентир
+chromium/m8b-widgets	50	focus	focus-web	Text:Switch | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	51	focus	focus-web	Text:Switch | Role:текст
+chromium/m8b-widgets	52	focus	focus-web	Text:Notifications | Role:переключатель | State:включено
+chromium/m8b-widgets	53	focus	focus-web	Text:Dark mode | Role:переключатель | State:выключено
+chromium/m8b-widgets	54	focus	focus-web	Text:Tree demo | Role:ориентир
+chromium/m8b-widgets	55	focus	focus-web	Text:Tree | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	56	focus	focus-web	Text:Tree | Role:текст
+chromium/m8b-widgets	57	focus	focus-web	Text:Files | Role:дерево
+chromium/m8b-widgets	58	focus	focus-web	Text:Documents | Role:элемент дерева | State:развёрнуто | Text:уровень 1
+chromium/m8b-widgets	59	focus	focus-web	Text:• | Role:текст
+chromium/m8b-widgets	60	focus	focus-web	Text:Documents | Role:текст
+chromium/m8b-widgets	61	focus	focus-web	Role:группа
+chromium/m8b-widgets	62	focus	focus-web	Text:Report | Role:элемент дерева | Text:уровень 2
+chromium/m8b-widgets	63	focus	focus-web	Text:◦ | Role:текст
+chromium/m8b-widgets	64	focus	focus-web	Text:Report | Role:текст
+chromium/m8b-widgets	65	focus	focus-web	Text:Budget | Role:элемент дерева | Text:уровень 2
+chromium/m8b-widgets	66	focus	focus-web	Text:◦ | Role:текст
+chromium/m8b-widgets	67	focus	focus-web	Text:Budget | Role:текст
+chromium/m8b-widgets	68	focus	focus-web	Text:Pictures | Role:элемент дерева | State:свёрнуто | Text:уровень 1
+chromium/m8b-widgets	69	focus	focus-web	Text:• | Role:текст
+chromium/m8b-widgets	70	focus	focus-web	Text:Pictures | Role:текст
+chromium/m8b-widgets	71	focus	focus-web	Role:группа
+chromium/m8b-widgets	72	focus	focus-web	Text:Holiday | Role:элемент дерева | Text:уровень 2
+chromium/m8b-widgets	73	focus	focus-web	Text:◦ | Role:текст
+chromium/m8b-widgets	74	focus	focus-web	Text:Holiday | Role:текст
+chromium/m8b-widgets	75	focus	focus-web	Text:Combobox demo | Role:ориентир
+chromium/m8b-widgets	76	focus	focus-web	Text:Combobox | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	77	focus	focus-web	Text:Combobox | Role:текст
+chromium/m8b-widgets	78	focus	focus-web	Role:текст
+chromium/m8b-widgets	79	focus	focus-web	Text:Favourite fruit | Role:текст
+chromium/m8b-widgets	80	focus	focus-web	Text:Favourite fruit | Role:комбинированный список | State:свёрнуто
+chromium/m8b-widgets	81	focus	focus-web	Text:Toppings | Role:список
+chromium/m8b-widgets	82	focus	focus-web	Text:Cheese | Role:элемент списка
+chromium/m8b-widgets	83	focus	focus-web	Text:Olives | Role:элемент списка
+chromium/m8b-widgets	84	focus	focus-web	Text:Menu button demo | Role:ориентир
+chromium/m8b-widgets	85	focus	focus-web	Text:Menu button | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	86	focus	focus-web	Text:Menu button | Role:текст
+chromium/m8b-widgets	87	focus	focus-web	Text:Actions | Role:кнопка | State:свёрнуто | State:подменю
+chromium/m8b-widgets	88	focus	focus-web	Text:Actions menu | Role:меню
+chromium/m8b-widgets	89	focus	focus-web	Text:Copy | Role:пункт меню
+chromium/m8b-widgets	90	focus	focus-web	Text:Word wrap | Role:пункт меню с флажком | State:отмечено
+chromium/m8b-widgets	91	focus	focus-web	Text:Small | Role:пункт меню с радиокнопкой | State:отмечено
+chromium/m8b-widgets	92	focus	focus-web	Text:Large | Role:пункт меню с радиокнопкой | State:не отмечено
+chromium/m8b-widgets	93	focus	focus-web	Text:Disclosure demo | Role:ориентир
+chromium/m8b-widgets	94	focus	focus-web	Text:Disclosure | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	95	focus	focus-web	Text:Disclosure | Role:текст
+chromium/m8b-widgets	96	focus	focus-web	Text:Show details | Role:кнопка | State:свёрнуто
+chromium/m8b-widgets	97	focus	focus-web	Text:Hide notes | Role:кнопка | State:развёрнуто
+chromium/m8b-widgets	98	focus	focus-web	Role:панель
+chromium/m8b-widgets	99	focus	focus-web	Role:абзац
+chromium/m8b-widgets	100	focus	focus-web	Text:Visible notes. | Role:текст
+chromium/m8b-widgets	101	focus	focus-web	Text:Accordion demo | Role:ориентир
+chromium/m8b-widgets	102	focus	focus-web	Text:Accordion | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	103	focus	focus-web	Text:Accordion | Role:текст
+chromium/m8b-widgets	104	focus	focus-web	Text:Personal information | Role:заголовок | Text:уровень 3
+chromium/m8b-widgets	105	focus	focus-web	Text:Personal information | Role:кнопка | State:развёрнуто
+chromium/m8b-widgets	106	focus	focus-web	Text:Personal information | Role:ориентир
+chromium/m8b-widgets	107	focus	focus-web	Role:абзац
+chromium/m8b-widgets	108	focus	focus-web	Text:Personal fields. | Role:текст
+chromium/m8b-widgets	109	focus	focus-web	Text:Billing address | Role:заголовок | Text:уровень 3
+chromium/m8b-widgets	110	focus	focus-web	Text:Billing address | Role:кнопка | State:свёрнуто
+chromium/m8b-widgets	111	focus	focus-web	Text:Toolbar demo | Role:ориентир
+chromium/m8b-widgets	112	focus	focus-web	Text:Toolbar | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	113	focus	focus-web	Text:Toolbar | Role:текст
+chromium/m8b-widgets	114	focus	focus-web	Text:Text formatting | Role:панель инструментов
+chromium/m8b-widgets	115	focus	focus-web	Text:Bold | Role:кнопка-переключатель | State:нажато
+chromium/m8b-widgets	116	focus	focus-web	Text:Italic | Role:кнопка-переключатель | State:не нажато
+chromium/m8b-widgets	117	focus	focus-web	Text:Underline | Role:кнопка-переключатель | State:частично нажато
+chromium/m8b-widgets	118	focus	focus-web	Text:Align left | Role:кнопка | State:подменю
+chromium/m8b-widgets	119	focus	focus-web	Text:Breadcrumb demo | Role:ориентир
+chromium/m8b-widgets	120	focus	focus-web	Text:Breadcrumb and current | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	121	focus	focus-web	Text:Breadcrumb and current | Role:текст
+chromium/m8b-widgets	122	focus	focus-web	Text:Breadcrumb | Role:ориентир
+chromium/m8b-widgets	123	focus	focus-web	Role:список
+chromium/m8b-widgets	124	focus	focus-web	Text:1. Home crumb | Role:элемент списка
+chromium/m8b-widgets	125	focus	focus-web	Text:1. | Role:текст
+chromium/m8b-widgets	126	focus	focus-web	Text:Home crumb | Role:ссылка
+chromium/m8b-widgets	127	focus	focus-web	Text:Home crumb | Role:текст
+chromium/m8b-widgets	128	focus	focus-web	Text:2. Products crumb | Role:элемент списка
+chromium/m8b-widgets	129	focus	focus-web	Text:2. | Role:текст
+chromium/m8b-widgets	130	focus	focus-web	Text:Products crumb | Role:ссылка
+chromium/m8b-widgets	131	focus	focus-web	Text:Products crumb | Role:текст
+chromium/m8b-widgets	132	focus	focus-web	Text:3. Gadgets crumb | Role:элемент списка
+chromium/m8b-widgets	133	focus	focus-web	Text:3. | Role:текст
+chromium/m8b-widgets	134	focus	focus-web	Text:Gadgets crumb | Role:ссылка | State:текущая страница
+chromium/m8b-widgets	135	focus	focus-web	Text:Gadgets crumb | Role:текст
+chromium/m8b-widgets	136	focus	focus-web	Text:Steps | Role:список
+chromium/m8b-widgets	137	focus	focus-web	Text:1. Step one link | Role:элемент списка
+chromium/m8b-widgets	138	focus	focus-web	Text:1. | Role:текст
+chromium/m8b-widgets	139	focus	focus-web	Text:Step one link | Role:ссылка | State:текущий шаг
+chromium/m8b-widgets	140	focus	focus-web	Text:Step one link | Role:текст
+chromium/m8b-widgets	141	focus	focus-web	Text:2. Location link | Role:элемент списка
+chromium/m8b-widgets	142	focus	focus-web	Text:2. | Role:текст
+chromium/m8b-widgets	143	focus	focus-web	Text:Location link | Role:ссылка | State:текущее место
+chromium/m8b-widgets	144	focus	focus-web	Text:Location link | Role:текст
+chromium/m8b-widgets	145	focus	focus-web	Text:3. Date link | Role:элемент списка
+chromium/m8b-widgets	146	focus	focus-web	Text:3. | Role:текст
+chromium/m8b-widgets	147	focus	focus-web	Text:Date link | Role:ссылка | State:текущая дата
+chromium/m8b-widgets	148	focus	focus-web	Text:Date link | Role:текст
+chromium/m8b-widgets	149	focus	focus-web	Text:4. Time link | Role:элемент списка
+chromium/m8b-widgets	150	focus	focus-web	Text:4. | Role:текст
+chromium/m8b-widgets	151	focus	focus-web	Text:Time link | Role:ссылка | State:текущее время
+chromium/m8b-widgets	152	focus	focus-web	Text:Time link | Role:текст
+chromium/m8b-widgets	153	focus	focus-web	Text:5. True link | Role:элемент списка
+chromium/m8b-widgets	154	focus	focus-web	Text:5. | Role:текст
+chromium/m8b-widgets	155	focus	focus-web	Text:True link | Role:ссылка | State:текущий
+chromium/m8b-widgets	156	focus	focus-web	Text:True link | Role:текст
+chromium/m8b-widgets	157	focus	focus-web	Text:6. False link | Role:элемент списка
+chromium/m8b-widgets	158	focus	focus-web	Text:6. | Role:текст
+chromium/m8b-widgets	159	focus	focus-web	Text:False link | Role:ссылка
+chromium/m8b-widgets	160	focus	focus-web	Text:False link | Role:текст
+chromium/m8b-widgets	161	focus	focus-web	Text:Headings demo | Role:ориентир
+chromium/m8b-widgets	162	focus	focus-web	Text:Headings by role | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	163	focus	focus-web	Text:Headings by role | Role:текст
+chromium/m8b-widgets	164	focus	focus-web	Text:Custom heading four | Role:заголовок | Text:уровень 4
+chromium/m8b-widgets	165	focus	focus-web	Text:Custom heading four | Role:текст
+chromium/m8b-widgets	166	focus	focus-web	Text:Custom heading two | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	167	focus	focus-web	Text:Custom heading two | Role:текст
+chromium/m8b-widgets	168	focus	focus-web	Text:Live demo | Role:ориентир
+chromium/m8b-widgets	169	focus	focus-web	Text:Busy | Role:заголовок | Text:уровень 2
+chromium/m8b-widgets	170	focus	focus-web	Text:Busy | Role:текст
+chromium/m8b-widgets	171	focus	focus-web	Role:панель | State:занято
+chromium/m8b-widgets	172	focus	focus-web	Role:абзац
+chromium/m8b-widgets	173	focus	focus-web	Text:Loading results text. | Role:текст
+chromium/m8b-widgets	174	focus	focus-web	Text:Progress status | Role:строка состояния
+chromium/m8b-widgets	175	focus	focus-web	Role:абзац
+chromium/m8b-widgets	176	focus	focus-web	Text:Idle status text. | Role:текст
+chromium/m8b-widgets	177	focus	focus-web	Role:абзац
+chromium/m8b-widgets	178	focus	focus-web	Text:End of widgets page. | Role:текст
 chromium/names	0	focus	focus-web	Text:SEM names | Role:документ
 chromium/names	1	focus	focus-web	Role:ориентир
 chromium/names	2	focus	focus-web	Text:Accessible name and description sources | Role:заголовок | Text:уровень 1
@@ -2699,6 +2980,26 @@ firefox/disabled	51	focus	focus-web	Text:Gift wrap | Role:флажок | State:�
 firefox/disabled	52	focus	focus-web	Role:абзац
 firefox/disabled	53	focus	focus-web	Text:Order | Role:кнопка | State:недоступно
 firefox/disabled	54	focus	focus-web	Text:Terms | Role:ссылка | State:недоступно
+firefox/errors	0	focus	focus-web	Text:SEM errors | Role:документ
+firefox/errors	1	focus	focus-web	Role:ориентир
+firefox/errors	2	focus	focus-web	Text:Fields with error messages | Role:заголовок | Text:уровень 1
+firefox/errors	3	focus	focus-web	Role:абзац
+firefox/errors	4	focus	focus-web	Text:Email | Role:текст
+firefox/errors	5	focus	focus-web	Text:Email | Role:поле ввода | State:неверный ввод
+firefox/errors	6	focus	focus-web	Role:текст
+firefox/errors	7	focus	focus-web	Role:абзац
+firefox/errors	8	focus	focus-web	Text:Age | Role:текст
+firefox/errors	9	focus	focus-web	Text:Age | Role:поле ввода | State:неверный ввод | Description:Whole years, digits only
+firefox/errors	10	focus	focus-web	Role:текст
+firefox/errors	11	focus	focus-web	Role:абзац
+firefox/errors	12	focus	focus-web	Text:Postal code | Role:текст
+firefox/errors	13	focus	focus-web	Text:Postal code | Role:поле ввода | State:обязательное | State:неверный ввод
+firefox/errors	14	focus	focus-web	Role:абзац
+firefox/errors	15	focus	focus-web	Text:Password | Role:текст
+firefox/errors	16	focus	focus-web	Text:Password | Role:поле ввода пароля | State:неверный ввод | Description:At least eight characters
+firefox/errors	17	focus	focus-web	Role:текст
+firefox/errors	18	focus	focus-web	Role:текст
+firefox/errors	19	focus	focus-web	Role:уведомление
 firefox/exotic-color	0	focus	focus-web	Text:SEM exotic-color | Role:документ
 firefox/exotic-color	1	focus	focus-web	Role:ориентир
 firefox/exotic-color	2	focus	focus-web	Text:Exotic input color | Role:заголовок | Text:уровень 1
@@ -3328,6 +3629,177 @@ firefox/m8-tables	78	focus	focus-web	Text:only cell | Role:строка
 firefox/m8-tables	79	focus	focus-web	Text:only cell | Role:ячейка
 firefox/m8-tables	80	focus	focus-web	Text:After tables | Role:заголовок | Text:уровень 2
 firefox/m8-tables	81	focus	focus-web	Role:абзац
+firefox/m8b-forms	0	focus	focus-web	Text:M8b Forms | Role:документ
+firefox/m8b-forms	1	focus	focus-web	Text:M8b form states | Role:заголовок | Text:уровень 1
+firefox/m8b-forms	2	focus	focus-web	Text:Signup | Role:ориентир
+firefox/m8b-forms	3	focus	focus-web	Role:абзац
+firefox/m8b-forms	4	focus	focus-web	Text:Email address | Role:текст
+firefox/m8b-forms	5	focus	focus-web	Text:Email address | Role:поле ввода | State:неверный ввод
+firefox/m8b-forms	6	focus	focus-web	Role:текст
+firefox/m8b-forms	7	focus	focus-web	Role:абзац
+firefox/m8b-forms	8	focus	focus-web	Text:User name | Role:текст
+firefox/m8b-forms	9	focus	focus-web	Text:User name | Role:поле ввода | Description:At least six characters
+firefox/m8b-forms	10	focus	focus-web	Role:текст
+firefox/m8b-forms	11	focus	focus-web	Role:абзац
+firefox/m8b-forms	12	focus	focus-web	Text:Password field | Role:текст
+firefox/m8b-forms	13	focus	focus-web	Text:Password field | Role:поле ввода | State:неверный ввод | Description:Use a long password
+firefox/m8b-forms	14	focus	focus-web	Role:текст
+firefox/m8b-forms	15	focus	focus-web	Role:абзац
+firefox/m8b-forms	16	focus	focus-web	Text:Required name | Role:текст
+firefox/m8b-forms	17	focus	focus-web	Text:Required name | Role:поле ввода | State:обязательное | State:неверный ввод
+firefox/m8b-forms	18	focus	focus-web	Text:Aria required name | Role:текст
+firefox/m8b-forms	19	focus	focus-web	Text:Aria required name | Role:поле ввода | State:обязательное
+firefox/m8b-forms	20	focus	focus-web	Role:абзац
+firefox/m8b-forms	21	focus	focus-web	Text:Read only name | Role:текст
+firefox/m8b-forms	22	focus	focus-web	Text:Read only name | Role:поле ввода
+firefox/m8b-forms	23	focus	focus-web	Text:Native read only | Role:текст
+firefox/m8b-forms	24	focus	focus-web	Text:Native read only | Role:поле ввода | State:только чтение
+firefox/m8b-forms	25	focus	focus-web	Role:абзац
+firefox/m8b-forms	26	focus	focus-web	Text:Disabled name | Role:текст
+firefox/m8b-forms	27	focus	focus-web	Text:Disabled name | Role:поле ввода | State:недоступно
+firefox/m8b-forms	28	focus	focus-web	Text:Aria disabled button | Role:кнопка | State:недоступно
+firefox/m8b-forms	29	focus	focus-web	Text:Native disabled button | Role:кнопка | State:недоступно
+firefox/m8b-forms	30	focus	focus-web	Role:абзац
+firefox/m8b-forms	31	focus	focus-web	Text:Accept terms | Role:флажок | State:не отмечено | State:неверный ввод | Description:You must accept to continue
+firefox/m8b-forms	32	focus	focus-web	Text:Accept terms | Role:текст
+firefox/m8b-forms	33	focus	focus-web	Role:текст
+firefox/m8b-forms	34	focus	focus-web	Text:Size | Role:группа | State:обязательное
+firefox/m8b-forms	35	focus	focus-web	Text:Small size | Role:радиокнопка | State:отмечено
+firefox/m8b-forms	36	focus	focus-web	Text:Small size | Role:текст
+firefox/m8b-forms	37	focus	focus-web	Text:Large size | Role:радиокнопка | State:не отмечено
+firefox/m8b-forms	38	focus	focus-web	Text:Large size | Role:текст
+firefox/m8b-forms	39	focus	focus-web	Role:абзац
+firefox/m8b-forms	40	focus	focus-web	Text:Colour pick | Role:текст
+firefox/m8b-forms	41	focus	focus-web	Text:Colour pick | Role:комбинированный список | State:свёрнуто | Description:Pick one
+firefox/m8b-forms	42	focus	focus-web	Role:меню
+firefox/m8b-forms	43	focus	focus-web	Text:Red | Role:пункт меню
+firefox/m8b-forms	44	focus	focus-web	Text:Green | Role:пункт меню
+firefox/m8b-forms	45	focus	focus-web	Role:текст
+firefox/m8b-forms	46	focus	focus-web	Role:абзац
+firefox/m8b-forms	47	focus	focus-web	Text:Notes area | Role:текст
+firefox/m8b-forms	48	focus	focus-web	Text:Notes area | Role:поле ввода | Description:Optional notes
+firefox/m8b-forms	49	focus	focus-web	Role:текст
+firefox/m8b-forms	50	focus	focus-web	Role:абзац
+firefox/m8b-forms	51	focus	focus-web	Text:Submit form | Role:кнопка | Description:Sends the signup
+firefox/m8b-forms	52	focus	focus-web	Role:текст
+firefox/m8b-forms	53	focus	focus-web	Role:абзац
+firefox/m8b-widgets	0	focus	focus-web	Text:M8b Widgets | Role:документ
+firefox/m8b-widgets	1	focus	focus-web	Text:M8b APG widgets | Role:заголовок | Text:уровень 1
+firefox/m8b-widgets	2	focus	focus-web	Text:Primary | Role:ориентир
+firefox/m8b-widgets	3	focus	focus-web	Role:список
+firefox/m8b-widgets	4	focus	focus-web	Text:Home link | Role:элемент списка
+firefox/m8b-widgets	5	focus	focus-web	Text:Home link | Role:ссылка
+firefox/m8b-widgets	6	focus	focus-web	Text:Docs link | Role:элемент списка
+firefox/m8b-widgets	7	focus	focus-web	Text:Docs link | Role:ссылка
+firefox/m8b-widgets	8	focus	focus-web	Text:Names | Role:ориентир
+firefox/m8b-widgets	9	focus	focus-web	Text:Names | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	10	focus	focus-web	Role:абзац
+firefox/m8b-widgets	11	focus	focus-web	Text:Close dialog | Role:кнопка
+firefox/m8b-widgets	12	focus	focus-web	Text:Search the site | Role:кнопка
+firefox/m8b-widgets	13	focus	focus-web	Text:Save draft | Role:кнопка
+firefox/m8b-widgets	14	focus	focus-web	Text:Send message | Role:кнопка
+firefox/m8b-widgets	15	focus	focus-web	Role:текст
+firefox/m8b-widgets	16	focus	focus-web	Role:текст
+firefox/m8b-widgets	17	focus	focus-web	Text:Title only | Role:кнопка
+firefox/m8b-widgets	18	focus	focus-web	Text:Read more about pandas | Role:ссылка
+firefox/m8b-widgets	19	focus	focus-web	Text:Company logo | Role:текст
+firefox/m8b-widgets	20	focus	focus-web	Role:абзац
+firefox/m8b-widgets	21	focus	focus-web	Role:текст
+firefox/m8b-widgets	22	focus	focus-web	Role:текст
+firefox/m8b-widgets	23	focus	focus-web	Text:Shipping address | Role:поле ввода
+firefox/m8b-widgets	24	focus	focus-web	Text:Quantity | Role:поле ввода
+firefox/m8b-widgets	25	focus	focus-web	Text:Tabs demo | Role:ориентир
+firefox/m8b-widgets	26	focus	focus-web	Text:Tabs | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	27	focus	focus-web	Text:Entertainment | Role:панель вкладок
+firefox/m8b-widgets	28	focus	focus-web	Text:Nils Frahm | Role:вкладка | State:выделено
+firefox/m8b-widgets	29	focus	focus-web	Text:Agnes Obel | Role:вкладка
+firefox/m8b-widgets	30	focus	focus-web	Text:Joke | Role:вкладка
+firefox/m8b-widgets	31	focus	focus-web	Text:Nils Frahm | Role:страница свойств
+firefox/m8b-widgets	32	focus	focus-web	Role:абзац
+firefox/m8b-widgets	33	focus	focus-web	Text:Switch demo | Role:ориентир
+firefox/m8b-widgets	34	focus	focus-web	Text:Switch | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	35	focus	focus-web	Text:Notifications | Role:переключатель | State:включено
+firefox/m8b-widgets	36	focus	focus-web	Text:Dark mode | Role:переключатель | State:выключено
+firefox/m8b-widgets	37	focus	focus-web	Text:Tree demo | Role:ориентир
+firefox/m8b-widgets	38	focus	focus-web	Text:Tree | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	39	focus	focus-web	Text:Files | Role:дерево
+firefox/m8b-widgets	40	focus	focus-web	Text:Documents | Role:элемент дерева | State:не выделено | State:развёрнуто | Text:уровень 1
+firefox/m8b-widgets	41	focus	focus-web	Role:группа
+firefox/m8b-widgets	42	focus	focus-web	Text:Report | Role:элемент дерева | Text:уровень 2
+firefox/m8b-widgets	43	focus	focus-web	Text:Budget | Role:элемент дерева | State:не выделено | Text:уровень 2
+firefox/m8b-widgets	44	focus	focus-web	Text:Pictures | Role:элемент дерева | State:не выделено | State:свёрнуто | Text:уровень 1
+firefox/m8b-widgets	45	focus	focus-web	Role:группа
+firefox/m8b-widgets	46	focus	focus-web	Text:Holiday | Role:элемент дерева | State:не выделено | Text:уровень 2
+firefox/m8b-widgets	47	focus	focus-web	Text:Combobox demo | Role:ориентир
+firefox/m8b-widgets	48	focus	focus-web	Text:Combobox | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	49	focus	focus-web	Text:Favourite fruit | Role:текст
+firefox/m8b-widgets	50	focus	focus-web	Text:Favourite fruit | Role:комбинированный список | State:свёрнуто
+firefox/m8b-widgets	51	focus	focus-web	Text:Toppings | Role:список
+firefox/m8b-widgets	52	focus	focus-web	Text:Cheese | Role:элемент списка
+firefox/m8b-widgets	53	focus	focus-web	Text:Olives | Role:элемент списка
+firefox/m8b-widgets	54	focus	focus-web	Text:Menu button demo | Role:ориентир
+firefox/m8b-widgets	55	focus	focus-web	Text:Menu button | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	56	focus	focus-web	Text:Actions | Role:кнопка | State:свёрнуто | State:подменю
+firefox/m8b-widgets	57	focus	focus-web	Text:Actions menu | Role:меню
+firefox/m8b-widgets	58	focus	focus-web	Text:Copy | Role:пункт меню
+firefox/m8b-widgets	59	focus	focus-web	Text:Word wrap | Role:пункт меню с флажком | State:отмечено
+firefox/m8b-widgets	60	focus	focus-web	Text:Small | Role:пункт меню с радиокнопкой | State:отмечено
+firefox/m8b-widgets	61	focus	focus-web	Text:Large | Role:пункт меню с радиокнопкой | State:не отмечено
+firefox/m8b-widgets	62	focus	focus-web	Text:Disclosure demo | Role:ориентир
+firefox/m8b-widgets	63	focus	focus-web	Text:Disclosure | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	64	focus	focus-web	Text:Show details | Role:кнопка | State:свёрнуто
+firefox/m8b-widgets	65	focus	focus-web	Text:Hide notes | Role:кнопка | State:развёрнуто
+firefox/m8b-widgets	66	focus	focus-web	Role:панель
+firefox/m8b-widgets	67	focus	focus-web	Role:абзац
+firefox/m8b-widgets	68	focus	focus-web	Text:Accordion demo | Role:ориентир
+firefox/m8b-widgets	69	focus	focus-web	Text:Accordion | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	70	focus	focus-web	Text:Personal information | Role:заголовок | Text:уровень 3
+firefox/m8b-widgets	71	focus	focus-web	Text:Personal information | Role:кнопка | State:развёрнуто
+firefox/m8b-widgets	72	focus	focus-web	Text:Personal information | Role:ориентир
+firefox/m8b-widgets	73	focus	focus-web	Role:абзац
+firefox/m8b-widgets	74	focus	focus-web	Text:Billing address | Role:заголовок | Text:уровень 3
+firefox/m8b-widgets	75	focus	focus-web	Text:Billing address | Role:кнопка | State:свёрнуто
+firefox/m8b-widgets	76	focus	focus-web	Text:Toolbar demo | Role:ориентир
+firefox/m8b-widgets	77	focus	focus-web	Text:Toolbar | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	78	focus	focus-web	Text:Text formatting | Role:панель инструментов
+firefox/m8b-widgets	79	focus	focus-web	Text:Bold | Role:кнопка-переключатель | State:нажато
+firefox/m8b-widgets	80	focus	focus-web	Text:Italic | Role:кнопка-переключатель | State:не нажато
+firefox/m8b-widgets	81	focus	focus-web	Text:Underline | Role:кнопка-переключатель | State:частично нажато
+firefox/m8b-widgets	82	focus	focus-web	Text:Align left | Role:кнопка | State:подменю
+firefox/m8b-widgets	83	focus	focus-web	Text:Breadcrumb demo | Role:ориентир
+firefox/m8b-widgets	84	focus	focus-web	Text:Breadcrumb and current | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	85	focus	focus-web	Text:Breadcrumb | Role:ориентир
+firefox/m8b-widgets	86	focus	focus-web	Role:список
+firefox/m8b-widgets	87	focus	focus-web	Text:1. Home crumb | Role:элемент списка
+firefox/m8b-widgets	88	focus	focus-web	Text:Home crumb | Role:ссылка
+firefox/m8b-widgets	89	focus	focus-web	Text:2. Products crumb | Role:элемент списка
+firefox/m8b-widgets	90	focus	focus-web	Text:Products crumb | Role:ссылка
+firefox/m8b-widgets	91	focus	focus-web	Text:3. Gadgets crumb | Role:элемент списка
+firefox/m8b-widgets	92	focus	focus-web	Text:Gadgets crumb | Role:ссылка | State:текущая страница
+firefox/m8b-widgets	93	focus	focus-web	Text:Steps | Role:список
+firefox/m8b-widgets	94	focus	focus-web	Text:1. Step one link | Role:элемент списка
+firefox/m8b-widgets	95	focus	focus-web	Text:Step one link | Role:ссылка | State:текущий шаг
+firefox/m8b-widgets	96	focus	focus-web	Text:2. Location link | Role:элемент списка
+firefox/m8b-widgets	97	focus	focus-web	Text:Location link | Role:ссылка | State:текущее место
+firefox/m8b-widgets	98	focus	focus-web	Text:3. Date link | Role:элемент списка
+firefox/m8b-widgets	99	focus	focus-web	Text:Date link | Role:ссылка | State:текущая дата
+firefox/m8b-widgets	100	focus	focus-web	Text:4. Time link | Role:элемент списка
+firefox/m8b-widgets	101	focus	focus-web	Text:Time link | Role:ссылка | State:текущее время
+firefox/m8b-widgets	102	focus	focus-web	Text:5. True link | Role:элемент списка
+firefox/m8b-widgets	103	focus	focus-web	Text:True link | Role:ссылка | State:текущий
+firefox/m8b-widgets	104	focus	focus-web	Text:6. False link | Role:элемент списка
+firefox/m8b-widgets	105	focus	focus-web	Text:False link | Role:ссылка
+firefox/m8b-widgets	106	focus	focus-web	Text:Headings demo | Role:ориентир
+firefox/m8b-widgets	107	focus	focus-web	Text:Headings by role | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	108	focus	focus-web	Text:Custom heading four | Role:заголовок | Text:уровень 4
+firefox/m8b-widgets	109	focus	focus-web	Text:Custom heading two | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	110	focus	focus-web	Text:Live demo | Role:ориентир
+firefox/m8b-widgets	111	focus	focus-web	Text:Busy | Role:заголовок | Text:уровень 2
+firefox/m8b-widgets	112	focus	focus-web	Role:панель | State:занято
+firefox/m8b-widgets	113	focus	focus-web	Role:абзац
+firefox/m8b-widgets	114	focus	focus-web	Text:Progress status | Role:строка состояния
+firefox/m8b-widgets	115	focus	focus-web	Role:абзац
+firefox/m8b-widgets	116	focus	focus-web	Role:абзац
 firefox/names	0	focus	focus-web	Text:SEM names | Role:документ
 firefox/names	1	focus	focus-web	Role:ориентир
 firefox/names	2	focus	focus-web	Text:Accessible name and description sources | Role:заголовок | Text:уровень 1

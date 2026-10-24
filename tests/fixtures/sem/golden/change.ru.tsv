@@ -232,6 +232,24 @@ chromium/disabled	57	mixed	change-web	State:частично отмечено
 chromium/disabled	57	press	change-web	
 chromium/disabled	57	rename	change-web	Text:Medium renamed
 chromium/disabled	67	rename	change-web	Text:Terms renamed
+chromium/errors	0	disable	change-web	
+chromium/errors	0	rename	change-web	Text:SEM errors renamed
+chromium/errors	7	disable	change-web	State:недоступно
+chromium/errors	7	invalid	change-web	State:значение допустимо
+chromium/errors	7	rename	change-web	Text:Email renamed
+chromium/errors	7	required	change-web	State:обязательное
+chromium/errors	13	disable	change-web	State:недоступно
+chromium/errors	13	invalid	change-web	State:значение допустимо
+chromium/errors	13	rename	change-web	Text:Age renamed
+chromium/errors	13	required	change-web	State:обязательное
+chromium/errors	19	disable	change-web	State:недоступно
+chromium/errors	19	invalid	change-web	State:неверный ввод
+chromium/errors	19	rename	change-web	Text:Postal code renamed
+chromium/errors	19	required	change-web	State:не обязательное
+chromium/errors	23	disable	change-web	State:недоступно
+chromium/errors	23	invalid	change-web	State:значение допустимо
+chromium/errors	23	rename	change-web	Text:Password renamed
+chromium/errors	23	required	change-web	State:обязательное
 chromium/exotic-color	0	disable	change-web	
 chromium/exotic-color	0	rename	change-web	Text:SEM exotic-color renamed
 chromium/exotic-color	4	disable	change-web	State:недоступно
@@ -855,6 +873,185 @@ chromium/m8-tables	107	disable	change-web	State:недоступно
 chromium/m8-tables	107	rename	change-web	Text:taken renamed
 chromium/m8-tables	109	disable	change-web	State:недоступно
 chromium/m8-tables	109	rename	change-web	Text:free renamed
+chromium/m8b-forms	0	disable	change-web	
+chromium/m8b-forms	0	rename	change-web	Text:M8b Forms renamed
+chromium/m8b-forms	7	disable	change-web	State:недоступно
+chromium/m8b-forms	7	invalid	change-web	State:значение допустимо
+chromium/m8b-forms	7	rename	change-web	Text:Email address renamed
+chromium/m8b-forms	7	required	change-web	State:обязательное
+chromium/m8b-forms	13	disable	change-web	State:недоступно
+chromium/m8b-forms	13	invalid	change-web	State:неверный ввод
+chromium/m8b-forms	13	rename	change-web	Text:User name renamed
+chromium/m8b-forms	13	required	change-web	State:обязательное
+chromium/m8b-forms	19	disable	change-web	State:недоступно
+chromium/m8b-forms	19	invalid	change-web	State:значение допустимо
+chromium/m8b-forms	19	rename	change-web	Text:Password field renamed
+chromium/m8b-forms	19	required	change-web	State:обязательное
+chromium/m8b-forms	25	disable	change-web	State:недоступно
+chromium/m8b-forms	25	invalid	change-web	State:неверный ввод
+chromium/m8b-forms	25	rename	change-web	Text:Required name renamed
+chromium/m8b-forms	25	required	change-web	State:не обязательное
+chromium/m8b-forms	28	disable	change-web	State:недоступно
+chromium/m8b-forms	28	invalid	change-web	State:неверный ввод
+chromium/m8b-forms	28	rename	change-web	Text:Aria required name renamed
+chromium/m8b-forms	28	required	change-web	State:не обязательное
+chromium/m8b-forms	32	rename	change-web	Text:Read only name renamed
+chromium/m8b-forms	35	rename	change-web	Text:Native read only renamed
+chromium/m8b-forms	40	rename	change-web	Text:Aria disabled button renamed
+chromium/m8b-forms	43	check	change-web	State:отмечено
+chromium/m8b-forms	43	disable	change-web	State:недоступно
+chromium/m8b-forms	43	mixed	change-web	State:частично отмечено
+chromium/m8b-forms	43	press	change-web	
+chromium/m8b-forms	43	rename	change-web	Text:Accept terms renamed
+chromium/m8b-forms	48	check	change-web	State:не отмечено
+chromium/m8b-forms	48	disable	change-web	State:недоступно
+chromium/m8b-forms	48	mixed	change-web	State:частично отмечено
+chromium/m8b-forms	48	press	change-web	
+chromium/m8b-forms	48	rename	change-web	Text:Small size renamed
+chromium/m8b-forms	49	check	change-web	State:отмечено
+chromium/m8b-forms	49	disable	change-web	State:недоступно
+chromium/m8b-forms	49	mixed	change-web	State:частично отмечено
+chromium/m8b-forms	49	press	change-web	
+chromium/m8b-forms	49	rename	change-web	Text:Large size renamed
+chromium/m8b-forms	53	disable	change-web	State:недоступно
+chromium/m8b-forms	53	expand	change-web	State:развёрнуто
+chromium/m8b-forms	53	rename	change-web	Text:Colour pick renamed
+chromium/m8b-forms	55	disable	change-web	State:недоступно
+chromium/m8b-forms	55	rename	change-web	Text:Red renamed
+chromium/m8b-forms	55	select	change-web	State:выделено
+chromium/m8b-forms	56	disable	change-web	State:недоступно
+chromium/m8b-forms	56	rename	change-web	Text:Green renamed
+chromium/m8b-forms	56	select	change-web	State:не выделено
+chromium/m8b-forms	62	disable	change-web	State:недоступно
+chromium/m8b-forms	62	invalid	change-web	State:неверный ввод
+chromium/m8b-forms	62	rename	change-web	Text:Notes area renamed
+chromium/m8b-forms	62	required	change-web	State:обязательное
+chromium/m8b-forms	66	disable	change-web	State:недоступно
+chromium/m8b-forms	66	rename	change-web	Text:Submit form renamed
+chromium/m8b-widgets	0	disable	change-web	
+chromium/m8b-widgets	0	rename	change-web	Text:M8b Widgets renamed
+chromium/m8b-widgets	7	disable	change-web	State:недоступно
+chromium/m8b-widgets	7	rename	change-web	Text:Home link renamed
+chromium/m8b-widgets	11	disable	change-web	State:недоступно
+chromium/m8b-widgets	11	rename	change-web	Text:Docs link renamed
+chromium/m8b-widgets	17	disable	change-web	State:недоступно
+chromium/m8b-widgets	17	rename	change-web	Text:Close dialog renamed
+chromium/m8b-widgets	18	disable	change-web	State:недоступно
+chromium/m8b-widgets	18	rename	change-web	Text:Search the site renamed
+chromium/m8b-widgets	19	disable	change-web	State:недоступно
+chromium/m8b-widgets	19	rename	change-web	Text:Save draft renamed
+chromium/m8b-widgets	20	disable	change-web	State:недоступно
+chromium/m8b-widgets	20	rename	change-web	Text:Send message renamed
+chromium/m8b-widgets	26	disable	change-web	State:недоступно
+chromium/m8b-widgets	26	rename	change-web	Text:Title only renamed
+chromium/m8b-widgets	27	disable	change-web	State:недоступно
+chromium/m8b-widgets	27	rename	change-web	Text:Read more about pandas renamed
+chromium/m8b-widgets	37	disable	change-web	State:недоступно
+chromium/m8b-widgets	37	invalid	change-web	State:неверный ввод
+chromium/m8b-widgets	37	rename	change-web	Text:Shipping address renamed
+chromium/m8b-widgets	37	required	change-web	State:обязательное
+chromium/m8b-widgets	38	disable	change-web	State:недоступно
+chromium/m8b-widgets	38	invalid	change-web	State:неверный ввод
+chromium/m8b-widgets	38	rename	change-web	Text:Quantity renamed
+chromium/m8b-widgets	38	required	change-web	State:обязательное
+chromium/m8b-widgets	43	disable	change-web	State:недоступно
+chromium/m8b-widgets	43	rename	change-web	Text:Nils Frahm renamed
+chromium/m8b-widgets	43	select	change-web	State:не выделено
+chromium/m8b-widgets	44	disable	change-web	State:недоступно
+chromium/m8b-widgets	44	rename	change-web	Text:Agnes Obel renamed
+chromium/m8b-widgets	44	select	change-web	State:выделено
+chromium/m8b-widgets	45	disable	change-web	State:недоступно
+chromium/m8b-widgets	45	rename	change-web	Text:Joke renamed
+chromium/m8b-widgets	45	select	change-web	State:выделено
+chromium/m8b-widgets	52	check	change-web	State:выключено
+chromium/m8b-widgets	52	disable	change-web	State:недоступно
+chromium/m8b-widgets	52	mixed	change-web	
+chromium/m8b-widgets	52	press	change-web	
+chromium/m8b-widgets	52	rename	change-web	Text:Notifications renamed
+chromium/m8b-widgets	53	check	change-web	State:включено
+chromium/m8b-widgets	53	disable	change-web	State:недоступно
+chromium/m8b-widgets	53	mixed	change-web	
+chromium/m8b-widgets	53	press	change-web	
+chromium/m8b-widgets	53	rename	change-web	Text:Dark mode renamed
+chromium/m8b-widgets	58	disable	change-web	State:недоступно
+chromium/m8b-widgets	58	expand	change-web	State:свёрнуто
+chromium/m8b-widgets	58	rename	change-web	Text:Documents renamed
+chromium/m8b-widgets	62	disable	change-web	State:недоступно
+chromium/m8b-widgets	62	rename	change-web	Text:Report renamed
+chromium/m8b-widgets	62	select	change-web	State:не выделено
+chromium/m8b-widgets	65	disable	change-web	State:недоступно
+chromium/m8b-widgets	65	rename	change-web	Text:Budget renamed
+chromium/m8b-widgets	68	disable	change-web	State:недоступно
+chromium/m8b-widgets	68	expand	change-web	State:развёрнуто
+chromium/m8b-widgets	68	rename	change-web	Text:Pictures renamed
+chromium/m8b-widgets	72	disable	change-web	State:недоступно
+chromium/m8b-widgets	72	rename	change-web	Text:Holiday renamed
+chromium/m8b-widgets	80	disable	change-web	State:недоступно
+chromium/m8b-widgets	80	expand	change-web	State:развёрнуто
+chromium/m8b-widgets	80	invalid	change-web	State:неверный ввод
+chromium/m8b-widgets	80	rename	change-web	Text:Favourite fruit renamed
+chromium/m8b-widgets	80	required	change-web	State:обязательное
+chromium/m8b-widgets	81	disable	change-web	State:недоступно
+chromium/m8b-widgets	81	rename	change-web	Text:Toppings renamed
+chromium/m8b-widgets	87	disable	change-web	State:недоступно
+chromium/m8b-widgets	87	expand	change-web	State:развёрнуто
+chromium/m8b-widgets	87	rename	change-web	Text:Actions renamed
+chromium/m8b-widgets	89	disable	change-web	State:недоступно
+chromium/m8b-widgets	89	rename	change-web	Text:Copy renamed
+chromium/m8b-widgets	90	check	change-web	State:не отмечено
+chromium/m8b-widgets	90	disable	change-web	State:недоступно
+chromium/m8b-widgets	90	mixed	change-web	State:частично отмечено
+chromium/m8b-widgets	90	press	change-web	
+chromium/m8b-widgets	90	rename	change-web	Text:Word wrap renamed
+chromium/m8b-widgets	91	check	change-web	State:не отмечено
+chromium/m8b-widgets	91	disable	change-web	State:недоступно
+chromium/m8b-widgets	91	mixed	change-web	State:частично отмечено
+chromium/m8b-widgets	91	press	change-web	
+chromium/m8b-widgets	91	rename	change-web	Text:Small renamed
+chromium/m8b-widgets	92	check	change-web	State:отмечено
+chromium/m8b-widgets	92	disable	change-web	State:недоступно
+chromium/m8b-widgets	92	mixed	change-web	State:частично отмечено
+chromium/m8b-widgets	92	press	change-web	
+chromium/m8b-widgets	92	rename	change-web	Text:Large renamed
+chromium/m8b-widgets	96	disable	change-web	State:недоступно
+chromium/m8b-widgets	96	expand	change-web	State:развёрнуто
+chromium/m8b-widgets	96	rename	change-web	Text:Show details renamed
+chromium/m8b-widgets	97	disable	change-web	State:недоступно
+chromium/m8b-widgets	97	expand	change-web	State:свёрнуто
+chromium/m8b-widgets	97	rename	change-web	Text:Hide notes renamed
+chromium/m8b-widgets	105	disable	change-web	State:недоступно
+chromium/m8b-widgets	105	expand	change-web	State:свёрнуто
+chromium/m8b-widgets	105	rename	change-web	Text:Personal information renamed
+chromium/m8b-widgets	110	disable	change-web	State:недоступно
+chromium/m8b-widgets	110	expand	change-web	State:развёрнуто
+chromium/m8b-widgets	110	rename	change-web	Text:Billing address renamed
+chromium/m8b-widgets	115	disable	change-web	State:недоступно
+chromium/m8b-widgets	115	press	change-web	State:не нажато
+chromium/m8b-widgets	115	rename	change-web	Text:Bold renamed
+chromium/m8b-widgets	116	disable	change-web	State:недоступно
+chromium/m8b-widgets	116	rename	change-web	Text:Italic renamed
+chromium/m8b-widgets	117	disable	change-web	State:недоступно
+chromium/m8b-widgets	117	rename	change-web	Text:Underline renamed
+chromium/m8b-widgets	118	disable	change-web	State:недоступно
+chromium/m8b-widgets	118	rename	change-web	Text:Align left renamed
+chromium/m8b-widgets	126	disable	change-web	State:недоступно
+chromium/m8b-widgets	126	rename	change-web	Text:Home crumb renamed
+chromium/m8b-widgets	130	disable	change-web	State:недоступно
+chromium/m8b-widgets	130	rename	change-web	Text:Products crumb renamed
+chromium/m8b-widgets	134	disable	change-web	State:недоступно
+chromium/m8b-widgets	134	rename	change-web	Text:Gadgets crumb renamed
+chromium/m8b-widgets	139	disable	change-web	State:недоступно
+chromium/m8b-widgets	139	rename	change-web	Text:Step one link renamed
+chromium/m8b-widgets	143	disable	change-web	State:недоступно
+chromium/m8b-widgets	143	rename	change-web	Text:Location link renamed
+chromium/m8b-widgets	147	disable	change-web	State:недоступно
+chromium/m8b-widgets	147	rename	change-web	Text:Date link renamed
+chromium/m8b-widgets	151	disable	change-web	State:недоступно
+chromium/m8b-widgets	151	rename	change-web	Text:Time link renamed
+chromium/m8b-widgets	155	disable	change-web	State:недоступно
+chromium/m8b-widgets	155	rename	change-web	Text:True link renamed
+chromium/m8b-widgets	159	disable	change-web	State:недоступно
+chromium/m8b-widgets	159	rename	change-web	Text:False link renamed
 chromium/names	0	disable	change-web	
 chromium/names	0	rename	change-web	Text:SEM names renamed
 chromium/names	8	disable	change-web	State:недоступно
@@ -1705,6 +1902,24 @@ firefox/disabled	45	mixed	change-web	State:частично отмечено
 firefox/disabled	45	press	change-web	
 firefox/disabled	45	rename	change-web	Text:Medium renamed
 firefox/disabled	54	rename	change-web	Text:Terms renamed
+firefox/errors	0	disable	change-web	
+firefox/errors	0	rename	change-web	Text:SEM errors renamed
+firefox/errors	5	disable	change-web	State:недоступно
+firefox/errors	5	invalid	change-web	State:значение допустимо
+firefox/errors	5	rename	change-web	Text:Email renamed
+firefox/errors	5	required	change-web	State:обязательное
+firefox/errors	9	disable	change-web	State:недоступно
+firefox/errors	9	invalid	change-web	State:значение допустимо
+firefox/errors	9	rename	change-web	Text:Age renamed
+firefox/errors	9	required	change-web	State:обязательное
+firefox/errors	13	disable	change-web	State:недоступно
+firefox/errors	13	invalid	change-web	State:значение допустимо
+firefox/errors	13	rename	change-web	Text:Postal code renamed
+firefox/errors	13	required	change-web	State:не обязательное
+firefox/errors	16	disable	change-web	State:недоступно
+firefox/errors	16	invalid	change-web	State:значение допустимо
+firefox/errors	16	rename	change-web	Text:Password renamed
+firefox/errors	16	required	change-web	State:обязательное
 firefox/exotic-color	0	disable	change-web	
 firefox/exotic-color	0	rename	change-web	Text:SEM exotic-color renamed
 firefox/exotic-color	3	disable	change-web	State:недоступно
@@ -2326,6 +2541,195 @@ firefox/m8-tables	62	select	change-web	State:выделено
 firefox/m8-tables	63	disable	change-web	State:недоступно
 firefox/m8-tables	63	rename	change-web	Text:free renamed
 firefox/m8-tables	63	select	change-web	State:выделено
+firefox/m8b-forms	0	disable	change-web	
+firefox/m8b-forms	0	rename	change-web	Text:M8b Forms renamed
+firefox/m8b-forms	5	disable	change-web	State:недоступно
+firefox/m8b-forms	5	invalid	change-web	State:значение допустимо
+firefox/m8b-forms	5	rename	change-web	Text:Email address renamed
+firefox/m8b-forms	5	required	change-web	State:обязательное
+firefox/m8b-forms	9	disable	change-web	State:недоступно
+firefox/m8b-forms	9	invalid	change-web	State:неверный ввод
+firefox/m8b-forms	9	rename	change-web	Text:User name renamed
+firefox/m8b-forms	9	required	change-web	State:обязательное
+firefox/m8b-forms	13	disable	change-web	State:недоступно
+firefox/m8b-forms	13	invalid	change-web	State:значение допустимо
+firefox/m8b-forms	13	rename	change-web	Text:Password field renamed
+firefox/m8b-forms	13	required	change-web	State:обязательное
+firefox/m8b-forms	17	disable	change-web	State:недоступно
+firefox/m8b-forms	17	invalid	change-web	State:значение допустимо
+firefox/m8b-forms	17	rename	change-web	Text:Required name renamed
+firefox/m8b-forms	17	required	change-web	State:не обязательное
+firefox/m8b-forms	19	disable	change-web	State:недоступно
+firefox/m8b-forms	19	invalid	change-web	State:неверный ввод
+firefox/m8b-forms	19	rename	change-web	Text:Aria required name renamed
+firefox/m8b-forms	19	required	change-web	State:не обязательное
+firefox/m8b-forms	22	disable	change-web	State:недоступно
+firefox/m8b-forms	22	invalid	change-web	State:неверный ввод
+firefox/m8b-forms	22	rename	change-web	Text:Read only name renamed
+firefox/m8b-forms	22	required	change-web	State:обязательное
+firefox/m8b-forms	24	disable	change-web	State:недоступно
+firefox/m8b-forms	24	rename	change-web	Text:Native read only renamed
+firefox/m8b-forms	28	rename	change-web	Text:Aria disabled button renamed
+firefox/m8b-forms	31	check	change-web	State:отмечено
+firefox/m8b-forms	31	disable	change-web	State:недоступно
+firefox/m8b-forms	31	mixed	change-web	State:частично отмечено
+firefox/m8b-forms	31	press	change-web	
+firefox/m8b-forms	31	rename	change-web	Text:Accept terms renamed
+firefox/m8b-forms	35	check	change-web	State:не отмечено
+firefox/m8b-forms	35	disable	change-web	State:недоступно
+firefox/m8b-forms	35	mixed	change-web	State:частично отмечено
+firefox/m8b-forms	35	press	change-web	
+firefox/m8b-forms	35	rename	change-web	Text:Small size renamed
+firefox/m8b-forms	37	check	change-web	State:отмечено
+firefox/m8b-forms	37	disable	change-web	State:недоступно
+firefox/m8b-forms	37	mixed	change-web	State:частично отмечено
+firefox/m8b-forms	37	press	change-web	
+firefox/m8b-forms	37	rename	change-web	Text:Large size renamed
+firefox/m8b-forms	41	disable	change-web	State:недоступно
+firefox/m8b-forms	41	expand	change-web	State:развёрнуто
+firefox/m8b-forms	41	rename	change-web	Text:Colour pick renamed
+firefox/m8b-forms	43	disable	change-web	State:недоступно
+firefox/m8b-forms	43	rename	change-web	Text:Red renamed
+firefox/m8b-forms	43	select	change-web	State:выделено
+firefox/m8b-forms	44	disable	change-web	State:недоступно
+firefox/m8b-forms	44	rename	change-web	Text:Green renamed
+firefox/m8b-forms	44	select	change-web	State:не выделено
+firefox/m8b-forms	48	disable	change-web	State:недоступно
+firefox/m8b-forms	48	invalid	change-web	State:неверный ввод
+firefox/m8b-forms	48	rename	change-web	Text:Notes area renamed
+firefox/m8b-forms	48	required	change-web	State:обязательное
+firefox/m8b-forms	51	disable	change-web	State:недоступно
+firefox/m8b-forms	51	rename	change-web	Text:Submit form renamed
+firefox/m8b-widgets	0	disable	change-web	
+firefox/m8b-widgets	0	rename	change-web	Text:M8b Widgets renamed
+firefox/m8b-widgets	5	disable	change-web	State:недоступно
+firefox/m8b-widgets	5	rename	change-web	Text:Home link renamed
+firefox/m8b-widgets	7	disable	change-web	State:недоступно
+firefox/m8b-widgets	7	rename	change-web	Text:Docs link renamed
+firefox/m8b-widgets	11	disable	change-web	State:недоступно
+firefox/m8b-widgets	11	rename	change-web	Text:Close dialog renamed
+firefox/m8b-widgets	12	disable	change-web	State:недоступно
+firefox/m8b-widgets	12	rename	change-web	Text:Search the site renamed
+firefox/m8b-widgets	13	disable	change-web	State:недоступно
+firefox/m8b-widgets	13	rename	change-web	Text:Save draft renamed
+firefox/m8b-widgets	14	disable	change-web	State:недоступно
+firefox/m8b-widgets	14	rename	change-web	Text:Send message renamed
+firefox/m8b-widgets	17	disable	change-web	State:недоступно
+firefox/m8b-widgets	17	rename	change-web	Text:Title only renamed
+firefox/m8b-widgets	18	disable	change-web	State:недоступно
+firefox/m8b-widgets	18	rename	change-web	Text:Read more about pandas renamed
+firefox/m8b-widgets	23	disable	change-web	State:недоступно
+firefox/m8b-widgets	23	invalid	change-web	State:неверный ввод
+firefox/m8b-widgets	23	rename	change-web	Text:Shipping address renamed
+firefox/m8b-widgets	23	required	change-web	State:обязательное
+firefox/m8b-widgets	24	disable	change-web	State:недоступно
+firefox/m8b-widgets	24	invalid	change-web	State:неверный ввод
+firefox/m8b-widgets	24	rename	change-web	Text:Quantity renamed
+firefox/m8b-widgets	24	required	change-web	State:обязательное
+firefox/m8b-widgets	28	disable	change-web	State:недоступно
+firefox/m8b-widgets	28	rename	change-web	Text:Nils Frahm renamed
+firefox/m8b-widgets	28	select	change-web	State:не выделено
+firefox/m8b-widgets	29	disable	change-web	State:недоступно
+firefox/m8b-widgets	29	rename	change-web	Text:Agnes Obel renamed
+firefox/m8b-widgets	29	select	change-web	State:выделено
+firefox/m8b-widgets	30	disable	change-web	State:недоступно
+firefox/m8b-widgets	30	rename	change-web	Text:Joke renamed
+firefox/m8b-widgets	30	select	change-web	State:выделено
+firefox/m8b-widgets	35	check	change-web	State:выключено
+firefox/m8b-widgets	35	disable	change-web	State:недоступно
+firefox/m8b-widgets	35	mixed	change-web	
+firefox/m8b-widgets	35	press	change-web	
+firefox/m8b-widgets	35	rename	change-web	Text:Notifications renamed
+firefox/m8b-widgets	36	check	change-web	State:включено
+firefox/m8b-widgets	36	disable	change-web	State:недоступно
+firefox/m8b-widgets	36	mixed	change-web	
+firefox/m8b-widgets	36	press	change-web	
+firefox/m8b-widgets	36	rename	change-web	Text:Dark mode renamed
+firefox/m8b-widgets	39	disable	change-web	State:недоступно
+firefox/m8b-widgets	39	rename	change-web	Text:Files renamed
+firefox/m8b-widgets	40	disable	change-web	State:недоступно
+firefox/m8b-widgets	40	expand	change-web	State:свёрнуто
+firefox/m8b-widgets	40	rename	change-web	Text:Documents renamed
+firefox/m8b-widgets	40	select	change-web	State:выделено
+firefox/m8b-widgets	42	disable	change-web	State:недоступно
+firefox/m8b-widgets	42	rename	change-web	Text:Report renamed
+firefox/m8b-widgets	42	select	change-web	State:не выделено
+firefox/m8b-widgets	43	disable	change-web	State:недоступно
+firefox/m8b-widgets	43	rename	change-web	Text:Budget renamed
+firefox/m8b-widgets	43	select	change-web	State:выделено
+firefox/m8b-widgets	44	disable	change-web	State:недоступно
+firefox/m8b-widgets	44	expand	change-web	State:развёрнуто
+firefox/m8b-widgets	44	rename	change-web	Text:Pictures renamed
+firefox/m8b-widgets	44	select	change-web	State:выделено
+firefox/m8b-widgets	46	disable	change-web	State:недоступно
+firefox/m8b-widgets	46	rename	change-web	Text:Holiday renamed
+firefox/m8b-widgets	46	select	change-web	State:выделено
+firefox/m8b-widgets	50	disable	change-web	State:недоступно
+firefox/m8b-widgets	50	expand	change-web	State:развёрнуто
+firefox/m8b-widgets	50	invalid	change-web	State:неверный ввод
+firefox/m8b-widgets	50	rename	change-web	Text:Favourite fruit renamed
+firefox/m8b-widgets	50	required	change-web	State:обязательное
+firefox/m8b-widgets	51	disable	change-web	State:недоступно
+firefox/m8b-widgets	51	rename	change-web	Text:Toppings renamed
+firefox/m8b-widgets	56	disable	change-web	State:недоступно
+firefox/m8b-widgets	56	expand	change-web	State:развёрнуто
+firefox/m8b-widgets	56	rename	change-web	Text:Actions renamed
+firefox/m8b-widgets	58	disable	change-web	State:недоступно
+firefox/m8b-widgets	58	rename	change-web	Text:Copy renamed
+firefox/m8b-widgets	59	check	change-web	State:не отмечено
+firefox/m8b-widgets	59	disable	change-web	State:недоступно
+firefox/m8b-widgets	59	mixed	change-web	State:частично отмечено
+firefox/m8b-widgets	59	press	change-web	
+firefox/m8b-widgets	59	rename	change-web	Text:Word wrap renamed
+firefox/m8b-widgets	60	check	change-web	State:не отмечено
+firefox/m8b-widgets	60	disable	change-web	State:недоступно
+firefox/m8b-widgets	60	mixed	change-web	State:частично отмечено
+firefox/m8b-widgets	60	press	change-web	
+firefox/m8b-widgets	60	rename	change-web	Text:Small renamed
+firefox/m8b-widgets	61	check	change-web	State:отмечено
+firefox/m8b-widgets	61	disable	change-web	State:недоступно
+firefox/m8b-widgets	61	mixed	change-web	State:частично отмечено
+firefox/m8b-widgets	61	press	change-web	
+firefox/m8b-widgets	61	rename	change-web	Text:Large renamed
+firefox/m8b-widgets	64	disable	change-web	State:недоступно
+firefox/m8b-widgets	64	expand	change-web	State:развёрнуто
+firefox/m8b-widgets	64	rename	change-web	Text:Show details renamed
+firefox/m8b-widgets	65	disable	change-web	State:недоступно
+firefox/m8b-widgets	65	expand	change-web	State:свёрнуто
+firefox/m8b-widgets	65	rename	change-web	Text:Hide notes renamed
+firefox/m8b-widgets	71	disable	change-web	State:недоступно
+firefox/m8b-widgets	71	expand	change-web	State:свёрнуто
+firefox/m8b-widgets	71	rename	change-web	Text:Personal information renamed
+firefox/m8b-widgets	75	disable	change-web	State:недоступно
+firefox/m8b-widgets	75	expand	change-web	State:развёрнуто
+firefox/m8b-widgets	75	rename	change-web	Text:Billing address renamed
+firefox/m8b-widgets	79	disable	change-web	State:недоступно
+firefox/m8b-widgets	79	press	change-web	State:не нажато
+firefox/m8b-widgets	79	rename	change-web	Text:Bold renamed
+firefox/m8b-widgets	80	disable	change-web	State:недоступно
+firefox/m8b-widgets	80	rename	change-web	Text:Italic renamed
+firefox/m8b-widgets	81	disable	change-web	State:недоступно
+firefox/m8b-widgets	81	rename	change-web	Text:Underline renamed
+firefox/m8b-widgets	82	disable	change-web	State:недоступно
+firefox/m8b-widgets	82	rename	change-web	Text:Align left renamed
+firefox/m8b-widgets	88	disable	change-web	State:недоступно
+firefox/m8b-widgets	88	rename	change-web	Text:Home crumb renamed
+firefox/m8b-widgets	90	disable	change-web	State:недоступно
+firefox/m8b-widgets	90	rename	change-web	Text:Products crumb renamed
+firefox/m8b-widgets	92	disable	change-web	State:недоступно
+firefox/m8b-widgets	92	rename	change-web	Text:Gadgets crumb renamed
+firefox/m8b-widgets	95	disable	change-web	State:недоступно
+firefox/m8b-widgets	95	rename	change-web	Text:Step one link renamed
+firefox/m8b-widgets	97	disable	change-web	State:недоступно
+firefox/m8b-widgets	97	rename	change-web	Text:Location link renamed
+firefox/m8b-widgets	99	disable	change-web	State:недоступно
+firefox/m8b-widgets	99	rename	change-web	Text:Date link renamed
+firefox/m8b-widgets	101	disable	change-web	State:недоступно
+firefox/m8b-widgets	101	rename	change-web	Text:Time link renamed
+firefox/m8b-widgets	103	disable	change-web	State:недоступно
+firefox/m8b-widgets	103	rename	change-web	Text:True link renamed
+firefox/m8b-widgets	105	disable	change-web	State:недоступно
+firefox/m8b-widgets	105	rename	change-web	Text:False link renamed
 firefox/names	0	disable	change-web	
 firefox/names	0	rename	change-web	Text:SEM names renamed
 firefox/names	5	disable	change-web	State:недоступно

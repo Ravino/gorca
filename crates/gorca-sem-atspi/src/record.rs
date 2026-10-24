@@ -258,6 +258,10 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
 
     if have_role && rec.role_source == RoleSource::Token {
         sem.flags |= SemFlags::ROLE_AUTHORED;
+        // The bit is a fact of the role, not of the states: a node whose states were not fetched
+        // (the document source reads states of the stateful roles only) still carries it, so the
+        // flags group is written with it. Without the states it holds nothing else.
+        known.set(Group::Flags, true);
     }
     rec.sem = sem;
     rec.known = known;
@@ -400,6 +404,24 @@ mod tests {
             name: Some("N"),
             description: None,
         }
+    }
+
+    #[test]
+    fn an_authored_role_is_known_even_when_the_states_were_not_fetched() {
+        // The document source reads states of the stateful roles only; a tab list (38) is not one.
+        let attrs = [("xml-roles", "tablist")];
+        let fetched = PropMask::ROLE | PropMask::ATTRS | PropMask::NAME;
+        let r = normalise(&node(fetched, 38, StateBits(0), &attrs));
+        assert_eq!(r.sem.role, SemRole::TabList);
+        assert!(r.sem.flags.contains(SemFlags::ROLE_AUTHORED));
+        assert!(
+            r.known.has(Group::Flags),
+            "the authored bit travels with the role"
+        );
+        // Without an author role the group stays unknown.
+        let r = normalise(&node(fetched, 38, StateBits(0), &[]));
+        assert!(!r.known.has(Group::Flags));
+        assert!(!r.sem.flags.contains(SemFlags::ROLE_AUTHORED));
     }
 
     #[test]
