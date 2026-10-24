@@ -1389,7 +1389,10 @@ fn a_shallow_change_is_fused_within_a_few_runs_while_a_deep_leaf_keeps_changing(
         }
     }
     let k = fused_at.expect("node 1 starved");
-    assert!(k <= 1024 + 8, "aging should serve it after its age bound, took {k}");
+    assert!(
+        k <= 1024 + 8,
+        "aging should serve it after its age bound, took {k}"
+    );
 }
 
 #[test]
@@ -1764,13 +1767,19 @@ fn aging_takes_a_fixed_quarter_of_the_fusions_and_never_two_in_a_row_while_prior
         assert_eq!(rep.fuse_calls, 1);
         if e.is_dirty(nid(3)) {
             missed_in_a_row += 1;
-            assert!(missed_in_a_row <= 1, "run {k}: aging took two slots in a row");
+            assert!(
+                missed_in_a_row <= 1,
+                "run {k}: aging took two slots in a row"
+            );
         } else {
             served += 1;
             missed_in_a_row = 0;
         }
     }
-    assert!(served >= 126, "the focused node got {served} of 168 fusions, aging gets a quarter");
+    assert!(
+        served >= 126,
+        "the focused node got {served} of 168 fusions, aging gets a quarter"
+    );
 }
 
 #[test]

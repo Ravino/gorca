@@ -569,7 +569,11 @@ fn g_p1_b_the_published_stream_does_not_depend_on_time_or_on_where_runs_cut() {
             while e.pending() > 0 {
                 let n = cuts[k % cuts.len()];
                 k += 1;
-                let b = if n == 0 { Budget::UNLIMITED } else { Budget::calls(n) };
+                let b = if n == 0 {
+                    Budget::UNLIMITED
+                } else {
+                    Budget::calls(n)
+                };
                 out.extend(published_nodes(&e.run(b).published));
             }
             out

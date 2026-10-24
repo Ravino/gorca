@@ -35,11 +35,14 @@ fn word(id: M, group: Group) -> Field {
     Field::new(FieldKind::STATE, Content::word(id), origin(group))
 }
 
-fn not(id: M, group: Group) -> Field {
+fn not(id: M, group: Group, lang: gorca_i18n::Lang) -> Field {
     // "not <word>" through the catalog template, so every language words the negation itself.
     Field::new(
         FieldKind::STATE,
-        Content::msg(M::StateNot, vec![Arg::text("word", gorca_i18n::t(id))]),
+        Content::msg(
+            M::StateNot,
+            vec![Arg::text("word", gorca_i18n::t_in(lang, id))],
+        ),
         origin(group),
     )
 }
@@ -197,7 +200,7 @@ pub fn compose_change(old: &SemEntry, new: &SemEntry, node: NodeKey, ctx: Compos
         fields.push(if sem.flags.contains(SemFlags::REQUIRED) {
             word(M::StateRequired, Group::Flags)
         } else {
-            not(M::StateRequired, Group::Flags)
+            not(M::StateRequired, Group::Flags, ctx.lang)
         });
     }
     if changed.has(Group::Invalid) {
@@ -257,6 +260,7 @@ mod tests {
         may_refine: false,
         web: false,
         skip_selected: false,
+        lang: gorca_i18n::Lang::En,
     };
 
     fn entry(role: SemRole) -> SemEntry {
@@ -354,6 +358,7 @@ mod tests {
         b.sem.select = Select::On;
         let skip = ComposeCtx {
             skip_selected: true,
+            lang: gorca_i18n::Lang::En,
             ..CTX
         };
         assert!(compose_change(&a, &b, key(), skip).fields.is_empty());

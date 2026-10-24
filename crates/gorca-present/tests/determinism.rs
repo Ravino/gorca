@@ -175,6 +175,7 @@ fn gen_ctx(r: &mut Rng) -> ComposeCtx {
         may_refine: r.chance(50),
         web: r.chance(50),
         skip_selected: r.chance(30),
+        lang: gorca_i18n::Lang::En,
     }
 }
 
@@ -197,7 +198,7 @@ fn present(
     e: &SemEntry,
     reason: Reason,
     ctx: ComposeCtx,
-    opts: RenderOpts,
+    opts: RenderOpts<'_>,
 ) -> Option<(PresIr, Spoken)> {
     let ir = compose(e, key(), reason, ctx).ok()?;
     let s = spoken(&render(&ir, opts));
@@ -208,7 +209,7 @@ fn present_change(
     old: &SemEntry,
     new: &SemEntry,
     ctx: ComposeCtx,
-    opts: RenderOpts,
+    opts: RenderOpts<'_>,
 ) -> (PresIr, Spoken) {
     let ir = compose_change(old, new, key(), ctx);
     let s = spoken(&render(&ir, opts));
@@ -229,6 +230,7 @@ fn p2_1_compose_and_render_are_a_pure_function_of_entry_reason_and_settings() {
         let ctx = gen_ctx(&mut r);
         let opts = RenderOpts {
             description_pause: r.chance(50),
+            ..RenderOpts::default()
         };
         let a = present(&e, Reason::Focus, ctx, opts).expect("focus has a rule row");
         let b = present(&e, Reason::Focus, ctx, opts).unwrap();
@@ -246,7 +248,7 @@ fn p2_1_compose_and_render_are_a_pure_function_of_entry_reason_and_settings() {
 #[test]
 fn p2_2_thread_interleaving_cannot_change_the_output() {
     // Every thread pins the same language: the language is a hidden input (P2.5), not a race.
-    let work: Vec<(SemEntry, ComposeCtx, RenderOpts)> = (0..400u64)
+    let work: Vec<(SemEntry, ComposeCtx, RenderOpts<'_>)> = (0..400u64)
         .map(|seed| {
             let mut r = Rng::new(seed ^ 0x77);
             (
@@ -254,6 +256,7 @@ fn p2_2_thread_interleaving_cannot_change_the_output() {
                 gen_ctx(&mut r),
                 RenderOpts {
                     description_pause: r.chance(50),
+                    ..RenderOpts::default()
                 },
             )
         })
@@ -345,45 +348,46 @@ fn p2_4_sem_rev_and_report_flags_do_not_change_the_words() {
     }
 }
 
-/// P2.5 HIDDEN INPUT: the UI language. `render` takes `RenderOpts` (no language) and formats
-/// through `gorca_i18n::language()`, a process-wide atomic plus a thread-local pin. The output is
-/// a function of (entry, reason, settings, **language**). This test pins the dependency down: the
-/// words change with the language, and are stable under a fixed one.
+/// P2.5 the UI language is an explicit input (fixed): `ComposeCtx::lang` and `RenderOpts::lang`
+/// carry it, so the output is a function of (entry, reason, ctx, opts) and the process-wide
+/// language and the thread pin are not read at all.
 #[test]
-fn p2_5_the_ui_language_is_a_hidden_input_of_render() {
+fn p2_5_the_ui_language_is_an_explicit_input_of_compose_and_render() {
     let mut e = SemEntry::default();
     e.sem.role = SemRole::Checkbox;
     e.sem.check = Check::On;
     e.name = Some(Arc::from("Mute"));
-    let ctx = ComposeCtx {
+    let ctx_in = |lang| ComposeCtx {
         flags: ReportFlags(0),
         may_refine: false,
         web: false,
         skip_selected: false,
+        lang,
     };
-    let o = RenderOpts::default();
-    let en = {
-        let _p = gorca_i18n::scoped(Lang::En);
-        present(&e, Reason::Focus, ctx, o).unwrap()
+    let opts_in = |lang| RenderOpts {
+        lang,
+        ..RenderOpts::default()
     };
-    let ru = {
-        let _p = gorca_i18n::scoped(Lang::Ru);
-        present(&e, Reason::Focus, ctx, o).unwrap()
-    };
+    let with = |lang: Lang| present(&e, Reason::Focus, ctx_in(lang), opts_in(lang)).unwrap();
+    let (en, ru) = (with(Lang::En), with(Lang::Ru));
     assert_eq!(en.0, ru.0, "the IR is language-free (words travel as ids)");
-    assert_ne!(en.1, ru.1, "the rendered tokens are not");
-    // Fixed language, stable output.
-    for _ in 0..5 {
-        let _p = gorca_i18n::scoped(Lang::Ru);
-        assert_eq!(present(&e, Reason::Focus, ctx, o).unwrap(), ru);
+    assert_ne!(
+        en.1, ru.1,
+        "the rendered tokens follow the explicit language"
+    );
+    // The ambient language (process atomic and thread pin) changes nothing.
+    for ambient in Lang::ALL {
+        let _p = gorca_i18n::scoped(ambient);
+        assert_eq!(with(Lang::En), en, "ambient {ambient:?}");
+        assert_eq!(with(Lang::Ru), ru, "ambient {ambient:?}");
     }
 }
 
-/// P2.6 HIDDEN INPUT: the extension catalog registry (`gorca_i18n::ext`, a process-global
-/// `RwLock<HashMap>`). A `Content::Ext` field renders through whatever is registered at that
-/// moment: the same IR renders to nothing before registration and to text after.
+/// P2.6 the extension catalogs are an explicit input (fixed): `RenderOpts::ext` is an immutable
+/// snapshot, so registering or unregistering in the process-wide registry after the snapshot was
+/// taken changes nothing, and the default options (no catalogs) render an add-on field as absent.
 #[test]
-fn p2_6_the_extension_catalog_registry_is_a_hidden_input_of_render() {
+fn p2_6_the_extension_catalogs_are_an_explicit_snapshot_of_render() {
     let ns = "m22b-determinism-ns";
     let ir = PresIr::new(
         Reason::Focus,
@@ -397,14 +401,27 @@ fn p2_6_the_extension_catalog_registry_is_a_hidden_input_of_render() {
         .into_iter()
         .collect(),
     );
-    let _p = gorca_i18n::scoped(Lang::En);
-    let before = spoken(&render(&ir, RenderOpts::default()));
-    assert!(before.is_empty());
+    let before = gorca_i18n::ext::snapshot();
     let errors = gorca_i18n::ext::register(ns, Lang::En, "hello = hi {n}\n");
     assert!(errors.is_empty(), "{errors:?}");
-    let after = spoken(&render(&ir, RenderOpts::default()));
-    assert_eq!(after, vec![(0, "hi 2".to_owned())]);
-    gorca_i18n::ext::unregister_extension(ns);
+    let after = gorca_i18n::ext::snapshot();
+    let with = |ext: &gorca_i18n::ext::ExtCatalogs| {
+        spoken(&render(
+            &ir,
+            RenderOpts {
+                ext,
+                ..RenderOpts::default()
+            },
+        ))
+    };
+    // The registry now has the namespace; only the snapshot decides what renders.
+    assert!(
+        with(&before).is_empty(),
+        "a snapshot taken earlier is unchanged"
+    );
+    assert!(spoken(&render(&ir, RenderOpts::default())).is_empty());
+    assert_eq!(with(&after), vec![(0, "hi 2".to_owned())]);
+    assert_eq!(with(&after), vec![(0, "hi 2".to_owned())], "immutable");
 }
 
 /// P2.7 only `Focus` has a rule row in `compose`; every other reason is the same typed error,
@@ -549,6 +566,7 @@ fn gen_diff_ctx<'a>(r: &mut Rng, surface: &'a str) -> DiffCtx<'a> {
         role: *r.pick(SemRole::ALL),
         name_derived: r.chance(50),
         untoggled: r.chance(50),
+        lang: gorca_i18n::Lang::En,
     }
 }
 
@@ -765,6 +783,7 @@ fn run_case(c: &Case, dev: &Deviations, mutate: impl FnOnce(&mut Case)) -> DiffO
             role: c.role,
             name_derived: c.name_derived,
             untoggled: c.untoggled,
+            lang: gorca_i18n::Lang::En,
         },
     )
 }
@@ -1039,7 +1058,11 @@ fn marker_stripped_name_rejects_a_dropped_word() {
         ),
         "a dropped word must not be classified as a stripped marker"
     );
-    for (old, new) in [("\u{2022} Alpha", "Alpha"), ("3. Beta", "Beta"), ("- x", "x")] {
+    for (old, new) in [
+        ("\u{2022} Alpha", "Alpha"),
+        ("3. Beta", "Beta"),
+        ("- x", "x"),
+    ] {
         c.legacy = vec![(SegmentKind::Text, old.into())];
         c.new = vec![(SegmentKind::Text, new.into())];
         assert_eq!(
@@ -1048,14 +1071,15 @@ fn marker_stripped_name_rejects_a_dropped_word() {
             "{old:?} -> {new:?}"
         );
     }
-    for (old, new) in [("Alpha", "Alpha"), (" Alpha", "Alpha"), ("2 apples", "apples")] {
+    for (old, new) in [
+        ("Alpha", "Alpha"),
+        (" Alpha", "Alpha"),
+        ("2 apples", "apples"),
+    ] {
         c.legacy = vec![(SegmentKind::Text, old.into())];
         c.new = vec![(SegmentKind::Text, new.into())];
         assert!(
-            !matches!(
-                run_case(&c, &permissive, |_| {}),
-                DiffOutcome::Allowed(_)
-            ),
+            !matches!(run_case(&c, &permissive, |_| {}), DiffOutcome::Allowed(_)),
             "{old:?} -> {new:?}"
         );
     }
@@ -1080,6 +1104,7 @@ fn every_used_classifier_is_reported() {
         role: SemRole::SearchBox,
         name_derived: false,
         untoggled: false,
+        lang: gorca_i18n::Lang::En,
     };
     let (outcome, used) = gorca_present::diff::diff_report(&l, &n, &permissive, ctx);
     assert_eq!(outcome, DiffOutcome::Allowed("field-contents-not-fused"));
@@ -1117,6 +1142,7 @@ fn p3_9_adding_a_row_never_turns_allowed_into_different() {
             role: if r.chance(50) { c1.role } else { c2.role },
             name_derived: c1.name_derived || c2.name_derived,
             untoggled: c1.untoggled || c2.untoggled,
+            lang: gorca_i18n::Lang::En,
         };
         // A subset of rows.
         let mut s = String::new();
@@ -1162,6 +1188,7 @@ fn p3_8_compose_render_diff_is_repeatable_end_to_end() {
                 may_refine: false,
                 web,
                 skip_selected: false,
+                lang: gorca_i18n::Lang::En,
             },
         )
         .unwrap();
