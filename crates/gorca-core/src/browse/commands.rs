@@ -634,19 +634,36 @@ fn is_ancestor_or_self(d: &WebDoc, anc: DocNodeId, node: DocNodeId) -> bool {
     false
 }
 
-/// The nearest ancestors of a node, nearest first (at most the inline capacity): where the
-/// browse cursor re-anchors when the page removes the node together with its whole subtree.
-fn ancestor_chain(d: &WebDoc, node: DocNodeId) -> SmallVec<[DocNodeId; 8]> {
+/// The nearest ancestors of a node, nearest first (at most the inline capacity), each with the
+/// sibling that follows the child on the path to `node`: where the browse cursor re-anchors when
+/// the page removes the node together with its whole subtree.
+fn ancestor_chain(d: &WebDoc, node: DocNodeId) -> SmallVec<[(DocNodeId, Option<DocNodeId>); 8]> {
     let mut chain = SmallVec::new();
-    let mut up = d.parent(node);
-    while let Some(p) = up {
+    let mut below = node;
+    while let Some(p) = d.parent(below) {
         if chain.len() == chain.inline_size() {
             break;
         }
-        chain.push(p);
-        up = d.parent(p);
+        chain.push((p, d.next_sibling(below)));
+        below = p;
     }
     chain
+}
+
+/// Where the cursor lands once its node is gone: the first line of what follows the removed
+/// node in document order under the nearest surviving ancestor, else of what follows that
+/// ancestor, else the last line of the ancestor.
+fn reanchor(d: &WebDoc, chain: &[(DocNodeId, Option<DocNodeId>)]) -> Option<(WebCursor, u32)> {
+    let k = chain.iter().position(|(a, _)| d.is_attached(*a))?;
+    let following = chain[k..]
+        .iter()
+        .filter_map(|(_, after)| *after)
+        .find(|n| d.is_attached(*n));
+    let off = match following {
+        Some(n) => cursor::content_start(d, n)?,
+        None => d.subtree_text_range(chain[k].0)?.1.saturating_sub(1),
+    };
+    cursor::cursor_at(d, off).map(|c| (c, off))
 }
 
 /// The visible text of a node's subtree as a one-line label, or `None` when it holds none: the
@@ -2420,14 +2437,11 @@ impl Reader {
                 // ancestor instead of the end of the document, where no Tab target and nothing
                 // to click remain.
                 let anchored = h.read.with(|d| {
-                    if !lost || last < d.text_len() {
-                        return None;
+                    if lost {
+                        reanchor(d, &b.cursor_chain)
+                    } else {
+                        None
                     }
-                    b.cursor_chain
-                        .iter()
-                        .find(|n| d.is_attached(**n) && d.root() != Some(**n))
-                        .and_then(|n| cursor::content_start(d, *n))
-                        .and_then(|off| cursor::cursor_at(d, off).map(|c| (c, off)))
                 });
                 let fixed = match anchored {
                     Some(a) => Some(a),
@@ -2455,6 +2469,9 @@ impl Reader {
                 }
                 // The cursor moved without a key: Tab availability follows it (D-2); a grab that
                 // was right for the old place would keep eating Tab for good.
+                if lost {
+                    b.tab_fallback = true;
+                }
                 resync_tabs = lost;
             }
             WebMode::Focus { .. } | WebMode::Browse { .. } | WebMode::Inactive => {}
@@ -3087,6 +3104,7 @@ impl Reader {
         }
         b.last_off = off;
         b.sel = None;
+        b.tab_fallback = false;
         if let Some(h) = b.docs.get(doc) {
             b.cursor_chain = h.read.with(|d| ancestor_chain(d, cur.node));
         }
@@ -3476,9 +3494,10 @@ impl Reader {
         {
             return (false, false);
         }
+        let fallback = b.tab_fallback;
         h.read.with(|d| {
             (
-                Self::tab_target(d, cur, Dir::Next).is_some(),
+                fallback || Self::tab_target(d, cur, Dir::Next).is_some(),
                 Self::tab_target(d, cur, Dir::Prev).is_some(),
             )
         })
@@ -3507,7 +3526,15 @@ impl Reader {
         };
         let Some(b) = self.web.as_ref() else { return };
         let Some(h) = b.docs.get(doc) else { return };
-        let target = h.read.with(|d| Self::tab_target(d, cur, dir));
+        // The first focusable after the cursor; after a removed pane with none left, the
+        // document itself (the page keeps the key, the browser chrome does not get it).
+        let fallback = dir == Dir::Next && b.tab_fallback;
+        let target = h.read.with(|d| {
+            Self::tab_target(d, cur, dir).or_else(|| if fallback { d.root() } else { None })
+        });
+        if let Some(b) = self.web.as_mut() {
+            b.tab_fallback = false;
+        }
         if let Some(node) = target {
             fx.push(ReaderEffect::Web(WebEffect::Act {
                 doc,

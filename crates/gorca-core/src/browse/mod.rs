@@ -580,7 +580,13 @@ pub struct BrowseState {
     pub restore_until: Option<(Instant, u32)>,
     /// The cursor node's ancestors (nearest first) as of the last mirror change that found the
     /// node attached: where to re-anchor when the page removes the node's whole subtree.
-    pub cursor_chain: SmallVec<[DocNodeId; 8]>,
+    /// Each entry: an ancestor and the sibling that follows, under it, the child on the path to
+    /// the cursor (the first place after the removed node in document order).
+    pub cursor_chain: SmallVec<[(DocNodeId, Option<DocNodeId>); 8]>,
+    /// The cursor was re-anchored after the page removed its pane: Tab with no target after the
+    /// cursor still acts inside the page (it focuses the document) instead of leaving for the
+    /// browser chrome. Cleared by the next cursor move.
+    pub tab_fallback: bool,
     /// Latest scroll request: sent after a pause so held keys do not flood the page (LP-6).
     pub scroll_due: Option<(Instant, DocId, DocNodeId, u32)>,
     /// When the browser last reported `load-complete`, by document root (page auto-read): the
@@ -716,6 +722,7 @@ impl BrowseState {
             last_off: 0,
             restore_until: None,
             cursor_chain: SmallVec::new(),
+            tab_fallback: false,
             displaced: None,
             armed_click: None,
             focus_key: None,

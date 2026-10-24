@@ -3854,9 +3854,12 @@ fn a_removed_pane_under_the_cursor_re_anchors_to_the_surviving_container() {
                 run(26, "Tail two"),
                 block(src(21, Role::Panel, Some(1021))),
                 run(23, "Deep text"),
+                block(src(27, Role::Panel, Some(1027))),
+                run(28, "Sibling after"),
             ]),
             kids(1, &[2, 4, 9, 11, 13, 20]),
-            kids(20, &[22, 25, 21]),
+            kids(20, &[22, 25, 21, 27]),
+            kids(27, &[28]),
             kids(25, &[26]),
             kids(21, &[23]),
             DocDelta::Settled { batch: 2 },
@@ -3885,7 +3888,7 @@ fn a_removed_pane_under_the_cursor_re_anchors_to_the_surviving_container() {
     r.tr.apply(
         &mut r.writer,
         vec![
-            kids(20, &[22, 25]),
+            kids(20, &[22, 25, 27]),
             DocDelta::Removed(vec![SrcNodeId(21), SrcNodeId(23)]),
             DocDelta::Settled { batch: 3 },
         ],
@@ -3907,7 +3910,7 @@ fn a_removed_pane_under_the_cursor_re_anchors_to_the_surviving_container() {
     let WebMode::Browse { doc, cur, .. } = r.mode() else {
         panic!("not browsing");
     };
-    let stay = r.tr.id_of(SrcNodeId(22)).expect("Head");
+    let stay = r.tr.id_of(SrcNodeId(28)).expect("Sibling after");
     let attached = r
         .docs
         .get(doc)
@@ -3917,6 +3920,91 @@ fn a_removed_pane_under_the_cursor_re_anchors_to_the_surviving_container() {
     assert!(attached, "the cursor is on a live node");
     assert_eq!(
         cur.node, stay,
-        "the start of the surviving pane, not the end of the document"
+        "the first line after the removed node, not the end of the document"
     );
+    // Tab with no focusable left after the cursor still acts in the page: it focuses the
+    // document instead of handing the key to the browser chrome.
+    let root = r
+        .docs
+        .get(doc)
+        .unwrap()
+        .read
+        .with(|d| d.root())
+        .expect("root");
+    let fx = r.key(CoreCmd::BrowseTabNext);
+    assert_eq!(acts(&fx), [(DocAction::Focus, root)]);
+}
+
+/// a1 review: the page re-renders the whole pane under new ids (the ancestors the cursor knew
+/// are gone too). The cursor still ends on a live node, silently, and keeps working.
+#[test]
+fn a_re_rendered_pane_with_new_ids_leaves_the_cursor_on_a_live_node() {
+    let mut r = rig();
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![
+                block(src(20, Role::Paragraph, Some(1020))),
+                block(src(21, Role::Panel, Some(1021))),
+                run(23, "Old text"),
+            ]),
+            kids(1, &[2, 4, 9, 11, 13, 20]),
+            kids(20, &[21]),
+            kids(21, &[23]),
+            DocDelta::Settled { batch: 2 },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 2,
+        }),
+        r.now,
+    );
+    r.focus(1006);
+    let mut said = Vec::new();
+    for _ in 0..12 {
+        said = spoken(&r.key(CoreCmd::BrowseCursorNextLine));
+        if said.iter().any(|s| s.contains("Old text")) {
+            break;
+        }
+    }
+    assert!(said.iter().any(|s| s.contains("Old text")), "{said:?}");
+    // New ids for the pane and its content; the old ones are removed.
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![
+                block(src(30, Role::Paragraph, Some(1030))),
+                run(31, "New"),
+            ]),
+            kids(1, &[2, 4, 9, 11, 13, 30]),
+            kids(30, &[31]),
+            DocDelta::Removed(vec![SrcNodeId(20), SrcNodeId(21), SrcNodeId(23)]),
+            DocDelta::Settled { batch: 3 },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 3,
+        }),
+        r.now,
+    );
+    assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
+    let WebMode::Browse { doc, cur, .. } = r.mode() else {
+        panic!("not browsing");
+    };
+    let attached = r
+        .docs
+        .get(doc)
+        .unwrap()
+        .read
+        .with(|d| d.is_attached(cur.node));
+    assert!(attached, "the cursor is on a live node");
+    assert!(!spoken(&r.key(CoreCmd::BrowseCursorPrevLine)).is_empty());
 }
