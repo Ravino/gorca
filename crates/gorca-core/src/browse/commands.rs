@@ -2556,6 +2556,27 @@ impl Reader {
         if resync_tabs {
             self.web_sync_tab_grabs(fx);
         }
+        self.web_loading_cue(doc, fx);
+    }
+
+    /// The text grew after an edge hit that followed our scroll request: the list is loading
+    /// more. Said once per edge visit; a page that did not grow stays with "top"/"bottom".
+    fn web_loading_cue(&mut self, doc: DocId, fx: &mut ReaderEffects) {
+        let now = self.now;
+        let Some(b) = self.web.as_mut() else { return };
+        let Some((at, len)) = b.edge_wait else { return };
+        if now.saturating_duration_since(at) >= LOADING_CUE_WINDOW {
+            b.edge_wait = None;
+            return;
+        }
+        let grown = b
+            .docs
+            .get(doc)
+            .is_some_and(|h| h.read.with(|d| d.text_len() > len));
+        if grown {
+            b.edge_wait = None;
+            self.say(t(M::WebLoading), fx);
+        }
     }
 
     /// M4: the document's root got focus before it had a line; speak the first line now, if
@@ -3184,6 +3205,7 @@ impl Reader {
         b.last_off = off;
         b.sel = None;
         b.tab_fallback = false;
+        b.edge_wait = None;
         if let Some(h) = b.docs.get(doc) {
             b.cursor_chain = h.read.with(|d| ancestor_chain(d, cur.node));
             b.cursor_item = h.read.with(|d| item_of(d, cur.node, off));
@@ -3329,19 +3351,22 @@ impl Reader {
                 if let Some(b) = self.web.as_mut() {
                     b.counters.edges += 1;
                 }
-                // An edge right after our own scroll request: a virtual list is fetching more.
-                let loading = self.web.as_ref().is_some_and(|b| {
-                    b.last_scroll
-                        .is_some_and(|t| now.saturating_duration_since(t) < LOADING_CUE_WINDOW)
-                });
-                let w = if loading {
-                    t(M::WebLoading)
-                } else {
-                    match e {
-                        Edge::Top => t(M::WebTop),
-                        Edge::Bottom => t(M::WebBottom),
-                    }
+                let w = match e {
+                    Edge::Top => t(M::WebTop),
+                    Edge::Bottom => t(M::WebBottom),
                 };
+                // After our own scroll request a virtual list may be fetching more: remember the
+                // length, a change that grows it within the window is announced once.
+                if let Some(b) = self.web.as_mut()
+                    && b.edge_wait.is_none()
+                    && b.last_scroll
+                        .is_some_and(|t| now.saturating_duration_since(t) < LOADING_CUE_WINDOW)
+                    && let WebMode::Browse { doc, .. } = b.mode
+                    && let Some(h) = b.docs.get(doc)
+                {
+                    let len = h.read.with(gorca_doc::web::WebDoc::text_len);
+                    b.edge_wait = Some((now, len));
+                }
                 self.say(w, fx);
             }
             Outcome::Nothing => {}

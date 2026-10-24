@@ -590,6 +590,9 @@ pub struct BrowseState {
     /// When the last scroll request went out: an edge hit right after it means the page is
     /// loading more (a virtual list), not that the content ends.
     pub last_scroll: Option<Instant>,
+    /// An edge was hit right after a scroll request: when the document text has grown past the
+    /// recorded length within the window, a virtual list really is loading (said once).
+    pub edge_wait: Option<(Instant, u32)>,
     /// The DOM id of the item (message, row) the cursor is in, and the cursor's offset from the
     /// item's start: the item is tracked, not the row object the page happens to reuse for it.
     pub cursor_item: Option<(Arc<str>, u32)>,
@@ -730,6 +733,7 @@ impl BrowseState {
             cursor_chain: SmallVec::new(),
             tab_fallback: false,
             last_scroll: None,
+            edge_wait: None,
             cursor_item: None,
             displaced: None,
             armed_click: None,

@@ -4030,24 +4030,63 @@ fn a_cursor_on_a_run_scrolls_the_owner_to_its_character() {
     );
 }
 
-/// a2: an edge hit right after our own scroll request is a virtual list loading, said as such;
-/// an edge with no scroll behind it is the end.
+/// a2: "loading" only when the text actually grows after an edge hit that followed our scroll
+/// request; a static page keeps saying top/bottom, and the cue is said once per edge visit.
 #[test]
-fn an_edge_right_after_a_scroll_says_loading_and_a_plain_edge_says_top() {
+fn loading_is_said_only_when_the_list_grows_after_the_edge() {
     let mut r = rig();
     r.focus(1002);
-    let top = spoken(&r.key(CoreCmd::BrowseCursorPrevLine));
-    assert_eq!(top, ["top"]);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    settle(&mut r);
+    // Static page: the scroll fired a moment ago, the edge is still just "top".
+    r.key(CoreCmd::BrowseCursorPrevLine);
+    for _ in 0..3 {
+        assert_eq!(spoken(&r.key(CoreCmd::BrowseCursorPrevLine)), ["top"]);
+    }
+    // A page that does not grow says nothing more.
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 1,
+        }),
+        r.now,
+    );
+    // Growing list: a move and a fresh scroll request, an edge, then older items arrive.
     r.key(CoreCmd::BrowseCursorNextLine);
     settle(&mut r);
     r.key(CoreCmd::BrowseCursorPrevLine);
-    // The scroll fired a moment ago (settle): the edge is "loading".
-    r.now += Duration::from_millis(10);
-    let again = spoken(&r.key(CoreCmd::BrowseCursorPrevLine));
-    assert_eq!(again, ["loading"]);
-    r.now += Duration::from_secs(3);
-    let later = spoken(&r.key(CoreCmd::BrowseCursorPrevLine));
-    assert_eq!(later, ["top"]);
+    assert_eq!(spoken(&r.key(CoreCmd::BrowseCursorPrevLine)), ["top"]);
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![
+                block(src(20, Role::Paragraph, Some(1020))),
+                run(21, "Older"),
+            ]),
+            kids(1, &[20, 2, 4, 9, 11, 13]),
+            kids(20, &[21]),
+            DocDelta::Settled { batch: 2 },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 2,
+        }),
+        r.now,
+    );
+    assert_eq!(spoken(&fx), ["loading"]);
+    // Once per edge visit.
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 3,
+        }),
+        r.now,
+    );
+    assert!(spoken(&fx).is_empty());
 }
 
 /// a2: the item is tracked by its DOM id, not the row object: the page re-renders the item under
