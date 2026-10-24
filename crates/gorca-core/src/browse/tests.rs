@@ -3930,7 +3930,7 @@ fn a_removed_pane_under_the_cursor_re_anchors_to_the_surviving_container() {
         .get(doc)
         .unwrap()
         .read
-        .with(|d| d.root())
+        .with(gorca_doc::web::WebDoc::root)
         .expect("root");
     let fx = r.key(CoreCmd::BrowseTabNext);
     assert_eq!(acts(&fx), [(DocAction::Focus, root)]);
