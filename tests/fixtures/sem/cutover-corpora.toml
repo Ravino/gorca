@@ -1,0 +1,30 @@
+# The corpus families the cut-over gate (`cargo xtask cutover <surface>`, ADR-0022 section 8.9)
+# must replay. A family is covered when `tests/fixtures/sem/<name>/` has recorded pages the replay
+# (`crates/gorca-connector-atspi/src/cutover_gate_tests.rs`, FAMILIES) feeds through both
+# presenters. A family with no fixtures fails the gate unless it carries a dated waiver with a
+# reason; the report prints every waiver, so a gap is never silent. Record with
+# `tools/sem-capture/capture.py` (see tests/fixtures/sem/README in docs/reports/m22a-a2-fixtures.md).
+
+[[family]]
+name = "gtk4"
+
+[[family]]
+name = "firefox"
+
+[[family]]
+name = "chromium"
+
+[[family]]
+name = "gtk3"
+waived_until = "2026-11-07"
+waiver = "No GTK3 gallery has been recorded yet; capture.py has only a GTK4 gallery. Record it before the focus and change cut-over commit, then delete this waiver."
+
+[[family]]
+name = "electron"
+waived_until = "2026-11-07"
+waiver = "No Electron fixture (Signal Desktop is installed, but needs a private display session and a logged-out UI capture). Record it before the cut-over commit, then delete this waiver."
+
+[[family]]
+name = "telegram"
+waived_until = "2026-11-07"
+waiver = "Telegram Desktop (Qt) is not installed on the host; no fixture can be recorded until it is. Owner decision needed: install it or drop the family."

@@ -36,7 +36,7 @@ const ALLOW_FILE: &str = "xtask/legacy.allow";
 pub struct Date(pub u32, pub u32, pub u32);
 
 impl Date {
-    fn parse(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         let mut it = s.trim().split('-');
         let (y, m, d) = (it.next()?, it.next()?, it.next()?);
         if it.next().is_some() || y.len() != 4 {
@@ -47,7 +47,7 @@ impl Date {
     }
 
     /// Today in UTC, from the system clock.
-    fn today() -> Result<Self> {
+    pub fn today() -> Result<Self> {
         let secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .context("system clock before 1970")?
@@ -475,7 +475,10 @@ pub fn run(print: bool) -> Result<bool> {
     let text = std::fs::read_to_string(root.join(ALLOW_FILE))
         .with_context(|| format!("reading {ALLOW_FILE}"))?;
     let allow = parse_allow(&text)?;
-    let problems = judge(&hits, &allow, Date::today()?);
+    let mut problems = judge(&hits, &allow, Date::today()?);
+    // A surface whose slice has no row left is cut over: it needs a passing gate report.
+    let live: std::collections::BTreeSet<String> = allow.iter().map(|a| a.slice.clone()).collect();
+    problems.extend(crate::cutover::check_reports(&root, &live));
     if problems.is_empty() {
         println!(
             "legacy rule: ok ({} allowlisted rows, {} uses; they only shrink)",
