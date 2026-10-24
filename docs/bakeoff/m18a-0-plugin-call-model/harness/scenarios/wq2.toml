@@ -1,0 +1,4 @@
+name = "wq2"
+kind = "wq2"
+desc = "fuel calibration per CPU and core class"
+runs = 15

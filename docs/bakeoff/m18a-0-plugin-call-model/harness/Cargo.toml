@@ -1,0 +1,34 @@
+# Own workspace: outside the main workspace and its gates (SPEC 2.1). The two candidate arm
+# crates live in arms/ (placeholders until the candidates replace their lib.rs).
+[workspace]
+members = ["common", "bin", "report", "load", "arms/arm-a", "arms/arm-bprime"]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+wasmtime = { version = "=49.0.3", default-features = false, features = ["component-model", "cranelift", "runtime", "pooling-allocator", "std", "parallel-compilation"] }
+libc = "0.2"
+hdrhistogram = { version = "7", default-features = false }
+zstd = "0.13"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+sha2 = "0.10"
+anyhow = "1"
+gorca-present-ir = { path = "../../../../crates/gorca-present-ir", features = ["host"] }
+gorca-model = { path = "../../../../crates/gorca-model" }
+m18a0-common = { path = "common" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+debug = 1
+
+[profile.dev]
+opt-level = 1

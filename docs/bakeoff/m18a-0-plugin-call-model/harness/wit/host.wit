@@ -1,0 +1,89 @@
+package gorca:ext@0.10.0;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// M18a-0 SUBSET of wit/gorca-ext-0.10 (checked by check-subset.sh). Interfaces are copied verbatim (comments stripped by the checker).
+
+interface model {
+  use types.{node-ref, anchor-ref, role-code, group-code, prop-value, view-node, prov-info,
+             selector-id, app-info};
+
+  app: func() -> app-info;
+  /// Document URL of a `site` scope, as matched by the manifest (none in `app-module`).
+  doc-url: func() -> option<string>;
+  /// Reader lane: the focused node of this scope, if any (none in the writer lane).
+  focus: func() -> option<node-ref>;
+  /// Reader lane: the browse or review cursor's node of this scope (none in the writer lane).
+  cursor: func() -> option<node-ref>;
+
+  role: func(n: node-ref) -> option<role-code>;
+  /// `none` = Unknown; `some(absent)` = fetched, no value.
+  prop: func(n: node-ref, group: group-code) -> option<prop-value>;
+  /// Needs `read-names`.
+  name: func(n: node-ref) -> option<string>;
+  /// Registry state bits (focused, selected, editable, ...).
+  states: func(n: node-ref) -> u64;
+  parent: func(n: node-ref) -> option<node-ref>;
+  children: func(n: node-ref, max: u16) -> list<node-ref>;
+  /// One boundary crossing for a bounded subtree, depth first (at most 256 nodes, depth 8).
+  subtree: func(root: node-ref, max-depth: u8, max-nodes: u16) -> list<view-node>;
+  /// Cached text only (never an IPC); `none` when not cached. Needs `read-text`. `len` ≤ 64 KiB.
+  text: func(n: node-ref, start: u32, len: u32) -> option<string>;
+  /// Toolkit or web attribute under a neutral key, clipped to 256 bytes. Needs
+  /// `read-attributes`. Keys (≤ 64 B, lowercase): `tag`, `class`, `id`, `aria-role`,
+  /// `aria-*`; each connector maps them. Unknown keys return none.
+  attr: func(n: node-ref, key: string) -> option<string>;
+  /// Evaluate a manifest selector natively in the core on the observed view (ADR-0019 §4.4).
+  matches: func(n: node-ref, sel: selector-id) -> bool;
+  select: func(root: node-ref, sel: selector-id, max: u16) -> list<node-ref>;
+  /// Host-minted anchor of a node for `fact-target::anchor`: none when the node has no anchor
+  /// of that kind (e.g. no DOM id).
+  anchor-of: func(n: node-ref, kind: anchor-kind) -> option<anchor-ref>;
+  /// Reader lane: provenance of a published group (ADR-0024 §2.10 read side).
+  prov: func(n: node-ref, group: group-code) -> option<prov-info>;
+
+  enum anchor-kind {
+    /// Frame + DOM id (+ duplicate count), web documents.
+    dom-id,
+    /// Structural path, role and name fingerprint.
+    structural,
+    /// Window + area + capture fingerprint (pixel sources).
+    region,
+  }
+}
+
+interface facts {
+  use types.{node-ref, anchor-ref, group-code, prop-value, selector-id, category-code};
+
+  variant fact-target {
+    node(node-ref),
+    anchor(anchor-ref),
+    /// Resolved on the observed view (ADR-0026 §2.3.2).
+    selector(selector-id),
+  }
+
+  /// Which stratum the fact is for (ADR-0026 §2.6). `patch` is S1 (author intent, plain speech)
+  /// and needs a grant for it; `inferred` is S4 (below derived, hedged by tier and confidence).
+  enum layer { patch, inferred }
+
+  /// `conf` is the plugin's calibrated precision in 1/1000 (ignored for `patch`).
+  /// `ttl-ms` is required for `inferred` (the host applies 300000 when none).
+  %assert: func(target: fact-target, group: group-code, value: prop-value, at: layer,
+                conf: u16, ttl-ms: option<u32>);
+  retract: func(target: fact-target, group: group-code, at: layer);
+  /// Patch layer (existence register): remove from browse, quick nav and review sets.
+  /// First-party or user-trusted plugins only; otherwise advisory (shown in `explain`).
+  hide: func(target: fact-target);
+  /// Retracts only this plugin's own `hide`.
+  unhide: func(target: fact-target);
+  /// Membership in a category the manifest declares (`ExtCats`, ADR-0022 §2.9). Categories are
+  /// never visible to selectors.
+  category: func(target: fact-target, cat: category-code, member: bool);
+}
+
+interface diag {
+  /// Rate-limited; never contains node text unless the user enabled verbose add-on logs.
+  /// Message ≤ 256 B (checked before copy).
+  log: func(level: u8, msg: string);
+  /// Monotonic milliseconds. Reader lane only: `none` in the writer lane, where output must
+  /// not depend on time (ADR-0026 §2.3.2).
+  now-ms: func() -> option<u64>;
+}

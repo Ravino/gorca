@@ -1,0 +1,4 @@
+name = "benign"
+kind = "focus"
+desc = "Signal private session: P-2 + 9 dummies; gating: 200k focus changes, >= 5 quiet runs"
+seed = 1
