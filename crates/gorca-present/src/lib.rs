@@ -12,6 +12,7 @@
 //!
 //! Everything here is pure and synchronous (no runtime).
 
+pub mod browse;
 pub mod change;
 pub mod compose;
 pub mod deviations;
@@ -35,4 +36,4 @@ pub use ir::{
     Arg, ArgVal, Content, ExtKindError, ExtKinds, ExtNs, ExtRef, Field, FieldFlags, FieldKind,
     FlatSpan, IrFlags, LangId, LangTags, Origin, PRES_IR_VERSION, PresIr, Reason, Redacted, RowId,
 };
-pub use render::{RenderOpts, Token, TokenText, render};
+pub use render::{RenderOpts, Token, TokenText, render, render_kinds};

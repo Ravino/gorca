@@ -208,6 +208,7 @@ sem_flags ATOMIC_PRESENTATION 4096
 sem_flags LAYOUT_TABLE 8192
 sem_flags SELECTION_FOLLOWS_FOCUS 16384
 sem_flags SYNTHETIC 32768
+sem_flags ROLE_AUTHORED 65536
 relevant ADDITIONS 1
 relevant REMOVALS 2
 relevant TEXT 4
@@ -217,3 +218,4 @@ groups keyshortcuts 20
 groups valuetext 21
 groups namefrom 22
 prov Provisional 8
+groups errortext 23

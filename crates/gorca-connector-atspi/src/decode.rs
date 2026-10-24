@@ -185,7 +185,20 @@ pub fn source_record(raw: &RawNode) -> SrcRecord {
         description: raw.description.as_deref(),
     });
     range_value_text(&mut rec, raw.value.as_ref());
+    error_text(&mut rec, raw.error_text.as_deref());
     rec
+}
+
+/// The error message the focus fetch read for an invalid control (the `aria-errormessage` target)
+/// is the node's error text; it is only read for the nodes that take one, so the group is known
+/// only then.
+fn error_text(rec: &mut SrcRecord, text: Option<&str>) {
+    use gorca_model::sem::{Group, SemText};
+    let Some(t) = non_empty(text) else { return };
+    let mut st: SemText = rec.sem.text.as_deref().cloned().unwrap_or_default();
+    st.error_text = Some(t);
+    rec.sem.text = Some(Arc::new(st));
+    rec.known.set(Group::ErrorText, true);
 }
 
 /// A numeric AT-SPI `Value` (slider, spin button, progress bar) is the node's value text when
@@ -480,6 +493,16 @@ mod tests {
         let n = snapshot(key(), &raw, Instant::now());
         assert_eq!(n.attrs.len(), 4);
         assert!(n.attrs.iter().any(|(k, _)| *k == w::ERROR_TEXT));
+        // The same text is the record's error text group, which the fusion carries to the entry.
+        let rec = n.sem.rec.as_deref().expect("a record");
+        assert!(rec.known.has(gorca_model::sem::Group::ErrorText));
+        assert_eq!(
+            rec.sem
+                .text
+                .as_deref()
+                .and_then(|t| t.error_text.as_deref()),
+            Some("bad")
+        );
     }
 
     #[test]

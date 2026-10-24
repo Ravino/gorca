@@ -14,7 +14,7 @@ use gorca_i18n::{Arg as I18nArg, Lang, ext};
 use gorca_model::SegmentKind;
 use smallvec::SmallVec;
 
-use crate::ir::{Arg, ArgVal, Content, PresIr};
+use crate::ir::{Arg, ArgVal, Content, FieldKind, PresIr};
 
 /// Token text: a catalog string, shared literal text or a formatted message.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -100,8 +100,8 @@ fn text_of(c: &Content, opts: &RenderOpts<'_>) -> Option<TokenText> {
     }
 }
 
-/// Render `ir`; empty content renders nothing.
-pub fn render(ir: &PresIr, opts: RenderOpts<'_>) -> SmallVec<[Token; 6]> {
+/// Render `ir` with the kind of the field each token came from; empty content renders nothing.
+pub fn render_kinds(ir: &PresIr, opts: RenderOpts<'_>) -> SmallVec<[(FieldKind, Token); 6]> {
     let mut out = SmallVec::new();
     for f in &ir.fields {
         let Some(text) = text_of(&f.content, &opts) else {
@@ -110,12 +110,20 @@ pub fn render(ir: &PresIr, opts: RenderOpts<'_>) -> SmallVec<[Token; 6]> {
         if text.as_str().is_empty() {
             continue;
         }
-        out.push(Token {
-            kind: f.kind.segment_kind(opts.description_pause),
-            text,
-        });
+        out.push((
+            f.kind,
+            Token {
+                kind: f.kind.segment_kind(opts.description_pause),
+                text,
+            },
+        ));
     }
     out
+}
+
+/// Render `ir`; empty content renders nothing.
+pub fn render(ir: &PresIr, opts: RenderOpts<'_>) -> SmallVec<[Token; 6]> {
+    render_kinds(ir, opts).into_iter().map(|(_, t)| t).collect()
 }
 
 #[cfg(test)]

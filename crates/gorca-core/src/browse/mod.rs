@@ -13,6 +13,7 @@
 pub mod commands;
 pub mod cursor;
 pub mod forms;
+pub mod ir;
 pub mod present;
 pub mod sayall;
 pub mod selmirror;
@@ -775,3 +776,6 @@ mod tests;
 
 #[cfg(test)]
 mod latency;
+
+#[cfg(test)]
+mod gate_tests;

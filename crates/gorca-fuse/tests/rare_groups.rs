@@ -13,12 +13,13 @@ use gorca_fuse::{
 use gorca_model::sem::{Group, NameFrom, ProvCode, SemRole, SemText, Semantics};
 
 const P0: PrimarySlot = PrimarySlot::P0;
-const RARE: [Group; 5] = [
+const RARE: [Group; 6] = [
     Group::RoleDescription,
     Group::Placeholder,
     Group::KeyShortcuts,
     Group::ValueText,
     Group::NameFrom,
+    Group::ErrorText,
 ];
 
 fn engine() -> Ivm<NoQuirks, NoPatches> {
@@ -66,6 +67,7 @@ fn the_entry_carries_every_rare_field_with_primary_provenance() {
         t.placeholder = Some(Arc::from("Search"));
         t.key_shortcuts = Some(Arc::from("Control+K"));
         t.value_text = Some(Arc::from("3 of 10"));
+        t.error_text = Some(Arc::from("Enter an address"));
     });
     feed(&mut e, 1, &sem);
     let v = e.entry_view(NodeIdx(0)).unwrap();
@@ -74,6 +76,7 @@ fn the_entry_carries_every_rare_field_with_primary_provenance() {
     assert_eq!(t.placeholder.as_deref(), Some("Search"));
     assert_eq!(t.key_shortcuts.as_deref(), Some("Control+K"));
     assert_eq!(t.value_text.as_deref(), Some("3 of 10"));
+    assert_eq!(t.error_text.as_deref(), Some("Enter an address"));
     assert_eq!(v.sem.name_from, NameFrom::Placeholder);
     for g in RARE {
         assert!(v.known.has(g), "{g:?} known");

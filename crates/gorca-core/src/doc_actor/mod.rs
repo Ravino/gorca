@@ -15,7 +15,7 @@
 
 pub mod agree;
 #[cfg(test)]
-mod agree_tests;
+pub(crate) mod agree_tests;
 pub mod fuse;
 pub mod live;
 pub mod repair;

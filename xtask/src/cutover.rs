@@ -42,48 +42,83 @@ pub struct Surface {
     pub slice: &'static str,
     /// The `gorca-present` path and the replay exist.
     pub ready: bool,
+    /// The package whose test binary holds the replay (empty: the replay was deleted with the
+    /// legacy path it compared against).
+    pub package: &'static str,
+    /// The replay test, `--exact` path inside that binary.
+    pub test: &'static str,
+    /// The corpus families the surface applies to (empty: every family of the manifest).
+    pub families: &'static [&'static str],
 }
+
+/// The families with a browse cursor: browse and quick navigation do not exist in the native
+/// toolkits.
+const WEB_FAMILIES: &[&str] = &["firefox", "chromium", "electron", "telegram"];
 
 pub const SURFACES: &[Surface] = &[
     Surface {
         name: "focus",
         slice: "M22b1-5",
         ready: true,
+        package: "",
+        test: "",
+        families: &[],
     },
     Surface {
         name: "change",
         slice: "M22b1-5",
         ready: true,
+        package: "",
+        test: "",
+        families: &[],
     },
     Surface {
         name: "browse",
         slice: "M22b2",
-        ready: false,
+        ready: true,
+        package: "gorca-core",
+        test: "browse::gate_tests::browse_emit",
+        families: WEB_FAMILIES,
     },
     Surface {
         name: "quicknav",
         slice: "M22b2",
-        ready: false,
+        ready: true,
+        package: "gorca-core",
+        test: "browse::gate_tests::browse_emit",
+        families: WEB_FAMILIES,
     },
     Surface {
         name: "review",
         slice: "M22b3",
         ready: false,
+        package: "",
+        test: "",
+        families: &[],
     },
     Surface {
         name: "window",
         slice: "M22b4",
         ready: false,
+        package: "",
+        test: "",
+        families: &[],
     },
     Surface {
         name: "notification",
         slice: "M22b4",
         ready: false,
+        package: "",
+        test: "",
+        families: &[],
     },
     Surface {
         name: "explain",
         slice: "M22b4",
         ready: false,
+        package: "",
+        test: "",
+        families: &[],
     },
 ];
 
@@ -95,7 +130,6 @@ const FIXTURES: &str = "tests/fixtures/sem";
 const CHANGE_FIXTURES: &str = "tests/fixtures/sem-change";
 /// The seed of the shuffled-arrival run (override with `--seed`).
 const DEFAULT_SEED: u64 = 0x5eed;
-const REPLAY_TEST: &str = "cutover_gate_tests::cutover_emit";
 
 fn repo_root() -> PathBuf {
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
@@ -464,6 +498,10 @@ pub const DROP_REASONS: &[(&str, &str)] = &[
     (
         "node-removed",
         "the real change removed the node; there is nothing left to speak about",
+    ),
+    (
+        "hidden-node",
+        "a hidden node: quick navigation never lands on one, so it has no description to compare",
     ),
 ];
 
@@ -902,14 +940,14 @@ pub fn report_path(dir: &Path, surface: &str, date: Date) -> PathBuf {
 // Running the replay
 // ---------------------------------------------------------------------------------------------
 
-fn build_test_binary(root: &Path) -> Result<PathBuf> {
+fn build_test_binary(root: &Path, package: &str) -> Result<PathBuf> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let out = Command::new(cargo)
         .current_dir(root)
         .args([
             "test",
             "-p",
-            "gorca-connector-atspi",
+            package,
             "--lib",
             "--no-run",
             "--message-format=json-render-diagnostics",
@@ -923,23 +961,25 @@ fn build_test_binary(root: &Path) -> Result<PathBuf> {
     let mut found = None;
     for msg in cargo_metadata::Message::parse_stream(out.stdout.as_slice()) {
         if let cargo_metadata::Message::CompilerArtifact(a) = msg.context("cargo output")?
-            && a.target.name == "gorca_connector_atspi"
+            && a.target.name == package.replace('-', "_")
             && a.profile.test
             && let Some(exe) = a.executable
         {
             found = Some(PathBuf::from(exe.as_str()));
         }
     }
-    found.context("cargo did not report the test executable of gorca-connector-atspi")
+    found.with_context(|| format!("cargo did not report the test executable of {package}"))
 }
 
 /// One replay inside a private session; returns the record file's text.
 /// The UI languages the gate replays in. The owner's language is Russian; both must pass.
 pub const LANGS: &[&str] = &["en", "ru"];
 
+#[allow(clippy::too_many_arguments)]
 fn replay_once(
     root: &Path,
     bin: &Path,
+    test: &str,
     surface: &str,
     lang: &str,
     seed: u64,
@@ -951,7 +991,7 @@ fn replay_once(
         .current_dir(root)
         .arg("--")
         .arg(bin)
-        .args(["--exact", REPLAY_TEST, "--nocapture"])
+        .args(["--exact", test, "--nocapture"])
         .env(
             "GORCA_PASSTHROUGH",
             "GORCA_CUTOVER_SURFACE GORCA_CUTOVER_OUT GORCA_CUTOVER_SHUFFLE GORCA_CUTOVER_LANG",
@@ -1090,15 +1130,52 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<bool> {
 
     let rows = parse_rows(&std::fs::read_to_string(root.join(DEVIATIONS))?)?;
     let specs = parse_manifest(&std::fs::read_to_string(root.join(CORPORA))?)?;
-    let bin = build_test_binary(&root)?;
+    if surface.package.is_empty() {
+        bail!(
+            "the replay of `{}` was deleted with its legacy presenter (the cut-over commit); its goldens are the guard now",
+            surface.name
+        );
+    }
+    let specs: Vec<FamilySpec> = specs
+        .into_iter()
+        .filter(|f| surface.families.is_empty() || surface.families.contains(&f.name.as_str()))
+        .collect();
+    let bin = build_test_binary(&root, surface.package)?;
     let scratch = std::env::temp_dir().join(format!("gorca-cutover-{}", std::process::id()));
     std::fs::create_dir_all(&scratch)?;
     let mut verdicts = Vec::new();
     let mut bad = String::new();
     for lang in LANGS {
-        let a = replay_once(&root, &bin, surface.name, lang, 0, &scratch, "a")?;
-        let b = replay_once(&root, &bin, surface.name, lang, 0, &scratch, "b")?;
-        let c = replay_once(&root, &bin, surface.name, lang, seed, &scratch, "shuffled")?;
+        let a = replay_once(
+            &root,
+            &bin,
+            surface.test,
+            surface.name,
+            lang,
+            0,
+            &scratch,
+            "a",
+        )?;
+        let b = replay_once(
+            &root,
+            &bin,
+            surface.test,
+            surface.name,
+            lang,
+            0,
+            &scratch,
+            "b",
+        )?;
+        let c = replay_once(
+            &root,
+            &bin,
+            surface.test,
+            surface.name,
+            lang,
+            seed,
+            &scratch,
+            "shuffled",
+        )?;
         let mut nondeterminism = Vec::new();
         for l in first_differences(&a, &b, 10) {
             nondeterminism.push(format!("two plain runs: {l}"));
@@ -1653,27 +1730,15 @@ mod tests {
 
     #[test]
     fn every_drop_reason_the_replay_raises_is_either_explained_here_or_meant_to_fail() {
-        // The replay's reason codes (cutover_gate_tests.rs). The explained set is closed: adding
-        // a reason there without explaining it here makes the gate fail, on purpose.
-        // The replay is deleted with the legacy focus and change presenters (their goldens replace
-        // it); a surface that is cut over later brings its own replay.
-        let Ok(src) = std::fs::read_to_string(
-            repo_root().join("crates/gorca-connector-atspi/src/cutover_gate_tests.rs"),
-        ) else {
-            return;
-        };
-        for explained in DROP_REASONS.iter().map(|(r, _)| *r) {
-            assert!(
-                src.contains(&format!("\"{explained}\"")),
-                "`{explained}` is explained but the replay never raises it"
-            );
-        }
-        for failing in [
-            "page-unparsable",
-            "empty-corpus",
-            "no-fused-entry",
-            "case-without-change",
-        ] {
+        // The replay's reason codes (the browse replay). The explained set is closed: adding a
+        // reason there without explaining it here makes the gate fail, on purpose. The focus and
+        // change replays were deleted with their legacy presenters (their goldens replace them).
+        let src =
+            std::fs::read_to_string(repo_root().join("crates/gorca-core/src/browse/gate_tests.rs"))
+                .expect("browse replay source");
+        assert!(src.contains("\"hidden-node\""));
+        assert!(drop_explanation("hidden-node").is_some());
+        for failing in ["page-unparsable", "empty-corpus"] {
             assert!(src.contains(&format!("\"{failing}\"")), "{failing}");
             assert!(
                 drop_explanation(failing).is_none(),

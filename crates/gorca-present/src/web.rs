@@ -35,7 +35,7 @@ fn word(kind: FieldKind, id: M, group: Group) -> Field {
 }
 
 /// NVDA's label for an ARIA role that differs from the coarse native word (`controlTypes/role.py`).
-const fn aria_word(role: SemRole) -> Option<M> {
+pub(crate) const fn aria_word(role: SemRole) -> Option<M> {
     Some(match role {
         SemRole::Switch => M::AriaSwitch,
         SemRole::Tab => M::AriaTab,
@@ -153,27 +153,12 @@ fn current_word(c: Current) -> Option<M> {
     }
 }
 
-/// Compose the web focus IR of `entry`.
-pub(crate) fn web_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
+/// The state words of web content in NVDA's `State` order (some sort after required/invalid).
+/// `focus` is true when the node just took the focus: an unselected list or tree item then says
+/// "not selected" (NVDA's `OutputReason.FOCUS`); browse mode never does.
+pub(crate) fn web_state_fields(entry: &SemEntry, focus: bool, fields: &mut SmallVec<[Field; 6]>) {
     let sem = &entry.sem;
     let role = sem.role;
-    let mut fields: SmallVec<[Field; 6]> = SmallVec::new();
-
-    let name = entry
-        .name
-        .as_ref()
-        .filter(|s| !crate::compose::name_is_blank(Some(s.as_ref())));
-    let named = crate::compose::name_field(entry, ctx, ROW_WEB_FOCUS);
-    let name_from_description = named.from_description;
-    let has_name = named.field.is_some();
-    if let Some(f) = named.field {
-        fields.push(f);
-    }
-    if let Some(w) = role_word(role, sem.press, name.is_some() || has_name) {
-        fields.push(word(FieldKind::ROLE, w, Group::Role));
-    }
-
-    // States in NVDA's `State` order; some sort after required/invalid (`late`).
     let mut late: SmallVec<[Field; 3]> = SmallVec::new();
     let menu_item = matches!(
         role,
@@ -193,6 +178,7 @@ pub(crate) fn web_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> Pre
     } else if quiet_selected
         && !menu_item
         && sem.select == Select::Off
+        && focus
         && sem.flags.contains(SemFlags::FOCUSABLE)
     {
         // NVDA says what is not selected only when the node takes the focus.
@@ -296,6 +282,29 @@ pub(crate) fn web_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> Pre
         fields.push(word(FieldKind::STATE, M::StateInvalidEntry, Group::Invalid));
     }
     fields.extend(late);
+}
+
+/// Compose the web focus IR of `entry`.
+pub(crate) fn web_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
+    let sem = &entry.sem;
+    let role = sem.role;
+    let mut fields: SmallVec<[Field; 6]> = SmallVec::new();
+
+    let name = entry
+        .name
+        .as_ref()
+        .filter(|s| !crate::compose::name_is_blank(Some(s.as_ref())));
+    let named = crate::compose::name_field(entry, ctx, ROW_WEB_FOCUS);
+    let name_from_description = named.from_description;
+    let has_name = named.field.is_some();
+    if let Some(f) = named.field {
+        fields.push(f);
+    }
+    if let Some(w) = role_word(role, sem.press, name.is_some() || has_name) {
+        fields.push(word(FieldKind::ROLE, w, Group::Role));
+    }
+
+    web_state_fields(entry, true, &mut fields);
 
     if let Some(c) = current_word(sem.current) {
         fields.push(word(FieldKind::STATE, c, Group::Current));

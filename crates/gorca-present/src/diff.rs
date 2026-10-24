@@ -84,6 +84,12 @@ pub enum Classifier {
     /// The fused value text (`aria-valuetext`, a text reading) is spoken where the legacy
     /// presenter spoke the raw number.
     ValueTextSpoken,
+    /// Browse: a disabled tab, menu item, tree item or option says "unavailable".
+    UnavailableItem,
+    /// Browse: an engine canvas is a graphic.
+    CanvasGraphic,
+    /// Browse: an `alertdialog` is a dialog on every engine.
+    AlertDialogParity,
     /// The model says the field is read only; the legacy snapshot's state set did not.
     ReadOnlyFromModel,
     /// The fused value (`aria-valuetext`, `aria-valuenow`) is spoken where the legacy snapshot of
@@ -177,7 +183,7 @@ pub fn role_word_pairs(lang: Lang) -> [(SemRole, &'static str, &'static str); 5]
 }
 
 impl Classifier {
-    pub const ALL: [Classifier; 18] = [
+    pub const ALL: [Classifier; 21] = [
         Classifier::FieldContentsNotFused,
         Classifier::ContentDerivedName,
         Classifier::PressedWithoutToggle,
@@ -196,6 +202,9 @@ impl Classifier {
         Classifier::MixedSwitchIgnored,
         Classifier::ToggleStateWord,
         Classifier::ValueTextSpoken,
+        Classifier::UnavailableItem,
+        Classifier::CanvasGraphic,
+        Classifier::AlertDialogParity,
     ];
 
     pub const fn id(self) -> &'static str {
@@ -218,6 +227,9 @@ impl Classifier {
             Classifier::MixedSwitchIgnored => "mixed-switch-ignored",
             Classifier::ToggleStateWord => "toggle-state-word",
             Classifier::ValueTextSpoken => "value-text-spoken",
+            Classifier::UnavailableItem => "unavailable-item",
+            Classifier::CanvasGraphic => "canvas-graphic",
+            Classifier::AlertDialogParity => "alert-dialog-parity",
         }
     }
 }
@@ -244,6 +256,14 @@ pub struct DiffCtx<'a> {
     pub avail_na: bool,
     /// The fused entry holds a value text (`aria-valuetext`, the engine's text reading).
     pub has_value_text: bool,
+    /// Browse and quick navigation: an announced item (tab, menu item, tree item, option) of the
+    /// range is unavailable in the fused model and the engine says the same (no `ENABLED`).
+    pub unavailable_item: bool,
+    /// Browse and quick navigation: a node of the range is a graphic in the fused model that the
+    /// legacy mapping had no role for (an engine canvas).
+    pub canvas_graphic: bool,
+    /// Browse and quick navigation: the range holds an `alertdialog`, announced as a dialog.
+    pub alert_dialog: bool,
     /// The UI language the classifiers' catalog words are taken in (the language `render` used).
     pub lang: Lang,
 }
@@ -260,6 +280,9 @@ impl DiffCtx<'static> {
         toggle_button: false,
         avail_na: false,
         has_value_text: false,
+        unavailable_item: false,
+        canvas_graphic: false,
+        alert_dialog: false,
         lang: Lang::En,
     };
 }
@@ -282,6 +305,9 @@ impl<'a> DiffCtx<'a> {
                 .text
                 .as_deref()
                 .is_some_and(|t| t.value_text.is_some()),
+            unavailable_item: false,
+            canvas_graphic: false,
+            alert_dialog: false,
             lang,
         }
     }
@@ -515,6 +541,40 @@ fn explain<'a>(
                 && count_kind(only_new, SegmentKind::Value) == 1
                 && take(only_new, kind(SegmentKind::Value))
         }
+        Classifier::UnavailableItem => {
+            let un = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::StateUnavailable);
+            // Every disabled item of the range says it: a range holds several.
+            let is_un = |k: &Key<'_>| k.0 == kind_code(SegmentKind::State) && k.1 == un;
+            let mut any = false;
+            while ctx.unavailable_item && take(only_new, is_un) {
+                any = true;
+            }
+            any
+        }
+        Classifier::CanvasGraphic => {
+            let graphic = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::WebGraphic);
+            ctx.canvas_graphic
+                && take(only_new, |k| {
+                    k.0 == kind_code(SegmentKind::Role) && k.1 == graphic
+                })
+        }
+        Classifier::AlertDialogParity => {
+            let dialog = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::RoleDialog);
+            let says_dialog = only_new
+                .iter()
+                .any(|k| k.0 == kind_code(SegmentKind::Role) && k.1 == dialog);
+            // The dialog is announced (and, as a container, spoken by its first line): the rest
+            // of the description follows from that.
+            // Or the dialog was entered earlier and only the first-line limit is left.
+            let truncated = only_new.is_empty() && !only_legacy.is_empty();
+            if ctx.alert_dialog && (says_dialog || truncated) {
+                only_legacy.clear();
+                only_new.clear();
+                true
+            } else {
+                false
+            }
+        }
         Classifier::ValueTextSpoken => {
             let value = kind_code(SegmentKind::Value);
             ctx.has_value_text
@@ -606,19 +666,21 @@ fn explain<'a>(
                 })
         }
         Classifier::NameCapDiffers => {
-            let text = kind_code(SegmentKind::Text);
+            // A name is a text token (focus) or a spoken piece of a line (browse).
+            let is_text =
+                |k: u8| k == kind_code(SegmentKind::Text) || k == kind_code(SegmentKind::Said);
             let common =
                 |a: &str, b: &str| a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count();
             let pair = only_legacy.iter().position(|a| {
-                a.0 == text
+                is_text(a.0)
                     && only_new
                         .iter()
-                        .any(|b| b.0 == text && a.1 != b.1 && common(a.1, b.1) >= 200)
+                        .any(|b| is_text(b.0) && a.1 != b.1 && common(a.1, b.1) >= 200)
             });
             match pair {
                 Some(i) => {
                     let a = only_legacy.remove(i);
-                    take(only_new, |b| b.0 == text && common(a.1, b.1) >= 200);
+                    take(only_new, |b| is_text(b.0) && common(a.1, b.1) >= 200);
                     true
                 }
                 None => false,
@@ -1123,6 +1185,75 @@ mod tests {
         );
         assert!(matches!(
             d(&legacy, &none, c(SemRole::Button)),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn browse_rows_are_gated_by_the_facts_of_the_range() {
+        use gorca_i18n::MsgId as M;
+        let t = gorca_i18n::t;
+        let said = |x: &str| l(SegmentKind::Said, x);
+        let nsaid = |x: &str| n(SegmentKind::Said, x);
+        let br = |f: &dyn Fn(&mut DiffCtx<'static>)| {
+            let mut c = DiffCtx {
+                surface: "browse",
+                ..DiffCtx::FOCUS
+            };
+            f(&mut c);
+            c
+        };
+        // Several disabled items of one range all say it; a range without one is a difference.
+        let legacy = [
+            l(SegmentKind::Role, t(M::AriaTab)),
+            said("Nils"),
+            l(SegmentKind::Role, t(M::AriaTab)),
+            said("Agnes"),
+        ];
+        let new = [
+            n(SegmentKind::Role, t(M::AriaTab)),
+            n(SegmentKind::State, t(M::StateUnavailable)),
+            nsaid("Nils"),
+            n(SegmentKind::Role, t(M::AriaTab)),
+            n(SegmentKind::State, t(M::StateUnavailable)),
+            nsaid("Agnes"),
+        ];
+        assert_eq!(
+            d(&legacy, &new, br(&|c| c.unavailable_item = true)),
+            DiffOutcome::Allowed("unavailable-item")
+        );
+        assert!(matches!(
+            d(&legacy, &new, br(&|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // A canvas is a graphic only where the range holds one.
+        let legacy = [said("chart")];
+        let new = [n(SegmentKind::Role, t(M::WebGraphic)), nsaid("chart")];
+        assert_eq!(
+            d(&legacy, &new, br(&|c| c.canvas_graphic = true)),
+            DiffOutcome::Allowed("canvas-graphic")
+        );
+        assert!(matches!(
+            d(&legacy, &new, br(&|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // An alertdialog is announced as a dialog (and the dialog's lines follow from that).
+        let legacy = [
+            said("Really delete?"),
+            said("Yes"),
+            l(SegmentKind::Role, t(M::RoleButton)),
+        ];
+        let new = [
+            nsaid("Confirm delete"),
+            n(SegmentKind::Role, t(M::RoleDialog)),
+            nsaid("Really delete?"),
+        ];
+        assert_eq!(
+            d(&legacy, &new, br(&|c| c.alert_dialog = true)),
+            DiffOutcome::Allowed("alert-dialog-parity")
+        );
+        assert!(matches!(
+            d(&legacy, &new, br(&|_| ())),
             DiffOutcome::Different { .. }
         ));
     }
