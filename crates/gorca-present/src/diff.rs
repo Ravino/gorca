@@ -3,7 +3,7 @@
 //! of `gorca-present`, compared as (kind, literal).
 
 use gorca_model::SegmentKind;
-use gorca_model::sem::{Check, Group, Press, ProvCode, SemEntry, SemRole};
+use gorca_model::sem::{Avail, Check, Group, Press, ProvCode, Select, SemEntry, SemRole};
 
 use crate::deviations::Deviations;
 use crate::render::Token;
@@ -69,6 +69,11 @@ pub enum Classifier {
     RoleWordImproved,
     /// A very long name: the legacy and the model cut it at different lengths.
     NameCapDiffers,
+    /// A flip of selection on a node the model says cannot be selected (a menu item, a button).
+    SelectNotApplicable,
+    /// A switch is never half-checked; the legacy presenter said "half pressed" for the mixed
+    /// state the engine reported on it.
+    MixedSwitchIgnored,
     /// The model says the field is read only; the legacy snapshot's state set did not.
     ReadOnlyFromModel,
     /// The fused value (`aria-valuetext`, `aria-valuenow`) is spoken where the legacy snapshot of
@@ -159,7 +164,7 @@ pub fn role_word_pairs() -> [(SemRole, &'static str, &'static str); 5] {
 }
 
 impl Classifier {
-    pub const ALL: [Classifier; 13] = [
+    pub const ALL: [Classifier; 15] = [
         Classifier::FieldContentsNotFused,
         Classifier::ContentDerivedName,
         Classifier::PressedWithoutToggle,
@@ -173,6 +178,8 @@ impl Classifier {
         Classifier::UnavailableStatic,
         Classifier::RoleWordImproved,
         Classifier::NameCapDiffers,
+        Classifier::SelectNotApplicable,
+        Classifier::MixedSwitchIgnored,
     ];
 
     pub const fn id(self) -> &'static str {
@@ -190,12 +197,15 @@ impl Classifier {
             Classifier::UnavailableStatic => "unavailable-static",
             Classifier::RoleWordImproved => "role-word-improved",
             Classifier::NameCapDiffers => "name-cap-differs",
+            Classifier::SelectNotApplicable => "select-not-applicable",
+            Classifier::MixedSwitchIgnored => "mixed-switch-ignored",
         }
     }
 }
 
 /// What the diff needs to know about the comparison besides the tokens.
 #[derive(Copy, Clone, Debug)]
+#[allow(clippy::struct_excessive_bools)] // one model fact per bit
 pub struct DiffCtx<'a> {
     /// The surface being compared (`deviations.toml` `surface`).
     pub surface: &'a str,
@@ -205,6 +215,12 @@ pub struct DiffCtx<'a> {
     pub name_derived: bool,
     /// The model says the node is neither checkable nor a toggle.
     pub untoggled: bool,
+    /// The model says the node has no pressed state (`Press::NotToggle`).
+    pub not_toggle: bool,
+    /// The model says the node cannot be selected (`Select::NotSelectable`).
+    pub not_selectable: bool,
+    /// The model says availability does not apply to the node (`Avail::NotApplicable`, SM-5).
+    pub avail_na: bool,
 }
 
 impl DiffCtx<'static> {
@@ -214,6 +230,9 @@ impl DiffCtx<'static> {
         role: SemRole::Unknown,
         name_derived: false,
         untoggled: false,
+        not_toggle: false,
+        not_selectable: false,
+        avail_na: false,
     };
 }
 
@@ -226,6 +245,9 @@ impl<'a> DiffCtx<'a> {
             name_derived: entry.prov.get(Group::Name) == Some(ProvCode::Derived),
             untoggled: entry.sem.press == Press::NotToggle
                 && entry.sem.check == Check::NotCheckable,
+            not_toggle: entry.sem.press == Press::NotToggle,
+            not_selectable: entry.sem.select == Select::NotSelectable,
+            avail_na: entry.sem.avail == Avail::NotApplicable,
         }
     }
 }
@@ -265,6 +287,11 @@ fn difference<'a>(a: &[Key<'a>], b: &[Key<'a>]) -> (Vec<Key<'a>>, Vec<Key<'a>>) 
     only_a.extend_from_slice(&a[i..]);
     only_b.extend_from_slice(&b[j..]);
     (only_a, only_b)
+}
+
+/// Whether `surface` is one of the state-change surfaces.
+fn is_change(surface: &str) -> bool {
+    surface.starts_with("change")
 }
 
 fn count_kind(keys: &[Key<'_>], kind: SegmentKind) -> usize {
@@ -327,11 +354,22 @@ fn explain<'a>(
             }
         }
         Classifier::PressedWithoutToggle => {
-            let pressed = gorca_i18n::t(gorca_i18n::MsgId::StatePressed);
-            ctx.untoggled
-                && ctx.role == SemRole::Tab
+            use gorca_i18n::MsgId as M;
+            let (pressed, not_pressed) = (
+                gorca_i18n::t(M::StatePressed),
+                gorca_i18n::t(M::StateNotPressed),
+            );
+            let state = kind_code(SegmentKind::State);
+            // Focus: a tab. A change: any node the model gives no pressed state (the engine
+            // flipped PRESSED on a check box or a tab; the model keeps check and selection).
+            let applies = if is_change(ctx.surface) {
+                ctx.not_toggle
+            } else {
+                ctx.untoggled && ctx.role == SemRole::Tab
+            };
+            applies
                 && take(only_legacy, |k| {
-                    k.0 == kind_code(SegmentKind::State) && k.1 == pressed
+                    k.0 == state && (k.1 == pressed || k.1 == not_pressed)
                 })
         }
         Classifier::MarkerStrippedName => {
@@ -387,13 +425,40 @@ fn explain<'a>(
                 && take(only_new, kind(SegmentKind::Value))
         }
         Classifier::UnavailableStatic => {
-            let un = gorca_i18n::t(gorca_i18n::MsgId::StateUnavailable);
-            matches!(
-                ctx.role,
-                SemRole::Generic | SemRole::Group | SemRole::Presentation | SemRole::Article
-            ) && take(only_legacy, |k| {
-                k.0 == kind_code(SegmentKind::State) && k.1 == un
-            })
+            use gorca_i18n::MsgId as M;
+            let (un, av) = (
+                gorca_i18n::t(M::StateUnavailable),
+                gorca_i18n::t(M::StateAvailable),
+            );
+            let state = kind_code(SegmentKind::State);
+            // Focus: a few static roles. A change: whatever the model says availability does not
+            // apply to (SM-5: static structure is never "unavailable").
+            let applies = if is_change(ctx.surface) {
+                ctx.avail_na
+            } else {
+                matches!(
+                    ctx.role,
+                    SemRole::Generic | SemRole::Group | SemRole::Presentation | SemRole::Article
+                )
+            };
+            applies && take(only_legacy, |k| k.0 == state && (k.1 == un || k.1 == av))
+        }
+        Classifier::SelectNotApplicable => {
+            use gorca_i18n::MsgId as M;
+            let (sel, not_sel) = (
+                gorca_i18n::t(M::StateSelected),
+                gorca_i18n::t(M::StateNotSelected),
+            );
+            let state = kind_code(SegmentKind::State);
+            ctx.not_selectable
+                && take(only_legacy, |k| {
+                    k.0 == state && (k.1 == sel || k.1 == not_sel)
+                })
+        }
+        Classifier::MixedSwitchIgnored => {
+            let half = gorca_i18n::t(gorca_i18n::MsgId::StateHalfPressed);
+            let state = kind_code(SegmentKind::State);
+            ctx.role == SemRole::Switch && take(only_legacy, |k| k.0 == state && k.1 == half)
         }
         Classifier::RoleWordImproved => {
             let role = kind_code(SegmentKind::Role);
@@ -738,6 +803,76 @@ mod tests {
                 &[n(SegmentKind::Text, &short_b)],
                 DiffCtx::FOCUS
             ),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn the_change_rows_are_gated_by_what_the_model_says() {
+        use gorca_i18n::MsgId as M;
+        let t = gorca_i18n::t;
+        let ch = |f: &dyn Fn(&mut DiffCtx<'static>)| {
+            let mut c = DiffCtx {
+                surface: "change-web",
+                ..DiffCtx::FOCUS
+            };
+            f(&mut c);
+            c
+        };
+        let none: [Token; 0] = [];
+        let un = [l(SegmentKind::State, t(M::StateUnavailable))];
+        // Availability does not apply: allowed; applies: a real difference.
+        assert_eq!(
+            d(&un, &none, ch(&|c| c.avail_na = true)),
+            DiffOutcome::Allowed("unavailable-static")
+        );
+        assert!(matches!(
+            d(&un, &none, ch(&|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // Pressed on a node without a pressed state; not pressed too; a toggle is a difference.
+        let pr = [l(SegmentKind::State, t(M::StatePressed))];
+        assert_eq!(
+            d(&pr, &none, ch(&|c| c.not_toggle = true)),
+            DiffOutcome::Allowed("pressed-without-toggle")
+        );
+        let npr = [l(SegmentKind::State, t(M::StateNotPressed))];
+        assert_eq!(
+            d(&npr, &none, ch(&|c| c.not_toggle = true)),
+            DiffOutcome::Allowed("pressed-without-toggle")
+        );
+        assert!(matches!(
+            d(&pr, &none, ch(&|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // Selection on a node that cannot be selected.
+        let sel = [l(SegmentKind::State, t(M::StateSelected))];
+        assert_eq!(
+            d(&sel, &none, ch(&|c| c.not_selectable = true)),
+            DiffOutcome::Allowed("select-not-applicable")
+        );
+        assert!(matches!(
+            d(&sel, &none, ch(&|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // A mixed switch.
+        let half = [l(SegmentKind::State, t(M::StateHalfPressed))];
+        assert_eq!(
+            d(&half, &none, ch(&|c| c.role = SemRole::Switch)),
+            DiffOutcome::Allowed("mixed-switch-ignored")
+        );
+        assert!(matches!(
+            d(&half, &none, ch(&|c| c.role = SemRole::Button)),
+            DiffOutcome::Different { .. }
+        ));
+        // The same facts on the focus surface do not widen the focus rows.
+        let focus_web = DiffCtx {
+            surface: "focus-web",
+            avail_na: true,
+            ..DiffCtx::FOCUS
+        };
+        assert!(matches!(
+            d(&un, &none, focus_web),
             DiffOutcome::Different { .. }
         ));
     }

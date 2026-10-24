@@ -175,6 +175,7 @@ fn gen_ctx(r: &mut Rng) -> ComposeCtx {
         may_refine: r.chance(50),
         web: r.chance(50),
         skip_selected: r.chance(30),
+        hedge_inferred: false,
     }
 }
 
@@ -287,8 +288,11 @@ fn p2_2_thread_interleaving_cannot_change_the_output() {
     }
 }
 
-/// P2.3 the presenter reads no provenance, confidence, taint, `known`, `stale` or `fallback`
-/// bits: scrambling them changes nothing. (Consequence worth knowing: an `Unknown` group is
+/// P2.3 the spoken words read no provenance, confidence, taint, `known`, `stale` or `fallback`
+/// bits: scrambling them changes nothing. (M22b1 slice 4: the provenance of the `name` group picks
+/// the field kind, `INFERRED_LABEL` for a layout-inferred name, and the hedge only when
+/// `ComposeCtx::hedge_inferred` is on; this test runs with it off, so the words stay equal while
+/// the IR kind may differ. `p4_*` below pins the kind and the hedge.) (Consequence worth knowing: an `Unknown` group is
 /// presented as its default; ADR-0022 section 2.3 says compose omits it. Not a determinism issue,
 /// recorded in the report.)
 #[test]
@@ -306,9 +310,10 @@ fn p2_3_provenance_taint_and_known_masks_are_not_inputs() {
         f.fallback = gorca_model::sem::GroupMask(u32::try_from(r.next() & 0xFFFF_FFFF).unwrap());
         let ctx = gen_ctx(&mut r);
         let o = RenderOpts::default();
+        let words = |x: Option<(gorca_present::PresIr, Spoken)>| x.map(|(_, w)| w);
         assert_eq!(
-            present(&e, Reason::Focus, ctx, o),
-            present(&f, Reason::Focus, ctx, o),
+            words(present(&e, Reason::Focus, ctx, o)),
+            words(present(&f, Reason::Focus, ctx, o)),
             "seed {seed}"
         );
         let g = gen_entry(&mut r);
@@ -360,6 +365,7 @@ fn p2_5_the_ui_language_is_a_hidden_input_of_render() {
         may_refine: false,
         web: false,
         skip_selected: false,
+        hedge_inferred: false,
     };
     let o = RenderOpts::default();
     let en = {
@@ -551,6 +557,9 @@ fn gen_diff_ctx<'a>(r: &mut Rng, surface: &'a str) -> DiffCtx<'a> {
         role: *r.pick(SemRole::ALL),
         name_derived: r.chance(50),
         untoggled: r.chance(50),
+        not_toggle: r.chance(50),
+        not_selectable: r.chance(50),
+        avail_na: r.chance(50),
     }
 }
 
@@ -767,6 +776,9 @@ fn run_case(c: &Case, dev: &Deviations, mutate: impl FnOnce(&mut Case)) -> DiffO
             role: c.role,
             name_derived: c.name_derived,
             untoggled: c.untoggled,
+            not_toggle: false,
+            not_selectable: false,
+            avail_na: false,
         },
     )
 }
@@ -1064,6 +1076,9 @@ fn known_gap_only_the_first_used_classifier_is_reported() {
         role: SemRole::SearchBox,
         name_derived: false,
         untoggled: false,
+        not_toggle: false,
+        not_selectable: false,
+        avail_na: false,
     };
     assert_eq!(
         diff(&l, &n, &permissive, ctx),
@@ -1101,6 +1116,9 @@ fn p3_9_adding_a_row_never_turns_allowed_into_different() {
             surface: "focus",
             role: if r.chance(50) { c1.role } else { c2.role },
             name_derived: c1.name_derived || c2.name_derived,
+            not_toggle: false,
+            not_selectable: false,
+            avail_na: false,
             untoggled: c1.untoggled || c2.untoggled,
         };
         // A subset of rows.
@@ -1147,6 +1165,7 @@ fn p3_8_compose_render_diff_is_repeatable_end_to_end() {
                 may_refine: false,
                 web,
                 skip_selected: false,
+                hedge_inferred: false,
             },
         )
         .unwrap();

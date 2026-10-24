@@ -217,6 +217,7 @@ fn focus_records(family: &Family, seed: u64, dev: &Deviations, out: &mut Vec<Rec
                 may_refine: false,
                 web: web_run,
                 skip_selected: false,
+                hedge_inferred: false,
             };
             let Ok(ir) = compose(entry, s.key, Reason::Focus, ctx) else {
                 out.push(Record {
@@ -425,6 +426,7 @@ fn change_records(family: &Family, seed: u64, dev: &Deviations, out: &mut Vec<Re
                     may_refine: false,
                     web: web_run,
                     skip_selected: false,
+                    hedge_inferred: false,
                 };
                 let ir = compose_change(oe, ne, n.key, ctx);
                 let tokens = render(
