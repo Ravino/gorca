@@ -1,0 +1,7 @@
+{
+  "name": "signal-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main.js",
+  "description": "Synthetic Signal-shaped Electron app for the gorca cut-over corpus (no account, no network)"
+}

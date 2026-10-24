@@ -1,10 +1,24 @@
 # The corpus families the cut-over gate (`cargo xtask cutover <surface>`, ADR-0022 section 8.9)
 # must replay. A family is covered when `tests/fixtures/sem/<name>/` has recorded pages the replay
 # (`crates/gorca-connector-atspi/src/cutover_gate_tests.rs`, FAMILIES) feeds through both
-# presenters. A family with no fixtures fails the gate unless it carries a dated waiver with a
-# reason; the report prints every waiver, so a gap is never silent. Record with
-# `tools/sem-capture/capture.py` (firefox, chromium, gtk4) and `capture_more.py` (gtk3, telegram,
-# electron; the state-change corpus under tests/fixtures/sem-change). No family is waived.
+# presenters and at least one node of them was compared (a page that decodes to nothing is an
+# unexplained drop, and a family whose every page was dropped is not covered). A family with no
+# fixtures fails the gate unless it carries a dated waiver with a reason; the report prints every
+# waiver, so a gap is never silent. No family is waived.
+#
+# Recording tools (all run inside a private world, never the live session):
+#   firefox, chromium, gtk4   tools/sem-capture/capture-all.sh (capture.py)
+#   gtk3, telegram, electron  tools/sem-capture/capture_more.py focus
+#   electron (Signal-shaped fixture app under Electron, no account)
+#                             capture_more.py focus --family electron-fixture
+#   gnome-shell               tests/shell/run_shell.sh -- tools/sem-capture/capture_shell.py
+#   vte                       tests/shell/run_shell.sh -- tools/sem-capture/capture_vte.py
+#   state changes (tests/fixtures/sem-change/<family>/<case>.before|after.jsonl)
+#                             capture_more.py change [--page values]
+#
+# `[[family.no_change]]` lists recorded real changes in which the engine's tree shows no change at
+# all. They stay as evidence of the engine's behaviour, and the report names them; a recorded case
+# that changes nothing and is not listed here is an unexplained drop.
 
 [[family]]
 name = "gtk4"
@@ -15,6 +29,10 @@ name = "firefox"
 [[family]]
 name = "chromium"
 
+[[family.no_change]]
+case = "value-range"
+reason = "Chromium 154 does not republish the Value reading of an <input type=range> after a script sets .value (checked with input and change events and a 5 s wait); the ARIA slider and number input cases do change"
+
 [[family]]
 name = "gtk3"
 
@@ -23,3 +41,9 @@ name = "electron"
 
 [[family]]
 name = "telegram"
+
+[[family]]
+name = "gnome-shell"
+
+[[family]]
+name = "vte"

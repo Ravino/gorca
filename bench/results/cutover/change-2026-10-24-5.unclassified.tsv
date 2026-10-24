@@ -1,0 +1,26 @@
+en	chromium/change:value-aria-slider	21	real-value-aria-slider	change-web	different	Value:60	Value:High	
+en	firefox/change:value-aria-slider	16	real-value-aria-slider	change-web	different	Value:60	Value:High	
+en	firefox/change:value-progress	11	real-value-progress	change-web	different	Value:80	Value:80%	
+en	firefox/disabled	26	rename	change-web	different	Text:• src renamed	Text:src renamed	
+en	firefox/disabled	28	rename	change-web	different	Text:◦ main.rs renamed	Text:main.rs renamed	
+en	firefox/disabled	29	rename	change-web	different	Text:◦ locked.rs renamed	Text:locked.rs renamed	
+en	firefox/disabled	30	rename	change-web	different	Text:• vendor renamed	Text:vendor renamed	
+en	firefox/disabled	32	rename	change-web	different	Text:◦ dep.rs renamed	Text:dep.rs renamed	
+en	firefox/disabled	39	rename	change-web	different	Text:• Red renamed	Text:Red renamed	
+en	firefox/disabled	40	rename	change-web	different	Text:• Green renamed	Text:Green renamed	
+en	gtk3/change:expand-tree	22	real-expand-tree	change	different	State:expanded		
+en	gtk4/accprops	32	select	change	allowed	State:selected		select-not-applicable: the engine marks the node selectable (state true, source record None), the fused entry says it cannot be selected
+en	gtk4/controls	52	select	change	allowed	State:selected		select-not-applicable: the engine marks the node selectable (state true, source record None), the fused entry says it cannot be selected
+ru	chromium/change:value-aria-slider	21	real-value-aria-slider	change-web	different	Value:60	Value:High	
+ru	firefox/change:value-aria-slider	16	real-value-aria-slider	change-web	different	Value:60	Value:High	
+ru	firefox/change:value-progress	11	real-value-progress	change-web	different	Value:80	Value:80%	
+ru	firefox/disabled	26	rename	change-web	different	Text:• src renamed	Text:src renamed	
+ru	firefox/disabled	28	rename	change-web	different	Text:◦ main.rs renamed	Text:main.rs renamed	
+ru	firefox/disabled	29	rename	change-web	different	Text:◦ locked.rs renamed	Text:locked.rs renamed	
+ru	firefox/disabled	30	rename	change-web	different	Text:• vendor renamed	Text:vendor renamed	
+ru	firefox/disabled	32	rename	change-web	different	Text:◦ dep.rs renamed	Text:dep.rs renamed	
+ru	firefox/disabled	39	rename	change-web	different	Text:• Red renamed	Text:Red renamed	
+ru	firefox/disabled	40	rename	change-web	different	Text:• Green renamed	Text:Green renamed	
+ru	gtk3/change:expand-tree	22	real-expand-tree	change	different	State:развёрнуто		
+ru	gtk4/accprops	32	select	change	allowed	State:выделено		select-not-applicable: the engine marks the node selectable (state true, source record None), the fused entry says it cannot be selected
+ru	gtk4/controls	52	select	change	allowed	State:выделено		select-not-applicable: the engine marks the node selectable (state true, source record None), the fused entry says it cannot be selected

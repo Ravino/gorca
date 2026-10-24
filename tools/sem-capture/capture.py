@@ -62,7 +62,8 @@ class Bus:
             Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION,
             None, None)
 
-    def call(self, dest, path, iface, method, args=None, timeout=TIMEOUT_MS):
+    def call(self, dest, path, iface, method, args=None, timeout=None):
+        timeout = TIMEOUT_MS if timeout is None else timeout
         try:
             v = self.c.call_sync(dest, path, iface, method, args, None,
                                  Gio.DBusCallFlags.NONE, timeout, None)
@@ -133,13 +134,13 @@ def record(bus, d, p, parent_i, depth, idx_of, nodes, pending_rel, limit):
             acts.append(nm if isinstance(nm, str) else None)
         node["actions"] = acts
     if "TableCell" in ifs:
-        tc = bus.props(d, p, "org.a11y.atspi.TableCell")
-        node["cell"] = {k: tc.get(k) for k in ("RowSpan", "ColumnSpan", "Position")}
+        node["cell"] = {k: bus.prop(d, p, "org.a11y.atspi.TableCell", k) for k in ("RowSpan", "ColumnSpan", "Position")}
         rc = bus.call(d, p, "org.a11y.atspi.TableCell", "GetRowColumnSpan")
         node["cell"]["row_col_span"] = list(rc) if isinstance(rc, (tuple, list)) else None
     if "Table" in ifs:
-        tp = bus.props(d, p, "org.a11y.atspi.Table")
-        node["table"] = {k: tp.get(k) for k in ("NRows", "NColumns")}
+        # One Get per property: Electron 44 aborts (SIGABRT, libdbus "a{sv}" marshalling error) on
+        # Properties.GetAll(org.a11y.atspi.Table) of an ARIA grid.
+        node["table"] = {k: bus.prop(d, p, "org.a11y.atspi.Table", k) for k in ("NRows", "NColumns")}
     if "Selection" in ifs:
         node["nselected"] = bus.prop(d, p, "org.a11y.atspi.Selection", "NSelectedChildren")
     node["relations"] = []
@@ -266,18 +267,25 @@ def pkg_version(pkg):
 
 
 def main():
+    global TIMEOUT_MS
     ap = argparse.ArgumentParser()
     ap.add_argument("--engine", required=True, choices=["firefox", "chromium", "gtk4"])
     ap.add_argument("--page", required=True)
     ap.add_argument("--html")
     ap.add_argument("--out", required=True)
     ap.add_argument("--settle", type=float, default=3.0, help="extra seconds after the tree is stable")
+    ap.add_argument("--early", action="store_true",
+                    help="read the tree as soon as the document is readable (Firefox 153 ESR dies about "
+                         "a second after a date, time or datetime-local input is exposed)")
+    ap.add_argument("--timeout-ms", type=int, default=TIMEOUT_MS,
+                    help="per-call D-Bus deadline (a slow engine page needs more than the default)")
     a = ap.parse_args()
     addr = os.environ.get("AT_SPI_BUS_ADDRESS") or os.environ.get("GORCA_A11Y_BUS_ADDRESS")
     if not addr or not os.environ.get("GORCA_HARNESS_DIR") or "/run/user/" in addr:
         sys.exit("refusing to run outside a private world (need GORCA_HARNESS_DIR and a private "
                  "AT_SPI_BUS_ADDRESS, got %r)" % addr)
     os.makedirs(a.out, exist_ok=True)
+    TIMEOUT_MS = a.timeout_ms
     root = os.environ["GORCA_HARNESS_DIR"]
     bus = Bus(addr)
     if a.engine == "gtk4":
@@ -311,14 +319,23 @@ def main():
                 time.sleep(0.5)
             if not sub:
                 sys.exit("document %r never appeared" % title)
-        n = quiesce(bus, sub[0], sub[1])
-        time.sleep(a.settle)
-        nodes = walk_subtree(bus, sub[0], sub[1])
+        if a.early:
+            nodes = []
+            for _ in range(40):
+                nodes = walk_subtree(bus, sub[0], sub[1])
+                if nodes and nodes[0]["role"] is not None and len(nodes) > 3:
+                    break
+                time.sleep(0.1)
+            n = len(nodes)
+        else:
+            n = quiesce(bus, sub[0], sub[1])
+            time.sleep(a.settle)
+            nodes = walk_subtree(bus, sub[0], sub[1])
         header = {"kind": "header", "schema": 1, "engine": a.engine, "engine_version": version_of(a.engine),
                   "app_name": appname, "page": a.page, "title": title,
                   "date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                   "atspi_lib": pkg_version("libatspi2.0-0t64"), "at_spi2_core": pkg_version("at-spi2-core"),
-                  "settled_nodes": n, "nodes": len(nodes),
+                  "settled_nodes": n, "nodes": len(nodes), "early": a.early,
                   "unreadable": bool(nodes and nodes[0]["role"] is None),
                   "note": "bus_name/path are per-run and not stable; compare by fixture_id / document order"}
         with open(os.path.join(a.out, a.page + ".jsonl"), "w", encoding="utf-8") as f:

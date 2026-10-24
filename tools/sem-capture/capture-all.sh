@@ -30,7 +30,11 @@ if [ "${1:-}" = "__inner" ]; then
         pg=$(basename "$f" .html)
         case "$f" in */tests/web/m8/pages/*) pg="m8-$pg" ;; esac
         [ -n "$PAGES" ] && ! echo " $PAGES " | grep -q " $pg " && continue
-        timeout -k 5 180 /usr/bin/python3 -I "$HERE/capture.py" --engine "$eng" --page "$pg" --html "$f" --out "$OUT/$eng" || rc=1
+        early=""
+        # Firefox 153 ESR dies about a second after a date/time/datetime-local input is exposed:
+        # read the first readable tree of those pages instead of waiting for it to settle.
+        case "$eng:$pg" in firefox:exotic-date|firefox:exotic-time|firefox:exotic-datetime) early="--early" ;; esac
+        timeout -k 5 180 /usr/bin/python3 -I "$HERE/capture.py" --engine "$eng" --page "$pg" --html "$f" --out "$OUT/$eng" $early || rc=1
       done
     fi
   done

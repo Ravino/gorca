@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Value gallery</title></head>
+<body>
+<main>
+<h1>Value gallery</h1>
+<p><label>Volume <input type="range" id="range" min="0" max="100" value="30"></label></p>
+<p><label>Quantity <input type="number" id="number" min="0" max="10" value="3"></label></p>
+<p><label>Download <progress id="progress" max="100" value="25"></progress></label></p>
+<p><label>Battery <meter id="meter" min="0" max="10" value="2"></meter></label></p>
+<p><span id="aslider" role="slider" tabindex="0" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20" aria-valuetext="Low">Brightness</span></p>
+<p><span id="aspin" role="spinbutton" tabindex="0" aria-label="Copies" aria-valuemin="1" aria-valuemax="9" aria-valuenow="2">2</span></p>
+<p><span id="aprogress" role="progressbar" aria-label="Upload" aria-valuemin="0" aria-valuemax="100" aria-valuenow="10"></span></p>
+
+<p><label>Colour
+<select id="select">
+  <option>Red</option>
+  <option>Green</option>
+  <option>Blue</option>
+</select></label></p>
+
+<details id="details"><summary>More options</summary><p>Hidden until opened.</p></details>
+
+<ul role="tree" aria-label="Files" id="tree">
+  <li role="treeitem" id="node1" aria-expanded="false" aria-selected="false" tabindex="0">Documents
+    <ul role="group" id="group1" hidden>
+      <li role="treeitem" aria-selected="false" tabindex="-1">report.txt</li>
+      <li role="treeitem" aria-selected="false" tabindex="-1">notes.txt</li>
+    </ul>
+  </li>
+  <li role="treeitem" id="node2" aria-selected="false" tabindex="-1">Pictures</li>
+</ul>
+
+<button id="menubtn" aria-haspopup="true" aria-expanded="false" aria-controls="menu1">Actions</button>
+<div role="menu" id="menu1" aria-label="Actions" hidden>
+  <div role="menuitem" tabindex="-1">Open</div>
+  <div role="menuitem" tabindex="-1">Delete</div>
+</div>
+
+<div role="tablist" aria-label="Tabs" id="tablist">
+  <div role="tab" id="tab1" aria-selected="true" tabindex="0">General</div>
+  <div role="tab" id="tab2" aria-selected="false" tabindex="-1">Billing</div>
+</div>
+
+<ul role="listbox" aria-label="Choices" id="listbox">
+  <li role="option" id="opt1" aria-selected="true" tabindex="0">One</li>
+  <li role="option" id="opt2" aria-selected="false" tabindex="-1">Two</li>
+</ul>
+
+<p><label>Plan
+<select id="select2" size="3">
+  <option id="sopt1">Free</option>
+  <option id="sopt2">Team</option>
+  <option id="sopt3" selected>Pro</option>
+</select></label></p>
+
+<p>
+<button onclick="var r=document.getElementById('range');r.value=70;r.dispatchEvent(new Event('input',{bubbles:true}));r.dispatchEvent(new Event('change',{bubbles:true}))">do:value-range</button>
+<button onclick="document.getElementById('number').value=4">do:value-number</button>
+<button onclick="document.getElementById('progress').value=80">do:value-progress</button>
+<button onclick="document.getElementById('meter').value=7">do:value-meter</button>
+<button onclick="var e=document.getElementById('aslider');e.setAttribute('aria-valuenow','60');e.setAttribute('aria-valuetext','High')">do:value-aria-slider</button>
+<button onclick="var e=document.getElementById('aspin');e.setAttribute('aria-valuenow','5');e.textContent='5'">do:value-aria-spin</button>
+<button onclick="document.getElementById('aprogress').setAttribute('aria-valuenow','70')">do:value-aria-progress</button>
+<button onclick="document.getElementById('select').selectedIndex=2">do:select-collapsed</button>
+<button onclick="document.getElementById('details').open=true">do:expand-details</button>
+<button onclick="document.getElementById('node1').setAttribute('aria-expanded','true');document.getElementById('group1').hidden=false">do:expand-tree</button>
+<button onclick="document.getElementById('menubtn').setAttribute('aria-expanded','true');document.getElementById('menu1').hidden=false">do:expand-menu</button>
+<button onclick="document.getElementById('tab2').setAttribute('aria-disabled','true')">do:disable-tab</button>
+<button onclick="document.getElementById('opt2').setAttribute('aria-disabled','true')">do:disable-option</button>
+<button onclick="document.getElementById('sopt2').disabled=true">do:disable-select-option</button>
+<button onclick="document.getElementById('node2').setAttribute('aria-disabled','true')">do:disable-treeitem</button>
+<button onclick="var s=document.getElementById('select2');s.selectedIndex=0">do:select-listbox</button>
+</p>
+</main>
+</body></html>

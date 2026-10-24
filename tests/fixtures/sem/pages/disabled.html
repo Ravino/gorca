@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SEM disabled</title></head>
+<body><main id="main"><h1>Disabled parts of composite widgets</h1>
+
+<p><label for="sel">Country</label>
+<select id="sel">
+  <option value="de">Germany</option>
+  <option value="fr" disabled>France (unavailable)</option>
+  <optgroup label="Nordic" disabled>
+    <option value="se">Sweden</option>
+    <option value="no">Norway</option>
+  </optgroup>
+  <option value="it" selected>Italy</option>
+</select></p>
+
+<p><label for="lb">Plan</label>
+<select id="lb" size="4">
+  <option>Free</option>
+  <option disabled>Team (sold out)</option>
+  <option selected>Pro</option>
+  <option disabled>Enterprise</option>
+</select></p>
+
+<div role="tablist" aria-label="Settings tabs" id="tabs">
+  <div role="tab" id="tab-a" aria-selected="true" aria-controls="panel-a" tabindex="0">General</div>
+  <div role="tab" id="tab-b" aria-selected="false" aria-disabled="true" tabindex="-1">Billing</div>
+  <div role="tab" id="tab-c" aria-selected="false" tabindex="-1">Privacy</div>
+</div>
+<div role="tabpanel" id="panel-a" aria-labelledby="tab-a">General settings</div>
+
+<ul role="tree" aria-label="Files">
+  <li role="treeitem" aria-expanded="true" aria-selected="false" tabindex="0">src
+    <ul role="group">
+      <li role="treeitem" aria-selected="true" tabindex="-1">main.rs</li>
+      <li role="treeitem" aria-selected="false" aria-disabled="true" tabindex="-1">locked.rs</li>
+    </ul>
+  </li>
+  <li role="treeitem" aria-expanded="false" aria-disabled="true" tabindex="-1">vendor
+    <ul role="group"><li role="treeitem" tabindex="-1">dep.rs</li></ul>
+  </li>
+</ul>
+
+<div role="menu" aria-label="Edit" id="menu">
+  <div role="menuitem" tabindex="0">Copy</div>
+  <div role="menuitem" aria-disabled="true" tabindex="-1">Paste</div>
+  <div role="menuitemcheckbox" aria-checked="true" aria-disabled="true" tabindex="-1">Word wrap</div>
+  <div role="menuitemradio" aria-checked="false" aria-disabled="true" tabindex="-1">Tabs</div>
+</div>
+
+<ul role="listbox" aria-label="Colours">
+  <li role="option" aria-selected="true" tabindex="0">Red</li>
+  <li role="option" aria-selected="false" aria-disabled="true" tabindex="-1">Green</li>
+</ul>
+
+<div role="radiogroup" aria-label="Size">
+  <label><input type="radio" name="sz" value="s" disabled> Small</label>
+  <label><input type="radio" name="sz" value="m" checked> Medium</label>
+</div>
+
+<fieldset disabled><legend>Shipping</legend>
+  <label>Street <input type="text" value="Main street 1"></label>
+  <label><input type="checkbox" checked> Gift wrap</label>
+</fieldset>
+<p><button disabled>Order</button> <a role="link" aria-disabled="true" tabindex="-1">Terms</a></p>
+</main></body></html>
