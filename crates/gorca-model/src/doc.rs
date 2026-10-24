@@ -137,6 +137,9 @@ pub enum DocAction {
         name: Option<std::sync::Arc<str>>,
     },
     ScrollIntoView,
+    /// Scroll the character at this hypertext offset of the node into view (the cursor's line
+    /// inside an owner taller than the viewport, whose text runs are not objects of their own).
+    ScrollToOffset(u32),
     SetCaret(u32),
     /// Select these hypertext ranges in the page (core side: ids are [`DocNodeId`]; the doc actor
     /// rewrites it to [`DocAction::SetSourceSelection`] before the source sees it).
