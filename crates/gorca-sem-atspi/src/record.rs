@@ -41,7 +41,7 @@ use crate::roles::{
     EngineRole, TokenPick, engine_role, is_weak_engine_role, pick_token, raw as raw_role,
     resolve_role, tag_role,
 };
-use crate::states::{StateBits, bit, map_states};
+use crate::states::{StateBits, bit, map_states_for};
 
 /// One raw node as the connector read it. Borrowed: the normaliser copies only what it keeps.
 #[derive(Copy, Clone, Debug)]
@@ -125,7 +125,7 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
     let mut invalid_entry = false;
     let mut required = false;
     if have_states {
-        let g = map_states(role, engine_toggle, engine_text_field, st);
+        let g = map_states_for(role, engine_toggle, engine_text_field, a.is_web(), st);
         sem.expand = g.expand;
         sem.orientation = g.orientation;
         sem.flags = g.flags;
@@ -552,11 +552,19 @@ mod tests {
         let r = normalise(&node(
             all(),
             7,
-            st(&[bit::INDETERMINATE, bit::CHECKABLE, bit::ENABLED]),
+            st(&[
+                bit::INDETERMINATE,
+                bit::CHECKABLE,
+                bit::ENABLED,
+                bit::SENSITIVE,
+            ]),
             &[],
         ));
         assert_eq!(r.sem.check, Check::Mixed);
         assert_eq!(r.sem.avail, Avail::Enabled);
+        // A native node without SENSITIVE is unavailable even when it still reports ENABLED.
+        let r = normalise(&node(all(), 7, st(&[bit::CHECKABLE, bit::ENABLED]), &[]));
+        assert_eq!(r.sem.avail, Avail::Disabled);
         let r = normalise(&node(all(), 62, st(&[bit::PRESSED]), &[]));
         assert_eq!((r.sem.role, r.sem.press), (SemRole::Button, Press::On));
         let r = normalise(&node(all(), 37, st(&[bit::SELECTABLE, bit::SELECTED]), &[]));

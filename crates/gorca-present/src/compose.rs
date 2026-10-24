@@ -77,19 +77,35 @@ pub(crate) fn name_field(entry: &SemEntry, ctx: ComposeCtx, row: RowId) -> Optio
         group: Group::Name.slot(),
         via: 0,
     };
+    // A name is spoken as a one-line label (collapsed white space, icon glyphs dropped): the label
+    // does not depend on where the name came from (P2.3: provenance is no input of the words).
+    // The renderer caps its length.
+    let text: Arc<str> = match collapse_label(name) {
+        Some(t) if t != **name => Arc::from(t),
+        _ => Arc::clone(name),
+    };
     if entry.prov.get(Group::Name) != Some(ProvCode::Inferred) {
-        return Some(Field::new(
-            FieldKind::NAME,
-            Content::Text(Arc::clone(name)),
-            origin,
-        ));
+        return Some(Field::new(FieldKind::NAME, Content::Text(text), origin));
     }
     let content = if ctx.hedge_inferred {
-        Content::msg(M::HedgeProbably, vec![Arg::text("text", name)])
+        Content::msg(M::HedgeProbably, vec![Arg::text("text", &text)])
     } else {
-        Content::Text(Arc::clone(name))
+        Content::Text(text)
     };
     Some(Field::new(FieldKind::INFERRED_LABEL, content, origin))
+}
+
+/// Text as a one-line label: whitespace collapsed, icon glyphs and object markers dropped. `None`
+/// when nothing speakable is left.
+pub fn collapse_label(s: &str) -> Option<String> {
+    let kept: String = s
+        .chars()
+        .filter(|c| {
+            !gorca_model::text::is_icon_glyph(*c) && !gorca_model::text::is_object_marker(*c)
+        })
+        .collect();
+    let label = kept.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!label.is_empty()).then_some(label)
 }
 
 const fn tri_state_word(class: Class) -> Option<M> {

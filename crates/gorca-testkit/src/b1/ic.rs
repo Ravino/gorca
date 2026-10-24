@@ -241,7 +241,13 @@ fn ic03(s: &mut dyn Sut) -> CaseResult {
         .iter()
         .enumerate()
     {
-        let node = format!("switches[{i}]");
+        // A switch has no selection state (ARIA, and the model): `selected` flips on a sidebar
+        // row, which has one.
+        let node = if *st == "selected" {
+            "sidebar[0]".to_owned()
+        } else {
+            format!("switches[{i}]")
+        };
         let p = s.path_of("settings", &node)?;
         s.focus("settings", &p)?;
         let before = s.presentations().len();

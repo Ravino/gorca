@@ -367,13 +367,26 @@ pub fn map_states(
     engine_text_field: bool,
     s: StateBits,
 ) -> StateGroups {
+    map_states_for(role, engine_toggle, engine_text_field, true, s)
+}
+
+/// [`map_states`] for a node of a web document (`web`) or of a native application. A native
+/// node without `SENSITIVE` is unavailable whatever else it reports (Orca's rule, and
+/// [`StateMode::Native`]); web engines set `ENABLED` or `SENSITIVE`, either one means enabled.
+pub fn map_states_for(
+    role: SemRole,
+    engine_toggle: bool,
+    engine_text_field: bool,
+    web: bool,
+    s: StateBits,
+) -> StateGroups {
     let check = map_check(role, s);
     let press = map_press(role, engine_toggle, s);
     let expand = map_expand(s);
     let select = map_select(role, s);
     // An empty state set means the application reported nothing (a hidden node), not "disabled".
     let avail = if is_disableable(role) && s.0 != 0 {
-        if s.has(bit::ENABLED) || s.has(bit::SENSITIVE) {
+        if s.has(bit::SENSITIVE) || (web && s.has(bit::ENABLED)) {
             Avail::Enabled
         } else {
             Avail::Disabled
