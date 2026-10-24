@@ -76,6 +76,9 @@ pub enum Classifier {
     /// A switch is never half-checked; the legacy presenter said "half pressed" for the mixed
     /// state the engine reported on it.
     MixedSwitchIgnored,
+    /// A toggle button exports its on state as `checked` (GTK3); the legacy change presenter said
+    /// checked, the model says pressed, like the focus row and Orca do.
+    ToggleStateWord,
     /// The model says the field is read only; the legacy snapshot's state set did not.
     ReadOnlyFromModel,
     /// The fused value (`aria-valuetext`, `aria-valuenow`) is spoken where the legacy snapshot of
@@ -166,7 +169,7 @@ pub fn role_word_pairs(lang: Lang) -> [(SemRole, &'static str, &'static str); 5]
 }
 
 impl Classifier {
-    pub const ALL: [Classifier; 15] = [
+    pub const ALL: [Classifier; 16] = [
         Classifier::FieldContentsNotFused,
         Classifier::ContentDerivedName,
         Classifier::PressedWithoutToggle,
@@ -182,6 +185,7 @@ impl Classifier {
         Classifier::NameCapDiffers,
         Classifier::SelectNotApplicable,
         Classifier::MixedSwitchIgnored,
+        Classifier::ToggleStateWord,
     ];
 
     pub const fn id(self) -> &'static str {
@@ -201,6 +205,7 @@ impl Classifier {
             Classifier::NameCapDiffers => "name-cap-differs",
             Classifier::SelectNotApplicable => "select-not-applicable",
             Classifier::MixedSwitchIgnored => "mixed-switch-ignored",
+            Classifier::ToggleStateWord => "toggle-state-word",
         }
     }
 }
@@ -221,6 +226,8 @@ pub struct DiffCtx<'a> {
     pub not_toggle: bool,
     /// The model says the node cannot be selected (`Select::NotSelectable`).
     pub not_selectable: bool,
+    /// The model says the node is a toggle button (a button with a pressed state).
+    pub toggle_button: bool,
     /// The model says availability does not apply to the node (`Avail::NotApplicable`, SM-5).
     pub avail_na: bool,
     /// The UI language the classifiers' catalog words are taken in (the language `render` used).
@@ -236,6 +243,7 @@ impl DiffCtx<'static> {
         untoggled: false,
         not_toggle: false,
         not_selectable: false,
+        toggle_button: false,
         avail_na: false,
         lang: Lang::En,
     };
@@ -252,6 +260,7 @@ impl<'a> DiffCtx<'a> {
                 && entry.sem.check == Check::NotCheckable,
             not_toggle: entry.sem.press == Press::NotToggle,
             not_selectable: entry.sem.select == Select::NotSelectable,
+            toggle_button: entry.sem.role == SemRole::Button && entry.sem.press != Press::NotToggle,
             avail_na: entry.sem.avail == Avail::NotApplicable,
             lang,
         }
@@ -493,6 +502,25 @@ fn explain<'a>(
                 )
             };
             applies && take(only_legacy, |k| k.0 == state && (k.1 == un || k.1 == av))
+        }
+        Classifier::ToggleStateWord => {
+            use gorca_i18n::MsgId as M;
+            let t = |id| gorca_i18n::t_in(ctx.lang, id);
+            let state = kind_code(SegmentKind::State);
+            if !(is_change(ctx.surface) && ctx.toggle_button) {
+                return false;
+            }
+            // Same polarity: checked <-> pressed, not checked <-> not pressed.
+            let pairs = [
+                (t(M::StateChecked), t(M::StatePressed)),
+                (t(M::StateNotChecked), t(M::StateNotPressed)),
+            ];
+            pairs.iter().any(|(l, n)| {
+                only_legacy.iter().any(|k| k.0 == state && k.1 == *l)
+                    && only_new.iter().any(|k| k.0 == state && k.1 == *n)
+                    && take(only_legacy, |k| k.0 == state && k.1 == *l)
+                    && take(only_new, |k| k.0 == state && k.1 == *n)
+            })
         }
         Classifier::SelectNotApplicable => {
             use gorca_i18n::MsgId as M;
@@ -937,6 +965,49 @@ mod tests {
         };
         assert!(matches!(
             d(&un, &none, focus_web),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn a_toggle_buttons_checked_is_the_models_pressed_on_the_change_surface_only() {
+        use gorca_i18n::MsgId as M;
+        let t = gorca_i18n::t;
+        let toggle = |surface: &'static str| DiffCtx {
+            surface,
+            toggle_button: true,
+            ..DiffCtx::FOCUS
+        };
+        let legacy = [l(SegmentKind::State, t(M::StateChecked))];
+        let new = [n(SegmentKind::State, t(M::StatePressed))];
+        assert_eq!(
+            d(&legacy, &new, toggle("change")),
+            DiffOutcome::Allowed("toggle-state-word")
+        );
+        let off = [l(SegmentKind::State, t(M::StateNotChecked))];
+        let off_new = [n(SegmentKind::State, t(M::StateNotPressed))];
+        assert_eq!(
+            d(&off, &off_new, toggle("change")),
+            DiffOutcome::Allowed("toggle-state-word")
+        );
+        // Opposite polarity, another surface, or a node that is no toggle: a real difference.
+        assert!(matches!(
+            d(&legacy, &off_new, toggle("change")),
+            DiffOutcome::Different { .. }
+        ));
+        assert!(matches!(
+            d(&legacy, &new, toggle("focus")),
+            DiffOutcome::Different { .. }
+        ));
+        assert!(matches!(
+            d(
+                &legacy,
+                &new,
+                DiffCtx {
+                    surface: "change",
+                    ..DiffCtx::FOCUS
+                }
+            ),
             DiffOutcome::Different { .. }
         ));
     }
