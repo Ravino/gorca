@@ -587,6 +587,12 @@ pub struct BrowseState {
     /// cursor still acts inside the page (it focuses the document) instead of leaving for the
     /// browser chrome. Cleared by the next cursor move.
     pub tab_fallback: bool,
+    /// When the last scroll request went out: an edge hit right after it means the page is
+    /// loading more (a virtual list), not that the content ends.
+    pub last_scroll: Option<Instant>,
+    /// The DOM id of the item (message, row) the cursor is in, and the cursor's offset from the
+    /// item's start: the item is tracked, not the row object the page happens to reuse for it.
+    pub cursor_item: Option<(Arc<str>, u32)>,
     /// Latest scroll request: sent after a pause so held keys do not flood the page (LP-6).
     pub scroll_due: Option<(Instant, DocId, DocNodeId, u32)>,
     /// When the browser last reported `load-complete`, by document root (page auto-read): the
@@ -723,6 +729,8 @@ impl BrowseState {
             restore_until: None,
             cursor_chain: SmallVec::new(),
             tab_fallback: false,
+            last_scroll: None,
+            cursor_item: None,
             displaced: None,
             armed_click: None,
             focus_key: None,

@@ -1882,6 +1882,41 @@ impl AtspiDocSource {
                     )
                     .await
             }
+            DocAction::ScrollToOffset(o) => {
+                // The character range, not the whole owner: an owner taller than the viewport
+                // would otherwise jump to an edge. An owner without a Text interface scrolls
+                // as a whole.
+                let o = i32::try_from(*o).unwrap_or(i32::MAX);
+                let end = o.saturating_add(1);
+                let ranged = self
+                    .app
+                    .call(
+                        lane,
+                        deadline,
+                        &path,
+                        TEXT,
+                        "ScrollSubstringTo",
+                        &(o, end, SCROLL_ANYWHERE),
+                    )
+                    .await;
+                match ranged {
+                    Ok(m) if !matches!(wire::parse_u32(m.body().data().bytes()), Ok(0)) => {
+                        return Ok(());
+                    }
+                    Ok(_) | Err(_) => {
+                        self.app
+                            .call(
+                                lane,
+                                deadline,
+                                &path,
+                                COMPONENT,
+                                "ScrollTo",
+                                &(SCROLL_ANYWHERE,),
+                            )
+                            .await
+                    }
+                }
+            }
             DocAction::SetCaret(o) => {
                 let o = i32::try_from(*o).unwrap_or(i32::MAX);
                 self.app

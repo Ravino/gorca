@@ -1219,13 +1219,19 @@ fn spawn_action(
         d.node(n).and_then(|v| v.meta).and_then(|m| m.src)
     };
     let src = a.read.with(|d| {
-        if matches!(act, DocAction::ScrollIntoView) {
+        if matches!(
+            act,
+            DocAction::ScrollIntoView | DocAction::ScrollToOffset(_)
+        ) {
             return scroll_src(d, node);
         }
         src_of(d, node)
     });
     let Some(src) = src else {
-        if matches!(act, DocAction::ScrollIntoView) {
+        if matches!(
+            act,
+            DocAction::ScrollIntoView | DocAction::ScrollToOffset(_)
+        ) {
             tracing::debug!(target: "gorca_phase", phase = "web_scroll", ok = false, why = "no_src");
         }
         fail(a);
@@ -1281,6 +1287,7 @@ fn spawn_action(
         | DocAction::ClickAnnounced { .. }
         | DocAction::ReleaseField
         | DocAction::ScrollIntoView
+        | DocAction::ScrollToOffset(_)
         | DocAction::SetCaret(_)
         | DocAction::SetSourceSelection(_)
         | DocAction::ClearSelection) => other,
@@ -1289,7 +1296,10 @@ fn spawn_action(
     let notices = a.notices.clone();
     let doc = a.spec_doc;
     let is_focus = matches!(act, DocAction::Focus);
-    let is_scroll = matches!(act, DocAction::ScrollIntoView);
+    let is_scroll = matches!(
+        act,
+        DocAction::ScrollIntoView | DocAction::ScrollToOffset(_)
+    );
     let is_click = matches!(act, DocAction::Click | DocAction::ClickAnnounced { .. });
     set.spawn(async move {
         // Wait for the selection request before this one; `done` is dropped at the end, which

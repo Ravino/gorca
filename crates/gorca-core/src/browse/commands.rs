@@ -85,6 +85,8 @@ const ENTRY_WAIT: Duration = Duration::from_secs(2);
 const SEL_DEBOUNCE: Duration = Duration::from_millis(40);
 /// Held cursor keys scroll the page once per this interval (LP-6).
 pub(super) const SCROLL_DEBOUNCE: Duration = Duration::from_millis(150);
+/// An edge hit this soon after a scroll request is spoken as "loading" (older items are coming).
+const LOADING_CUE_WINDOW: Duration = Duration::from_millis(1200);
 /// Focus in a document the mirror does not know yet waits this long (browse design 7.3).
 const LOADING_GRACE: Duration = Duration::from_secs(1);
 /// The shortest time between two focus resolutions restarted by key presses.
@@ -663,6 +665,76 @@ fn reanchor(d: &WebDoc, chain: &[(DocNodeId, Option<DocNodeId>)]) -> Option<(Web
         Some(n) => cursor::content_start(d, n)?,
         None => d.subtree_text_range(chain[k].0)?.1.saturating_sub(1),
     };
+    cursor::cursor_at(d, off).map(|c| (c, off))
+}
+
+/// How a scroll request for the cursor is addressed. A text run is not an object of its own:
+/// its owner scrolls to the cursor's character (an owner taller than the viewport must not
+/// jump to an edge). An addressable node scrolls as a whole.
+fn scroll_target(d: &WebDoc, node: DocNodeId, local: u32) -> Option<(DocNodeId, DocAction)> {
+    let addressable = |n: DocNodeId| {
+        d.node(n)
+            .and_then(|v| v.meta)
+            .is_some_and(|m| m.local.is_some())
+    };
+    if addressable(node) {
+        return None;
+    }
+    let owner = d.parent(node)?;
+    let mut off = 0u32;
+    for c in d.children(owner) {
+        if c == node {
+            break;
+        }
+        // A run adds its text; an embedded object is one placeholder in the owner's text.
+        off = off.saturating_add(if addressable(c) {
+            1
+        } else {
+            d.own_len(c).unwrap_or(0)
+        });
+    }
+    Some((owner, DocAction::ScrollToOffset(off.saturating_add(local))))
+}
+
+/// The page item (message, row) the cursor is in: the nearest ancestor-or-self with a DOM id,
+/// and the cursor's distance from the item's start. The item is what the user reads; the row
+/// object a virtual list reuses for it is not.
+fn item_of(d: &WebDoc, node: DocNodeId, off: u32) -> Option<(Arc<str>, u32)> {
+    let mut at = Some(node);
+    for _ in 0..12 {
+        let n = at?;
+        let id = d.node(n).and_then(|v| v.meta).and_then(|m| {
+            m.attrs
+                .iter()
+                .find(|(k, _)| *k == gorca_doc_source_api::web_attrs::DOM_ID)
+                .map(|(_, v)| Arc::clone(v))
+        });
+        if let Some(id) = id.filter(|i| !i.is_empty()) {
+            let start = d.offset_of(n)?;
+            return Some((id, off.saturating_sub(start)));
+        }
+        at = d.parent(n);
+    }
+    None
+}
+
+/// The cursor on the item with this DOM id, wherever the page re-rendered it.
+fn find_item(d: &WebDoc, id: &str, delta: u32) -> Option<(WebCursor, u32)> {
+    let n = d.preorder().find(|n| {
+        d.node(*n).and_then(|v| v.meta).is_some_and(|m| {
+            m.attrs
+                .iter()
+                .any(|(k, v)| *k == gorca_doc_source_api::web_attrs::DOM_ID && &**v == id)
+        })
+    })?;
+    if !d.is_attached(n) {
+        return None;
+    }
+    let (s, e) = d.subtree_text_range(n)?;
+    let off = cursor::content_start(d, n)?
+        .max(s)
+        .saturating_add(delta)
+        .min(e.saturating_sub(1));
     cursor::cursor_at(d, off).map(|c| (c, off))
 }
 
@@ -2431,17 +2503,22 @@ impl Reader {
                 if !lost {
                     // Remember where the node sits, for the day the page removes all of it.
                     b.cursor_chain = h.read.with(|d| ancestor_chain(d, cur.node));
+                    b.cursor_item = h.read.with(|d| item_of(d, cur.node, last));
                 }
                 // The page removed the cursor's whole subtree (a pane closed) and the flat offset
                 // now lies past the end of what is left: re-anchor to the nearest surviving
                 // ancestor instead of the end of the document, where no Tab target and nothing
                 // to click remain.
+                // The item the user was reading comes back under another row object (a virtual
+                // list re-rendered): follow the item by its DOM id before the structural guess.
                 let anchored = h.read.with(|d| {
-                    if lost {
-                        reanchor(d, &b.cursor_chain)
-                    } else {
-                        None
+                    if !lost {
+                        return None;
                     }
+                    b.cursor_item
+                        .as_ref()
+                        .and_then(|(id, delta)| find_item(d, id, *delta))
+                        .or_else(|| reanchor(d, &b.cursor_chain))
                 });
                 let fixed = match anchored {
                     Some(a) => Some(a),
@@ -2662,14 +2739,16 @@ impl Reader {
                 fx.push(ReaderEffect::ArmTimer(due));
             }
         }
-        if let Some((due, doc, node, _)) = b.scroll_due {
+        if let Some((due, doc, node, local)) = b.scroll_due {
             if due <= now {
                 b.scroll_due = None;
-                fx.push(ReaderEffect::Web(WebEffect::Act {
-                    doc,
-                    node,
-                    act: DocAction::ScrollIntoView,
-                }));
+                b.last_scroll = Some(now);
+                let (node, act) = b
+                    .docs
+                    .get(doc)
+                    .and_then(|h| h.read.with(|d| scroll_target(d, node, local)))
+                    .unwrap_or((node, DocAction::ScrollIntoView));
+                fx.push(ReaderEffect::Web(WebEffect::Act { doc, node, act }));
                 // D-2: Tab availability follows the cursor (a grabbed Tab cannot be passed on).
                 // Reading never moves focus or the page caret (BM-2).
                 sync_tabs = true;
@@ -3107,6 +3186,7 @@ impl Reader {
         b.tab_fallback = false;
         if let Some(h) = b.docs.get(doc) {
             b.cursor_chain = h.read.with(|d| ancestor_chain(d, cur.node));
+            b.cursor_item = h.read.with(|d| item_of(d, cur.node, off));
         }
         if b.native_sel_node.is_some() && b.model == SelectionModel::Native {
             b.sel_due = Some(now + SEL_DEBOUNCE);
@@ -3249,9 +3329,18 @@ impl Reader {
                 if let Some(b) = self.web.as_mut() {
                     b.counters.edges += 1;
                 }
-                let w = match e {
-                    Edge::Top => t(M::WebTop),
-                    Edge::Bottom => t(M::WebBottom),
+                // An edge right after our own scroll request: a virtual list is fetching more.
+                let loading = self.web.as_ref().is_some_and(|b| {
+                    b.last_scroll
+                        .is_some_and(|t| now.saturating_duration_since(t) < LOADING_CUE_WINDOW)
+                });
+                let w = if loading {
+                    t(M::WebLoading)
+                } else {
+                    match e {
+                        Edge::Top => t(M::WebTop),
+                        Edge::Bottom => t(M::WebBottom),
+                    }
                 };
                 self.say(w, fx);
             }
@@ -3541,6 +3630,10 @@ impl Reader {
                 node,
                 act: DocAction::Focus,
             }));
+            if fallback {
+                // The fallback was spent: release the grab so the next Tab walks the page natively.
+                self.web_sync_tab_grabs(fx);
+            }
         } else {
             let w = match dir {
                 Dir::Next => t(M::WebNoNextFocusable),

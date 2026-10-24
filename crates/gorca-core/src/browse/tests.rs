@@ -2084,7 +2084,7 @@ fn reading_never_sets_a_page_caret_or_moves_focus() {
     assert!(!all.is_empty(), "the scrolls still go out");
     assert!(
         all.iter()
-            .all(|(a, _)| matches!(a, DocAction::ScrollIntoView)),
+            .all(|(a, _)| matches!(a, DocAction::ScrollIntoView | DocAction::ScrollToOffset(_))),
         "reading only scrolls: {all:?}"
     );
 }
@@ -2148,6 +2148,7 @@ fn selections(fx: &ReaderEffects) -> Vec<gorca_model::SelectionSpec<DocNodeId>> 
             | DocAction::ClickAnnounced { .. }
             | DocAction::ReleaseField
             | DocAction::ScrollIntoView
+            | DocAction::ScrollToOffset(_)
             | DocAction::SetCaret(_)
             | DocAction::SetSourceSelection(_)
             | DocAction::ClearSelection => None,
@@ -4007,4 +4008,130 @@ fn a_re_rendered_pane_with_new_ids_leaves_the_cursor_on_a_live_node() {
         .with(|d| d.is_attached(cur.node));
     assert!(attached, "the cursor is on a live node");
     assert!(!spoken(&r.key(CoreCmd::BrowseCursorPrevLine)).is_empty());
+}
+
+/// a2 review: the cursor on a text run scrolls its owner to the cursor's character, not the whole
+/// owner (an owner taller than the viewport would jump to an edge).
+#[test]
+fn a_cursor_on_a_run_scrolls_the_owner_to_its_character() {
+    let mut r = rig();
+    r.focus(1006);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    let said = acts(&settle(&mut r));
+    let h2 = r.tr.id_of(SrcNodeId(9)).expect("h2");
+    assert!(
+        said.contains(&(DocAction::ScrollToOffset(0), h2)),
+        "{said:?}"
+    );
+    assert!(
+        !said
+            .iter()
+            .any(|(a, _)| matches!(a, DocAction::ScrollIntoView))
+    );
+}
+
+/// a2: an edge hit right after our own scroll request is a virtual list loading, said as such;
+/// an edge with no scroll behind it is the end.
+#[test]
+fn an_edge_right_after_a_scroll_says_loading_and_a_plain_edge_says_top() {
+    let mut r = rig();
+    r.focus(1002);
+    let top = spoken(&r.key(CoreCmd::BrowseCursorPrevLine));
+    assert_eq!(top, ["top"]);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseCursorPrevLine);
+    // The scroll fired a moment ago (settle): the edge is "loading".
+    r.now += Duration::from_millis(10);
+    let again = spoken(&r.key(CoreCmd::BrowseCursorPrevLine));
+    assert_eq!(again, ["loading"]);
+    r.now += Duration::from_secs(3);
+    let later = spoken(&r.key(CoreCmd::BrowseCursorPrevLine));
+    assert_eq!(later, ["top"]);
+}
+
+/// a2: the item is tracked by its DOM id, not the row object: the page re-renders the item under
+/// new ids (a virtual list reusing rows) and the cursor follows it.
+#[test]
+fn the_cursor_follows_its_item_by_dom_id_across_a_re_render() {
+    let mut r = rig();
+    let item = |id: u64, local: u64, dom: &str, t: &str, rid: u64| {
+        let mut p = block(src(id, Role::Paragraph, Some(local)));
+        p.attrs.push((web_attrs::DOM_ID, Arc::from(dom)));
+        vec![p, run(rid, t)]
+    };
+    let mut up = item(20, 1020, "msg-1", "First message", 21);
+    up.extend(item(22, 1022, "msg-2", "Second message", 23));
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(up),
+            kids(1, &[2, 4, 9, 11, 13, 20, 22]),
+            kids(20, &[21]),
+            kids(22, &[23]),
+            DocDelta::Settled { batch: 2 },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 2,
+        }),
+        r.now,
+    );
+    r.focus(1006);
+    let mut said = Vec::new();
+    for _ in 0..14 {
+        said = spoken(&r.key(CoreCmd::BrowseCursorNextLine));
+        if said.iter().any(|s| s.contains("Second message")) {
+            break;
+        }
+    }
+    assert!(
+        said.iter().any(|s| s.contains("Second message")),
+        "{said:?}"
+    );
+    settle(&mut r);
+    // Re-render: both items come back under new ids and a new first item is prepended.
+    let mut up = item(30, 1030, "msg-0", "Older message", 31);
+    up.extend(item(32, 1032, "msg-1", "First message", 33));
+    up.extend(item(34, 1034, "msg-2", "Second message", 35));
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(up),
+            kids(1, &[2, 4, 9, 11, 13, 30, 32, 34]),
+            kids(30, &[31]),
+            kids(32, &[33]),
+            kids(34, &[35]),
+            DocDelta::Removed(vec![
+                SrcNodeId(20),
+                SrcNodeId(21),
+                SrcNodeId(22),
+                SrcNodeId(23),
+            ]),
+            DocDelta::Settled { batch: 3 },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 3,
+        }),
+        r.now,
+    );
+    let WebMode::Browse { doc, cur, .. } = r.mode() else {
+        panic!("not browsing");
+    };
+    let text = r
+        .docs
+        .get(doc)
+        .unwrap()
+        .read
+        .with(|d| d.node(cur.node).and_then(|v| v.text.map(str::to_owned)));
+    assert_eq!(text.as_deref(), Some("Second message"));
 }
