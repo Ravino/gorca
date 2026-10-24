@@ -476,7 +476,8 @@ fn map_press(role: SemRole, engine_toggle: bool, s: StateBits) -> Press {
     }
     if s.has(bit::INDETERMINATE) {
         Press::Mixed
-    } else if s.has(bit::PRESSED) {
+    } else if s.has(bit::PRESSED) || (engine_toggle && s.has(bit::CHECKED)) {
+        // A toggle button (GTK3's `toggle-button`, an expander) exports its on state as CHECKED.
         Press::On
     } else {
         Press::Off
@@ -594,6 +595,17 @@ mod tests {
             map_states(SemRole::Heading, false, false, s).check,
             Check::NotCheckable
         );
+    }
+
+    #[test]
+    fn a_toggle_buttons_checked_bit_is_its_pressed_state() {
+        let on = bits(&[bit::CHECKED]);
+        let off = StateBits(0);
+        assert_eq!(map_press(SemRole::Button, true, on), Press::On);
+        assert_eq!(map_press(SemRole::Button, true, off), Press::Off);
+        // Without the engine saying it is a toggle, CHECKED is no pressed state.
+        assert_eq!(map_press(SemRole::Button, false, on), Press::NotToggle);
+        assert_eq!(map_press(SemRole::Checkbox, true, on), Press::NotToggle);
     }
 
     #[test]

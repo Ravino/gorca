@@ -169,3 +169,10 @@ surface = "change-web"
 epoch = "m22b1"
 reason = "ARIA gives a switch no mixed state; the model ignores it, the legacy presenter said half pressed."
 until = "2026-11-07"
+
+[[deviation]]
+id = "toggle-state-word"
+surface = "change"
+epoch = "m22b1"
+reason = "A GTK3 toggle button exports its on state as checked; the legacy change presenter said checked or not checked. The model keeps it as the button's pressed state and says pressed or not pressed, as the focus row and Orca do."
+until = "2026-11-07"
