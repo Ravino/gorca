@@ -13,6 +13,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use gorca_i18n::Lang;
+use gorca_i18n::ext::ExtCatalogs;
 use gorca_model::sem::SemEntry;
 use gorca_model::{NodeKey, SegmentKind};
 use smallvec::SmallVec;
@@ -243,13 +245,34 @@ pub fn channel_with(depth: usize, deviations: Deviations) -> (ShadowHandle, Shad
 }
 
 impl ShadowActor {
-    /// Process one sample: compose, render, diff, count, log.
+    /// An actor with no queue: the cut-over gate and tests call [`ShadowActor::process_in`] on it
+    /// directly, so no sample is ever dropped by `try_send` and no outcome depends on how the
+    /// actor task is scheduled.
+    pub fn standalone(deviations: Deviations) -> ShadowActor {
+        channel_with(1, deviations).1
+    }
+
+    /// Process one sample in the current UI language and extension catalogs (the ambient process
+    /// state, read once here). Use [`ShadowActor::process_in`] where the result must not depend on
+    /// either.
     pub fn process(&self, s: &FocusSample) -> Option<DiffOutcome> {
+        self.process_in(s, gorca_i18n::language(), &gorca_i18n::ext::snapshot())
+    }
+
+    /// Process one sample: compose, render, diff, count, log. A pure function of the sample, the
+    /// deviation list, `lang` and `ext`; callable without the queue.
+    pub fn process_in(
+        &self,
+        s: &FocusSample,
+        lang: Lang,
+        ext: &ExtCatalogs,
+    ) -> Option<DiffOutcome> {
         let ctx = ComposeCtx {
             flags: ReportFlags::default(),
             may_refine: s.may_refine,
             web: s.web,
             skip_selected: false,
+            lang,
         };
         let ir = match compose(&s.entry, s.node, Reason::Focus, ctx) {
             Ok(ir) => ir,
@@ -263,13 +286,15 @@ impl ShadowActor {
             &ir,
             RenderOpts {
                 description_pause: s.description_pause,
+                lang,
+                ext,
             },
         );
         let outcome = diff(
             &s.legacy,
             &tokens,
             &self.deviations,
-            DiffCtx::for_entry(if s.web { "focus-web" } else { "focus" }, &s.entry),
+            DiffCtx::for_entry(if s.web { "focus-web" } else { "focus" }, &s.entry, lang),
         );
         match &outcome {
             DiffOutcome::Equal => bump(&self.stats.equal),
@@ -286,19 +311,33 @@ impl ShadowActor {
         Some(outcome)
     }
 
-    /// Process one change sample: compose the change, render, diff, count.
+    /// Process one change sample in the current UI language and extension catalogs.
     pub fn process_change(&self, s: &ChangeSample) -> DiffOutcome {
+        self.process_change_in(s, gorca_i18n::language(), &gorca_i18n::ext::snapshot())
+    }
+
+    /// Process one change sample: compose the change, render, diff, count; pure like
+    /// [`ShadowActor::process_in`].
+    pub fn process_change_in(
+        &self,
+        s: &ChangeSample,
+        lang: Lang,
+        ext: &ExtCatalogs,
+    ) -> DiffOutcome {
         let ctx = ComposeCtx {
             flags: ReportFlags::default(),
             may_refine: false,
             web: s.web,
             skip_selected: s.skip_selected,
+            lang,
         };
         let ir = compose_change(&s.old, &s.new, s.node, ctx);
         let tokens = render(
             &ir,
             RenderOpts {
                 description_pause: false,
+                lang,
+                ext,
             },
         );
         let surface = if s.web { "change-web" } else { "change" };
@@ -306,7 +345,7 @@ impl ShadowActor {
             &s.legacy,
             &tokens,
             &self.deviations,
-            DiffCtx::for_entry(surface, &s.new),
+            DiffCtx::for_entry(surface, &s.new, lang),
         );
         match &outcome {
             DiffOutcome::Equal | DiffOutcome::OrderOnly => bump(&self.stats.change_equal),
@@ -445,6 +484,32 @@ mod tests {
         let s = h.stats();
         assert_eq!((s.equal, s.different, s.compared()), (1, 1, 2));
         assert!((s.different_ratio() - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_standalone_actor_processes_without_the_queue_in_the_given_language() {
+        let a = ShadowActor::standalone(Deviations::empty());
+        let e = entry(SemRole::Checkbox, "Mute", Check::On);
+        let role = gorca_model::Role::CheckBox.spoken();
+        let checked = gorca_i18n::t_in(Lang::En, gorca_i18n::MsgId::StateChecked);
+        let legacy = vec![
+            tok(SegmentKind::Text, "Mute"),
+            tok(SegmentKind::Role, role),
+            tok(SegmentKind::State, checked),
+        ];
+        let none = ExtCatalogs::empty();
+        // The ambient language is Russian; the explicit one decides.
+        let _pin = gorca_i18n::scoped(Lang::Ru);
+        for _ in 0..3 {
+            assert_eq!(
+                a.process_in(&sample(Arc::clone(&e), legacy.clone()), Lang::En, &none),
+                Some(DiffOutcome::Equal)
+            );
+        }
+        assert!(matches!(
+            a.process_in(&sample(e, legacy), Lang::Ru, &none),
+            Some(DiffOutcome::Different { .. })
+        ));
     }
 
     #[test]

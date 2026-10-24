@@ -5,6 +5,8 @@
 use gorca_model::SegmentKind;
 use gorca_model::sem::{Check, Group, Press, ProvCode, SemEntry, SemRole};
 
+use gorca_i18n::Lang;
+
 use crate::deviations::Deviations;
 use crate::render::Token;
 
@@ -145,9 +147,9 @@ pub const VALUE_ROLES: &[SemRole] = &[
 ];
 
 /// (role, legacy word, model word) pairs accepted by `role-word-improved`.
-pub fn role_word_pairs() -> [(SemRole, &'static str, &'static str); 5] {
+pub fn role_word_pairs(lang: Lang) -> [(SemRole, &'static str, &'static str); 5] {
     use gorca_i18n::MsgId as M;
-    let t = gorca_i18n::t;
+    let t = |id| gorca_i18n::t_in(lang, id);
     [
         (SemRole::Option, t(M::RolePanel), t(M::RoleListItem)),
         (SemRole::Feed, t(M::RolePanel), t(M::RoleList)),
@@ -205,6 +207,8 @@ pub struct DiffCtx<'a> {
     pub name_derived: bool,
     /// The model says the node is neither checkable nor a toggle.
     pub untoggled: bool,
+    /// The UI language the classifiers' catalog words are taken in (the language `render` used).
+    pub lang: Lang,
 }
 
 impl DiffCtx<'static> {
@@ -214,18 +218,20 @@ impl DiffCtx<'static> {
         role: SemRole::Unknown,
         name_derived: false,
         untoggled: false,
+        lang: Lang::En,
     };
 }
 
 impl<'a> DiffCtx<'a> {
     /// The facts of `entry` that decide which classifiers may apply.
-    pub fn for_entry(surface: &'a str, entry: &SemEntry) -> DiffCtx<'a> {
+    pub fn for_entry(surface: &'a str, entry: &SemEntry, lang: Lang) -> DiffCtx<'a> {
         DiffCtx {
             surface,
             role: entry.sem.role,
             name_derived: entry.prov.get(Group::Name) == Some(ProvCode::Derived),
             untoggled: entry.sem.press == Press::NotToggle
                 && entry.sem.check == Check::NotCheckable,
+            lang,
         }
     }
 }
@@ -281,6 +287,51 @@ fn take(keys: &mut Vec<Key<'_>>, pred: impl Fn(&Key<'_>) -> bool) -> bool {
     }
 }
 
+/// True for the characters a bullet or dash marker is made of.
+fn is_bullet_char(c: char) -> bool {
+    matches!(
+        c,
+        '*' | '-'
+            | '+'
+            | '>'
+            | '\u{2022}'
+            | '\u{25E6}'
+            | '\u{25AA}'
+            | '\u{25AB}'
+            | '\u{2023}'
+            | '\u{00B7}'
+            | '\u{2013}'
+            | '\u{2014}'
+            | '\u{25CF}'
+            | '\u{25CB}'
+            | '\u{25A0}'
+            | '\u{25A1}'
+            | '\u{2043}'
+    )
+}
+
+/// `legacy` is `new` with a list marker in front: the removed prefix, trimmed, is bullets only
+/// ("\u{2022} Alpha") or a number closed by a dot or parenthesis ("3. Beta", "(3) Beta"). A dropped
+/// word ("Delete all" to "all") or a bare number ("2 apples") is not a marker.
+fn is_marker_stripped(legacy: &str, new: &str) -> bool {
+    if new.is_empty() {
+        return false;
+    }
+    let Some(prefix) = legacy.strip_suffix(new) else {
+        return false;
+    };
+    let marker = prefix.trim();
+    if marker.is_empty() {
+        return false;
+    }
+    if marker.chars().all(is_bullet_char) {
+        return true;
+    }
+    let body = marker.trim_start_matches('(');
+    let rest = body.trim_start_matches(|c: char| c.is_ascii_digit());
+    rest.len() < body.len() && matches!(rest, "." | ")")
+}
+
 /// Try to explain part of the difference with `c`; true when it removed something.
 fn explain<'a>(
     c: Classifier,
@@ -327,7 +378,7 @@ fn explain<'a>(
             }
         }
         Classifier::PressedWithoutToggle => {
-            let pressed = gorca_i18n::t(gorca_i18n::MsgId::StatePressed);
+            let pressed = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::StatePressed);
             ctx.untoggled
                 && ctx.role == SemRole::Tab
                 && take(only_legacy, |k| {
@@ -340,12 +391,12 @@ fn explain<'a>(
                 a.0 == text
                     && only_new
                         .iter()
-                        .any(|b| b.0 == text && a.1.len() > b.1.len() && a.1.ends_with(b.1))
+                        .any(|b| b.0 == text && is_marker_stripped(a.1, b.1))
             });
             match pair {
                 Some(i) => {
                     let a = only_legacy.remove(i);
-                    take(only_new, |b| b.0 == text && a.1.ends_with(b.1));
+                    take(only_new, |b| b.0 == text && is_marker_stripped(a.1, b.1));
                     true
                 }
                 None => false,
@@ -353,8 +404,8 @@ fn explain<'a>(
         }
         Classifier::StaticTextWord => {
             let (label, text) = (
-                gorca_i18n::t(gorca_i18n::MsgId::RoleLabel),
-                gorca_i18n::t(gorca_i18n::MsgId::RoleStaticText),
+                gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::RoleLabel),
+                gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::RoleStaticText),
             );
             let word =
                 |k: &Key<'_>| k.0 == kind_code(SegmentKind::Role) && (k.1 == label || k.1 == text);
@@ -365,8 +416,8 @@ fn explain<'a>(
                 && take(only_new, word)
         }
         Classifier::GroupingWord => {
-            let panel = gorca_i18n::t(gorca_i18n::MsgId::RolePanel);
-            let group = gorca_i18n::t(gorca_i18n::MsgId::AriaGroup);
+            let panel = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::RolePanel);
+            let group = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::AriaGroup);
             let role = kind_code(SegmentKind::Role);
             matches!(ctx.role, SemRole::Group | SemRole::RadioGroup)
                 && only_legacy.iter().any(|k| k.0 == role && k.1 == panel)
@@ -387,7 +438,7 @@ fn explain<'a>(
                 && take(only_new, kind(SegmentKind::Value))
         }
         Classifier::UnavailableStatic => {
-            let un = gorca_i18n::t(gorca_i18n::MsgId::StateUnavailable);
+            let un = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::StateUnavailable);
             matches!(
                 ctx.role,
                 SemRole::Generic | SemRole::Group | SemRole::Presentation | SemRole::Article
@@ -397,7 +448,7 @@ fn explain<'a>(
         }
         Classifier::RoleWordImproved => {
             let role = kind_code(SegmentKind::Role);
-            role_word_pairs()
+            role_word_pairs(ctx.lang)
                 .iter()
                 .find(|(r, l, n)| {
                     *r == ctx.role
@@ -429,7 +480,7 @@ fn explain<'a>(
             }
         }
         Classifier::ReadOnlyFromModel => {
-            let ro = gorca_i18n::t(gorca_i18n::MsgId::StateReadOnly);
+            let ro = gorca_i18n::t_in(ctx.lang, gorca_i18n::MsgId::StateReadOnly);
             matches!(
                 ctx.role,
                 SemRole::TextBox | SemRole::SearchBox | SemRole::PasswordBox | SemRole::Checkbox
@@ -454,33 +505,46 @@ pub fn diff(
     allowed: &Deviations,
     ctx: DiffCtx<'_>,
 ) -> DiffOutcome {
+    diff_report(legacy, new, allowed, ctx).0
+}
+
+/// Like [`diff`], and also every classifier that fired, in `Classifier::ALL` order (not only the
+/// first). The `Allowed` id is the first of them. Several can fire on one comparison; the list is
+/// what per-row hit counts must read.
+pub fn diff_report(
+    legacy: &[LegacyToken],
+    new: &[Token],
+    allowed: &Deviations,
+    ctx: DiffCtx<'_>,
+) -> (DiffOutcome, Vec<&'static str>) {
     let (la, lb) = (keys_legacy(legacy), keys_new(new));
     if la == lb {
-        return DiffOutcome::Equal;
+        return (DiffOutcome::Equal, Vec::new());
     }
     let (mut sa, mut sb) = (la.clone(), lb.clone());
     sa.sort_unstable();
     sb.sort_unstable();
     if sa == sb {
-        return DiffOutcome::OrderOnly;
+        return (DiffOutcome::OrderOnly, Vec::new());
     }
     let (mut only_legacy, mut only_new) = difference(&sa, &sb);
-    let mut used: Option<&'static str> = None;
+    let mut used: Vec<&'static str> = Vec::new();
     for c in Classifier::ALL {
         if !allowed.allows(c.id(), ctx.surface) {
             continue;
         }
         if explain(c, &ctx, &mut only_legacy, &mut only_new, &sa, &sb) {
-            used.get_or_insert(c.id());
+            used.push(c.id());
         }
     }
-    match used {
+    let outcome = match used.first() {
         Some(id) if only_legacy.is_empty() && only_new.is_empty() => DiffOutcome::Allowed(id),
         Some(_) | None => DiffOutcome::Different {
             legacy_only: u32::try_from(only_legacy.len()).unwrap_or(u32::MAX),
             new_only: u32::try_from(only_new.len()).unwrap_or(u32::MAX),
         },
-    }
+    };
+    (outcome, used)
 }
 
 #[cfg(test)]

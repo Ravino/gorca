@@ -481,6 +481,13 @@ fn fact_star(n: usize, cap: usize) -> Ivm<NoQuirks, NoPatches> {
     e
 }
 
+fn cut_trials() -> u64 {
+    std::env::var("GORCA_FUSE_TRIALS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .map_or(30, |t| (t / 5).max(30))
+}
+
 fn published_nodes(p: &[gorca_fuse::Published]) -> Vec<u32> {
     p.iter().map(|x| x.node.0).collect()
 }
@@ -493,8 +500,6 @@ fn d4_1_bump_global_publishes_the_same_nodes_in_the_same_order_on_every_engine()
     let mut seen: BTreeSet<Vec<u32>> = BTreeSet::new();
     for _ in 0..16 {
         let mut e = fact_star(40, 4);
-        // Make the drain independent of the wall clock: a bound no test can reach.
-        e.set_sync_drain_time(Duration::from_secs(3600));
         seen.insert(published_nodes(&e.bump_global()));
     }
     assert_eq!(seen.len(), 1, "distinct streams: {seen:?}");
@@ -526,55 +531,109 @@ fn d4_2_the_drained_state_after_a_revocation_is_engine_independent() {
     assert_eq!(finals.len(), 1);
 }
 
-/// KNOWN GAP G-P1-a: `Ivm::touch_priority_nodes` (`ivm.rs:1636`) collects the priority nodes that
-/// carry facts by iterating `self.prio.keys()`, a `std::collections::HashMap` with the default
-/// `RandomState`, and sends the first `max_sync_drain` of them to the synchronous drain. When the
-/// cap bites, WHICH nodes are re-fused before `set_source_state` returns, and in what order the
-/// rest reach the background queue, changes from engine to engine. The drained result is the same
-/// (D4.2); the intermediate publication stream is not.
-///
-/// Fix proposal: sort `nodes` by the dirty key `(class, order, idx)` the set already stores
-/// (`prio: HashMap<NodeIdx, (u8, u32)>`) before the `cap` split. Make `prio` an `FxMap` or a
-/// `BTreeMap` for the same reason.
+/// G-P1-a (fixed): `touch_priority_nodes` sorts the priority nodes by `(class, order, node)`
+/// before the `max_sync_drain` split, so fresh engines (other `RandomState` seeds) publish the
+/// same synchronous prefix when the cap bites.
 #[test]
-fn known_gap_touch_priority_nodes_stream_differs_between_engines() {
+fn g_p1_a_touch_priority_nodes_stream_is_the_same_on_every_engine() {
     let mut seen: BTreeSet<Vec<u32>> = BTreeSet::new();
     for _ in 0..24 {
         let mut e = fact_star(40, 4);
-        e.set_sync_drain_time(Duration::from_secs(3600));
         seen.insert(published_nodes(&e.set_source_state(
             id(3),
             5,
             SourceState::Revoked,
         )));
     }
-    assert!(
-        seen.len() > 1,
-        "today the synchronous part differs between engines; this flips when G-P1-a is fixed: {seen:?}"
-    );
+    assert_eq!(seen.len(), 1, "distinct synchronous parts: {seen:?}");
 }
 
-/// KNOWN GAP G-P1-b: the synchronous drain stops on wall-clock time too
-/// (`ivm.rs:1665,1674,1683`, `SYNC_DRAIN_TIME`), and `Budget::until(Instant)` reads the clock
-/// (`ivm.rs:139`). With a zero time bound the drain fuses exactly one node, with a large one it
-/// fuses up to the cap: the published prefix is a function of machine speed. A replay that must
-/// be bit-identical has to pin the bound (`set_sync_drain_time`) and use call budgets.
+/// G-P1-b (fixed): the synchronous drain is bounded by a count of fusions (`max_sync_drain`),
+/// never by time: the published prefix has the cap's length on any machine, and the work clock of
+/// `run` (ticks, background feeds, aging slots count fusions) makes the concatenated publication
+/// stream independent of where runs are cut (a call count, or a wall deadline).
 #[test]
-fn known_gap_the_synchronous_drain_length_depends_on_a_wall_clock_bound() {
-    let run = |t: Duration| {
-        let mut e = fact_star(40, 8);
-        e.set_sync_drain_time(t);
-        e.set_source_state(id(3), 5, SourceState::Revoked).len()
-    };
-    let (zero, large) = (run(Duration::ZERO), run(Duration::from_secs(3600)));
-    assert_eq!(zero, 1, "a zero bound stops after one fusion");
-    assert_eq!(large, 8, "a large bound stops at the call cap");
-    assert!(
-        large > zero,
-        "{large} vs {zero}: the bound, not the data, decided the prefix"
+fn g_p1_b_the_published_stream_does_not_depend_on_time_or_on_where_runs_cut() {
+    let mut e = fact_star(40, 8);
+    assert_eq!(
+        e.set_source_state(id(3), 5, SourceState::Revoked).len(),
+        8,
+        "the synchronous part is exactly the work cap"
     );
-    // With the bound pinned the stream is a function of the data.
-    assert_eq!(run(Duration::from_secs(3600)), large);
+    for seed in 1..=cut_trials() {
+        let (parent, ops) = workload(seed, 24, 150);
+        let stream = |cuts: &[usize]| {
+            let mut e = engine(&parent);
+            e.apply(ops.iter().cloned());
+            let (mut out, mut calls, mut k) = (Vec::new(), 0, 0);
+            while e.pending() > 0 {
+                let n = cuts[k % cuts.len()];
+                k += 1;
+                let b = if n == 0 {
+                    Budget::UNLIMITED
+                } else {
+                    Budget::calls(n)
+                };
+                let rep = e.run(b);
+                calls += rep.fuse_calls;
+                out.extend(published_nodes(&rep.published));
+            }
+            (out, calls)
+        };
+        let (whole, total) = stream(&[0]);
+        // Cuts that leave fewer than the 8 cut runs after which a node ages by run count.
+        let (c1, c2) = (total.div_ceil(6).max(1), total.div_ceil(3).max(1));
+        for cuts in [&[c1][..], &[c2], &[c1, c2], &[total.max(1)]] {
+            assert_eq!(stream(cuts).0, whole, "seed {seed}, cuts {cuts:?}");
+        }
+    }
+}
+
+/// The wall-clock valve of the synchronous drain (production only) changes where the drain
+/// returns, never the concatenated publication stream: the drain's remaining fusions are finished
+/// first by the next `run`, in the same order. Cut points from "after one fusion" (a zero valve)
+/// to "never", for the global epoch and for a source revocation.
+#[test]
+fn the_sync_drain_valve_does_not_change_the_concatenated_stream() {
+    let valves = [
+        None,
+        Some(Duration::ZERO),
+        Some(Duration::from_nanos(500)),
+        Some(Duration::from_micros(5)),
+        Some(Duration::from_micros(30)),
+        Some(Duration::from_secs(3600)),
+    ];
+    let stream = |valve: Option<Duration>, revoke: bool| {
+        let mut e = fact_star(60, 16);
+        e.set_sync_valve(valve);
+        let mut out = if revoke {
+            published_nodes(&e.set_source_state(id(3), 5, SourceState::Revoked))
+        } else {
+            published_nodes(&e.bump_global())
+        };
+        while e.pending() > 0 {
+            out.extend(published_nodes(&e.run(Budget::calls(5)).published));
+        }
+        assert!(e.verify().is_ok());
+        out
+    };
+    for revoke in [false, true] {
+        let whole = stream(None, revoke);
+        assert!(!revoke || !whole.is_empty());
+        for valve in valves {
+            for _ in 0..4 {
+                assert_eq!(
+                    stream(valve, revoke),
+                    whole,
+                    "valve {valve:?}, revoke {revoke}"
+                );
+            }
+        }
+    }
+    // A zero valve really cuts: the synchronous part is one fusion, the rest comes from `run`.
+    let mut e = fact_star(60, 16);
+    e.set_sync_valve(Some(Duration::ZERO));
+    assert_eq!(e.set_source_state(id(3), 5, SourceState::Revoked).len(), 1);
 }
 
 /// D4.3 call-budgeted `run` is deterministic as an intermediate stream: same inputs, same budget,
