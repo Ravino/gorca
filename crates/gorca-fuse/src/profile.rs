@@ -94,6 +94,8 @@ impl Rules {
             expandable: RoleSet::of(&[
                 R::Application,
                 R::Button,
+                // A GTK 3 tree view row is a table cell with the expandable state.
+                R::Cell,
                 R::Checkbox,
                 R::Combobox,
                 R::GridCell,
@@ -240,6 +242,15 @@ impl Profile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn disableable_is_the_one_shared_list_and_a_tree_view_cell_can_expand() {
+        let r = Rules::aria();
+        for role in SemRole::ALL {
+            assert_eq!(r.disableable.has(*role), role.is_disableable(), "{role:?}");
+        }
+        assert!(r.expandable.has(SemRole::Cell));
+    }
 
     #[test]
     fn role_set_covers_every_registered_role_and_the_high_words() {

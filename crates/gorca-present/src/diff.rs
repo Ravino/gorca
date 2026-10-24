@@ -81,6 +81,9 @@ pub enum Classifier {
     /// A toggle button exports its on state as `checked` (GTK3); the legacy change presenter said
     /// checked, the model says pressed, like the focus row and Orca do.
     ToggleStateWord,
+    /// The fused value text (`aria-valuetext`, a text reading) is spoken where the legacy
+    /// presenter spoke the raw number.
+    ValueTextSpoken,
     /// The model says the field is read only; the legacy snapshot's state set did not.
     ReadOnlyFromModel,
     /// The fused value (`aria-valuetext`, `aria-valuenow`) is spoken where the legacy snapshot of
@@ -112,6 +115,9 @@ pub const ROLE_FROM_MODEL_ROLES: &[SemRole] = &[
     SemRole::Tooltip,
     SemRole::Generic,
     SemRole::Group,
+    // An `<input type=date>` is an editable field; the legacy mapping had no word for the
+    // engine's date editor role.
+    SemRole::TextBox,
     SemRole::Presentation,
     SemRole::Application,
     SemRole::Term,
@@ -171,7 +177,7 @@ pub fn role_word_pairs(lang: Lang) -> [(SemRole, &'static str, &'static str); 5]
 }
 
 impl Classifier {
-    pub const ALL: [Classifier; 17] = [
+    pub const ALL: [Classifier; 18] = [
         Classifier::FieldContentsNotFused,
         Classifier::ContentDerivedName,
         Classifier::PressedWithoutToggle,
@@ -189,6 +195,7 @@ impl Classifier {
         Classifier::SelectNotApplicable,
         Classifier::MixedSwitchIgnored,
         Classifier::ToggleStateWord,
+        Classifier::ValueTextSpoken,
     ];
 
     pub const fn id(self) -> &'static str {
@@ -210,6 +217,7 @@ impl Classifier {
             Classifier::SelectNotApplicable => "select-not-applicable",
             Classifier::MixedSwitchIgnored => "mixed-switch-ignored",
             Classifier::ToggleStateWord => "toggle-state-word",
+            Classifier::ValueTextSpoken => "value-text-spoken",
         }
     }
 }
@@ -234,6 +242,8 @@ pub struct DiffCtx<'a> {
     pub toggle_button: bool,
     /// The model says availability does not apply to the node (`Avail::NotApplicable`, SM-5).
     pub avail_na: bool,
+    /// The fused entry holds a value text (`aria-valuetext`, the engine's text reading).
+    pub has_value_text: bool,
     /// The UI language the classifiers' catalog words are taken in (the language `render` used).
     pub lang: Lang,
 }
@@ -249,6 +259,7 @@ impl DiffCtx<'static> {
         not_selectable: false,
         toggle_button: false,
         avail_na: false,
+        has_value_text: false,
         lang: Lang::En,
     };
 }
@@ -266,6 +277,11 @@ impl<'a> DiffCtx<'a> {
             not_selectable: entry.sem.select == Select::NotSelectable,
             toggle_button: entry.sem.role == SemRole::Button && entry.sem.press != Press::NotToggle,
             avail_na: entry.sem.avail == Avail::NotApplicable,
+            has_value_text: entry
+                .sem
+                .text
+                .as_deref()
+                .is_some_and(|t| t.value_text.is_some()),
             lang,
         }
     }
@@ -499,6 +515,15 @@ fn explain<'a>(
                 && count_kind(only_new, SegmentKind::Value) == 1
                 && take(only_new, kind(SegmentKind::Value))
         }
+        Classifier::ValueTextSpoken => {
+            let value = kind_code(SegmentKind::Value);
+            ctx.has_value_text
+                && VALUE_ROLES.contains(&ctx.role)
+                && count_kind(legacy_all, SegmentKind::Value) == 1
+                && count_kind(new_all, SegmentKind::Value) == 1
+                && take(only_legacy, |k| k.0 == value)
+                && take(only_new, |k| k.0 == value)
+        }
         Classifier::UnavailableStatic => {
             use gorca_i18n::MsgId as M;
             let (un, av) = (
@@ -510,6 +535,18 @@ fn explain<'a>(
             // apply to (SM-5: static structure is never "unavailable").
             let applies = if is_change(ctx.surface) {
                 ctx.avail_na
+            } else if ctx.surface == "focus" {
+                // Native: a static actor or label that reports neither SENSITIVE nor ENABLED
+                // (GNOME Shell's St actors) is not disabled; the model says not applicable.
+                ctx.avail_na
+                    && matches!(
+                        ctx.role,
+                        SemRole::Generic
+                            | SemRole::StaticText
+                            | SemRole::Caption
+                            | SemRole::Img
+                            | SemRole::Presentation
+                    )
             } else {
                 matches!(
                     ctx.role,
@@ -522,7 +559,7 @@ fn explain<'a>(
             use gorca_i18n::MsgId as M;
             let t = |id| gorca_i18n::t_in(ctx.lang, id);
             let state = kind_code(SegmentKind::State);
-            if !(is_change(ctx.surface) && ctx.toggle_button) {
+            if !ctx.toggle_button {
                 return false;
             }
             // Same polarity: checked <-> pressed, not checked <-> not pressed.
@@ -985,7 +1022,7 @@ mod tests {
     }
 
     #[test]
-    fn a_toggle_buttons_checked_is_the_models_pressed_on_the_change_surface_only() {
+    fn a_toggle_buttons_checked_is_the_models_pressed_on_the_native_surfaces_only() {
         use gorca_i18n::MsgId as M;
         let t = gorca_i18n::t;
         let toggle = |surface: &'static str| DiffCtx {
@@ -1010,8 +1047,13 @@ mod tests {
             d(&legacy, &off_new, toggle("change")),
             DiffOutcome::Different { .. }
         ));
-        assert!(matches!(
+        assert_eq!(
             d(&legacy, &new, toggle("focus")),
+            DiffOutcome::Allowed("toggle-state-word")
+        );
+        // No row for web content: a web switch or toggle is a different story.
+        assert!(matches!(
+            d(&legacy, &new, toggle("focus-web")),
             DiffOutcome::Different { .. }
         ));
         assert!(matches!(
@@ -1043,6 +1085,46 @@ mod tests {
         // Equal text is not a deviation at all.
         let same = [l(SegmentKind::Text, "\u{2022}")];
         assert_eq!(d(&same, &new, DiffCtx::FOCUS), DiffOutcome::Equal);
+    }
+
+    #[test]
+    fn a_value_text_is_allowed_only_where_the_entry_has_one() {
+        let legacy = [l(SegmentKind::Value, "2")];
+        let new = [n(SegmentKind::Value, "Tuesday")];
+        let c = |has: bool| DiffCtx {
+            surface: "focus-web",
+            role: SemRole::Slider,
+            has_value_text: has,
+            ..DiffCtx::FOCUS
+        };
+        assert_eq!(
+            d(&legacy, &new, c(true)),
+            DiffOutcome::Allowed("value-text-spoken")
+        );
+        assert!(matches!(
+            d(&legacy, &new, c(false)),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn a_static_native_node_is_not_unavailable_but_a_control_is() {
+        use gorca_i18n::MsgId as M;
+        let legacy = [l(SegmentKind::State, gorca_i18n::t(M::StateUnavailable))];
+        let none: [Token; 0] = [];
+        let c = |role| DiffCtx {
+            role,
+            avail_na: true,
+            ..DiffCtx::FOCUS
+        };
+        assert_eq!(
+            d(&legacy, &none, c(SemRole::Generic)),
+            DiffOutcome::Allowed("unavailable-static")
+        );
+        assert!(matches!(
+            d(&legacy, &none, c(SemRole::Button)),
+            DiffOutcome::Different { .. }
+        ));
     }
 
     #[test]

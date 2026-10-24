@@ -225,19 +225,10 @@ fn print_table(title: &str, r: &Replay) {
     }
 }
 
-/// Differences outside `deviations.toml` the web replay shows. It was 0; the cut-over corpora
-/// (exotic date/time/month inputs, ARIA value text) and the recorded `Value` reading of sliders,
-/// progress bars and spin buttons (the legacy connector fetches it, the replay did not) brought 18
-/// to light, all of them open model/deviation work and not hidden by a row:
-///
-/// * 17 value readings: the legacy presenter speaks the raw `CurrentValue` ("2", "30"), the fused
-///   entry speaks the engine's value text ("Tuesday", "30%", "02"). The `value-from-attrs` row
-///   only covers a silent legacy side, which the replay no longer produces for those roles;
-/// * 1 empty required date field in Chromium (a group of spin buttons): the fused role is a group
-///   and the legacy presenter said no role.
-///
-/// The ceiling only goes down.
-const WEB_DIFFERENT_CEILING: u64 = 18;
+/// Differences outside `deviations.toml` the web replay shows: none. The value readings are the
+/// `value-text-spoken` row (only where the fused entry holds a value text) and a date input is a
+/// text box, not a group. The ceiling only goes down.
+const WEB_DIFFERENT_CEILING: u64 = 0;
 
 #[test]
 fn the_web_corpus_replays_through_both_presenters() {

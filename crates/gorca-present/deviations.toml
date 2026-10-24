@@ -190,3 +190,59 @@ surface = "focus-web"
 epoch = "m22b1"
 reason = "A name is spoken as a one-line label whatever its source: runs of white space collapse to one space. The legacy name kept the engine's spacing (a list marker with its trailing spaces)."
 until = "2026-11-07"
+
+[[deviation]]
+id = "unavailable-static"
+surface = "focus"
+epoch = "m22b1"
+reason = "A static St actor or label reports neither SENSITIVE nor ENABLED while it is showing (recorded: GNOME Shell panels, labels and icons; its buttons, toggles and menus carry both). Absence is not a disabled state, so the legacy native rule said unavailable on every static node; the model never disables static structure (SM-5)."
+until = "2026-11-07"
+
+[[deviation]]
+id = "name-whitespace"
+surface = "focus"
+epoch = "m22b1"
+reason = "A name is spoken as a one-line label whatever its source: runs of white space (the legacy name of a Shell date label has en spaces) collapse to one space."
+until = "2026-11-07"
+
+[[deviation]]
+id = "name-whitespace"
+surface = "change-web"
+epoch = "m22b1"
+reason = "A name is spoken as a one-line label: runs of white space collapse to one space."
+until = "2026-11-07"
+
+[[deviation]]
+id = "marker-stripped-name"
+surface = "change-web"
+epoch = "m22b1"
+reason = "A quirk row strips the CSS bullet the engine put into the name; the model name is the intended one."
+until = "2026-11-07"
+
+[[deviation]]
+id = "toggle-state-word"
+surface = "focus"
+epoch = "m22b1"
+reason = "A GTK toggle button exports its on state as checked; the model keeps it as the button's pressed state (the engine role is a toggle button, checked by the cut-over gate) and says pressed, as Orca does."
+until = "2026-11-07"
+
+[[deviation]]
+id = "value-text-spoken"
+surface = "focus"
+epoch = "m22b1"
+reason = "The fused entry holds the engine's value text and speaks it; the legacy presenter spoke the raw number."
+until = "2026-11-07"
+
+[[deviation]]
+id = "value-text-spoken"
+surface = "focus-web"
+epoch = "m22b1"
+reason = "aria-valuetext (Tuesday, High, 40 percent) is spoken where the legacy presenter spoke the raw number; applies only where the fused entry holds a value text."
+until = "2026-11-07"
+
+[[deviation]]
+id = "value-text-spoken"
+surface = "change-web"
+epoch = "m22b1"
+reason = "aria-valuetext is spoken where the legacy presenter spoke the raw number; applies only where the fused entry holds a value text."
+until = "2026-11-07"

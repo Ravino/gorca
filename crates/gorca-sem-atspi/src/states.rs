@@ -306,8 +306,10 @@ const fn check_optional(r: SemRole) -> bool {
 }
 
 /// Roles on which `aria-selected` is supported.
-const fn select_role(r: SemRole) -> bool {
-    matches!(
+const fn select_role(r: SemRole, web: bool) -> bool {
+    // A native toolkit exports selection on whatever it selects (GTK flow box children, calendar
+    // day buttons, switcher entries); only web content follows ARIA's list of supporting roles.
+    !web || matches!(
         r,
         SemRole::Option
             // A `<select>` option is exported as a menu item; it is selectable when the engine says so.
@@ -383,7 +385,7 @@ pub fn map_states_for(
     let check = map_check(role, s);
     let press = map_press(role, engine_toggle, s);
     let expand = map_expand(s);
-    let select = map_select(role, s);
+    let select = map_select(role, web, s);
     // An empty state set means the application reported nothing (a hidden node), not "disabled".
     let avail = if is_disableable(role) && s.0 != 0 {
         if s.has(bit::SENSITIVE) || (web && s.has(bit::ENABLED)) {
@@ -478,8 +480,8 @@ fn map_expand(s: StateBits) -> Expand {
     }
 }
 
-fn map_select(role: SemRole, s: StateBits) -> Select {
-    if !select_role(role) {
+fn map_select(role: SemRole, web: bool, s: StateBits) -> Select {
+    if !select_role(role, web) {
         return Select::NotSelectable;
     }
     if s.has(bit::SELECTED) {
@@ -747,6 +749,16 @@ mod tests {
             map_states(SemRole::MenuItem, false, false, StateBits(0)).select,
             Select::NotSelectable
         );
+    }
+
+    #[test]
+    fn native_nodes_select_on_any_role_but_web_follows_aria() {
+        let on = bits(&[bit::SELECTABLE, bit::SELECTED]);
+        let g = |role, web| map_states_for(role, false, false, web, on).select;
+        assert_eq!(g(SemRole::Button, false), Select::On);
+        assert_eq!(g(SemRole::Generic, false), Select::On);
+        assert_eq!(g(SemRole::Button, true), Select::NotSelectable);
+        assert_eq!(g(SemRole::Option, true), Select::On);
     }
 
     #[test]
