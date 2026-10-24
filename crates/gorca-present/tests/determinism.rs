@@ -141,6 +141,7 @@ fn gen_entry(r: &mut Rng) -> SemEntry {
             col_index_text: opt_str(r),
             row_index_text: opt_str(r),
             details_target: None,
+            dom_id: None,
         }));
     }
     e.name = opt_str(r);
@@ -164,6 +165,7 @@ fn deep_rebuild(e: &SemEntry) -> SemEntry {
             col_index_text: re(&t.col_index_text),
             row_index_text: re(&t.row_index_text),
             details_target: t.details_target,
+            dom_id: re(&t.dom_id),
         })
     });
     out

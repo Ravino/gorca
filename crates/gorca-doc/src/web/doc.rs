@@ -14,7 +14,8 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use gorca_model::{DocNodeId, Role};
+use gorca_model::sem::SemEntry;
+use gorca_model::{DocNodeId, LocalId, Role, SrcNodeId};
 
 use super::cats::{
     Cat, NodeFlags, NodeMeta, NodeSpec, RANKED, RANKED_N, SubtreeSpec, cats_of, ranked_index,
@@ -336,6 +337,24 @@ impl WebDoc {
             text: sl.text.as_deref(),
             meta: sl.meta.as_deref(),
         })
+    }
+
+    /// The node's fused entry (ADR-0022 SM-8: the document actor stamps it before it publishes
+    /// the batch). `None` for a node not fused yet, a synthetic node and a stale id. This is the
+    /// way a reader gets a presentation fact of a mirror node.
+    pub fn sem_of(&self, id: DocNodeId) -> Option<&SemEntry> {
+        self.node(id)?.meta?.sem.as_deref()
+    }
+
+    /// The transport key of the node's object (identity, not a presentation fact): `Some` for a
+    /// node an app can be addressed at, `None` for a text run and a stale id.
+    pub fn local_of(&self, id: DocNodeId) -> Option<LocalId> {
+        self.node(id)?.meta?.local
+    }
+
+    /// The source's own id of the node (identity: the key a source action is addressed by).
+    pub fn src_of(&self, id: DocNodeId) -> Option<SrcNodeId> {
+        self.node(id)?.meta?.src
     }
 
     pub fn parent(&self, id: DocNodeId) -> Option<DocNodeId> {

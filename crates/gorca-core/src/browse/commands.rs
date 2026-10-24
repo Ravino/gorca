@@ -672,11 +672,7 @@ fn reanchor(d: &WebDoc, chain: &[(DocNodeId, Option<DocNodeId>)]) -> Option<(Web
 /// its owner scrolls to the cursor's character (an owner taller than the viewport must not
 /// jump to an edge). An addressable node scrolls as a whole.
 fn scroll_target(d: &WebDoc, node: DocNodeId, local: u32) -> Option<(DocNodeId, DocAction)> {
-    let addressable = |n: DocNodeId| {
-        d.node(n)
-            .and_then(|v| v.meta)
-            .is_some_and(|m| m.local.is_some())
-    };
+    let addressable = |n: DocNodeId| d.local_of(n).is_some();
     if addressable(node) {
         return None;
     }
@@ -703,12 +699,7 @@ fn item_of(d: &WebDoc, node: DocNodeId, off: u32) -> Option<(Arc<str>, u32)> {
     let mut at = Some(node);
     for _ in 0..12 {
         let n = at?;
-        let id = d.node(n).and_then(|v| v.meta).and_then(|m| {
-            m.attrs
-                .iter()
-                .find(|(k, _)| *k == gorca_doc_source_api::web_attrs::DOM_ID)
-                .map(|(_, v)| Arc::clone(v))
-        });
+        let id = d.sem_of(n).and_then(|e| e.sem.dom_id()).map(Arc::clone);
         if let Some(id) = id.filter(|i| !i.is_empty()) {
             let start = d.offset_of(n)?;
             return Some((id, off.saturating_sub(start)));
@@ -721,11 +712,9 @@ fn item_of(d: &WebDoc, node: DocNodeId, off: u32) -> Option<(Arc<str>, u32)> {
 /// The cursor on the item with this DOM id, wherever the page re-rendered it.
 fn find_item(d: &WebDoc, id: &str, delta: u32) -> Option<(WebCursor, u32)> {
     let n = d.preorder().find(|n| {
-        d.node(*n).and_then(|v| v.meta).is_some_and(|m| {
-            m.attrs
-                .iter()
-                .any(|(k, v)| *k == gorca_doc_source_api::web_attrs::DOM_ID && &**v == id)
-        })
+        d.sem_of(*n)
+            .and_then(|e| e.sem.dom_id())
+            .is_some_and(|v| &**v == id)
     })?;
     if !d.is_attached(n) {
         return None;
@@ -1070,7 +1059,7 @@ impl Reader {
             for _ in 0..64 {
                 let Some(id) = n else { break };
                 let v = d.node(id)?;
-                let local = v.meta.and_then(|m| m.local);
+                let local = d.local_of(id);
                 match pointer_class(v.role) {
                     PointerClass::Interactive => {
                         if local.is_some() {

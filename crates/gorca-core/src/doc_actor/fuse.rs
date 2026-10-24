@@ -227,16 +227,26 @@ impl FuseStage {
         }
     }
 
-    /// Write a record's known groups as the `atspi` primary's registers at `seq`.
-    fn write(&mut self, node: NodeIdx, rec: &SrcRecord, seq: u64) {
+    /// Write a record's known groups as the `atspi` primary's registers at `seq`. The record's
+    /// HTML `id` goes to the engine too: a document-source record is the whole attribute list
+    /// (no `id` there means the node has none), a focus-fetch record is not (it never carries
+    /// the `id`, so it must not clear the one the document source reported).
+    fn write(&mut self, node: NodeIdx, rec: &SrcRecord, seq: u64, whole_node: bool) {
         let writes = writes_of(rec);
-        let mut inputs: Vec<Input> = Vec::with_capacity(writes.len() + 1);
+        let mut inputs: Vec<Input> = Vec::with_capacity(writes.len() + 2);
         inputs.push(Input::Life {
             node,
             src: ATSPI,
             seq,
             alive: true,
         });
+        if whole_node || rec.dom_id.is_some() {
+            inputs.push(Input::Attr {
+                node,
+                seq,
+                id: rec.dom_id.clone(),
+            });
+        }
         inputs.extend(writes.into_iter().map(|write| Input::Obs {
             node,
             src: ATSPI,
@@ -250,7 +260,7 @@ impl FuseStage {
     fn upsert(&mut self, n: &SrcNode, seq: u64) {
         let Some(ix) = self.alloc(n.id) else { return };
         if let Some(rec) = &n.rec {
-            self.write(ix, rec, seq);
+            self.write(ix, rec, seq, true);
             return;
         }
         // A synthetic node (a text run): the text is its content.
@@ -261,7 +271,7 @@ impl FuseStage {
             rec.name = Some(Arc::clone(t));
             rec.known.set(Group::Name, true);
         }
-        self.write(ix, &rec, seq);
+        self.write(ix, &rec, seq, true);
     }
 
     fn set_children(&mut self, parent: SrcNodeId, list: &[SrcNodeId], detached: &mut Vec<NodeIdx>) {
@@ -367,7 +377,7 @@ impl FuseStage {
             }
         }
         self.ivm.set_focus_chain(&chain);
-        self.write(n, rec, 2 * issued_at + 1);
+        self.write(n, rec, 2 * issued_at + 1, false);
         Some(self.run())
     }
 
@@ -570,6 +580,40 @@ mod tests {
         assert_eq!(name_of(&s, 2).as_deref(), Some("Home"));
         assert_eq!(s.sem(SrcNodeId(2)).map(|e| e.sem.role), Some(SemRole::Link));
         assert_eq!(s.len(), 3);
+    }
+
+    fn with_id(mut n: SrcNode, id: Option<&str>) -> SrcNode {
+        let mut r = n.rec.as_deref().cloned().unwrap_or_default();
+        r.dom_id = id.map(Arc::from);
+        n.rec = Some(Arc::new(r));
+        n
+    }
+
+    fn dom_id_of(s: &FuseStage, id: u64) -> Option<String> {
+        s.sem(SrcNodeId(id))
+            .and_then(|e| e.sem.dom_id().map(ToString::to_string))
+    }
+
+    #[test]
+    fn the_html_id_of_a_record_reaches_the_entry_and_only_a_whole_node_record_clears_it() {
+        let mut s = FuseStage::new(setup());
+        s.apply(&[
+            reset(1),
+            DocDelta::Upsert(vec![
+                node(1, SemRole::DocumentWeb, None),
+                with_id(node(2, SemRole::Paragraph, None), Some("msg-1")),
+            ]),
+            kids(1, &[2]),
+        ]);
+        assert_eq!(dom_id_of(&s, 2).as_deref(), Some("msg-1"));
+        assert_eq!(dom_id_of(&s, 1), None);
+        // A focus fetch never carries the id; it must not clear what the source reported.
+        let fetched = rec(SemRole::Paragraph, Some("Hello"));
+        s.fact(SrcNodeId(2), &fetched, 5);
+        assert_eq!(dom_id_of(&s, 2).as_deref(), Some("msg-1"));
+        // The source's next record of the node is the whole attribute list: no id, none.
+        s.apply(&[DocDelta::Upsert(vec![node(2, SemRole::Paragraph, None)])]);
+        assert_eq!(dom_id_of(&s, 2), None);
     }
 
     #[test]

@@ -43,7 +43,7 @@ aria-words | crates/gorca-core/src/browse/present.rs | 13 | 2026-11-21 | M22b2
 attrs-field | crates/gorca-core/src/aria.rs | 1 | 2026-11-21 | M22b2
 attrs-field | crates/gorca-core/src/browse/commands.rs | 9 | 2026-11-21 | M22b2
 attrs-field | crates/gorca-core/src/browse/present.rs | 4 | 2026-11-21 | M22b2
-meta-field | crates/gorca-core/src/browse/commands.rs | 5 | 2026-11-21 | M22b2
+meta-field | crates/gorca-core/src/browse/commands.rs | 4 | 2026-11-21 | M22b2
 meta-field | crates/gorca-core/src/browse/present.rs | 10 | 2026-11-21 | M22b2
 node-meta | crates/gorca-core/src/browse/commands.rs | 2 | 2026-11-21 | M22b2
 role-spoken | crates/gorca-core/src/browse/present.rs | 3 | 2026-11-21 | M22b2

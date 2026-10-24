@@ -283,6 +283,13 @@ impl Node {
         self.cold.as_deref().and_then(|c| c.attr.as_ref())
     }
 
+    /// The HTML `id` the primary reported, when it reported a non-empty one.
+    fn dom_id(&self) -> Option<&Arc<str>> {
+        self.attr()
+            .and_then(|(_, id)| id.as_ref())
+            .filter(|id| !id.is_empty())
+    }
+
     fn doc_rev(&self) -> u64 {
         self.cold.as_deref().map_or(0, |c| c.doc_rev)
     }
@@ -294,6 +301,16 @@ impl Node {
     fn cold_mut(&mut self) -> &mut Cold {
         self.cold.get_or_insert_with(Box::default)
     }
+}
+
+/// Put the node's HTML `id` on a fused entry (`SemText::dom_id`). The id is not a register: the
+/// engine stamps it on every entry it builds (published, provisional and from-scratch), so the
+/// readers of an entry see the same id the DOM-id anchors bind to.
+fn stamp_dom_id(e: &mut SemEntry, id: Option<&Arc<str>>) {
+    let Some(id) = id else { return };
+    let mut t = e.sem.text.as_deref().cloned().unwrap_or_default();
+    t.dom_id = Some(Arc::clone(id));
+    e.sem.text = Some(Arc::new(t));
 }
 
 /// Relation reverse index: `target -> sources` that read the target's text.
@@ -724,6 +741,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             &mut NoTrace,
         );
         let mut e = fused.entry;
+        stamp_dom_id(&mut e, n.dom_id());
         e.sem_rev = 0;
         for &g in Group::ALL {
             if e.prov.get(g) != Some(gorca_model::sem::ProvCode::Default) {
@@ -2011,7 +2029,12 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
         // Phase B: store, publish with early cutoff, propagate.
         let (new_entry, mut contrib, content_children) = match fused {
-            Some(f) => (Some(f.entry), f.winners, f.content_children),
+            Some(f) => {
+                let mut e = f.entry;
+                let id = node_of(&self.nodes, x).and_then(Node::dom_id);
+                stamp_dom_id(&mut e, id);
+                (Some(e), f.winners, f.content_children)
+            }
             None => (None, Vec::new(), Vec::new()),
         };
         // A name built from tainted children carries their sources up the content edge.
@@ -2286,7 +2309,9 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 &mut NoTrace,
             );
             drop(vs);
-            out[i] = Some(fused.entry);
+            let mut e = fused.entry;
+            stamp_dom_id(&mut e, nd.dom_id());
+            out[i] = Some(e);
         }
         (s0s, out)
     }

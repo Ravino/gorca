@@ -1229,10 +1229,8 @@ pub(crate) fn scroll_src(
     // The depth bound keeps a corrupt parent chain from looping.
     for _ in 0..SCROLL_CLIMB_MAX {
         let n = at?;
-        if let Some(m) = d.node(n).and_then(|v| v.meta)
-            && m.local.is_some()
-        {
-            return m.src;
+        if d.local_of(n).is_some() {
+            return d.src_of(n);
         }
         at = d.parent(n);
     }

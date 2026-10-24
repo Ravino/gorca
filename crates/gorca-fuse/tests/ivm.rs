@@ -2377,3 +2377,37 @@ fn a_backlog_node_is_served_within_eight_cut_runs_under_a_steady_priority_trickl
         "{k}: it must not jump the queue before the second clock"
     );
 }
+
+#[test]
+fn the_html_id_of_a_node_is_on_its_entry_and_follows_the_id() {
+    let mut e = chain_engine(2);
+    let dom = |e: &Ivm<NoQuirks, NoPatches>, i: usize| {
+        e.entry_unmasked(nid(i))
+            .and_then(|x| x.sem.dom_id().map(ToString::to_string))
+    };
+    assert_eq!(dom(&e, 1), None, "no id reported, none on the entry");
+    e.apply([Input::Attr {
+        node: nid(1),
+        seq: 5,
+        id: Some(Arc::from("msg-7")),
+    }]);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(dom(&e, 1).as_deref(), Some("msg-7"));
+    assert_eq!(dom(&e, 0), None, "the id belongs to its node only");
+    assert!(e.verify().is_ok(), "from-scratch fusion agrees");
+    e.apply([Input::Attr {
+        node: nid(1),
+        seq: 6,
+        id: Some(Arc::from("msg-8")),
+    }]);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(dom(&e, 1).as_deref(), Some("msg-8"));
+    e.apply([Input::Attr {
+        node: nid(1),
+        seq: 7,
+        id: None,
+    }]);
+    e.run(Budget::UNLIMITED);
+    assert_eq!(dom(&e, 1), None);
+    assert!(e.verify().is_ok());
+}

@@ -44,6 +44,11 @@ impl Semantics {
         self.text.as_deref().and_then(|t| t.description.as_deref())
     }
 
+    /// The HTML `id` of the node, if the source reported one.
+    pub fn dom_id(&self) -> Option<&Arc<str>> {
+        self.text.as_deref().and_then(|t| t.dom_id.as_ref())
+    }
+
     /// The author's `aria-roledescription`, if any.
     pub fn role_description(&self) -> Option<&str> {
         self.text

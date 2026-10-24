@@ -4089,11 +4089,37 @@ fn loading_is_said_only_when_the_list_grows_after_the_edge() {
     assert!(spoken(&fx).is_empty());
 }
 
+/// A fusion stage's answer for a test: the entry of each node, by source id.
+struct DomIds(std::collections::HashMap<SrcNodeId, Arc<gorca_model::sem::SemEntry>>);
+
+impl crate::doc_actor::fuse::SemLookup for DomIds {
+    fn sem(&self, src: SrcNodeId) -> Option<Arc<gorca_model::sem::SemEntry>> {
+        self.0.get(&src).cloned()
+    }
+}
+
 /// a2: the item is tracked by its DOM id, not the row object: the page re-renders the item under
 /// new ids (a virtual list reusing rows) and the cursor follows it.
 #[test]
 fn the_cursor_follows_its_item_by_dom_id_across_a_re_render() {
     let mut r = rig();
+    // The fused entries carry the DOM id (the engine stamps it from the source's record).
+    let sems = |nodes: &[SrcNode]| {
+        DomIds(
+            nodes
+                .iter()
+                .filter_map(|n| {
+                    let dom = n.attrs.iter().find(|(k, _)| *k == web_attrs::DOM_ID)?;
+                    let mut e = gorca_model::sem::SemEntry::default();
+                    e.sem.text = Some(Arc::new(gorca_model::sem::SemText {
+                        dom_id: Some(Arc::clone(&dom.1)),
+                        ..gorca_model::sem::SemText::default()
+                    }));
+                    Some((n.id, Arc::new(e)))
+                })
+                .collect(),
+        )
+    };
     let item = |id: u64, local: u64, dom: &str, t: &str, rid: u64| {
         let mut p = block(src(id, Role::Paragraph, Some(local)));
         p.attrs.push((web_attrs::DOM_ID, Arc::from(dom)));
@@ -4101,7 +4127,8 @@ fn the_cursor_follows_its_item_by_dom_id_across_a_re_render() {
     };
     let mut up = item(20, 1020, "msg-1", "First message", 21);
     up.extend(item(22, 1022, "msg-2", "Second message", 23));
-    r.tr.apply(
+    let lookup = sems(&up);
+    r.tr.apply_fused(
         &mut r.writer,
         vec![
             DocDelta::Upsert(up),
@@ -4110,6 +4137,8 @@ fn the_cursor_follows_its_item_by_dom_id_across_a_re_render() {
             kids(22, &[23]),
             DocDelta::Settled { batch: 2 },
         ],
+        &lookup,
+        &[],
     )
     .unwrap();
     r.writer.publish();
@@ -4133,11 +4162,17 @@ fn the_cursor_follows_its_item_by_dom_id_across_a_re_render() {
         "{said:?}"
     );
     settle(&mut r);
+    let tracked = r.reader.web.as_ref().and_then(|b| b.cursor_item.clone());
+    assert!(
+        tracked.is_some(),
+        "the cursor's item is tracked by its DOM id"
+    );
     // Re-render: both items come back under new ids and a new first item is prepended.
     let mut up = item(30, 1030, "msg-0", "Older message", 31);
     up.extend(item(32, 1032, "msg-1", "First message", 33));
     up.extend(item(34, 1034, "msg-2", "Second message", 35));
-    r.tr.apply(
+    let lookup = sems(&up);
+    r.tr.apply_fused(
         &mut r.writer,
         vec![
             DocDelta::Upsert(up),
@@ -4153,6 +4188,8 @@ fn the_cursor_follows_its_item_by_dom_id_across_a_re_render() {
             ]),
             DocDelta::Settled { batch: 3 },
         ],
+        &lookup,
+        &[],
     )
     .unwrap();
     r.writer.publish();

@@ -244,6 +244,17 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
         }
     }
 
+    if have_attrs {
+        // The HTML `id` is not in `WANTED_ATTRS` (the app connector keeps only what the groups
+        // read); the document source hands over every attribute it holds, `id` among them.
+        let id = raw.attrs.iter().find(|(k, _)| *k == "id").map(|(_, v)| *v);
+        let mut cut = false;
+        rec.dom_id = arc_capped(id, &mut cut);
+        if cut {
+            notes.add(Notes::TRUNCATED);
+        }
+    }
+
     rec.sem = sem;
     rec.known = known;
     rec.notes = notes;
@@ -758,6 +769,28 @@ mod tests {
         assert!(normalise(&n).known.has(Group::NameFrom));
         n.name = Some("Save");
         assert!(!normalise(&n).known.has(Group::NameFrom));
+    }
+
+    #[test]
+    fn the_html_id_is_kept_capped_and_only_when_attributes_were_fetched() {
+        let a = [("tag", "p"), ("id", "msg-1")];
+        let r = normalise(&node(all(), 62, StateBits(0), &a));
+        assert_eq!(r.dom_id.as_deref(), Some("msg-1"));
+        // No attribute fetch, no opinion.
+        let r = normalise(&node(PropMask::ROLE, 62, StateBits(0), &a));
+        assert_eq!(r.dom_id, None);
+        // No id, an empty id and a huge id.
+        assert_eq!(normalise(&node(all(), 62, StateBits(0), &[])).dom_id, None);
+        let e = [("id", "")];
+        assert_eq!(normalise(&node(all(), 62, StateBits(0), &e)).dom_id, None);
+        let big = "x".repeat(5000);
+        let b = [("id", big.as_str())];
+        let r = normalise(&node(all(), 62, StateBits(0), &b));
+        assert_eq!(
+            r.dom_id.as_deref().map(str::len),
+            Some(crate::attrs::PAGE_STRING_CAP)
+        );
+        assert!(r.notes.contains(Notes::TRUNCATED));
     }
 
     #[test]

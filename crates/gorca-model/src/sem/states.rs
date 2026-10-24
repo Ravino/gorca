@@ -215,6 +215,10 @@ pub struct SemText {
     pub row_index_text: Option<Arc<str>>,
     /// First `aria-details` target, read on demand.
     pub details_target: Option<NodeKey>,
+    /// The HTML `id` of the node, when the source reported one: the page's own name for the
+    /// object, stable across the re-renders that replace the object (a virtual list reuses
+    /// objects, not ids). Set by the engine from the primary's reported id, not by a register.
+    pub dom_id: Option<Arc<str>>,
 }
 
 impl SemText {
@@ -231,6 +235,7 @@ impl SemText {
             &self.value_text,
             &self.col_index_text,
             &self.row_index_text,
+            &self.dom_id,
         ];
         HDR + size_of::<SemText>()
             + strs
@@ -250,5 +255,6 @@ impl SemText {
             && self.col_index_text.is_none()
             && self.row_index_text.is_none()
             && self.details_target.is_none()
+            && self.dom_id.is_none()
     }
 }

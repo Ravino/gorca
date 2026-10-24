@@ -479,6 +479,7 @@ pub fn text_of(description: Option<&str>, a: &ParsedAttrs<'_>) -> (Option<Arc<Se
         col_index_text: arc_capped(a.colindextext, &mut cut),
         row_index_text: arc_capped(a.rowindextext, &mut cut),
         details_target: None,
+        dom_id: None,
     };
     if t.is_empty() {
         (None, cut)

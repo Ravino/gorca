@@ -122,6 +122,9 @@ pub struct SrcRecord {
     pub role_source: RoleSource,
     /// The DOM tag, when the engine exports it.
     pub tag: TagName,
+    /// The HTML `id` the engine exports, capped. Not a group: the engine stamps it on the fused
+    /// entry (`SemText::dom_id`) and uses it to bind DOM-id anchors.
+    pub dom_id: Option<Arc<str>>,
     /// Diagnostics.
     pub notes: Notes,
 }
