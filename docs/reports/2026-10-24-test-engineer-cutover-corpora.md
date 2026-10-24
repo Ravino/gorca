@@ -57,6 +57,17 @@ row[tabindex=0], composer with `data-supertab`).
 
 ## 3. What the new corpora show (gate result, open for the model work)
 
+Final reruns on `dca7854c` (`focus-2026-10-24-5.md`, `change-2026-10-24-5.md`; the `-4` pair is the first
+run of the new gate and stays as evidence). Both fail, English and Russian alike:
+
+| surface | families | compared | equal | intended | unclassified | dropped | unexplained drops |
+|---|---|---|---|---|---|---|---|
+| focus | 8/8 | 6497 | 4880 | 571 | 1046 | 120 | 0 |
+| change | 8/8 | 3750 | 3305 | 432 | 13 | 8184 | 0 |
+
+The model-fact check already catches 2 real records on `change`: GTK4 list items (`gtk4/accprops`) carry the SELECTABLE
+state, the fused entry says "not selectable", and `select-not-applicable` would have accepted the lost "selected".
+
 See the reports for the full lists. In short:
 
 * GNOME Shell: the legacy presenter says "unavailable" for ~1000 panels and labels (Clutter actors lack `sensitive`); the new
