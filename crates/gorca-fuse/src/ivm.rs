@@ -637,6 +637,74 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         Some(Arc::new(m))
     }
 
+    /// The entry to read for `node`, **always** when the node is alive (PV-1, ADR-0022 section
+    /// 8.3): the published entry, or, while the node waits for its fusion, a provisional entry made
+    /// at once from its registers by the same strata with no patches, no facts and the children's
+    /// S0 views only. Its `sem_rev` is 0 and every group that did not default carries
+    /// [`ProvCode::Provisional`]; the first real fusion replaces it. A reader never needs an
+    /// `Option` branch of its own for "not fused yet".
+    pub fn entry_or_provisional(&self, node: NodeIdx) -> Option<Arc<SemEntry>> {
+        if let Some(e) = self.entry_view(node) {
+            return Some(e);
+        }
+        let n = node_of(&self.nodes, node)?;
+        let ranked = Ranked::default();
+        let s0 = s0_with(
+            &self.profile,
+            &n.regs,
+            ranked.view(),
+            &self.quirks,
+            &mut NoTrace,
+        )?;
+        let role = n
+            .regs
+            .user_value(Group::Role)
+            .and_then(|(_, w)| w.slot().role())
+            .or_else(|| s0.role())
+            .unwrap_or(self.profile.default_role);
+        let nodes = &self.nodes;
+        let named = self.profile.rules.content_named.has(role);
+        let (vs, more) = if named {
+            views(
+                &n.children,
+                self.profile.limits.max_children.max(1),
+                self.profile.rules.content_depth,
+                |c| node_of(nodes, c).map_or(&[][..], |cn| cn.children.as_slice()),
+                |c| {
+                    node_of(nodes, c).map_or((None, None), |cn| {
+                        (s0_view_of(nodes, c), cn.published.as_deref())
+                    })
+                },
+            )
+        } else {
+            (Vec::new(), false)
+        };
+        let nb = Neighbours {
+            parent: n.parent.and_then(|p| s0_view_of(nodes, p)),
+            children: &vs,
+            more_children: more,
+        };
+        let mut scratch = Scratch::default();
+        let fused = fuse_node_with(
+            &self.profile,
+            &n.regs,
+            &s0,
+            &nb,
+            ranked.view(),
+            &crate::strata::NoPatches,
+            &mut scratch,
+            &mut NoTrace,
+        );
+        let mut e = fused.entry;
+        e.sem_rev = 0;
+        for &g in Group::ALL {
+            if e.prov.get(g) != Some(gorca_model::sem::ProvCode::Default) {
+                e.prov.set(g, gorca_model::sem::ProvCode::Provisional);
+            }
+        }
+        Some(Arc::new(e))
+    }
+
     /// Dirty nodes plus background dependents not yet re-fused.
     pub fn pending(&self) -> usize {
         let sweep = self.sweep.map_or(0, |c| self.nodes.len().saturating_sub(c));

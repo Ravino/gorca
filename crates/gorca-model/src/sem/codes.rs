@@ -171,7 +171,7 @@ impl From<EvidenceKind> for GroupCode {
 }
 
 coded_enum! {
-    /// Provenance of a group's winner: 4 bits per slot in [`ProvTag`], 8 codes spare.
+    /// Provenance of a group's winner: 4 bits per slot in [`ProvTag`], 7 codes spare.
     ///
     /// There is **no `Fallback` code**: a primary value used because a higher-ranked primary is
     /// `Unknown` is `ObservedPrimary` plus the `fallback` mask bit (math section 10.4 item 4).
@@ -184,6 +184,10 @@ coded_enum! {
         ObservedSecondary = 5 => "ObservedSecondary",
         Patch = 6 => "Patch",
         User = 7 => "User",
+        /// Made at once from the source record while the node waits for its fusion (PV-1,
+        /// ADR-0022 section 8.3): the lowest stratum, below `Default` only in that it is replaced
+        /// by the first real fusion. Never saved, never read by patch selectors.
+        Provisional = 8 => "Provisional",
     }
 }
 
@@ -485,7 +489,15 @@ mod tests {
     #[test]
     fn prov_code_has_no_fallback() {
         assert_eq!(ProvCode::from_name("Fallback"), None);
-        assert_eq!(ProvCode::from_code(8), None);
-        assert_eq!(ProvCode::ALL.len(), 8);
+        assert_eq!(ProvCode::from_code(9), None);
+        assert_eq!(
+            ProvCode::ALL.len(),
+            9,
+            "eight observed codes and Provisional (PV-1)"
+        );
+        assert_eq!(
+            ProvCode::from_name("Provisional"),
+            Some(ProvCode::Provisional)
+        );
     }
 }

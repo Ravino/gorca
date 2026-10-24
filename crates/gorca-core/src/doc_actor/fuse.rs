@@ -425,7 +425,9 @@ impl FuseStage {
 impl SemLookup for FuseStage {
     fn sem(&self, src: SrcNodeId) -> Option<Arc<SemEntry>> {
         let n = self.ids.get(&src)?;
-        self.ivm.entry_view(*n)
+        // PV-1: a node waiting for its fusion still has an entry (provisional, replaced by the
+        // first real fusion), so no reader needs a branch for "not fused yet".
+        self.ivm.entry_or_provisional(*n)
     }
 }
 

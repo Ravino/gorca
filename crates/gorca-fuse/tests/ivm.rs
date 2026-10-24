@@ -2286,3 +2286,51 @@ fn an_engine_content_name_of_a_container_gives_way_to_the_deeper_content_name_bu
     let e = build(NameFrom::Content, "5");
     assert_eq!(e.name.as_deref(), Some("5"));
 }
+
+/// PV-1 (ADR-0022 section 8.3): a node that waits for its fusion still has an entry, made at once
+/// from its registers; the first real fusion replaces it, and a node that is not alive has none.
+#[test]
+fn a_node_waiting_for_its_fusion_has_a_provisional_entry() {
+    use gorca_model::sem::ProvCode;
+    let mut profile = Profile::new(&[PrimarySlot::P0, PrimarySlot::P1], toy_rules());
+    profile.default_role = SemRole::Generic;
+    let mut e = Ivm::new(profile, NoQuirks, NoPatches);
+    e.add_node(nid(0), None).unwrap();
+    // Not alive yet: nothing to show.
+    assert!(e.entry_or_provisional(nid(0)).is_none());
+    e.apply([
+        Input::Life {
+            node: nid(0),
+            src: PrimarySlot::P0,
+            seq: 1,
+            alive: true,
+        },
+        Input::Obs {
+            node: nid(0),
+            src: PrimarySlot::P0,
+            seq: 2,
+            write: write_from_toy(Group::Role, &json!("button")),
+        },
+        Input::Obs {
+            node: nid(0),
+            src: PrimarySlot::P0,
+            seq: 2,
+            write: write_from_toy(Group::Name, &json!("Save")),
+        },
+    ]);
+    // Dirty, never run: the published entry does not exist, the provisional one does.
+    assert!(e.entry_view(nid(0)).is_none());
+    let p = e.entry_or_provisional(nid(0)).expect("a provisional entry");
+    assert_eq!(p.sem.role, SemRole::Button);
+    assert_eq!(p.name.as_deref(), Some("Save"));
+    assert_eq!(p.sem_rev, 0, "revision 0 marks a provisional entry");
+    assert_eq!(p.prov.get(Group::Name), Some(ProvCode::Provisional));
+    assert_eq!(p.prov.get(Group::Role), Some(ProvCode::Provisional));
+    // The real fusion replaces it: same words, real provenance, a revision.
+    e.run(Budget::UNLIMITED);
+    let r = e.entry_or_provisional(nid(0)).expect("fused");
+    assert_eq!(r.name.as_deref(), Some("Save"));
+    assert!(r.sem_rev > 0);
+    assert_ne!(r.prov.get(Group::Name), Some(ProvCode::Provisional));
+    assert_eq!(r.sem.role, p.sem.role);
+}

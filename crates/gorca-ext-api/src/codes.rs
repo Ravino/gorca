@@ -56,6 +56,7 @@ pub const PROV_CODES: &[Row] = &[
     ("ObservedSecondary", 5),
     ("Patch", 6),
     ("User", 7),
+    ("Provisional", 8),
 ];
 
 /// Confidence classes.
