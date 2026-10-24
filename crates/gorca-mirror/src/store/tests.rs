@@ -752,6 +752,7 @@ fn a_fused_entry_replaces_the_record_of_the_snapshot_it_was_made_from() {
     w.apply(batch(vec![s]), ApplyOrigin::Push);
     let rev = r.revision();
     let before = w.shared.bytes.load(Ordering::Relaxed);
+    let old_node = r.get(key(1)).hit().unwrap();
     let entry = Arc::new(gorca_model::sem::SemEntry::default());
     assert!(w.attach_sem(key(1), &rec, Arc::clone(&entry)));
     let got = r.get(key(1)).hit().unwrap();
@@ -768,7 +769,12 @@ fn a_fused_entry_replaces_the_record_of_the_snapshot_it_was_made_from() {
         rev,
         "no revision bump: the content did not change"
     );
-    assert_ne!(w.shared.bytes.load(Ordering::Relaxed), before);
+    // The charge follows the swap exactly: the record's bytes go, the entry's come. (Not
+    // `assert_ne!`: the two structs may have the same size.)
+    assert_eq!(
+        w.shared.bytes.load(Ordering::Relaxed),
+        before - node_bytes(&old_node) + node_bytes(&got)
+    );
     w.check_invariants().unwrap();
 }
 
