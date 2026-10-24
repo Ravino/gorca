@@ -578,6 +578,7 @@ fn gen_diff_ctx<'a>(r: &mut Rng, surface: &'a str) -> DiffCtx<'a> {
         not_selectable: r.chance(50),
         avail_na: r.chance(50),
         toggle_button: r.chance(50),
+        has_value_text: r.chance(50),
         lang: gorca_i18n::Lang::En,
     }
 }
@@ -799,6 +800,7 @@ fn run_case(c: &Case, dev: &Deviations, mutate: impl FnOnce(&mut Case)) -> DiffO
             not_selectable: false,
             avail_na: false,
             toggle_button: false,
+            has_value_text: false,
             lang: gorca_i18n::Lang::En,
         },
     )
@@ -1122,6 +1124,7 @@ fn every_used_classifier_is_reported() {
         not_selectable: false,
         avail_na: false,
         toggle_button: false,
+        has_value_text: false,
         lang: gorca_i18n::Lang::En,
     };
     let (outcome, used) = gorca_present::diff::diff_report(&l, &n, &permissive, ctx);
@@ -1163,6 +1166,7 @@ fn p3_9_adding_a_row_never_turns_allowed_into_different() {
             not_selectable: false,
             avail_na: false,
             toggle_button: false,
+            has_value_text: false,
             untoggled: c1.untoggled || c2.untoggled,
             lang: gorca_i18n::Lang::En,
         };

@@ -94,6 +94,8 @@ impl Rules {
             expandable: RoleSet::of(&[
                 R::Application,
                 R::Button,
+                // A GTK 3 tree view row is a table cell with the expandable state.
+                R::Cell,
                 R::Checkbox,
                 R::Combobox,
                 R::GridCell,

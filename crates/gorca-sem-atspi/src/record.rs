@@ -304,6 +304,11 @@ fn resolve_node_role(
         if engine == SemRole::TextBox && a.text_input_type == Some("search") {
             engine = SemRole::SearchBox;
         }
+        // The engines export an `<input type=date>` (and time, month, week) as a date editor, which
+        // maps to a group; a form input is an editable field, not a group of things.
+        if engine == SemRole::Group && a.tag == Some("input") {
+            engine = SemRole::TextBox;
+        }
         if engine == SemRole::Table && a.layout_guess == Some("true") {
             engine = SemRole::Presentation;
         }
@@ -545,6 +550,15 @@ mod tests {
             SemRole::Table,
             "an authored table is never a layout table"
         );
+    }
+
+    #[test]
+    fn a_web_date_input_is_a_text_box_not_a_group() {
+        // AT-SPI role 12 is the date editor; the DOM tag says it is an input.
+        let r = normalise(&node(all(), 12, st(&[bit::FOCUSABLE]), &[("tag", "input")]));
+        assert_eq!(r.sem.role, SemRole::TextBox);
+        let r = normalise(&node(all(), 12, st(&[bit::FOCUSABLE]), &[("tag", "div")]));
+        assert_eq!(r.sem.role, SemRole::Group);
     }
 
     #[test]

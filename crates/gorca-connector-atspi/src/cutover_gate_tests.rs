@@ -1161,6 +1161,7 @@ mod witness_tests {
             not_toggle: false,
             not_selectable: false,
             toggle_button: false,
+            has_value_text: false,
             avail_na: false,
             lang: gorca_present::Lang::En,
         }
