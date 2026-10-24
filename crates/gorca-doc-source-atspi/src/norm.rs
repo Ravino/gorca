@@ -176,7 +176,11 @@ mod tests {
         assert_eq!(&*b.name, "blink");
         assert_eq!(&*n.name, "gtk4");
         assert!(!g.quirks.is_empty(), "Gecko ships the list-marker row");
-        assert!(b.quirks.is_empty());
+        assert_eq!(
+            b.quirks.len(),
+            1,
+            "Blink ships only the contenteditable-host row"
+        );
     }
 
     #[test]

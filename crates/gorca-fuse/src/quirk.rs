@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use gorca_model::sem::{GROUP_COUNT, Group, GroupMask, SemRole};
+use gorca_model::sem::{GROUP_COUNT, Group, GroupMask, SemFlags, SemRole};
 use thiserror::Error;
 use toml_edit::{DocumentMut, Item, Table};
 
@@ -190,6 +190,18 @@ fn group(name: &str, row: usize) -> Result<Group> {
     })
 }
 
+/// The flags of a `requires-flags` / `forbids-flags` list (`editable`, `read-only`, ...).
+fn flags(t: &Table, row: usize, field: &'static str) -> Result<SemFlags> {
+    let names = string_list(t, row, field, MAX_ROWS, MAX_LABEL_BYTES)?;
+    let mut out = SemFlags::empty();
+    for n in &names {
+        let flag = SemFlags::from_name(&n.to_ascii_uppercase().replace('-', "_"))
+            .ok_or(QuirkError::Field { row, field })?;
+        out |= flag;
+    }
+    Ok(out)
+}
+
 fn role(name: &str, row: usize) -> Result<SemRole> {
     SemRole::from_name(name).ok_or_else(|| QuirkError::UnknownRole {
         row,
@@ -226,6 +238,10 @@ pub struct QuirkRule {
     /// Empty set = any role (a record without a role matches only then).
     pub roles: RoleSet,
     pub has_roles: bool,
+    /// Flags the record must have (`requires-flags`): the rule is data about a state, not code.
+    pub need: SemFlags,
+    /// Flags the record must not have (`forbids-flags`).
+    pub deny: SemFlags,
     pub action: QuirkAction,
 }
 
@@ -309,10 +325,46 @@ impl QuirkSet {
 fn parse_rule(t: &Table, row: usize) -> Result<QuirkRule> {
     let action_name = string(t, row, "action")?;
     let allowed: &[&str] = match action_name {
-        "strip-name-prefix" => &["id", "name", "source", "roles", "action", "prefixes"],
-        "strip-name-ordinal" => &["id", "name", "source", "roles", "action"],
-        "unknown-group" => &["id", "name", "source", "roles", "action", "group"],
-        "role-remap" => &["id", "name", "source", "roles", "action", "from", "to"],
+        "strip-name-prefix" => &[
+            "id",
+            "name",
+            "source",
+            "roles",
+            "requires-flags",
+            "forbids-flags",
+            "action",
+            "prefixes",
+        ],
+        "strip-name-ordinal" => &[
+            "id",
+            "name",
+            "source",
+            "roles",
+            "requires-flags",
+            "forbids-flags",
+            "action",
+        ],
+        "unknown-group" => &[
+            "id",
+            "name",
+            "source",
+            "roles",
+            "requires-flags",
+            "forbids-flags",
+            "action",
+            "group",
+        ],
+        "role-remap" => &[
+            "id",
+            "name",
+            "source",
+            "roles",
+            "requires-flags",
+            "forbids-flags",
+            "action",
+            "from",
+            "to",
+        ],
         other => {
             return Err(QuirkError::UnknownAction {
                 row,
@@ -339,6 +391,8 @@ fn parse_rule(t: &Table, row: usize) -> Result<QuirkRule> {
         roles = roles.with(role(n, row)?);
     }
 
+    let need = flags(t, row, "requires-flags")?;
+    let deny = flags(t, row, "forbids-flags")?;
     let action = match action_name {
         "strip-name-prefix" => {
             let prefixes = string_list(t, row, "prefixes", MAX_PREFIXES, MAX_PREFIX_BYTES)?;
@@ -372,6 +426,8 @@ fn parse_rule(t: &Table, row: usize) -> Result<QuirkRule> {
         src,
         roles,
         has_roles: !role_names.is_empty(),
+        need,
+        deny,
         action,
     })
 }
@@ -384,8 +440,21 @@ impl QuirkRule {
         matches!(&rec.slots[ix(Group::Role)], Slot::Val(Val::Role(r)) if self.roles.has(*r))
     }
 
+    /// The record's flags satisfy `requires-flags` and `forbids-flags` (an unknown or absent
+    /// flags register satisfies neither list's positive requirement).
+    fn flags_match(&self, rec: &Record) -> bool {
+        if self.need.is_empty() && self.deny.is_empty() {
+            return true;
+        }
+        let have = match &rec.slots[ix(Group::Flags)] {
+            Slot::Val(Val::Flags(f)) => *f,
+            _ => SemFlags::empty(),
+        };
+        have.contains(self.need) && !have.intersects(self.deny)
+    }
+
     fn apply(&self, rec: &mut Record) {
-        if !self.role_matches(rec) {
+        if !self.role_matches(rec) || !self.flags_match(rec) {
             return;
         }
         match &self.action {

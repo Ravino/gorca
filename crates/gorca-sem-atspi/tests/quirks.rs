@@ -289,3 +289,45 @@ fn inexpressible_groups_are_never_known_to_the_normaliser() {
         }
     }
 }
+
+/// M22b1 slice 4: the contenteditable host is a data row, not Reader code. A focusable, editable
+/// generic element becomes a text box; read-only, non-editable or authored roles are untouched.
+#[test]
+#[allow(clippy::expect_used)]
+fn a_contenteditable_host_becomes_a_text_box_by_a_quirk_row() {
+    use gorca_model::sem::SemFlags;
+    for engine in ["gecko", "blink"] {
+        let q = quirks_of(engine);
+        let role_after = |role: SemRole, flags: SemFlags| {
+            let mut r = Record {
+                slots: unknown_eff(),
+                hit: [0; GROUP_COUNT],
+            };
+            r.slots[ix(Group::Role)] = Slot::Val(Val::Role(role));
+            r.slots[ix(Group::Flags)] = Slot::Val(Val::Flags(flags));
+            q.apply(PrimarySlot::P0, &mut r);
+            r.slots[ix(Group::Role)].clone()
+        };
+        let host = SemFlags::EDITABLE | SemFlags::FOCUSABLE;
+        assert_eq!(
+            role_after(SemRole::Generic, host),
+            Slot::Val(Val::Role(SemRole::TextBox)),
+            "{engine}"
+        );
+        assert_eq!(
+            role_after(SemRole::Generic, host | SemFlags::READ_ONLY),
+            Slot::Val(Val::Role(SemRole::Generic)),
+            "{engine}: read only"
+        );
+        assert_eq!(
+            role_after(SemRole::Generic, SemFlags::EDITABLE),
+            Slot::Val(Val::Role(SemRole::Generic)),
+            "{engine}: not focusable"
+        );
+        assert_eq!(
+            role_after(SemRole::Group, host),
+            Slot::Val(Val::Role(SemRole::Group)),
+            "{engine}: an authored role"
+        );
+    }
+}
