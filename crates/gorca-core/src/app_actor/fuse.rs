@@ -250,7 +250,13 @@ fn build_ivm(tables: Option<SemTables>) -> Ivm<QuirkSet, NoPatches> {
             }
         }
     }
-    Ivm::new(profile, quirks, NoPatches)
+    let mut ivm = Ivm::new(profile, quirks, NoPatches);
+    // Production only: tests and replays keep the drain purely work-based (the published stream
+    // is the same either way).
+    if !cfg!(test) {
+        ivm.set_sync_valve(Some(gorca_fuse::SYNC_WALL_VALVE));
+    }
+    ivm
 }
 
 fn load(t: SemTables, profile: &mut Profile) -> Result<QuirkSet, gorca_fuse::QuirkError> {

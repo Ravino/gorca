@@ -781,11 +781,16 @@ impl Actor {
 
 const MAX_PENDING_NOTICES: usize = 8;
 
+/// Pause before a fusion slice that ran out of budget continues. The engine's aging bound (8
+/// budget-cut runs, about 32 ms) assumes `run` is re-armed within 4 ms while `pending > 0`.
+const FUSE_RESUME: Duration = Duration::from_millis(1);
+const _: () = assert!(FUSE_RESUME.as_millis() <= 4);
+
 /// Ready shortly when the fusion stage still owes work; never ready otherwise. Interactive
 /// messages are served between the slices (the select is biased towards them).
 async fn fuse_wait(pending: bool) {
     if pending {
-        tokio::time::sleep(Duration::from_millis(1)).await;
+        tokio::time::sleep(FUSE_RESUME).await;
     } else {
         std::future::pending::<()>().await;
     }

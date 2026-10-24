@@ -1368,8 +1368,8 @@ fn a_shallow_change_is_fused_within_a_few_runs_while_a_deep_leaf_keeps_changing(
         write: write_from_toy(Group::Description, &json!("Required")),
     }]);
     let mut fused_at = None;
-    // Aging is on the work clock: a node waits AGE_FUSIONS (1024) fusions, then gets a quarter slot.
-    for k in 0..1200u64 {
+    // Aging has two clocks: 1024 fusions, or 8 budget-cut runs (here every run is cut).
+    for k in 0..40u64 {
         e.apply([Input::Obs {
             node: nid(49),
             src: PrimarySlot::P0,
@@ -1390,8 +1390,8 @@ fn a_shallow_change_is_fused_within_a_few_runs_while_a_deep_leaf_keeps_changing(
     }
     let k = fused_at.expect("node 1 starved");
     assert!(
-        k <= 1024 + 8,
-        "aging should serve it after its age bound, took {k}"
+        k <= 8 + 4 + 2,
+        "aging should serve it after 8 cut runs and a slot, took {k}"
     );
 }
 
@@ -2302,4 +2302,30 @@ fn an_engine_content_name_of_a_container_gives_way_to_the_deeper_content_name_bu
     assert_eq!(e.name.as_deref(), Some("Quantity"));
     let e = build(NameFrom::Content, "5");
     assert_eq!(e.name.as_deref(), Some("5"));
+}
+
+#[test]
+fn a_backlog_node_is_served_within_eight_cut_runs_under_a_steady_priority_trickle() {
+    let mut e = star(60);
+    e.set_focus_chain(&[nid(3), nid(0)]);
+    dirty_description(&mut e, 40, 10);
+    assert!(e.priority_class(nid(40)) >= 3, "a backlog node");
+    let mut served_at = None;
+    for k in 0..200u64 {
+        // A higher-priority change every run keeps class 0 busy, and every run is budget-cut.
+        dirty_description(&mut e, 3, 100 + k);
+        let rep = e.run(Budget::calls(1));
+        assert_eq!(rep.fuse_calls, 1);
+        if rep.published.iter().any(|p| p.node.0 == 40) {
+            served_at = Some(k);
+            break;
+        }
+    }
+    let k = served_at.expect("the backlog node starved");
+    // Eligible after 8 cut runs, taken at the next aging slot (one fusion in four).
+    assert!(k <= 8 + 4, "took {k} runs: 8 cut runs plus one aging slot");
+    assert!(
+        k >= 8,
+        "{k}: it must not jump the queue before the second clock"
+    );
 }

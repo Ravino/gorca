@@ -26,6 +26,7 @@ mod support;
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use gorca_fuse::{
     AnchorId, Budget, FactIn, Grant, Input, Ivm, NoPatches, NoQuirks, NodeIdx, Payload,
@@ -564,8 +565,7 @@ fn g_p1_b_the_published_stream_does_not_depend_on_time_or_on_where_runs_cut() {
         let stream = |cuts: &[usize]| {
             let mut e = engine(&parent);
             e.apply(ops.iter().cloned());
-            let mut out = Vec::new();
-            let mut k = 0;
+            let (mut out, mut calls, mut k) = (Vec::new(), 0, 0);
             while e.pending() > 0 {
                 let n = cuts[k % cuts.len()];
                 k += 1;
@@ -574,15 +574,66 @@ fn g_p1_b_the_published_stream_does_not_depend_on_time_or_on_where_runs_cut() {
                 } else {
                     Budget::calls(n)
                 };
-                out.extend(published_nodes(&e.run(b).published));
+                let rep = e.run(b);
+                calls += rep.fuse_calls;
+                out.extend(published_nodes(&rep.published));
             }
-            out
+            (out, calls)
         };
-        let whole = stream(&[0]);
-        for cuts in [&[1usize][..], &[3], &[2, 5, 1, 7], &[16]] {
-            assert_eq!(stream(cuts), whole, "seed {seed}, cuts {cuts:?}");
+        let (whole, total) = stream(&[0]);
+        // Cuts that leave fewer than the 8 cut runs after which a node ages by run count.
+        let (c1, c2) = (total.div_ceil(6).max(1), total.div_ceil(3).max(1));
+        for cuts in [&[c1][..], &[c2], &[c1, c2], &[total.max(1)]] {
+            assert_eq!(stream(cuts).0, whole, "seed {seed}, cuts {cuts:?}");
         }
     }
+}
+
+/// The wall-clock valve of the synchronous drain (production only) changes where the drain
+/// returns, never the concatenated publication stream: the drain's remaining fusions are finished
+/// first by the next `run`, in the same order. Cut points from "after one fusion" (a zero valve)
+/// to "never", for the global epoch and for a source revocation.
+#[test]
+fn the_sync_drain_valve_does_not_change_the_concatenated_stream() {
+    let valves = [
+        None,
+        Some(Duration::ZERO),
+        Some(Duration::from_nanos(500)),
+        Some(Duration::from_micros(5)),
+        Some(Duration::from_micros(30)),
+        Some(Duration::from_secs(3600)),
+    ];
+    let stream = |valve: Option<Duration>, revoke: bool| {
+        let mut e = fact_star(60, 16);
+        e.set_sync_valve(valve);
+        let mut out = if revoke {
+            published_nodes(&e.set_source_state(id(3), 5, SourceState::Revoked))
+        } else {
+            published_nodes(&e.bump_global())
+        };
+        while e.pending() > 0 {
+            out.extend(published_nodes(&e.run(Budget::calls(5)).published));
+        }
+        assert!(e.verify().is_ok());
+        out
+    };
+    for revoke in [false, true] {
+        let whole = stream(None, revoke);
+        assert!(!revoke || !whole.is_empty());
+        for valve in valves {
+            for _ in 0..4 {
+                assert_eq!(
+                    stream(valve, revoke),
+                    whole,
+                    "valve {valve:?}, revoke {revoke}"
+                );
+            }
+        }
+    }
+    // A zero valve really cuts: the synchronous part is one fusion, the rest comes from `run`.
+    let mut e = fact_star(60, 16);
+    e.set_sync_valve(Some(Duration::ZERO));
+    assert_eq!(e.set_source_state(id(3), 5, SourceState::Revoked).len(), 1);
 }
 
 /// D4.3 call-budgeted `run` is deterministic as an intermediate stream: same inputs, same budget,

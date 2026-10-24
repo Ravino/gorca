@@ -25,7 +25,7 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gorca_model::fact::{BindGen, SourceId};
 use gorca_model::sem::{BindQuality, Group, GroupMask, SemEntry};
@@ -213,6 +213,18 @@ const REST_CLASS: u8 = 3;
 /// before aging may pick it ahead of depth order.
 const AGE_FUSIONS: u64 = 1024;
 
+/// A node also becomes age-eligible after it stayed pending through this many budget-cut runs
+/// (a run that returned with work left): with `Budget::until` runs of about 2 ms and the actors
+/// re-arming `run` within 1 ms (never more than 4 ms) while `pending > 0`, this bounds the
+/// wall-clock wait to about 32 ms however slow the fusions are, and the rule stays a function of
+/// the sequence of runs, not of the clock.
+const AGE_CUT_RUNS: u64 = 8;
+
+/// The wall-clock valve of the synchronous drain in production: after at least one fusion the
+/// drain returns once it has run this long, and the rest of its work is finished by the start of
+/// the next [`Ivm::run`] in the same order (see [`Ivm::set_sync_valve`]).
+pub const SYNC_WALL_VALVE: Duration = Duration::from_micros(400);
+
 /// While the dirty set is busy, the background queue gets `FEED_SHARE` units every `FEED_EVERY`
 /// fusions (a quarter of the work), counted over all runs.
 const FEED_EVERY: u64 = 16;
@@ -353,6 +365,13 @@ pub struct Ivm<Q: Quirks, P: PatchSource> {
     fused_total: u64,
     aged_total: u64,
     next_feed: u64,
+    /// Runs that returned with work left (the second aging clock, see `AGE_CUT_RUNS`).
+    cut_runs: u64,
+    /// Wall-clock valve of the synchronous drain (production only; `None` is fully work-based).
+    sync_valve: Option<Duration>,
+    /// Fusions of the synchronous drain's cap still owed after the valve cut it: the next `run`
+    /// finishes them first, in heap order, before any aging or background feed.
+    sync_resume: usize,
     #[cfg(debug_assertions)]
     refusions: HashMap<NodeIdx, u32>,
     s0_computes: u64,
@@ -567,6 +586,9 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             fused_total: 0,
             aged_total: 0,
             next_feed: 0,
+            cut_runs: 0,
+            sync_valve: None,
+            sync_resume: 0,
             #[cfg(debug_assertions)]
             refusions: HashMap::new(),
             s0_computes: 0,
@@ -1147,7 +1169,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     fn mark_dirty(&mut self, n: NodeIdx) {
         let Some(key) = self.key_of(n) else { return };
-        self.dirty.mark(n, key, self.fused_total);
+        self.dirty.mark(n, key, self.fused_total, self.cut_runs);
     }
 
     fn take_dirty(&mut self, key: DirtyKey) {
@@ -1661,29 +1683,63 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     // ---- running ---------------------------------------------------------------------------------
 
+    /// Production only: let the synchronous drain return after `valve` of wall time (at least one
+    /// fusion is always done). The published content does not depend on where the valve cuts: the
+    /// fusions still owed out of the drain's cap are finished by the start of the next `run` in
+    /// the same heap order, before any aging or background feed, so the concatenated publication
+    /// stream equals the uncut one (as long as no input is applied in between). Replay, tests and
+    /// benchmarks leave it `None`.
+    pub fn set_sync_valve(&mut self, valve: Option<Duration>) {
+        self.sync_valve = valve;
+    }
+
     /// Re-fuse the priority classes synchronously (focus chain first, then the visible window), at
     /// most `Limits::max_sync_drain` fusions; what does not fit stays dirty in front for the next
-    /// `run`. Publications go to `sink` the moment they happen. The bound is a count of fusions,
-    /// not time: the published prefix is the same on a slow and a fast machine (the read-time
-    /// silence mask already hides silenced values on nodes the drain did not reach, and the cap
-    /// bounds the latency).
+    /// `run`. Publications go to `sink` the moment they happen. The bound is a count of fusions:
+    /// the published prefix is the same on a slow and a fast machine (the read-time silence mask
+    /// already hides silenced values on nodes the drain did not reach, and the cap bounds the
+    /// latency). With a valve set the cut may come earlier, with the same overall stream.
     fn drain_priority_with(&mut self, sink: &mut dyn FnMut(Published)) -> RunReport {
         let cap = self.profile.limits.max_sync_drain.max(1);
         let mut rep = RunReport::default();
         #[cfg(debug_assertions)]
         self.refusions.clear();
-        loop {
+        self.sync_resume = 0;
+        self.drain_priority_loop(cap, self.sync_valve, None, &mut rep, sink);
+        rep.pending = self.pending();
+        rep
+    }
+
+    /// The loop of the synchronous drain, shared with the resume at the start of a `run`. At most
+    /// `cap` fusions are done by this call; if the `valve` or the `budget` stops it early, the
+    /// fusions of the cap still owed are remembered in `sync_resume`.
+    fn drain_priority_loop(
+        &mut self,
+        cap: usize,
+        valve: Option<Duration>,
+        budget: Option<&Budget>,
+        rep: &mut RunReport,
+        sink: &mut dyn FnMut(Published),
+    ) {
+        let (t0, start) = (Instant::now(), rep.fuse_calls);
+        'outer: loop {
             let before = rep.fuse_calls;
             while let Some(key) = self.dirty.peek() {
-                if key.0 >= REST_CLASS || rep.fuse_calls >= cap {
+                let done = rep.fuse_calls - start;
+                if key.0 >= REST_CLASS || done >= cap {
                     break;
                 }
+                let valve_cut = done > 0 && valve.is_some_and(|v| t0.elapsed() >= v);
+                if valve_cut || budget.is_some_and(|b| b.exhausted(rep.fuse_calls)) {
+                    self.sync_resume = cap - done;
+                    break 'outer;
+                }
                 self.take_dirty(key);
-                self.process(NodeIdx(key.2), &mut rep, sink);
+                self.process(NodeIdx(key.2), rep, sink);
             }
             // Fusing changes which nodes feed the priority nodes: refresh the set and go on while
             // a priority node is still dirty (keys are scheduling hints, never results).
-            if rep.fuse_calls == before || rep.fuse_calls >= cap {
+            if rep.fuse_calls == before || rep.fuse_calls - start >= cap {
                 break;
             }
             self.apply_prio();
@@ -1691,8 +1747,6 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 break;
             }
         }
-        rep.pending = self.pending();
-        rep
     }
 
     fn drain_priority(&mut self) -> RunReport {
@@ -1704,9 +1758,13 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     /// Re-fuse dirty nodes until the budget is spent: the focus chain, then the visible window,
     /// then deepest first, with two anti-starvation guarantees. **Aging:** a node dirty for
-    /// `AGE_FUSIONS` runs may be taken ahead of depth order, for a quarter of all fusions over time.
-    /// **Background share:** queued dependents, sweeps and epoch re-fuses get a share of every run
-    /// even while the dirty set is busy. Carry-over changes latency only, never the result.
+    /// `AGE_FUSIONS` fusions, or pending through `AGE_CUT_RUNS` budget-cut runs, may be taken ahead
+    /// of depth order, in the fusion slots that are a quarter of all fusions. **Background share:**
+    /// queued dependents, sweeps and epoch re-fuses get `FEED_SHARE` units every `FEED_EVERY`
+    /// fusions even while the dirty set is busy. Both clocks count fusions (and cut runs), never
+    /// wall time, so a deadline decides only how the same fusion sequence is batched into runs
+    /// (until a node has waited through `AGE_CUT_RUNS` cut runs). Carry-over changes latency only,
+    /// never the result.
     pub fn run(&mut self, budget: Budget) -> RunReport {
         let mut out = Vec::new();
         let mut rep = self.run_with(budget, &mut |p| out.push(p));
@@ -1721,8 +1779,15 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         let mut rep = RunReport::default();
         #[cfg(debug_assertions)]
         self.refusions.clear();
+        if self.sync_resume > 0 {
+            // The synchronous drain was cut by its valve: finish its cap first, in the same order.
+            let left = std::mem::take(&mut self.sync_resume);
+            self.drain_priority_loop(left, None, Some(&budget), &mut rep, sink);
+        }
+        let mut cut = false;
         loop {
             if budget.exhausted(rep.fuse_calls) {
+                cut = true;
                 break;
             }
             // The work clock: ticks, background feeds and aging slots are functions of the number
@@ -1733,7 +1798,8 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 self.feed_background(FEED_SHARE);
             }
             let aged = if self.fused_total % AGE_PERIOD == AGE_SLOT {
-                self.dirty.oldest(self.fused_total, AGE_FUSIONS)
+                self.dirty
+                    .oldest(self.fused_total, AGE_FUSIONS, self.cut_runs, AGE_CUT_RUNS)
             } else {
                 None
             };
@@ -1756,6 +1822,9 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             self.process(NodeIdx(key.2), &mut rep, sink);
         }
         rep.pending = self.pending();
+        if cut && rep.pending > 0 {
+            self.cut_runs += 1;
+        }
         if rep.pending == 0 {
             // Nothing references a released or re-registered id any more.
             let (side, epochs) = (&self.side, &self.epochs);

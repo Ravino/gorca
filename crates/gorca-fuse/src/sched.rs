@@ -51,13 +51,15 @@ struct Live {
     /// Validity stamp of the aging entry; assigned when the node first became dirty.
     aseq: u64,
     since: u64,
+    /// The cut-run counter when the node first became dirty.
+    since_run: u64,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct DirtySet {
     heap: BinaryHeap<Reverse<(DirtyKey, u64)>>,
     live: FxMap<NodeIdx, Live>,
-    ages: VecDeque<(u64, u32, u64)>,
+    ages: VecDeque<(u64, u64, u32, u64)>,
     next: u64,
 }
 
@@ -76,7 +78,7 @@ impl DirtySet {
 
     /// Mark `n` dirty under `key` at run `tick`. A node already dirty under the same key costs a
     /// single probe; a different key re-keys it (a new heap entry, the old one goes stale).
-    pub(crate) fn mark(&mut self, n: NodeIdx, key: DirtyKey, tick: u64) {
+    pub(crate) fn mark(&mut self, n: NodeIdx, key: DirtyKey, tick: u64, run: u64) {
         self.next += 1;
         let seq = self.next;
         match self.live.get_mut(&n) {
@@ -94,10 +96,11 @@ impl DirtySet {
                         hseq: seq,
                         aseq: seq,
                         since: tick,
+                        since_run: run,
                     },
                 );
                 self.heap.push(Reverse((key, seq)));
-                self.ages.push_back((tick, n.0, seq));
+                self.ages.push_back((tick, run, n.0, seq));
             }
         }
         if self.heap.len() > 2 * self.live.len() + 1024 {
@@ -132,12 +135,21 @@ impl DirtySet {
         self.live.remove(&NodeIdx(key.2));
     }
 
-    /// The key of the longest-dirty node, if it has been dirty for at least `min_age` runs.
-    pub(crate) fn oldest(&mut self, tick: u64, min_age: u64) -> Option<DirtyKey> {
-        while let Some(&(since, idx, aseq)) = self.ages.front() {
+    /// The key of the longest-dirty node, if it has been dirty for at least `min_age` ticks (the
+    /// work clock) or through at least `min_runs` budget-cut runs (`run` is the cut-run counter).
+    pub(crate) fn oldest(
+        &mut self,
+        tick: u64,
+        min_age: u64,
+        run: u64,
+        min_runs: u64,
+    ) -> Option<DirtyKey> {
+        while let Some(&(since, since_run, idx, aseq)) = self.ages.front() {
             match self.live.get(&NodeIdx(idx)) {
                 Some(l) if l.aseq == aseq => {
-                    return (tick.saturating_sub(since) >= min_age).then_some(l.key);
+                    let eligible = tick.saturating_sub(since) >= min_age
+                        || run.saturating_sub(since_run) >= min_runs;
+                    return eligible.then_some(l.key);
                 }
                 _ => {
                     self.ages.pop_front();
@@ -153,10 +165,10 @@ impl DirtySet {
             .values()
             .map(|l| Reverse((l.key, l.hseq)))
             .collect();
-        let mut by_age: Vec<(u64, u32, u64)> = self
+        let mut by_age: Vec<(u64, u64, u32, u64)> = self
             .live
             .iter()
-            .map(|(n, l)| (l.since, n.0, l.aseq))
+            .map(|(n, l)| (l.since, l.since_run, n.0, l.aseq))
             .collect();
         by_age.sort_unstable();
         self.ages = by_age.into();
@@ -178,15 +190,15 @@ mod tests {
     #[test]
     fn orders_by_class_then_depth_then_index_and_rekeys() {
         let mut d = DirtySet::default();
-        d.mark(n(5), k(2, 1, 5), 0);
-        d.mark(n(6), k(2, 4, 6), 0);
-        d.mark(n(7), k(0, 0, 7), 0);
+        d.mark(n(5), k(2, 1, 5), 0, 0);
+        d.mark(n(6), k(2, 4, 6), 0, 0);
+        d.mark(n(7), k(0, 0, 7), 0, 0);
         assert_eq!(d.len(), 3);
         let first = d.peek().expect("first");
         assert_eq!(first, k(0, 0, 7));
         d.take(first);
         // Re-key 5 to the front class: it now beats the deeper node 6.
-        d.mark(n(5), k(0, 1, 5), 0);
+        d.mark(n(5), k(0, 1, 5), 0, 0);
         assert_eq!(d.peek(), Some(k(0, 1, 5)));
         d.take(k(0, 1, 5));
         assert_eq!(d.peek(), Some(k(2, 4, 6)));
@@ -197,32 +209,43 @@ mod tests {
     #[test]
     fn a_removed_node_never_comes_back_and_marking_twice_is_one_entry() {
         let mut d = DirtySet::default();
-        d.mark(n(1), k(2, 0, 1), 0);
-        d.mark(n(1), k(2, 0, 1), 0);
+        d.mark(n(1), k(2, 0, 1), 0, 0);
+        d.mark(n(1), k(2, 0, 1), 0, 0);
         assert_eq!(d.len(), 1);
         d.remove(n(1));
         assert!(d.peek().is_none());
-        d.mark(n(1), k(2, 0, 1), 3);
+        d.mark(n(1), k(2, 0, 1), 3, 0);
         assert_eq!(d.peek(), Some(k(2, 0, 1)));
     }
 
     #[test]
     fn aging_returns_the_longest_dirty_node_once_old_enough() {
         let mut d = DirtySet::default();
-        d.mark(n(1), k(2, 5, 1), 1);
-        d.mark(n(2), k(2, 0, 2), 2);
-        assert_eq!(d.oldest(3, 3), None, "node 1 is only 2 runs old");
-        assert_eq!(d.oldest(4, 3), Some(k(2, 5, 1)));
+        d.mark(n(1), k(2, 5, 1), 1, 0);
+        d.mark(n(2), k(2, 0, 2), 2, 0);
+        assert_eq!(
+            d.oldest(3, 3, 0, u64::MAX),
+            None,
+            "node 1 is only 2 runs old"
+        );
+        // The second clock: pending through enough budget-cut runs makes a young node eligible.
+        assert_eq!(
+            d.oldest(3, 3, 7, 8),
+            None,
+            "node 1 waited through 7 cut runs"
+        );
+        assert_eq!(d.oldest(3, 3, 8, 8), Some(k(2, 5, 1)));
+        assert_eq!(d.oldest(4, 3, 0, u64::MAX), Some(k(2, 5, 1)));
         d.take(k(2, 5, 1));
-        assert_eq!(d.oldest(4, 3), None);
-        assert_eq!(d.oldest(5, 3), Some(k(2, 0, 2)));
+        assert_eq!(d.oldest(4, 3, 0, u64::MAX), None);
+        assert_eq!(d.oldest(5, 3, 0, u64::MAX), Some(k(2, 0, 2)));
     }
 
     #[test]
     fn stale_entries_are_compacted() {
         let mut d = DirtySet::default();
         for round in 0..5000u32 {
-            d.mark(n(1), k(2, round, 1), 0);
+            d.mark(n(1), k(2, round, 1), 0, 0);
         }
         assert!(d.heap.len() < 2 * d.len() + 1100, "{}", d.heap.len());
         assert_eq!(d.peek().map(|key| key.2), Some(1));

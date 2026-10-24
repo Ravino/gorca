@@ -84,7 +84,12 @@ pub struct FuseStage {
 }
 
 fn engine(setup: &FuseSetup) -> Ivm<QuirkSet, NoPatches> {
-    Ivm::new(setup.profile.clone(), setup.quirks.clone(), NoPatches)
+    let mut ivm = Ivm::new(setup.profile.clone(), setup.quirks.clone(), NoPatches);
+    // Production only: tests and replays keep the drain purely work-based.
+    if !cfg!(test) {
+        ivm.set_sync_valve(Some(gorca_fuse::SYNC_WALL_VALVE));
+    }
+    ivm
 }
 
 impl FuseStage {

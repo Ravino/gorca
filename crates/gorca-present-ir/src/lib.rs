@@ -14,8 +14,9 @@
 //!   code it does not know passes the item through **unedited** and never traps (`Reason::Unknown`,
 //!   `Content::Opaque`, an unregistered `FieldKind`). Adding a kind is therefore not a break.
 //! * **Words travel as catalog key strings** (`MsgId::key`), never as the build-order `MsgId`
-//!   number, which moves when a key is added. `Content::from_wire_msg` resolves a key; an unknown key
-//!   becomes `Content::Opaque`.
+//!   number, which moves when a key is added. `Content::from_wire_msg` resolves a key; an unknown
+//!   key is kept whole as `Content::UnknownMsg`, which **re-encodes as kind 1 (a message) with its
+//!   original key and arguments**, so forwarding an IR is lossless; it renders as nothing.
 //! * **No prose with numbers baked in.** "2 of 5" is `Content::Msg { id, args }` with numeric
 //!   arguments, so speech and braille format separately.
 //! * **Add-on text is a catalog reference** (`Content::Ext { ns, key, args }`), resolved through the
@@ -64,10 +65,22 @@ pub enum Reason {
     ListEntry,
     WhereAmI,
     /// A reason of a newer host: edits must leave the IR unedited. The code is never a registered
-    /// one (`0..=8`): the variant cannot be built outside this crate, use [`Reason::unknown`] or
-    /// [`Reason::from_code`], which map a registered code to its own variant.
-    #[non_exhaustive]
-    Unknown(u16),
+    /// one (`0..=8`): [`UnknownReason`] has a private field and is made only by
+    /// [`Reason::unknown`] or [`Reason::from_code`], which map a registered code to its own
+    /// variant.
+    Unknown(UnknownReason),
+}
+
+/// The code of a reason this host does not know. Cannot be built directly: the code is never one
+/// of the registered ones.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct UnknownReason(u16);
+
+impl UnknownReason {
+    /// The wire code.
+    pub const fn code(self) -> u16 {
+        self.0
+    }
 }
 
 impl Reason {
@@ -83,7 +96,7 @@ impl Reason {
             Reason::Change { .. } => 6,
             Reason::ListEntry => 7,
             Reason::WhereAmI => 8,
-            Reason::Unknown(c) => c,
+            Reason::Unknown(u) => u.0,
         }
     }
 
@@ -102,7 +115,7 @@ impl Reason {
             },
             7 => Reason::ListEntry,
             8 => Reason::WhereAmI,
-            c => Reason::Unknown(c),
+            c => Reason::Unknown(UnknownReason(c)),
         }
     }
 
@@ -744,7 +757,7 @@ mod tests {
             assert_eq!(Reason::from_code(r.code(), true, 0b101), r);
         }
         let u = Reason::from_code(999, false, 0);
-        assert_eq!(u, Reason::Unknown(999));
+        assert_eq!(u, Reason::unknown(999));
         assert_eq!(u.code(), 999);
         assert!(!u.editable() && Reason::Focus.editable());
     }
@@ -1014,7 +1027,7 @@ mod tests {
             Origin::default(),
         );
         let ir = PresIr::new(
-            Reason::Unknown(77),
+            Reason::unknown(77),
             node(),
             3,
             [odd.clone()].into_iter().collect(),
