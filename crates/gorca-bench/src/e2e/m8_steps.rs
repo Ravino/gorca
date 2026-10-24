@@ -1383,6 +1383,34 @@ fn lt() -> Vec<Step> {
     v
 }
 
+/// Menu buttons (`tests/web/menus/pages/menubutton.html`). NVDA: a popup opened by a button
+/// speaks the menu role and the focused (or active) first item; when focus stays on the button
+/// the button says "expanded". Pattern A moves focus into the menu, B keeps it on the button and
+/// moves `aria-activedescendant`, C inserts a fresh menu subtree on every open.
+fn mb() -> Vec<Step> {
+    // Real evdev keys typed into the browser (the reader sees only their effects): Enter 28,
+    // Down 108, Escape 1.
+    const ENTER_RAW: &[u32] = &[28];
+    const DOWN_RAW: &[u32] = &[108];
+    const ESC_RAW: &[u32] = &[1];
+    vec![
+        s("MB.a.focus", P0, "Focus on the menu button: name, role and its popup", Act::Focus(role::PUSH_BUTTON, "Actions menu"), &["Actions menu", "button"]),
+        pos("MB.a.prime", Act::AppKeys(&[42])), pos("MB.a.wait", Act::Wait(600)),
+        s("MB.a.open", P0, "Enter opens the menu, focus moves in: the menu role and the first item", Act::AppKeys(ENTER_RAW), &["Actions", "menu", "Copy link", "menu item"]).win(1500),
+        s("MB.a.down", P0, "Down moves to the next item", Act::AppKeys(DOWN_RAW), &["Paste text"]).win(1200),
+        s("MB.a.esc", P0, "Escape closes the menu, focus returns to the button", Act::AppKeys(ESC_RAW), &["Actions menu"]).win(1200),
+        s("MB.b.focus", P0, "Focus on the second menu button", Act::Focus(role::PUSH_BUTTON, "Sort menu"), &["Sort menu", "button"]),
+        pos("MB.b.prime", Act::AppKeys(&[42])), pos("MB.b.wait", Act::Wait(600)),
+        s("MB.b.open", P0, "Enter opens the menu, aria-activedescendant names the first item: the menu, then the item", Act::AppKeys(ENTER_RAW), &["Sort", "menu", "Sort by name", "menu item"]).win(1500),
+        s("MB.b.down", P0, "Down moves the active descendant: the item is spoken", Act::AppKeys(DOWN_RAW), &["Sort by date"]).win(1200),
+        s("MB.b.esc", P0, "Escape closes it: the button is back", Act::AppKeys(ESC_RAW), &["Sort menu"]).win(1200),
+        s("MB.c.focus", P0, "Focus on the third menu button", Act::Focus(role::PUSH_BUTTON, "Fresh menu"), &["Fresh menu", "button"]),
+        pos("MB.c.prime", Act::AppKeys(&[42])), pos("MB.c.wait", Act::Wait(600)),
+        s("MB.c.open", P0, "Enter inserts a fresh menu and focuses its first item", Act::AppKeys(ENTER_RAW), &["Fresh", "menu", "Mute chat", "menu item"]).win(1500),
+        s("MB.c.esc", P0, "Escape removes it and refocuses the button", Act::AppKeys(ESC_RAW), &["Fresh menu"]).win(1200),
+    ]
+}
+
 /// Every scenario, in run order.
 pub fn scenarios() -> Vec<Scenario> {
     let sc = |id, area, page, title, body| Scenario { id, area, page, title, body, xfail: None };
@@ -1390,6 +1418,7 @@ pub fn scenarios() -> Vec<Scenario> {
         sc("M8-FLB", "form label sources: what Tab onto a control says", "../../forms/pages/labels.html", "FL Labels", Body::Steps(lb)),
         sc("M8-FLR", "real-site login shapes: what Tab onto a control says", "../../forms/pages/login-real.html", "FL Real logins", Body::Steps(lr)),
         sc("M8-FLT", "real-site login shapes walked with real Tab presses", "../../forms/pages/login-real.html", "FL Real logins", Body::Steps(lt)),
+        sc("M8-MB", "menu buttons: popup menu and first item are announced", "../../menus/pages/menubutton.html", "MB Menu buttons", Body::Steps(mb)),
         sc("M8-QN", "quick navigation keys", "quicknav.html", "M8 Quick navigation", Body::Steps(qn)),
         sc("M8-TB", "tables", "tables.html", "M8 Tables", Body::Steps(tb)),
         sc("M8-FM", "forms, focus and browse mode", "forms.html", "M8 Forms", Body::Steps(fm)),

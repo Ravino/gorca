@@ -400,6 +400,13 @@ pub struct Reader {
     pub(crate) stale_replies_dropped: u64,
     pub(crate) duplicate_focus_dropped: u64,
     pub(crate) last_focus: Option<(NodeKey, Instant)>,
+    /// The focus before `last_focus` (menu popup-start echoes, see `menu_start_redirect`).
+    pub(crate) menu_prev: Option<(NodeKey, Instant)>,
+    /// A menu whose popup-start focus was folded into the item focused just before it: the item
+    /// and the menu's snapshot, spoken as the item's lead.
+    pub(crate) menu_lead_snap: Option<(NodeKey, Arc<NodeSnapshot>)>,
+    /// The web menu item whose presentation already waited once for the document mirror.
+    pub(crate) menu_waited: Option<NodeKey>,
     /// The node of the latest `ItemSelected`, until a real focus change replaces it.
     pub(crate) selection_node: Option<NodeKey>,
     pub(crate) focused_app: Option<Arc<FocusedApp>>,
@@ -508,6 +515,9 @@ impl Reader {
             stale_replies_dropped: 0,
             duplicate_focus_dropped: 0,
             last_focus: None,
+            menu_prev: None,
+            menu_lead_snap: None,
+            menu_waited: None,
             selection_node: None,
             focused_app: None,
             presenters: PresenterRegistry::builtin(),
@@ -3117,5 +3127,134 @@ mod tests {
         assert_eq!(first["name"], "Window 1", "{text}");
         let states = first["states"].as_array().unwrap();
         assert!(states.iter().any(|s| s == "selected"), "{text}");
+    }
+
+    // ---- web menu popups: the menu, then its item ----
+
+    fn web_node(n: u64, role: Role, name: &str, web: bool) -> Arc<NodeSnapshot> {
+        let mut s = (*snap(n, role, name)).clone();
+        s.states = StateSet::ENABLED | StateSet::SHOWING | StateSet::VISIBLE;
+        if web {
+            s.attrs
+                .push((gorca_doc_source_api::web_attrs::TAG, Arc::from("li")));
+        }
+        Arc::new(s)
+    }
+
+    /// Gecko fires an extra focus on the popup right after the focus on its first item. The item
+    /// stays the focus and the menu's name and role lead it: one utterance, menu then item.
+    #[test]
+    fn a_menu_popup_start_echo_folds_into_the_item_that_was_focused_before_it() {
+        let mut f = fixture();
+        let t0 = Instant::now();
+        let fx = focus_on(&mut f, 10, t0);
+        assert!(effects_of(&fx).contains(&"fetch-focus"));
+        let fx = focus_on(&mut f, 11, t0 + Duration::from_millis(1));
+        assert!(effects_of(&fx).contains(&"fetch-focus"));
+        // the menu's reply: nothing is spoken, the item is asked for again
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                11,
+                FetchKind::Focus,
+                web_node(11, Role::Menu, "Actions", true),
+            ),
+            t0 + Duration::from_millis(3),
+        );
+        assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
+        assert_eq!(
+            effects_of(&fx)
+                .iter()
+                .filter(|e| **e == "fetch-focus")
+                .count(),
+            1
+        );
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                10,
+                FetchKind::Focus,
+                web_node(10, Role::MenuItem, "Copy link", true),
+            ),
+            t0 + Duration::from_millis(5),
+        );
+        let said = spoken(&fx);
+        assert_eq!(said.len(), 1, "{said:?}");
+        let text = said[0].to_lowercase();
+        let at = |w: &str| text.find(w).unwrap_or(usize::MAX);
+        assert!(
+            at("actions") < at("menu") && at("menu") < at("copy link"),
+            "{text}"
+        );
+        assert!(at("copy link") < at("menu item"), "{text}");
+    }
+
+    /// A native (GTK) popup is not a web page: the menu focus after an item focus is an ordinary
+    /// focus change and speaks as before.
+    #[test]
+    fn a_native_menu_focus_after_an_item_is_not_folded() {
+        let mut f = fixture();
+        let t0 = Instant::now();
+        focus_on(&mut f, 10, t0);
+        focus_on(&mut f, 11, t0 + Duration::from_millis(1));
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                11,
+                FetchKind::Focus,
+                web_node(11, Role::Menu, "Actions", false),
+            ),
+            t0 + Duration::from_millis(3),
+        );
+        let said = spoken(&fx);
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].to_lowercase().contains("actions"), "{said:?}");
+    }
+
+    /// A menu focus long after another focus is a plain focus too (a menu the user opened).
+    #[test]
+    fn a_menu_focus_long_after_the_previous_focus_is_not_folded() {
+        let mut f = fixture();
+        let t0 = Instant::now();
+        focus_on(&mut f, 10, t0);
+        focus_on(&mut f, 11, t0 + Duration::from_millis(900));
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                11,
+                FetchKind::Focus,
+                web_node(11, Role::Menu, "Actions", true),
+            ),
+            t0 + Duration::from_millis(903),
+        );
+        assert_eq!(spoken(&fx).len(), 1);
+    }
+
+    /// A web menu item the document mirror does not know (a menu the page has just inserted)
+    /// waits one flap delay for the mirror, once; after that it speaks.
+    #[test]
+    fn a_fresh_web_menu_item_waits_once_for_the_mirror_then_speaks() {
+        let mut f = fixture();
+        let t0 = Instant::now();
+        focus_on(&mut f, 10, t0);
+        let item = || web_node(10, Role::MenuItem, "Copy link", true);
+        let fx = f.reader.handle(
+            reply(&f, 10, FetchKind::Focus, item()),
+            t0 + Duration::from_millis(2),
+        );
+        assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
+        assert!(effects_of(&fx).contains(&"timer"), "{:?}", effects_of(&fx));
+        let fx = f
+            .reader
+            .handle(ReaderMsg::Timer, t0 + Duration::from_millis(40));
+        let fx = if spoken(&fx).is_empty() {
+            f.reader.handle(
+                reply(&f, 10, FetchKind::Focus, item()),
+                t0 + Duration::from_millis(42),
+            )
+        } else {
+            fx
+        };
+        assert_eq!(spoken(&fx).len(), 1, "{:?}", effects_of(&fx));
     }
 }

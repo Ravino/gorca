@@ -1,0 +1,28 @@
+9629253786747 said "MB Menu buttons, document"
+9629285608595 said "browse mode, heading level 1, Menu buttons"
+9629592567716 said "Actions menu, button, collapsed, submenu"
+9630676754391 said "Copy link, menu item"
+9632212539751 said "Paste text, menu item"
+9632342405441 said "browse mode, Actions menu, button, expanded, submenu"
+9632348104955 said "collapsed"
+9632479138795 said "Sort menu, button, collapsed, submenu"
+9633562421314 said "Sort by name, menu item, current"
+9635098105169 said "Sort by date, menu item, current"
+9635232525012 said "browse mode, Sort menu, button, expanded, submenu"
+9635233093382 said "browse mode, Sort menu, button, collapsed, submenu"
+9635359785937 said "Fresh menu, button, collapsed, submenu"
+9636443002512 said "Mute chat, menu item"
+bus 2 /org/a11y/atspi/accessible/6 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/7 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/6 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/192 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/192 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/197 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/198 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/192 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/193 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/201 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/202 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/193 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/186 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/205 StateChanged:focused

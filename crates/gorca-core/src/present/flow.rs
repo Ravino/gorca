@@ -17,6 +17,8 @@ use gorca_rt::BudgetClass;
 /// scrolling under the pointer): hits are then held for [`STORM_HOLD`], so the last focus wins
 /// and the speech server is not flooded with fragments. An isolated focus speaks at once.
 pub const RAPID_FOCUS: Duration = Duration::from_millis(20);
+/// How soon after an item's focus a focus event for its own menu is a popup-start echo.
+pub const MENU_START_WINDOW: Duration = Duration::from_millis(100);
 /// How long a hit in a storm waits for a newer focus to supersede it.
 pub const STORM_HOLD: Duration = Duration::from_millis(4);
 
@@ -192,6 +194,7 @@ impl Reader {
         tracing::debug!(msg = ?f, "focus lane");
         match f {
             FocusLaneMsg::FocusChanged { node } => {
+                self.menu_lead_snap = None;
                 self.selection_node = None;
                 self.focus_retried = None;
                 self.focus_backoff = None;
@@ -223,6 +226,106 @@ impl Reader {
         }
     }
 
+    /// The engine's "menu popup start" echo: Gecko fires an extra focus on a role=menu popup right
+    /// after the focus on the item inside it. When the focus just presented is such a menu and
+    /// another node held the focus an instant before, the menu is not the focus: the other node is
+    /// focused again and carries the menu's words as its lead (`menu_lead`). True when `snap` was
+    /// folded this way and must not be spoken as a focus of its own.
+    fn menu_start_redirect(&mut self, snap: &Arc<NodeSnapshot>, fx: &mut ReaderEffects) -> bool {
+        if !matches!(snap.role, Role::Menu | Role::MenuBar)
+            || self.selection_node.is_some()
+            || !Self::shadow_node_is_web(snap)
+        {
+            return false;
+        }
+        let (Some((prev, prev_at)), Some((cur, cur_at))) = (self.menu_prev, self.last_focus) else {
+            return false;
+        };
+        if cur != snap.key
+            || prev.app != snap.key.app
+            || cur_at.saturating_duration_since(prev_at) >= MENU_START_WINDOW
+        {
+            return false;
+        }
+        self.menu_lead_snap = Some((prev, Arc::clone(snap)));
+        self.menu_prev = None;
+        self.last_focus = None;
+        let now = self.now;
+        self.begin_focus(prev, now, fx);
+        true
+    }
+
+    /// The words of the menu an item of a web page is entered through (name and role), spoken
+    /// before the item when focus arrives from outside that menu: a popup opened by a button is
+    /// announced as a menu, then its first item.
+    fn menu_lead(
+        &mut self,
+        snap: &NodeSnapshot,
+        id: UttId,
+        epoch: Epoch,
+    ) -> Option<Vec<gorca_model::Segment>> {
+        let folded = self
+            .menu_lead_snap
+            .take()
+            .filter(|(item, _)| *item == snap.key)
+            .map(|(_, m)| m);
+        if snap.role != Role::MenuItem {
+            return None;
+        }
+        let base = if let Some(m) = folded {
+            NodeSnapshot {
+                states: StateSet::ENABLED,
+                value: None,
+                description: None,
+                ..(*m).clone()
+            }
+        } else {
+            let from = self.presented.as_ref().map(|p| p.node);
+            let (role, name) = self.web_menu_entered(snap.key, from)?;
+            NodeSnapshot {
+                role,
+                name: Some(name),
+                states: StateSet::ENABLED,
+                value: None,
+                description: None,
+                attrs: smallvec::SmallVec::default(),
+                sem: gorca_model::NodeSem::NONE,
+                ..snap.clone()
+            }
+        };
+        let lead = self
+            .presenters
+            .present(PresentContext::Focus, &base, id, epoch);
+        Some(lead.segments.into_vec())
+    }
+
+    /// A web menu item the document mirror does not know yet (a menu the page has just inserted)
+    /// cannot tell which menu it opens: its presentation waits one flap delay for the mirror, once.
+    fn menu_wait_for_mirror(&mut self, snap: &NodeSnapshot, fx: &mut ReaderEffects) -> bool {
+        if snap.role != Role::MenuItem
+            || self.selection_node.is_some()
+            || self.menu_waited == Some(snap.key)
+            || self.menu_lead_snap.is_some()
+            || !Self::shadow_node_is_web(snap)
+            || self.web_knows(snap.key)
+        {
+            return false;
+        }
+        self.menu_waited = Some(snap.key);
+        let until = self.now + crate::focus::FOCUS_FLAP_DELAY;
+        let epoch = self.epoch.current();
+        self.apply_focus(
+            FocusMsg::FocusChanged {
+                node: snap.key,
+                epoch,
+                until,
+            },
+            fx,
+        );
+        fx.push(ReaderEffect::ArmTimer(until));
+        true
+    }
+
     pub(crate) fn begin_focus(&mut self, node: NodeKey, now: Instant, fx: &mut ReaderEffects) {
         let previous = self.last_focus;
         if let Some((last, at)) = previous
@@ -233,6 +336,7 @@ impl Reader {
             self.reconfirm_focus(node, fx);
             return;
         }
+        self.menu_prev = previous.filter(|(p, _)| *p != node);
         self.last_focus = Some((node, now));
         self.reconfirm = Reconfirm::Idle;
         self.timeout_charged = false;
@@ -724,6 +828,9 @@ impl Reader {
         // current, haspopup, description, error text), which a focus fetch does not carry.
         let overlaid = self.spoken_snapshot(snap);
         let snap = &overlaid;
+        if self.menu_start_redirect(snap, fx) || self.menu_wait_for_mirror(snap, fx) {
+            return;
+        }
         tracing::debug!(node = ?snap.key, states = ?snap.states, ?source, from_cache, "focus presented");
         let (next, effect) = self.focus.step(FocusMsg::Presented { node: snap.key });
         self.focus = next;
@@ -737,6 +844,13 @@ impl Reader {
                 };
                 let mut u = self.presenters.present(ctx, snap, id, epoch);
                 let shadow = self.shadow_focus(ctx, snap, &u, from_cache);
+                if ctx == PresentContext::Focus
+                    && let Some(lead) = self.menu_lead(snap, id, epoch)
+                {
+                    for (at, seg) in lead.into_iter().enumerate() {
+                        u.segments.insert(at, seg);
+                    }
+                }
                 if !self.cmd.effective.browse.description_pause {
                     crate::aria::strip_pause(&mut u);
                 }
