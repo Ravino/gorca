@@ -1,0 +1,120 @@
+en	chromium/aria-props	61	value	change-web	different	Value:3		
+en	chromium/change:value-aria-slider	21	real-value-aria-slider	change-web	different	Value:60	Value:High	
+en	chromium/exotic-date	9	value	change-web	different	Value:6.5		
+en	chromium/exotic-date	11	value	change-web	different	Value:16		
+en	chromium/exotic-date	13	value	change-web	different	Value:2015		
+en	chromium/exotic-date	20	value	change-web	different	Value:6.5		
+en	chromium/exotic-date	22	value	change-web	different	Value:16		
+en	chromium/exotic-date	24	value	change-web	different	Value:137880.5		
+en	chromium/exotic-datetime	9	value	change-web	different	Value:6.5		
+en	chromium/exotic-datetime	11	value	change-web	different	Value:16		
+en	chromium/exotic-datetime	13	value	change-web	different	Value:137880.5		
+en	chromium/exotic-datetime	15	value	change-web	different	Value:6.5		
+en	chromium/exotic-datetime	17	value	change-web	different	Value:29.5		
+en	chromium/exotic-datetime	19	value	change-web	different	Value:1.5		
+en	chromium/exotic-month	9	value	change-web	different	Value:6.5		
+en	chromium/exotic-month	11	value	change-web	different	Value:137880.5		
+en	chromium/exotic-month	19	value	change-web	different	Value:27		
+en	chromium/exotic-month	21	value	change-web	different	Value:137880.5		
+en	chromium/exotic-time	9	value	change-web	different	Value:6.5		
+en	chromium/exotic-time	11	value	change-web	different	Value:29.5		
+en	chromium/exotic-time	13	value	change-web	different	Value:1.5		
+en	chromium/exotic-time	20	value	change-web	different	Value:6.5		
+en	chromium/exotic-time	22	value	change-web	different	Value:29.5		
+en	chromium/exotic-time	24	value	change-web	different	Value:29.5		
+en	chromium/exotic-time	26	value	change-web	different	Value:1.5		
+en	chromium/m8-forms	67	value	change-web	different	Value:5		
+en	chromium/m8-forms	71	value	change-web	different	Value:4.5		
+en	chromium/m8-forms	77	value	change-web	different	Value:6		
+en	chromium/m8-forms	78	value	change-web	different	Value:4.5		
+en	chromium/m8-quicknav	175	value	change-web	different	Value:5		
+en	chromium/widgets	90	value	change-web	different	Value:6		
+en	chromium/widgets	91	value	change-web	different	Value:5		
+en	chromium/widgets	92	value	change-web	different	Value:10		
+en	chromium/widgets	93	value	change-web	different	Value:50		
+en	chromium/widgets	94	value	change-web	different	Value:50		
+en	chromium/widgets	95	value	change-web	different	Value:16		
+en	chromium/widgets	96	value	change-web	different	Value:4.5		
+en	firefox/aria-props	32	value	change-web	different	Value:3		
+en	firefox/change:value-aria-slider	16	real-value-aria-slider	change-web	different	Value:60	Value:High	
+en	firefox/change:value-progress	11	real-value-progress	change-web	different	Value:80	Value:80%	
+en	firefox/disabled	26	rename	change-web	different	Text:• src renamed	Text:src renamed	
+en	firefox/disabled	28	rename	change-web	different	Text:◦ main.rs renamed	Text:main.rs renamed	
+en	firefox/disabled	29	rename	change-web	different	Text:◦ locked.rs renamed	Text:locked.rs renamed	
+en	firefox/disabled	30	rename	change-web	different	Text:• vendor renamed	Text:vendor renamed	
+en	firefox/disabled	32	rename	change-web	different	Text:◦ dep.rs renamed	Text:dep.rs renamed	
+en	firefox/disabled	39	rename	change-web	different	Text:• Red renamed	Text:Red renamed	
+en	firefox/disabled	40	rename	change-web	different	Text:• Green renamed	Text:Green renamed	
+en	firefox/m8-forms	55	value	change-web	different	Value:5		
+en	firefox/m8-forms	58	value	change-web	different	Value:4.5		
+en	firefox/m8-forms	63	value	change-web	different	Value:6		
+en	firefox/m8-forms	64	value	change-web	different	Value:4.5		
+en	firefox/m8-quicknav	109	value	change-web	different	Value:5		
+en	firefox/widgets	74	value	change-web	different	Value:6		
+en	firefox/widgets	75	value	change-web	different	Value:5		
+en	firefox/widgets	76	value	change-web	different	Value:10		
+en	firefox/widgets	77	value	change-web	different	Value:50		
+en	firefox/widgets	78	value	change-web	different	Value:50		
+en	firefox/widgets	79	value	change-web	different	Value:16		
+en	firefox/widgets	80	value	change-web	different	Value:4.5		
+en	gtk3/change:expand-tree	22	real-expand-tree	change	different	State:expanded		
+ru	chromium/aria-props	61	value	change-web	different	Value:3		
+ru	chromium/change:value-aria-slider	21	real-value-aria-slider	change-web	different	Value:60	Value:High	
+ru	chromium/exotic-date	9	value	change-web	different	Value:6.5		
+ru	chromium/exotic-date	11	value	change-web	different	Value:16		
+ru	chromium/exotic-date	13	value	change-web	different	Value:2015		
+ru	chromium/exotic-date	20	value	change-web	different	Value:6.5		
+ru	chromium/exotic-date	22	value	change-web	different	Value:16		
+ru	chromium/exotic-date	24	value	change-web	different	Value:137880.5		
+ru	chromium/exotic-datetime	9	value	change-web	different	Value:6.5		
+ru	chromium/exotic-datetime	11	value	change-web	different	Value:16		
+ru	chromium/exotic-datetime	13	value	change-web	different	Value:137880.5		
+ru	chromium/exotic-datetime	15	value	change-web	different	Value:6.5		
+ru	chromium/exotic-datetime	17	value	change-web	different	Value:29.5		
+ru	chromium/exotic-datetime	19	value	change-web	different	Value:1.5		
+ru	chromium/exotic-month	9	value	change-web	different	Value:6.5		
+ru	chromium/exotic-month	11	value	change-web	different	Value:137880.5		
+ru	chromium/exotic-month	19	value	change-web	different	Value:27		
+ru	chromium/exotic-month	21	value	change-web	different	Value:137880.5		
+ru	chromium/exotic-time	9	value	change-web	different	Value:6.5		
+ru	chromium/exotic-time	11	value	change-web	different	Value:29.5		
+ru	chromium/exotic-time	13	value	change-web	different	Value:1.5		
+ru	chromium/exotic-time	20	value	change-web	different	Value:6.5		
+ru	chromium/exotic-time	22	value	change-web	different	Value:29.5		
+ru	chromium/exotic-time	24	value	change-web	different	Value:29.5		
+ru	chromium/exotic-time	26	value	change-web	different	Value:1.5		
+ru	chromium/m8-forms	67	value	change-web	different	Value:5		
+ru	chromium/m8-forms	71	value	change-web	different	Value:4.5		
+ru	chromium/m8-forms	77	value	change-web	different	Value:6		
+ru	chromium/m8-forms	78	value	change-web	different	Value:4.5		
+ru	chromium/m8-quicknav	175	value	change-web	different	Value:5		
+ru	chromium/widgets	90	value	change-web	different	Value:6		
+ru	chromium/widgets	91	value	change-web	different	Value:5		
+ru	chromium/widgets	92	value	change-web	different	Value:10		
+ru	chromium/widgets	93	value	change-web	different	Value:50		
+ru	chromium/widgets	94	value	change-web	different	Value:50		
+ru	chromium/widgets	95	value	change-web	different	Value:16		
+ru	chromium/widgets	96	value	change-web	different	Value:4.5		
+ru	firefox/aria-props	32	value	change-web	different	Value:3		
+ru	firefox/change:value-aria-slider	16	real-value-aria-slider	change-web	different	Value:60	Value:High	
+ru	firefox/change:value-progress	11	real-value-progress	change-web	different	Value:80	Value:80%	
+ru	firefox/disabled	26	rename	change-web	different	Text:• src renamed	Text:src renamed	
+ru	firefox/disabled	28	rename	change-web	different	Text:◦ main.rs renamed	Text:main.rs renamed	
+ru	firefox/disabled	29	rename	change-web	different	Text:◦ locked.rs renamed	Text:locked.rs renamed	
+ru	firefox/disabled	30	rename	change-web	different	Text:• vendor renamed	Text:vendor renamed	
+ru	firefox/disabled	32	rename	change-web	different	Text:◦ dep.rs renamed	Text:dep.rs renamed	
+ru	firefox/disabled	39	rename	change-web	different	Text:• Red renamed	Text:Red renamed	
+ru	firefox/disabled	40	rename	change-web	different	Text:• Green renamed	Text:Green renamed	
+ru	firefox/m8-forms	55	value	change-web	different	Value:5		
+ru	firefox/m8-forms	58	value	change-web	different	Value:4.5		
+ru	firefox/m8-forms	63	value	change-web	different	Value:6		
+ru	firefox/m8-forms	64	value	change-web	different	Value:4.5		
+ru	firefox/m8-quicknav	109	value	change-web	different	Value:5		
+ru	firefox/widgets	74	value	change-web	different	Value:6		
+ru	firefox/widgets	75	value	change-web	different	Value:5		
+ru	firefox/widgets	76	value	change-web	different	Value:10		
+ru	firefox/widgets	77	value	change-web	different	Value:50		
+ru	firefox/widgets	78	value	change-web	different	Value:50		
+ru	firefox/widgets	79	value	change-web	different	Value:16		
+ru	firefox/widgets	80	value	change-web	different	Value:4.5		
+ru	gtk3/change:expand-tree	22	real-expand-tree	change	different	State:развёрнуто		

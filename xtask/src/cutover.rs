@@ -8,12 +8,16 @@
 //! 1. builds the replay test binary of `gorca-connector-atspi` (`cutover_gate_tests`), which feeds
 //!    every corpus family of `tests/fixtures/sem` through both presenters and writes one canonical
 //!    record per node;
-//! 2. runs it three times inside a private session (`tests/harness/run-isolated.sh`): twice
-//!    plainly and once with a seeded shuffle of the arrival order and batching, and requires the
-//!    three record files to be byte-identical (nondeterminism fails the gate);
+//! 2. runs it three times per UI language (English, then Russian, the owner's) inside a private
+//!    session (`tests/harness/run-isolated.sh`): twice plainly and once with a seeded shuffle of
+//!    the arrival order and batching, and requires the three record files to be byte-identical
+//!    (nondeterminism fails the gate);
 //! 3. classifies each record: EQUAL, INTENDED (a deviation row for exactly this surface, not
-//!    expired, with an `epoch` tag and a reason) or UNCLASSIFIED; it passes with 0 UNCLASSIFIED
-//!    and every required corpus family covered (or waived with a dated reason);
+//!    expired, with an `epoch` tag and a reason, whose predicate does not rest on a fused model
+//!    fact that the source record contradicts) or UNCLASSIFIED; every node or case the replay did
+//!    not compare is a DROP counted per reason, and a drop with no explanation fails the gate. It
+//!    passes, in each language, with 0 UNCLASSIFIED, 0 unexplained drops and every required corpus
+//!    family covered by compared nodes (or waived with a dated reason);
 //! 4. prints the table and writes `bench/results/cutover/<surface>-<date>.md`, never overwriting
 //!    an older report (a failing report is evidence and stays).
 //!
@@ -87,6 +91,8 @@ const REPORT_DIR: &str = "bench/results/cutover";
 const DEVIATIONS: &str = "crates/gorca-present/deviations.toml";
 const CORPORA: &str = "tests/fixtures/sem/cutover-corpora.toml";
 const FIXTURES: &str = "tests/fixtures/sem";
+/// The recorded state changes (`<family>/<case>.before|after.jsonl`) are inputs of the gate too.
+const CHANGE_FIXTURES: &str = "tests/fixtures/sem-change";
 /// The seed of the shuffled-arrival run (override with `--seed`).
 const DEFAULT_SEED: u64 = 0x5eed;
 const REPLAY_TEST: &str = "cutover_gate_tests::cutover_emit";
@@ -111,6 +117,9 @@ pub struct Rec {
     pub deviation: String,
     pub legacy: String,
     pub new: String,
+    /// Set on an `allowed` record whose row rests on a fused model fact that the source record
+    /// contradicts (empty otherwise).
+    pub witness: String,
 }
 
 impl Rec {
@@ -125,8 +134,8 @@ pub fn parse_records(text: &str) -> Result<Vec<Rec>> {
     let mut out = Vec::new();
     for (n, line) in text.lines().enumerate() {
         let f: Vec<&str> = line.split('\t').collect();
-        if f.len() != 8 {
-            bail!("record {}: want 8 fields, got {}", n + 1, f.len());
+        if f.len() != 9 {
+            bail!("record {}: want 9 fields, got {}", n + 1, f.len());
         }
         out.push(Rec {
             corpus: f[0].to_owned(),
@@ -139,6 +148,7 @@ pub fn parse_records(text: &str) -> Result<Vec<Rec>> {
             deviation: f[5].to_owned(),
             legacy: f[6].to_owned(),
             new: f[7].to_owned(),
+            witness: f[8].to_owned(),
         });
     }
     Ok(out)
@@ -208,6 +218,8 @@ pub enum Class {
     Silent,
     Intended(String),
     Unclassified(String),
+    /// The replay did not compare this (reason code). Counted apart from the nodes.
+    Dropped(String),
 }
 
 pub fn classify(rec: &Rec, rows: &[Row], today: Date) -> Class {
@@ -226,6 +238,15 @@ pub fn classify(rec: &Rec, rows: &[Row], today: Date) -> Class {
                 ));
             };
             if matching.iter().any(|r| row_defect(r, today).is_none()) {
+                // A row must not justify a regression with the model fact that causes it: when
+                // the source record contradicts the fused fact the row's predicate read, the
+                // difference is a model defect, not an intended improvement.
+                if !rec.witness.is_empty() {
+                    return Class::Unclassified(format!(
+                        "row `{}` rests on a fused model fact the source record contradicts: {}",
+                        rec.deviation, rec.witness
+                    ));
+                }
                 return Class::Intended(format!(
                     "{}@{} [{}]",
                     first.id, first.surface, first.epoch
@@ -237,6 +258,7 @@ pub fn classify(rec: &Rec, rows: &[Row], today: Date) -> Class {
                 rec.deviation, rec.surface
             ))
         }
+        "dropped" => Class::Dropped(rec.deviation.clone()),
         "order-only" => Class::Unclassified("same tokens, different order".to_owned()),
         "different" => Class::Unclassified("tokens differ".to_owned()),
         other => Class::Unclassified(format!("unknown outcome `{other}`")),
@@ -255,12 +277,17 @@ pub struct Tally {
 
 impl Tally {
     fn add(&mut self, c: &Class) {
+        // Drops are counted by reason (`Verdict::drops`), never as compared nodes.
+        if matches!(c, Class::Dropped(_)) {
+            return;
+        }
         self.nodes += 1;
         match c {
             Class::Equal => self.equal += 1,
             Class::Silent => self.silent += 1,
             Class::Intended(_) => self.intended += 1,
             Class::Unclassified(_) => self.unclassified += 1,
+            Class::Dropped(_) => {}
         }
     }
 }
@@ -275,6 +302,10 @@ pub struct FamilySpec {
     pub name: String,
     pub waived_until: Option<Date>,
     pub waiver: String,
+    /// Recorded real changes that show no change in the engine's tree (case, reason): known gaps
+    /// of the engine, kept as evidence. A `case-without-change` drop not listed here is
+    /// unexplained.
+    pub no_change: Vec<(String, String)>,
 }
 
 pub fn parse_manifest(src: &str) -> Result<Vec<FamilySpec>> {
@@ -298,10 +329,24 @@ pub fn parse_manifest(src: &str) -> Result<Vec<FamilySpec>> {
             if waived_until.is_some() && s("waiver").trim().is_empty() {
                 bail!("family {}: a waiver needs a reason", s("name"));
             }
+            let mut no_change = Vec::new();
+            if let Some(list) = t.get("no_change").and_then(|i| i.as_array_of_tables()) {
+                for n in list {
+                    let g = |k: &str| n.get(k).and_then(|v| v.as_str()).unwrap_or_default();
+                    if g("case").is_empty() || g("reason").trim().is_empty() {
+                        bail!(
+                            "family {}: a no_change entry needs a case and a reason",
+                            s("name")
+                        );
+                    }
+                    no_change.push((g("case").to_owned(), g("reason").to_owned()));
+                }
+            }
             out.push(FamilySpec {
                 name: s("name").to_owned(),
                 waived_until,
                 waiver: s("waiver").to_owned(),
+                no_change,
             });
         }
     }
@@ -321,7 +366,7 @@ pub enum Coverage {
 
 pub fn coverage(specs: &[FamilySpec], recs: &[Rec], today: Date) -> Vec<(String, Coverage)> {
     let mut corpora: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
-    for r in recs {
+    for r in recs.iter().filter(|r| r.outcome != "dropped") {
         corpora.entry(r.family()).or_default().insert(&r.corpus);
     }
     specs
@@ -381,9 +426,72 @@ pub fn first_differences(a: &str, b: &str, limit: usize) -> Vec<String> {
 // The verdict and the report
 // ---------------------------------------------------------------------------------------------
 
-/// Everything the report needs.
+/// One reason a replay did not compare a node or a case, and why that is acceptable. A reason that
+/// is not listed here is an *unexplained* drop and fails the gate, whatever else passes.
+pub const DROP_REASONS: &[(&str, &str)] = &[
+    (
+        "unreadable-node",
+        "the recorder's calls on the node failed (dead object or timeout): there is no role to present",
+    ),
+    (
+        "native-node-in-web-family",
+        "application or browser chrome around the web content (menus, frame buttons): the family is fused with the web tables, so a native comparison would be unsound",
+    ),
+    (
+        "web-node-in-native-family",
+        "web content embedded in a native application",
+    ),
+    (
+        "static-leaf-no-entry",
+        "a text leaf that is merged into its parent's content name and is never a focus target",
+    ),
+    (
+        "mutation-no-target",
+        "synthetic mutation: no focusable node of the page has a state of that kind to flip",
+    ),
+    (
+        "mutation-not-focusable",
+        "synthetic mutation: the state could flip on a node that is not focusable; a change utterance is spoken for the focused node, so it is not replayed",
+    ),
+    (
+        "trigger-button",
+        "the do:* button the recorder pressed to make the change; its own focus change is not the change under test",
+    ),
+    (
+        "node-added",
+        "the real change added the node (children of an expanded item, a popup); a new node is not a change of an existing one",
+    ),
+    (
+        "node-removed",
+        "the real change removed the node; there is nothing left to speak about",
+    ),
+];
+
+/// The explanation of a drop reason, `None` when the gate has none.
+pub fn drop_explanation(reason: &str) -> Option<&'static str> {
+    DROP_REASONS
+        .iter()
+        .find(|(r, _)| *r == reason)
+        .map(|(_, why)| *why)
+}
+
+/// Drops of one (family, reason).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DropRow {
+    pub family: String,
+    pub reason: String,
+    pub count: u64,
+    /// The explanation, `None` for an unexplained drop.
+    pub explanation: Option<String>,
+    pub example: String,
+}
+
+/// Everything the report needs for one language.
+#[derive(Clone)]
 pub struct Verdict {
     pub surface: String,
+    /// `en` or `ru`: the catalog language the replay ran in.
+    pub lang: String,
     pub date: Date,
     pub total: Tally,
     pub per_family: BTreeMap<String, Tally>,
@@ -393,14 +501,30 @@ pub struct Verdict {
     pub intended: BTreeMap<String, u64>,
     /// (case, surface, masked legacy, masked new, reason) -> (count, first example).
     pub unclassified: BTreeMap<String, (u64, String)>,
+    /// Every node and case the replay did not compare.
+    pub drops: Vec<DropRow>,
     pub not_ready: bool,
     pub run_hash: u64,
 }
 
 impl Verdict {
+    pub fn dropped(&self) -> u64 {
+        self.drops.iter().map(|d| d.count).sum()
+    }
+
+    /// Drops no listed reason (or manifest entry) explains: each one fails the gate.
+    pub fn unexplained_drops(&self) -> u64 {
+        self.drops
+            .iter()
+            .filter(|d| d.explanation.is_none())
+            .map(|d| d.count)
+            .sum()
+    }
+
     pub fn pass(&self) -> bool {
         !self.not_ready
             && self.total.unclassified == 0
+            && self.unexplained_drops() == 0
             && self.total.nodes > 0
             && self.deterministic
             && !self
@@ -408,6 +532,11 @@ impl Verdict {
                 .iter()
                 .any(|(_, c)| matches!(c, Coverage::Missing))
     }
+}
+
+/// The gate passes only when every language passes.
+pub fn all_pass(vs: &[Verdict]) -> bool {
+    !vs.is_empty() && vs.iter().all(Verdict::pass)
 }
 
 /// Mask page and app content so differences group by their wording, as the replay tables do.
@@ -422,8 +551,10 @@ fn mask(s: &str) -> String {
 }
 
 /// Build the verdict from the plain run's records, the determinism comparison and the manifest.
+#[allow(clippy::too_many_arguments)]
 pub fn judge(
     surface: &str,
+    lang: &str,
     recs: &[Rec],
     rows: &[Row],
     specs: &[FamilySpec],
@@ -435,8 +566,30 @@ pub fn judge(
     let mut per_family: BTreeMap<String, Tally> = BTreeMap::new();
     let mut intended: BTreeMap<String, u64> = BTreeMap::new();
     let mut unclassified: BTreeMap<String, (u64, String)> = BTreeMap::new();
+    let mut drops: BTreeMap<(String, String, String), DropRow> = BTreeMap::new();
     for r in recs {
         let c = classify(r, rows, today);
+        if let Class::Dropped(reason) = &c {
+            let n: u64 = r.legacy.parse().unwrap_or(1);
+            let explanation = drop_explained(r, reason, specs);
+            // A drop with a manifest explanation is keyed by its case so that the report names it.
+            let case_key = if reason == "case-without-change" {
+                r.corpus.clone()
+            } else {
+                String::new()
+            };
+            let e = drops
+                .entry((r.family().to_owned(), reason.clone(), case_key))
+                .or_insert_with(|| DropRow {
+                    family: r.family().to_owned(),
+                    reason: reason.clone(),
+                    count: 0,
+                    explanation,
+                    example: format!("{} {}", r.corpus, r.new),
+                });
+            e.count += n;
+            continue;
+        }
         total.add(&c);
         per_family.entry(r.family().to_owned()).or_default().add(&c);
         match &c {
@@ -460,11 +613,12 @@ pub fn judge(
                 });
                 e.0 += 1;
             }
-            Class::Equal | Class::Silent => {}
+            Class::Equal | Class::Silent | Class::Dropped(_) => {}
         }
     }
     Verdict {
         surface: surface.to_owned(),
+        lang: lang.to_owned(),
         date: today,
         total,
         per_family,
@@ -473,9 +627,24 @@ pub fn judge(
         nondeterminism,
         intended,
         unclassified,
+        drops: drops.into_values().collect(),
         not_ready: false,
         run_hash,
     }
+}
+
+/// Why a drop is acceptable: the listed reason, or for a real case that changed nothing the
+/// manifest entry that names the (family, case) and says why the engine shows no change.
+fn drop_explained(r: &Rec, reason: &str, specs: &[FamilySpec]) -> Option<String> {
+    if reason == "case-without-change" {
+        let case = r.case.strip_prefix("real-").unwrap_or(&r.case);
+        return specs
+            .iter()
+            .find(|s| s.name == r.family())
+            .and_then(|s| s.no_change.iter().find(|(c, _)| c == case))
+            .map(|(_, why)| format!("known: {why}"));
+    }
+    drop_explanation(reason).map(str::to_owned)
 }
 
 fn yes_no(b: bool) -> &'static str {
@@ -491,32 +660,38 @@ fn covered_count(v: &Verdict) -> (usize, usize) {
     (covered, v.coverage.len())
 }
 
-/// The short table printed on the terminal and placed at the top of the report.
-pub fn table(v: &Verdict) -> String {
-    let (c, n) = covered_count(v);
+/// The short table printed on the terminal and placed at the top of the report: one row per
+/// language.
+pub fn table(vs: &[Verdict]) -> String {
     let mut s = String::new();
     let _ = writeln!(
         s,
-        "| surface | corpora | nodes | equal | intended | unclassified | deterministic |"
+        "| surface | lang | corpora | compared | equal | intended | unclassified | dropped | unexplained drops | deterministic |"
     );
-    let _ = writeln!(s, "|---|---|---|---|---|---|---|");
-    let _ = writeln!(
-        s,
-        "| {} | {c}/{n} families | {} | {} | {} | {} | {} |",
-        v.surface,
-        v.total.nodes,
-        v.total.equal + v.total.silent,
-        v.total.intended,
-        v.total.unclassified,
-        yes_no(v.deterministic)
-    );
+    let _ = writeln!(s, "|---|---|---|---|---|---|---|---|---|---|");
+    for v in vs {
+        let (c, n) = covered_count(v);
+        let _ = writeln!(
+            s,
+            "| {} | {} | {c}/{n} families | {} | {} | {} | {} | {} | {} | {} |",
+            v.surface,
+            v.lang,
+            v.total.nodes,
+            v.total.equal + v.total.silent,
+            v.total.intended,
+            v.total.unclassified,
+            v.dropped(),
+            v.unexplained_drops(),
+            yes_no(v.deterministic)
+        );
+    }
     s
 }
 
 /// Everything an `inputs` line hashes: the deviations, the manifest and every fixture file.
 pub fn inputs_hash(root: &Path) -> Result<u64> {
     let mut files = vec![root.join(DEVIATIONS), root.join(CORPORA)];
-    let mut stack = vec![root.join(FIXTURES)];
+    let mut stack = vec![root.join(FIXTURES), root.join(CHANGE_FIXTURES)];
     while let Some(d) = stack.pop() {
         for e in std::fs::read_dir(&d).with_context(|| format!("reading {}", d.display()))? {
             let p = e?.path();
@@ -539,40 +714,32 @@ pub fn inputs_hash(root: &Path) -> Result<u64> {
     Ok(h)
 }
 
-/// The Markdown report. `meta` carries the conditions (rev, load, governor, seed).
-pub fn report(v: &Verdict, meta: &[(String, String)]) -> String {
-    let mut s = String::new();
-    let _ = writeln!(s, "# Cut-over gate: {}", v.surface);
-    let _ = writeln!(s);
-    let _ = writeln!(s, "result: {}", if v.pass() { "PASS" } else { "FAIL" });
-    let _ = writeln!(s, "surface: {}", v.surface);
-    let _ = writeln!(s, "date: {}", v.date);
-    for (k, val) in meta {
-        let _ = writeln!(s, "{k}: {val}");
-    }
-    let _ = writeln!(s, "records: {:016x}", v.run_hash);
-    let _ = writeln!(s);
-    if v.not_ready {
-        let _ = writeln!(
-            s,
-            "This surface has no `gorca-present` path yet, so there is nothing to replay. The gate \
-             fails by design until its slice (docs/reports/m22b1-plan.md) lands the path and the replay."
-        );
-        let _ = writeln!(s);
-    }
-    s.push_str(&table(v));
-    let _ = writeln!(s);
+/// One language's sections of the report.
+fn language_section(v: &Verdict, s: &mut String) {
     let _ = writeln!(
         s,
-        "equal includes {} nodes where both presenters say nothing.",
-        v.total.silent
+        "## Language: {} ({})",
+        v.lang,
+        if v.pass() { "PASS" } else { "FAIL" }
     );
     let _ = writeln!(s);
-    let _ = writeln!(s, "## Corpora");
+    let _ = writeln!(
+        s,
+        "compared {} nodes: {} equal (including {} where both presenters say nothing), {} intended, {} unclassified; {} dropped, {} unexplained.",
+        v.total.nodes,
+        v.total.equal + v.total.silent,
+        v.total.silent,
+        v.total.intended,
+        v.total.unclassified,
+        v.dropped(),
+        v.unexplained_drops()
+    );
+    let _ = writeln!(s);
+    let _ = writeln!(s, "### Corpora ({})", v.lang);
     let _ = writeln!(s);
     let _ = writeln!(
         s,
-        "| family | status | nodes | equal | intended | unclassified |"
+        "| family | status | compared | equal | intended | unclassified |"
     );
     let _ = writeln!(s, "|---|---|---|---|---|---|");
     for (name, c) in &v.coverage {
@@ -592,7 +759,34 @@ pub fn report(v: &Verdict, meta: &[(String, String)]) -> String {
         );
     }
     let _ = writeln!(s);
-    let _ = writeln!(s, "## Determinism");
+    let _ = writeln!(s, "### Dropped nodes and cases ({})", v.lang);
+    let _ = writeln!(s);
+    if v.drops.is_empty() {
+        let _ = writeln!(s, "None.");
+    } else {
+        let _ = writeln!(s, "| family | reason | count | explanation |");
+        let _ = writeln!(s, "|---|---|---|---|");
+        for d in &v.drops {
+            let why = d.explanation.as_deref().unwrap_or("UNEXPLAINED");
+            let _ = writeln!(s, "| {} | {} | {} | {} |", d.family, d.reason, d.count, why);
+        }
+        let _ = writeln!(s);
+        let _ = writeln!(
+            s,
+            "total dropped: {}; unexplained: {} (must be 0 to PASS).",
+            v.dropped(),
+            v.unexplained_drops()
+        );
+        for d in v.drops.iter().filter(|d| d.explanation.is_none()) {
+            let _ = writeln!(
+                s,
+                "- unexplained `{}` in {}: e.g. {}",
+                d.reason, d.family, d.example
+            );
+        }
+    }
+    let _ = writeln!(s);
+    let _ = writeln!(s, "### Determinism ({})", v.lang);
     let _ = writeln!(s);
     if v.deterministic {
         let _ = writeln!(
@@ -608,7 +802,11 @@ pub fn report(v: &Verdict, meta: &[(String, String)]) -> String {
         }
     }
     let _ = writeln!(s);
-    let _ = writeln!(s, "## Intended differences (deviations.toml, epoch change)");
+    let _ = writeln!(
+        s,
+        "### Intended differences ({}, deviations.toml, epoch change)",
+        v.lang
+    );
     let _ = writeln!(s);
     if v.intended.is_empty() {
         let _ = writeln!(s, "None.");
@@ -617,7 +815,7 @@ pub fn report(v: &Verdict, meta: &[(String, String)]) -> String {
         let _ = writeln!(s, "- `{id}`: {n}");
     }
     let _ = writeln!(s);
-    let _ = writeln!(s, "## Unclassified differences");
+    let _ = writeln!(s, "### Unclassified differences ({})", v.lang);
     let _ = writeln!(s);
     if v.unclassified.is_empty() {
         let _ = writeln!(s, "None.");
@@ -633,6 +831,57 @@ pub fn report(v: &Verdict, meta: &[(String, String)]) -> String {
             "- ... and {} more groups (see the .unclassified.tsv)",
             rows.len() - 60
         );
+    }
+    let _ = writeln!(s);
+}
+
+/// The Markdown report over every language. `meta` carries the conditions (rev, load, governor,
+/// seed). The overall result is PASS only when every language passes.
+pub fn report(vs: &[Verdict], meta: &[(String, String)]) -> String {
+    let mut s = String::new();
+    let surface = vs.first().map_or("", |v| v.surface.as_str());
+    let _ = writeln!(s, "# Cut-over gate: {surface}");
+    let _ = writeln!(s);
+    let _ = writeln!(s, "result: {}", if all_pass(vs) { "PASS" } else { "FAIL" });
+    let _ = writeln!(s, "surface: {surface}");
+    if let Some(v) = vs.first() {
+        let _ = writeln!(s, "date: {}", v.date);
+    }
+    let _ = writeln!(
+        s,
+        "languages: {}",
+        vs.iter()
+            .map(|v| v.lang.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    for (k, val) in meta {
+        let _ = writeln!(s, "{k}: {val}");
+    }
+    for v in vs {
+        let _ = writeln!(s, "records-{}: {:016x}", v.lang, v.run_hash);
+    }
+    let _ = writeln!(s);
+    if vs.iter().any(|v| v.not_ready) {
+        let _ = writeln!(
+            s,
+            "This surface has no `gorca-present` path yet, so there is nothing to replay. The gate \
+             fails by design until its slice (docs/reports/m22b1-plan.md) lands the path and the replay."
+        );
+        let _ = writeln!(s);
+    }
+    s.push_str(&table(vs));
+    let _ = writeln!(s);
+    let _ = writeln!(
+        s,
+        "The gate runs the replay once per UI language (English and Russian, the owner's) and \
+         passes only when both pass. Nodes the replay did not compare are counted per reason \
+         below; a drop with no explanation fails the gate. A row that rests on a fused model fact \
+         the source record contradicts is not accepted as intended."
+    );
+    let _ = writeln!(s);
+    for v in vs {
+        language_section(v, &mut s);
     }
     s
 }
@@ -685,15 +934,19 @@ fn build_test_binary(root: &Path) -> Result<PathBuf> {
 }
 
 /// One replay inside a private session; returns the record file's text.
+/// The UI languages the gate replays in. The owner's language is Russian; both must pass.
+pub const LANGS: &[&str] = &["en", "ru"];
+
 fn replay_once(
     root: &Path,
     bin: &Path,
     surface: &str,
+    lang: &str,
     seed: u64,
     scratch: &Path,
     tag: &str,
 ) -> Result<String> {
-    let out = scratch.join(format!("{surface}-{tag}.tsv"));
+    let out = scratch.join(format!("{surface}-{lang}-{tag}.tsv"));
     let status = Command::new(root.join("tests/harness/run-isolated.sh"))
         .current_dir(root)
         .arg("--")
@@ -701,17 +954,18 @@ fn replay_once(
         .args(["--exact", REPLAY_TEST, "--nocapture"])
         .env(
             "GORCA_PASSTHROUGH",
-            "GORCA_CUTOVER_SURFACE GORCA_CUTOVER_OUT GORCA_CUTOVER_SHUFFLE",
+            "GORCA_CUTOVER_SURFACE GORCA_CUTOVER_OUT GORCA_CUTOVER_SHUFFLE GORCA_CUTOVER_LANG",
         )
+        .env("GORCA_CUTOVER_LANG", lang)
         .env("GORCA_CUTOVER_SURFACE", surface)
         .env("GORCA_CUTOVER_OUT", &out)
         .env("GORCA_CUTOVER_SHUFFLE", seed.to_string())
         .status()
         .context("starting tests/harness/run-isolated.sh")?;
     if !status.success() {
-        bail!("replay `{tag}` failed ({status}) inside the private session");
+        bail!("replay `{lang}/{tag}` failed ({status}) inside the private session");
     }
-    std::fs::read_to_string(&out).with_context(|| format!("replay `{tag}` wrote no records"))
+    std::fs::read_to_string(&out).with_context(|| format!("replay `{lang}/{tag}` wrote no records"))
 }
 
 fn git(root: &Path, args: &[&str]) -> Option<String> {
@@ -764,14 +1018,15 @@ fn surface_of(name: &str) -> Result<&'static Surface> {
 
 fn write_report(
     root: &Path,
-    v: &Verdict,
+    vs: &[Verdict],
     meta: &[(String, String)],
     unclassified_tsv: &str,
 ) -> Result<PathBuf> {
     let dir = root.join(REPORT_DIR);
     std::fs::create_dir_all(&dir)?;
-    let path = report_path(&dir, &v.surface, v.date);
-    std::fs::write(&path, report(v, meta))?;
+    let first = vs.first().context("no verdict to report")?;
+    let path = report_path(&dir, &first.surface, first.date);
+    std::fs::write(&path, report(vs, meta))?;
     if !unclassified_tsv.is_empty() {
         std::fs::write(path.with_extension("unclassified.tsv"), unclassified_tsv)?;
     }
@@ -808,6 +1063,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<bool> {
     if !surface.ready {
         let v = Verdict {
             surface: surface.name.to_owned(),
+            lang: "en".to_owned(),
             date: today,
             total: Tally::default(),
             per_family: BTreeMap::new(),
@@ -816,11 +1072,13 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<bool> {
             nondeterminism: Vec::new(),
             intended: BTreeMap::new(),
             unclassified: BTreeMap::new(),
+            drops: Vec::new(),
             not_ready: true,
             run_hash: 0,
         };
-        let p = write_report(&root, &v, &meta, "")?;
-        print!("{}", table(&v));
+        let vs = [v];
+        let p = write_report(&root, &vs, &meta, "")?;
+        print!("{}", table(&vs));
         eprintln!(
             "cutover {}: FAIL, no gorca-present path yet ({}); report {}",
             surface.name,
@@ -835,47 +1093,51 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<bool> {
     let bin = build_test_binary(&root)?;
     let scratch = std::env::temp_dir().join(format!("gorca-cutover-{}", std::process::id()));
     std::fs::create_dir_all(&scratch)?;
-    let a = replay_once(&root, &bin, surface.name, 0, &scratch, "a")?;
-    let b = replay_once(&root, &bin, surface.name, 0, &scratch, "b")?;
-    let c = replay_once(&root, &bin, surface.name, seed, &scratch, "shuffled")?;
-    let _ = std::fs::remove_dir_all(&scratch);
-
-    let mut nondeterminism = Vec::new();
-    for l in first_differences(&a, &b, 10) {
-        nondeterminism.push(format!("two plain runs: {l}"));
-    }
-    for l in first_differences(&a, &c, 10) {
-        nondeterminism.push(format!("shuffled arrival (seed {seed:#x}): {l}"));
-    }
-    let recs = parse_records(&a)?;
-    let v = judge(
-        surface.name,
-        &recs,
-        &rows,
-        &specs,
-        nondeterminism,
-        today,
-        fnv64(a.as_bytes()),
-    );
+    let mut verdicts = Vec::new();
     let mut bad = String::new();
-    for r in &recs {
-        if matches!(classify(r, &rows, today), Class::Unclassified(_)) {
-            let _ = writeln!(
-                bad,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                r.corpus, r.node, r.case, r.surface, r.outcome, r.legacy, r.new
-            );
+    for lang in LANGS {
+        let a = replay_once(&root, &bin, surface.name, lang, 0, &scratch, "a")?;
+        let b = replay_once(&root, &bin, surface.name, lang, 0, &scratch, "b")?;
+        let c = replay_once(&root, &bin, surface.name, lang, seed, &scratch, "shuffled")?;
+        let mut nondeterminism = Vec::new();
+        for l in first_differences(&a, &b, 10) {
+            nondeterminism.push(format!("two plain runs: {l}"));
+        }
+        for l in first_differences(&a, &c, 10) {
+            nondeterminism.push(format!("shuffled arrival (seed {seed:#x}): {l}"));
+        }
+        let recs = parse_records(&a)?;
+        verdicts.push(judge(
+            surface.name,
+            lang,
+            &recs,
+            &rows,
+            &specs,
+            nondeterminism,
+            today,
+            fnv64(a.as_bytes()),
+        ));
+        for r in &recs {
+            if matches!(classify(r, &rows, today), Class::Unclassified(_)) {
+                let _ = writeln!(
+                    bad,
+                    "{lang}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    r.corpus, r.node, r.case, r.surface, r.outcome, r.legacy, r.new, r.witness
+                );
+            }
         }
     }
-    let p = write_report(&root, &v, &meta, &bad)?;
-    print!("{}", table(&v));
+    let _ = std::fs::remove_dir_all(&scratch);
+    let p = write_report(&root, &verdicts, &meta, &bad)?;
+    print!("{}", table(&verdicts));
+    let pass = all_pass(&verdicts);
     println!(
         "cutover {}: {} (report {})",
         surface.name,
-        if v.pass() { "PASS" } else { "FAIL" },
+        if pass { "PASS" } else { "FAIL" },
         p.display()
     );
-    Ok(v.pass())
+    Ok(pass)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -997,6 +1259,21 @@ mod tests {
             deviation: dev.to_owned(),
             legacy: "Text:Save | Role:button".to_owned(),
             new: "Text:Save | Role:button".to_owned(),
+            witness: String::new(),
+        }
+    }
+
+    fn dropped(family: &str, reason: &str, n: u64) -> Rec {
+        Rec {
+            corpus: format!("{family}/page"),
+            node: 0,
+            case: "focus".to_owned(),
+            surface: "focus".to_owned(),
+            outcome: "dropped".to_owned(),
+            deviation: reason.to_owned(),
+            legacy: n.to_string(),
+            new: "example".to_owned(),
+            witness: String::new(),
         }
     }
 
@@ -1081,11 +1358,14 @@ mod tests {
 
     #[test]
     fn records_round_trip_and_reject_bad_lines() {
-        let t = "gtk4/controls\t7\tfocus\tfocus\tequal\t\tText:a\tText:a\n";
+        let t = "gtk4/controls\t7\tfocus\tfocus\tequal\t\tText:a\tText:a\t\n";
         let r = parse_records(t).expect("parses");
         assert_eq!((r[0].node, r[0].family()), (7, "gtk4"));
         assert!(parse_records("a\tb\n").is_err());
-        assert!(parse_records("c\tx\tfocus\tfocus\tequal\t\t\t\n").is_err());
+        assert!(parse_records("c\tx\tfocus\tfocus\tequal\t\t\t\t\n").is_err());
+        // The 8-field format of the old replay is refused: a replay without the witness column
+        // must not be judged as if it had passed the model-fact check.
+        assert!(parse_records("gtk4/c\t7\tfocus\tfocus\tequal\t\tText:a\tText:a\n").is_err());
     }
 
     #[test]
@@ -1117,7 +1397,14 @@ mod tests {
         let src = std::fs::read_to_string(repo_root().join(CORPORA)).expect("manifest");
         let specs = parse_manifest(&src).expect("parses");
         for want in [
-            "gtk3", "gtk4", "firefox", "chromium", "electron", "telegram",
+            "gtk3",
+            "gtk4",
+            "firefox",
+            "chromium",
+            "electron",
+            "telegram",
+            "gnome-shell",
+            "vte",
         ] {
             assert!(specs.iter().any(|s| s.name == want), "family {want}");
         }
@@ -1130,21 +1417,25 @@ mod tests {
                 name: "gtk4".into(),
                 waived_until: None,
                 waiver: String::new(),
+                no_change: Vec::new(),
             },
             FamilySpec {
                 name: "telegram".into(),
                 waived_until: Some(Date(2026, 11, 7)),
                 waiver: "no fixture".into(),
+                no_change: Vec::new(),
             },
             FamilySpec {
                 name: "electron".into(),
                 waived_until: Some(Date(2026, 10, 1)),
                 waiver: "stale".into(),
+                no_change: Vec::new(),
             },
             FamilySpec {
                 name: "gtk3".into(),
                 waived_until: None,
                 waiver: String::new(),
+                no_change: Vec::new(),
             },
         ];
         let recs = vec![rec("equal", "", "focus")];
@@ -1173,13 +1464,18 @@ mod tests {
         );
     }
 
-    fn verdict(recs: &[Rec], nondet: Vec<String>) -> Verdict {
+    fn verdict_in(lang: &str, recs: &[Rec], nondet: Vec<String>) -> Verdict {
         let specs = vec![FamilySpec {
             name: "gtk4".into(),
             waived_until: None,
             waiver: String::new(),
+            no_change: vec![("slider".into(), "the engine does not republish it".into())],
         }];
-        judge("focus", recs, &[good()], &specs, nondet, TODAY, 1)
+        judge("focus", lang, recs, &[good()], &specs, nondet, TODAY, 1)
+    }
+
+    fn verdict(recs: &[Rec], nondet: Vec<String>) -> Verdict {
+        verdict_in("en", recs, nondet)
     }
 
     #[test]
@@ -1193,7 +1489,11 @@ mod tests {
         );
         assert!(v.pass());
         assert_eq!((v.total.nodes, v.total.equal, v.total.intended), (2, 1, 1));
-        assert!(table(&v).contains("| focus | 1/1 families | 2 | 1 | 1 | 0 | yes |"));
+        assert!(
+            table(&[v]).contains("| focus | en | 1/1 families | 2 | 1 | 1 | 0 | 0 | 0 | yes |"),
+            "{}",
+            table(&[verdict(&[rec("equal", "", "focus")], Vec::new())])
+        );
     }
 
     #[test]
@@ -1221,7 +1521,7 @@ mod tests {
         b.legacy = "Text:Elsewhere | Role:button".to_owned();
         b.new = "Text:Again | Role:link".to_owned();
         let v = verdict(&[a, b], Vec::new());
-        let text = report(&v, &[("rev".into(), "abc".into())]);
+        let text = report(&[v], &[("rev".into(), "abc".into())]);
         assert!(text.contains("result: FAIL"));
         assert!(text.contains("rev: abc"));
         assert!(
@@ -1233,6 +1533,150 @@ mod tests {
             (m.surface.as_str(), m.pass, m.rev.as_str()),
             ("focus", false, "abc")
         );
+    }
+
+    #[test]
+    fn a_row_that_rests_on_a_contradicted_model_fact_is_not_intended() {
+        // The row exists, is dated, tagged and reasoned, and the output differs exactly as the row
+        // says: without the witness it is INTENDED.
+        let mut r = rec("allowed", "role-from-model", "focus");
+        assert!(matches!(classify(&r, &[good()], TODAY), Class::Intended(_)));
+        // With a witness (the source record contradicts the fused fact the predicate read) the same
+        // record is a model defect, and the gate fails on it.
+        r.witness = "select-not-applicable: the source record says selectable".to_owned();
+        match classify(&r, &[good()], TODAY) {
+            Class::Unclassified(why) => {
+                assert!(why.contains("rests on a fused model fact"), "{why}");
+                assert!(why.contains("source record says selectable"), "{why}");
+            }
+            other => panic!("expected a failure, got {other:?}"),
+        }
+        let v = verdict(&[rec("equal", "", "focus"), r], Vec::new());
+        assert!(!v.pass(), "a row cannot justify its own regression");
+        assert_eq!(v.total.unclassified, 1);
+        assert_eq!(v.total.intended, 0);
+    }
+
+    #[test]
+    fn every_dropped_node_is_counted_and_an_unexplained_reason_fails_the_gate() {
+        let mut recs = vec![rec("equal", "", "focus")];
+        recs.push(dropped("gtk4", "trigger-button", 3));
+        recs.push(dropped("gtk4", "node-added", 2));
+        let v = verdict(&recs, Vec::new());
+        assert!(v.pass(), "explained drops do not fail: {:?}", v.drops);
+        assert_eq!(v.dropped(), 5);
+        assert_eq!(v.unexplained_drops(), 0);
+        assert_eq!(
+            v.total.nodes, 1,
+            "drops are not compared nodes and are not counted as equal"
+        );
+        let text = report(&[v], &[]);
+        assert!(text.contains("| gtk4 | trigger-button | 3 |"), "{text}");
+        assert!(text.contains("total dropped: 5; unexplained: 0"), "{text}");
+        // A reason nobody explained, and the two the replay raises for broken corpora.
+        for reason in [
+            "mystery",
+            "empty-corpus",
+            "page-unparsable",
+            "no-fused-entry",
+        ] {
+            let mut recs = vec![rec("equal", "", "focus")];
+            recs.push(dropped("gtk4", reason, 1));
+            let v = verdict(&recs, Vec::new());
+            assert!(!v.pass(), "unexplained drop `{reason}` must fail");
+            assert_eq!(v.unexplained_drops(), 1);
+            let text = report(&[v], &[]);
+            assert!(text.contains("UNEXPLAINED"), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_real_case_without_a_change_is_explained_only_by_the_manifest() {
+        let mut listed = dropped("gtk4", "case-without-change", 1);
+        listed.corpus = "gtk4/change:slider".to_owned();
+        listed.case = "real-slider".to_owned();
+        let mut unlisted = listed.clone();
+        unlisted.corpus = "gtk4/change:spin".to_owned();
+        unlisted.case = "real-spin".to_owned();
+        let ok = verdict(&[rec("equal", "", "focus"), listed], Vec::new());
+        assert!(ok.pass(), "{:?}", ok.drops);
+        assert!(
+            ok.drops[0]
+                .explanation
+                .as_deref()
+                .unwrap()
+                .contains("known")
+        );
+        let bad = verdict(&[rec("equal", "", "focus"), unlisted], Vec::new());
+        assert!(!bad.pass());
+        assert_eq!(bad.unexplained_drops(), 1);
+    }
+
+    #[test]
+    fn dropped_records_do_not_count_as_corpus_coverage() {
+        // A family whose every page was dropped has nothing compared: it is not covered.
+        let specs = vec![FamilySpec {
+            name: "vte".into(),
+            waived_until: None,
+            waiver: String::new(),
+            no_change: Vec::new(),
+        }];
+        let c = coverage(&specs, &[dropped("vte", "empty-corpus", 1)], TODAY);
+        assert_eq!(c[0].1, Coverage::Missing);
+    }
+
+    #[test]
+    fn the_gate_passes_only_when_every_language_passes() {
+        let ok = verdict_in("en", &[rec("equal", "", "focus")], Vec::new());
+        let ru_bad = verdict_in("ru", &[rec("different", "", "focus")], Vec::new());
+        assert!(ok.pass() && !ru_bad.pass());
+        assert!(!all_pass(&[ok.clone(), ru_bad.clone()]));
+        assert!(all_pass(&[ok.clone(), ok.clone()]));
+        assert!(!all_pass(&[]), "no verdict is no evidence");
+        let text = report(&[ok, ru_bad], &[("rev".into(), "abc".into())]);
+        assert!(text.contains("result: FAIL"), "{text}");
+        assert!(text.contains("languages: en, ru"), "{text}");
+        assert!(text.contains("## Language: en (PASS)"), "{text}");
+        assert!(text.contains("## Language: ru (FAIL)"), "{text}");
+        let m = parse_report("x.md", &text).expect("front matter");
+        assert!(!m.pass);
+    }
+
+    #[test]
+    fn a_no_change_entry_needs_a_reason() {
+        let ok = "[[family]]\nname = \"x\"\n[[family.no_change]]\ncase = \"slider\"\nreason = \"engine\"\n";
+        let specs = parse_manifest(ok).expect("parses");
+        assert_eq!(specs[0].no_change, vec![("slider".into(), "engine".into())]);
+        let bad = "[[family]]\nname = \"x\"\n[[family.no_change]]\ncase = \"slider\"\n";
+        assert!(parse_manifest(bad).is_err());
+    }
+
+    #[test]
+    fn every_drop_reason_the_replay_raises_is_either_explained_here_or_meant_to_fail() {
+        // The replay's reason codes (cutover_gate_tests.rs). The explained set is closed: adding
+        // a reason there without explaining it here makes the gate fail, on purpose.
+        let src = std::fs::read_to_string(
+            repo_root().join("crates/gorca-connector-atspi/src/cutover_gate_tests.rs"),
+        )
+        .expect("replay source");
+        for explained in DROP_REASONS.iter().map(|(r, _)| *r) {
+            assert!(
+                src.contains(&format!("\"{explained}\"")),
+                "`{explained}` is explained but the replay never raises it"
+            );
+        }
+        for failing in [
+            "page-unparsable",
+            "empty-corpus",
+            "no-fused-entry",
+            "case-without-change",
+        ] {
+            assert!(src.contains(&format!("\"{failing}\"")), "{failing}");
+            assert!(
+                drop_explanation(failing).is_none(),
+                "{failing} must stay unexplained"
+            );
+        }
     }
 
     #[test]

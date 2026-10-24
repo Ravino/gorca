@@ -318,24 +318,27 @@ fn model_fact_witness(
     fired: &[&'static str],
     ctx: &DiffCtx<'_>,
     rec: Option<&SrcRecord>,
+    legacy_states: StateSet,
     meta: &NodeMeta,
 ) -> String {
     let change = ctx.surface.starts_with("change");
     let mut why: Vec<String> = Vec::new();
     for &id in fired {
         let w = match id {
-            "select-not-applicable" => rec
-                .filter(|r| {
-                    ctx.not_selectable
-                        && r.known.has(Group::Select)
-                        && r.sem.select != Select::NotSelectable
-                })
-                .map(|r| {
+            // The engine's own SELECTABLE state is what the legacy presenter reads; a source record
+            // that says selectable says the same. Either contradicts "cannot be selected".
+            "select-not-applicable" => {
+                let source = rec.filter(|r| {
+                    r.known.has(Group::Select) && r.sem.select != Select::NotSelectable
+                });
+                let state = legacy_states.contains(StateSet::SELECTABLE);
+                (ctx.not_selectable && (state || source.is_some())).then(|| {
                     format!(
-                        "the source record says selectable ({:?}), the fused entry says it cannot be selected",
-                        r.sem.select
+                        "the engine marks the node selectable (state {state}, source record {:?}), the fused entry says it cannot be selected",
+                        source.map(|r| r.sem.select)
                     )
-                }),
+                })
+            }
             // Availability: the independent table of gorca-sem-atspi lists the roles a disabled
             // state is meaningful on. The fused profile has its own copy; a role the source table
             // disables and the fused entry calls "not applicable" is the defect, not a deviation.
@@ -347,11 +350,15 @@ fn model_fact_witness(
                         r.sem.role
                     )
                 }),
+            // An ARIA switch is exported as a toggle button too (with the checkable state); the
+            // model's Switch role is the right reading there. A node the model calls a plain
+            // button while the engine calls it a toggle button is the contradiction.
             "pressed-without-toggle" => (change
                 && ctx.not_toggle
+                && ctx.role == SemRole::Button
                 && meta.raw_role == RAW_TOGGLE_BUTTON)
                 .then(|| {
-                    "the engine role is a toggle button, the fused entry says it has no pressed state"
+                    "the engine role is a toggle button, the fused entry is a button with no pressed state"
                         .to_owned()
                 }),
             "toggle-state-word" => (ctx.toggle_button && meta.raw_role != RAW_TOGGLE_BUTTON)
@@ -482,7 +489,7 @@ fn focus_records(family: &Family, run: &Run, dev: &Deviations, out: &mut Vec<Rec
             let (d, fired) = diff_report(&legacy, &tokens, dev, dctx);
             let (outcome, deviation) = classify(&d, legacy.is_empty(), tokens.is_empty());
             let witness = if outcome == "allowed" {
-                model_fact_witness(&fired, &dctx, s.sem.rec.as_deref(), meta)
+                model_fact_witness(&fired, &dctx, s.sem.rec.as_deref(), s.states, meta)
             } else {
                 String::new()
             };
@@ -636,13 +643,18 @@ const MUTATIONS: &[(&str, Mutation)] = &[
         true
     }),
     // A value change: the reading of a slider, spin button or progress bar moves to the middle of
-    // its range (or one step when the range is unknown).
+    // its range (or one step when the range is unknown). A node with an `aria-valuetext` has a
+    // value text that does not follow the number, so a lone number flip would be incoherent there:
+    // the recorded real cases cover those.
     ("value", |r| {
+        if r.sem_attrs.iter().any(|(k, _)| &**k == "valuetext") {
+            return false;
+        }
         let Some(crate::decode::RawValue::Number { current, min, max }) = r.value.as_mut() else {
             return false;
         };
         let to = if min.is_finite() && max.is_finite() && max > min {
-            (*min + *max) / 2.0
+            f64::midpoint(*min, *max)
         } else {
             *current + 1.0
         };
@@ -695,7 +707,7 @@ fn compare_change(
     let (d, fired) = diff_report(&legacy, &tokens, dev, dctx);
     let (outcome, deviation) = classify(&d, legacy.is_empty(), tokens.is_empty());
     let witness = if outcome == "allowed" {
-        model_fact_witness(&fired, &dctx, n.sem.rec.as_deref(), meta)
+        model_fact_witness(&fired, &dctx, n.sem.rec.as_deref(), n.states, meta)
     } else {
         String::new()
     };
@@ -999,10 +1011,24 @@ fn emit(surface: &str, seed: u64, lang: gorca_present::Lang) -> Option<String> {
     }
     recs.sort_by(|a, b| {
         (
-            &a.corpus, a.node, &a.case, a.surface, a.outcome, a.deviation, &a.legacy, &a.new,
+            &a.corpus,
+            a.node,
+            &a.case,
+            a.surface,
+            a.outcome,
+            a.deviation,
+            &a.legacy,
+            &a.new,
         )
             .cmp(&(
-                &b.corpus, b.node, &b.case, b.surface, b.outcome, b.deviation, &b.legacy, &b.new,
+                &b.corpus,
+                b.node,
+                &b.case,
+                b.surface,
+                b.outcome,
+                b.deviation,
+                &b.legacy,
+                &b.new,
             ))
     });
     let mut text = String::new();
@@ -1082,7 +1108,7 @@ fn every_new_family_has_recorded_pages_and_every_page_compares_something() {
         assert!(
             text.lines()
                 .any(|l| l.starts_with(&format!("{}/", family.dir))
-                    && !l.split('\t').nth(4).is_some_and(|o| o == "dropped")),
+                    && l.split('\t').nth(4).is_none_or(|o| o != "dropped")),
             "family {} compared no node",
             family.dir
         );
@@ -1147,13 +1173,25 @@ mod witness_tests {
             ..ctx("change-web")
         };
         let r = rec(SemRole::MenuItem, Select::On);
-        let w = model_fact_witness(&["select-not-applicable"], &c, Some(&r), &meta(35, false));
+        let w = model_fact_witness(
+            &["select-not-applicable"],
+            &c,
+            Some(&r),
+            StateSet::empty(),
+            &meta(35, false),
+        );
         assert!(w.contains("select-not-applicable"), "{w}");
         // The source agrees that it cannot be selected: the row stands on shared evidence.
         let r2 = rec(SemRole::Button, Select::NotSelectable);
         assert!(
-            model_fact_witness(&["select-not-applicable"], &c, Some(&r2), &meta(43, false))
-                .is_empty()
+            model_fact_witness(
+                &["select-not-applicable"],
+                &c,
+                Some(&r2),
+                StateSet::empty(),
+                &meta(43, false)
+            )
+            .is_empty()
         );
     }
 
@@ -1165,14 +1203,26 @@ mod witness_tests {
         };
         let tree = rec(SemRole::Tree, Select::NotSelectable);
         assert!(
-            !model_fact_witness(&["unavailable-static"], &c, Some(&tree), &meta(65, false))
-                .is_empty(),
+            !model_fact_witness(
+                &["unavailable-static"],
+                &c,
+                Some(&tree),
+                StateSet::empty(),
+                &meta(65, false)
+            )
+            .is_empty(),
             "a tree can be disabled"
         );
         let doc = rec(SemRole::Document, Select::NotSelectable);
         assert!(
-            model_fact_witness(&["unavailable-static"], &c, Some(&doc), &meta(95, false))
-                .is_empty(),
+            model_fact_witness(
+                &["unavailable-static"],
+                &c,
+                Some(&doc),
+                StateSet::empty(),
+                &meta(95, false)
+            )
+            .is_empty(),
             "a document cannot"
         );
         // The focus row, gated by role, is held to the same table.
@@ -1182,8 +1232,14 @@ mod witness_tests {
             ..ctx("focus-web")
         };
         assert!(
-            !model_fact_witness(&["unavailable-static"], &f, Some(&group), &meta(87, false))
-                .is_empty(),
+            !model_fact_witness(
+                &["unavailable-static"],
+                &f,
+                Some(&group),
+                StateSet::empty(),
+                &meta(87, false)
+            )
+            .is_empty(),
             "a disabled fieldset is a group that can be disabled"
         );
     }
@@ -1192,6 +1248,7 @@ mod witness_tests {
     fn toggle_facts_are_checked_against_the_engine_role() {
         let c = DiffCtx {
             not_toggle: true,
+            role: SemRole::Button,
             ..ctx("change")
         };
         let r = SrcRecord {
@@ -1203,13 +1260,40 @@ mod witness_tests {
             ..SrcRecord::default()
         };
         assert!(
-            !model_fact_witness(&["pressed-without-toggle"], &c, Some(&r), &meta(62, false))
-                .is_empty(),
-            "the engine says toggle button"
+            !model_fact_witness(
+                &["pressed-without-toggle"],
+                &c,
+                Some(&r),
+                StateSet::empty(),
+                &meta(62, false)
+            )
+            .is_empty(),
+            "the engine says toggle button, the model a plain button"
+        );
+        // An ARIA switch is exported as a toggle button; the model's Switch is the right reading.
+        let sw = DiffCtx {
+            role: SemRole::Switch,
+            ..c
+        };
+        assert!(
+            model_fact_witness(
+                &["pressed-without-toggle"],
+                &sw,
+                Some(&r),
+                StateSet::empty(),
+                &meta(62, false)
+            )
+            .is_empty()
         );
         assert!(
-            model_fact_witness(&["pressed-without-toggle"], &c, Some(&r), &meta(4, false))
-                .is_empty(),
+            model_fact_witness(
+                &["pressed-without-toggle"],
+                &c,
+                Some(&r),
+                StateSet::empty(),
+                &meta(4, false)
+            )
+            .is_empty(),
             "a check box flipped to pressed is not a toggle"
         );
         let t = DiffCtx {
@@ -1217,10 +1301,24 @@ mod witness_tests {
             ..ctx("change")
         };
         assert!(
-            !model_fact_witness(&["toggle-state-word"], &t, Some(&r), &meta(43, false)).is_empty()
+            !model_fact_witness(
+                &["toggle-state-word"],
+                &t,
+                Some(&r),
+                StateSet::empty(),
+                &meta(43, false)
+            )
+            .is_empty()
         );
         assert!(
-            model_fact_witness(&["toggle-state-word"], &t, Some(&r), &meta(62, false)).is_empty()
+            model_fact_witness(
+                &["toggle-state-word"],
+                &t,
+                Some(&r),
+                StateSet::empty(),
+                &meta(62, false)
+            )
+            .is_empty()
         );
     }
 
@@ -1230,10 +1328,37 @@ mod witness_tests {
             role: SemRole::Slider,
             ..ctx("focus-web")
         };
-        assert!(!model_fact_witness(&["value-from-attrs"], &c, None, &meta(51, true)).is_empty());
-        assert!(model_fact_witness(&["value-from-attrs"], &c, None, &meta(51, false)).is_empty());
+        assert!(
+            !model_fact_witness(
+                &["value-from-attrs"],
+                &c,
+                None,
+                StateSet::empty(),
+                &meta(51, true)
+            )
+            .is_empty()
+        );
+        assert!(
+            model_fact_witness(
+                &["value-from-attrs"],
+                &c,
+                None,
+                StateSet::empty(),
+                &meta(51, false)
+            )
+            .is_empty()
+        );
         // A row the check knows nothing about is not touched.
-        assert!(model_fact_witness(&["role-from-model"], &c, None, &meta(51, true)).is_empty());
+        assert!(
+            model_fact_witness(
+                &["role-from-model"],
+                &c,
+                None,
+                StateSet::empty(),
+                &meta(51, true)
+            )
+            .is_empty()
+        );
     }
 
     #[test]
@@ -1252,5 +1377,72 @@ mod witness_tests {
         assert_eq!(pairs, vec![(0, 0), (1, 2)]);
         assert_eq!(removed, vec![2]);
         assert_eq!(added, vec![1]);
+    }
+
+    /// The defect the judge found (reports `change-2026-10-24-3`): the model called the options of
+    /// a `<select>` "not selectable", and `select-not-applicable` accepted every selection change
+    /// on them as intended. Rebuilt here on the real Firefox corpus by forcing the fused fact: the
+    /// replay must mark the record, so the gate refuses it however the row reads. This failed
+    /// (the record carried no witness) before the check existed.
+    #[test]
+    fn the_select_defect_is_caught_on_the_real_corpus_however_the_row_reads() {
+        let _lang = gorca_i18n::scoped(gorca_present::Lang::En);
+        let row = "[[deviation]]\nid = \"select-not-applicable\"\nsurface = \"change-web\"\nreason = \"r\"\nuntil = \"2099-01-01\"\n";
+        let dev = Deviations::parse(row).expect("row parses");
+        let run = Run {
+            lang: gorca_present::Lang::En,
+            seed: 0,
+        };
+        let tables = crate::sem_profile::tables_for("", "app", WebEngine::Gecko);
+        let (base, (metas, _)) = (
+            page("firefox", "disabled").expect("page"),
+            page_meta("firefox", "disabled").expect("meta"),
+        );
+        let old = fuse(tables, "t/old", &base, 0);
+        // The option nodes: AT-SPI menu items (role 35) of the select combo box, selectable.
+        let mut hit = None;
+        for (i, m) in metas.iter().enumerate() {
+            if m.raw_role != 35 {
+                continue;
+            }
+            let mutated = page_with("firefox", "disabled", &|raw| {
+                if has(&raw.state_words, st::SELECTABLE) {
+                    let on = has(&raw.state_words, st::SELECTED);
+                    put(&mut raw.state_words, st::SELECTED, !on);
+                }
+            })
+            .expect("mutated page");
+            let new = fuse(tables, "t/new", &mutated, 0);
+            let force = |s: &Arc<NodeSnapshot>| {
+                let mut n = (**s).clone();
+                let mut e = (**n.sem.entry.as_ref().expect("entry")).clone();
+                e.sem.select = Select::NotSelectable;
+                n.sem.entry = Some(Arc::new(e));
+                Arc::new(n)
+            };
+            let mut out = Vec::new();
+            compare_change(
+                &force(&old[i]),
+                &force(&new[i]),
+                m,
+                "firefox/disabled",
+                "select",
+                true,
+                &run,
+                &dev,
+                &mut out,
+            );
+            if out[0].outcome == "allowed" {
+                hit = Some(out.remove(0));
+                break;
+            }
+        }
+        let rec = hit.expect("a selection change on an option is allowed by the row");
+        assert!(
+            rec.witness.contains("select-not-applicable")
+                && rec.witness.contains("engine marks the node selectable"),
+            "the contradicted fact must be named: {:?}",
+            rec.witness
+        );
     }
 }
