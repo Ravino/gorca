@@ -77,6 +77,13 @@ pub struct NodeView<'a> {
     pub meta: Option<&'a NodeMeta>,
 }
 
+impl NodeView<'_> {
+    /// The fused semantics the document actor attached to the node (ADR-0022 SM-8).
+    pub fn sem(&self) -> Option<std::sync::Arc<gorca_model::SemEntry>> {
+        self.meta?.sem.clone()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct WebDoc {
     seed: u64,

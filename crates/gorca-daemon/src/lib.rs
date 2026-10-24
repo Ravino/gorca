@@ -381,7 +381,6 @@ async fn run_inner(
     let mut core = Core::new(CoreConfig {
         shutdown_grace: SHUTDOWN_GRACE,
         lazy_attrs: opts.lazy_attrs,
-        present_shadow: opts.present_shadow,
         ..CoreConfig::default()
     });
     // A caller-supplied factory (tests of the shared fill code) wins over the flag.

@@ -131,9 +131,6 @@ pub(crate) struct NodeMeta {
     pub path_key: String,
     /// The engine-exported HTML id or the GTK fixture id.
     pub fixture_id: Option<String>,
-    pub raw_role: u32,
-    /// The node carries a numeric `Value` reading.
-    pub has_value: bool,
 }
 
 /// Per-node metadata of a recorded page, aligned with [`page`] (same lines, same order), and the
@@ -148,10 +145,10 @@ pub(crate) fn page_meta(engine: &str, name: &str) -> Option<(Vec<NodeMeta>, Vec<
             continue;
         }
         let i = v.get("i").and_then(serde_json::Value::as_u64).unwrap_or(0);
-        let Some(role) = v.get("role").and_then(serde_json::Value::as_u64) else {
+        if v.get("role").and_then(serde_json::Value::as_u64).is_none() {
             unreadable.push(i);
             continue;
-        };
+        }
         let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("");
         metas.push(NodeMeta {
             path_key: format!("{}|{}", s("bus_name"), s("path")),
@@ -159,11 +156,6 @@ pub(crate) fn page_meta(engine: &str, name: &str) -> Option<(Vec<NodeMeta>, Vec<
                 .get("fixture_id")
                 .and_then(|x| x.as_str())
                 .map(str::to_owned),
-            raw_role: u32::try_from(role).unwrap_or(0),
-            has_value: v
-                .get("value")
-                .and_then(|x| x.get("CurrentValue"))
-                .is_some_and(serde_json::Value::is_number),
         });
     }
     Some((metas, unreadable))

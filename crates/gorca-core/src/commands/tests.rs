@@ -37,24 +37,27 @@ fn key(n: u64) -> NodeKey {
 }
 
 fn snap(n: u64, role: Role, name: &str, parent: Option<u64>) -> Arc<NodeSnapshot> {
-    Arc::new(NodeSnapshot {
-        key: key(n),
-        role,
-        states: StateSet::empty(),
-        name: Some(Arc::from(name)),
-        description: None,
-        value: None,
-        parent: parent.map(key),
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
-        attrs: gorca_model::AttrMap::default(),
-        relations: gorca_model::Relations::default(),
-        bounds: None,
-        have: gorca_model::PropMask::PRESENT,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    })
+    Arc::new(
+        NodeSnapshot {
+            key: key(n),
+            role,
+            states: StateSet::empty(),
+            name: Some(Arc::from(name)),
+            description: None,
+            value: None,
+            parent: parent.map(key),
+            children: ChildList::Unknown,
+            interfaces: Ifaces::empty(),
+            attrs: gorca_model::AttrMap::default(),
+            relations: gorca_model::Relations::default(),
+            bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
+            fresh: Freshness::Fresh { at: Instant::now() },
+            sem: gorca_model::NodeSem::NONE,
+        }
+        .with_test_record(),
+    )
 }
 
 #[derive(Debug)]

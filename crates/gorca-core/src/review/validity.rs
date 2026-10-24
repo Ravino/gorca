@@ -161,6 +161,7 @@ mod tests {
             fresh: Freshness::Fresh { at: Instant::now() },
             sem: gorca_model::NodeSem::NONE,
         }
+        .with_test_record()
     }
 
     #[test]

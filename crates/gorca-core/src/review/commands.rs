@@ -704,8 +704,8 @@ impl Reader {
                 }
                 let id = self.utt_id();
                 let u = self
-                    .presenters
-                    .present(PresentContext::Focus, &v.snap, id, epoch);
+                    .build_focus(PresentContext::Focus, &v.snap, id, epoch, false)
+                    .utterance;
                 let mut u = u;
                 u.may_refine |= v.aged || !v.stale.is_empty();
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
@@ -1676,8 +1676,8 @@ impl Reader {
                 let id = self.utt_id();
                 let epoch = self.epoch.current();
                 let u = self
-                    .presenters
-                    .present(PresentContext::Focus, &v.snap, id, epoch);
+                    .build_focus(PresentContext::Focus, &v.snap, id, epoch, false)
+                    .utterance;
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
             }
             Lookup::Miss | Lookup::Gone => self.say(t(M::ReviewFocus), fx),

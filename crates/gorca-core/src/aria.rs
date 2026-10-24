@@ -122,11 +122,6 @@ impl<'a> Node<'a> {
         self.attrs.iter().find(|(a, _)| *a == k).map(|(_, v)| &**v)
     }
 
-    /// Does the node come from web content? Both engines give every element a `tag`.
-    pub fn is_web(&self) -> bool {
-        self.attr(web_attrs::TAG).is_some()
-    }
-
     /// The first ARIA role token that has a word.
     pub fn kind(&self) -> Kind {
         self.attr(web_attrs::XML_ROLES)

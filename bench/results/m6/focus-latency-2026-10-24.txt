@@ -1,0 +1,31 @@
+# M-6: Reader::handle(FocusChanged) on a cache hit, new presenter against the legacy presenter
+date: 2026-10-24T04:16:14Z
+baseline: main e442fe7f (legacy presenter; the tag legacy/focus-last is cut from this tree)
+new: the cut-over tree, base 3cce41aa plus its working tree
+host: 16 CPUs, kernel 7.1.8+deb13-rt-amd64, release build, bench/m6/focus-latency.sh main 9
+bench: the ignored test m6_focus_latency, 20000 timed focus changes per round after 500 warm-up, legacy and new alternate
+gate: delta of the median p99 over the rounds <= 100000 ns (0.1 ms)
+
+governor: performance load: 7.00 7.93 8.08
+round 1 legacy: M6 n=20000 spoke=20500 p50_ns=480 p99_ns=708 p999_ns=753 max_ns=11968
+round 1 new:    M6 n=20000 spoke=20500 p50_ns=760 p99_ns=971 p999_ns=1040 max_ns=10532
+round 2 legacy: M6 n=20000 spoke=20500 p50_ns=479 p99_ns=662 p999_ns=716 max_ns=7203
+round 2 new:    M6 n=20000 spoke=20500 p50_ns=771 p99_ns=995 p999_ns=1049 max_ns=15074
+round 3 legacy: M6 n=20000 spoke=20500 p50_ns=485 p99_ns=663 p999_ns=716 max_ns=8213
+round 3 new:    M6 n=20000 spoke=20500 p50_ns=766 p99_ns=1024 p999_ns=1074 max_ns=9146
+round 4 legacy: M6 n=20000 spoke=20500 p50_ns=487 p99_ns=716 p999_ns=756 max_ns=8934
+round 4 new:    M6 n=20000 spoke=20500 p50_ns=769 p99_ns=999 p999_ns=1066 max_ns=14627
+round 5 legacy: M6 n=20000 spoke=20500 p50_ns=480 p99_ns=659 p999_ns=805 max_ns=6654
+round 5 new:    M6 n=20000 spoke=20500 p50_ns=761 p99_ns=959 p999_ns=1055 max_ns=11664
+round 6 legacy: M6 n=20000 spoke=20500 p50_ns=480 p99_ns=690 p999_ns=738 max_ns=17493
+round 6 new:    M6 n=20000 spoke=20500 p50_ns=781 p99_ns=1052 p999_ns=1133 max_ns=22475
+round 7 legacy: M6 n=20000 spoke=20500 p50_ns=483 p99_ns=690 p999_ns=736 max_ns=10080
+round 7 new:    M6 n=20000 spoke=20500 p50_ns=763 p99_ns=1012 p999_ns=1068 max_ns=8564
+round 8 legacy: M6 n=20000 spoke=20500 p50_ns=481 p99_ns=648 p999_ns=719 max_ns=7620
+round 8 new:    M6 n=20000 spoke=20500 p50_ns=763 p99_ns=1001 p999_ns=1052 max_ns=8356
+round 9 legacy: M6 n=20000 spoke=20500 p50_ns=486 p99_ns=707 p999_ns=812 max_ns=7505
+round 9 new:    M6 n=20000 spoke=20500 p50_ns=771 p99_ns=1017 p999_ns=1067 max_ns=18902
+median p99 legacy=690ns new=1001ns delta=311ns (gate <= 100000ns)
+M-6 PASS
+
+scope: the in-process cost of Reader::handle (mirror hit, presenter, effect list). The keypress-to-speech check of the same tree on a real Shell world is bench/results/e2e/p1-wired-cutover (functional: 21 steps, GTK4, Firefox, GNOME Shell). The tag legacy/focus-last did not exist yet; main is the same legacy code.

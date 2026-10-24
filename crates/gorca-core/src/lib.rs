@@ -94,8 +94,6 @@ pub use health::{
     SLOW_RECOVERY, SLOW_WINDOW,
 };
 pub use mode::{BaseMode, GatedGrabs, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, WebCursor};
-#[cfg(feature = "cutover-probe")]
-pub use present::cutover_probe_tests::legacy_change_tokens;
 pub use present::log_states as snapshot_state_names;
 pub use present::value_text;
 pub use present::{
@@ -105,9 +103,8 @@ pub use present::{
 };
 pub use present::{
     FOCUS_FIELDS, FOCUS_FIELDS_LAZY, NoLabels, NodeLabel, PresentContext, PresentJob, PresentKind,
-    PresentLog, PresentRecord, PresentSource, Presented, Presenter, PresenterRegistry, RAPID_FOCUS,
+    PresentLog, PresentRecord, PresentSource, Presented, PresenterRegistry, RAPID_FOCUS,
     REFINE_WINDOW, STORM_HOLD, SpeechIntent, focus_fields_for, focus_need, key_echo_text,
-    present_focus, present_selected_item,
 };
 pub use quick::{
     BATTERY_DEADLINE, BatteryState, HISTORY_CAP, PowerInfo, PowerSource, install_power_source,

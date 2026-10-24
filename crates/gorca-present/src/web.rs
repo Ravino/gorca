@@ -159,11 +159,17 @@ pub(crate) fn web_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> Pre
     let role = sem.role;
     let mut fields: SmallVec<[Field; 6]> = SmallVec::new();
 
-    let name = entry.name.as_ref().filter(|s| !s.is_empty());
-    if let Some(f) = crate::compose::name_field(entry, ctx, ROW_WEB_FOCUS) {
+    let name = entry
+        .name
+        .as_ref()
+        .filter(|s| !crate::compose::name_is_blank(Some(s.as_ref())));
+    let named = crate::compose::name_field(entry, ctx, ROW_WEB_FOCUS);
+    let name_from_description = named.from_description;
+    let has_name = named.field.is_some();
+    if let Some(f) = named.field {
         fields.push(f);
     }
-    if let Some(w) = role_word(role, sem.press, name.is_some()) {
+    if let Some(w) = role_word(role, sem.press, name.is_some() || has_name) {
         fields.push(word(FieldKind::ROLE, w, Group::Role));
     }
 
@@ -315,7 +321,7 @@ pub(crate) fn web_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> Pre
     if let Some(d) = sem.text.as_deref().and_then(|t| t.description.as_ref()) {
         let trimmed = d.trim();
         let repeat = name.is_some_and(|n| n.trim().eq_ignore_ascii_case(trimmed));
-        if !trimmed.is_empty() && !repeat {
+        if !trimmed.is_empty() && !repeat && !name_from_description {
             fields.push(Field::new(
                 FieldKind::DESCRIPTION,
                 Content::Text(Arc::clone(d)),

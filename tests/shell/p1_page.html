@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>P1 Page</title></head>
+<body>
+<main>
+<h1>P1 Page</h1>
+<p>
+  <label><input type="checkbox" id="sub"> Subscribe</label>
+</p>
+<p>
+  <button id="det" aria-expanded="false" aria-controls="more"
+          onclick="var e=this.getAttribute('aria-expanded')==='true';this.setAttribute('aria-expanded',e?'false':'true');document.getElementById('more').hidden=e;">Details</button>
+</p>
+<div id="more" hidden>More text</div>
+<p>
+  <label for="vol">Volume</label>
+  <input type="range" id="vol" min="0" max="100" step="10" value="50">
+</p>
+</main>
+</body>
+</html>

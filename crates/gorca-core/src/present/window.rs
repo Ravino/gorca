@@ -1220,28 +1220,31 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn snap(s: &Spec) -> Arc<NodeSnapshot> {
-        Arc::new(NodeSnapshot {
-            key: key(s.n),
-            role: s.role,
-            states: s.states,
-            name: (!s.name.is_empty()).then(|| Arc::from(s.name)),
-            description: None,
-            value: None,
-            parent: None,
-            children: if s.kids.is_empty() {
-                ChildList::Count(0)
-            } else {
-                ChildList::Known(s.kids.iter().map(|k| key(*k)).collect())
-            },
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        })
+        Arc::new(
+            NodeSnapshot {
+                key: key(s.n),
+                role: s.role,
+                states: s.states,
+                name: (!s.name.is_empty()).then(|| Arc::from(s.name)),
+                description: None,
+                value: None,
+                parent: None,
+                children: if s.kids.is_empty() {
+                    ChildList::Count(0)
+                } else {
+                    ChildList::Known(s.kids.iter().map(|k| key(*k)).collect())
+                },
+                interfaces: Ifaces::empty(),
+                attrs: gorca_model::AttrMap::default(),
+                relations: gorca_model::Relations::default(),
+                bounds: None,
+                have: PropMask::PRESENT,
+                confirmed_seq: 0,
+                fresh: Freshness::Fresh { at: Instant::now() },
+                sem: gorca_model::NodeSem::NONE,
+            }
+            .with_test_record(),
+        )
     }
 
     /// A map as a navigation source.

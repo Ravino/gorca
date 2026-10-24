@@ -16,6 +16,8 @@ gorca-i18n = { workspace = true }
 # `Segment` carries a message id and an origin id (ADR-0022 2.5, M22a-C1b): for tests and the
 # "why did it say that" trace. Off in release builds.
 seg-origin = []
+# Test support: a bare snapshot gets the source record a connector would have made (M22b1).
+testing = []
 
 [dev-dependencies]
 serde_json = "1"

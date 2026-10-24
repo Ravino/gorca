@@ -28,17 +28,15 @@
 //! `gorca-model`, `gorca-rt`, `atspi`, `zbus`.
 
 mod connector;
-#[cfg(test)]
-mod cutover_gate_tests;
 mod decode;
 mod doc_source;
 mod enablement;
 mod events;
 mod fetch;
 #[cfg(test)]
-mod legacy_agreement_tests;
+mod golden_tests;
 #[cfg(test)]
-mod present_replay_tests;
+mod legacy_agreement_tests;
 mod proc;
 mod role_map;
 mod sem_profile;

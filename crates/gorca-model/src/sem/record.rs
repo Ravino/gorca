@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use super::{GroupMask, Semantics};
+use super::{Group, GroupMask, ProvCode, SemEntry, Semantics};
 
 /// Which side decided the role.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -103,6 +103,27 @@ impl TagName {
     /// True when the node had no tag.
     pub fn is_empty(&self) -> bool {
         self.len == 0
+    }
+}
+
+impl SrcRecord {
+    /// The entry made at once from this record, with no fusion (PV-1, ADR-0022 section 8.3):
+    /// the record's values, its name, its `known` mask, every known group marked
+    /// [`ProvCode::Provisional`] and `sem_rev` 0. A total, local function of the record; the
+    /// first real fusion replaces it.
+    pub fn provisional_entry(&self) -> SemEntry {
+        let mut e = SemEntry {
+            sem: self.sem.clone(),
+            name: self.name.clone(),
+            known: self.known,
+            ..SemEntry::default()
+        };
+        for &g in Group::ALL {
+            if self.known.has(g) {
+                e.prov.set(g, ProvCode::Provisional);
+            }
+        }
+        e
     }
 }
 

@@ -423,7 +423,8 @@ fn parity_of_page(
         };
         let snap_name = (!r.name.is_empty()).then(|| Arc::<str>::from(r.name.as_str()));
         let snap = fake_snapshot(role, snap_name.clone());
-        let fused = crate::browse::commands::fused_name(&snap, &entry);
+        let _ = &snap;
+        let fused = entry.name.clone();
         // The list marker.
         if matches!(role, Role::ListItem | Role::TreeItem)
             && let Some(n) = snap_name.as_deref()
@@ -672,8 +673,11 @@ fn synthetic(
         .expect("the control is in the mirror");
     let old = legacy_subtree_label(doc, id);
     let entry = stage.sem(SrcNodeId(2)).expect("fused");
-    let new = crate::browse::commands::fused_name(&fake_snapshot(legacy_role, None), &entry)
-        .map(|n| n.to_string());
+    let _ = legacy_role;
+    let new = entry
+        .name
+        .as_deref()
+        .and_then(gorca_present::one_line_label);
     (old, new)
 }
 
@@ -849,10 +853,7 @@ fn the_signal_message_row_is_named_from_author_text_and_time_not_from_its_button
         Some(gorca_model::sem::ProvCode::Derived)
     );
     // What the Reader speaks: the engine's shallow name gives way to the derived one.
-    let spoken = crate::browse::commands::fused_name(
-        &fake_snapshot(Role::Row, Some(Arc::from("React to message"))),
-        &e,
-    );
+    let spoken = e.name.clone();
     assert_eq!(
         spoken.as_deref(),
         Some("Contact 0 Message number 398 body text 10:38 React to message")

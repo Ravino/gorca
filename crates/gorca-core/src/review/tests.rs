@@ -54,28 +54,31 @@ fn node(
     if r.is_some() {
         have |= PropMask::BOUNDS;
     }
-    Arc::new(NodeSnapshot {
-        key: key(n),
-        role,
-        states: if matches!(role, Role::Button | Role::TextEntry) {
-            StateSet::SHOWING | StateSet::VISIBLE | StateSet::FOCUSABLE
-        } else {
-            StateSet::SHOWING | StateSet::VISIBLE
-        },
-        name: (!name.is_empty()).then(|| Arc::from(name)),
-        description: None,
-        value: None,
-        parent: parent.map(key),
-        children: ChildList::Known(kids.iter().map(|k| key(*k)).collect()),
-        interfaces: Ifaces::empty(),
-        attrs: AttrMap::default(),
-        relations: Relations::default(),
-        bounds: r,
-        have,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    })
+    Arc::new(
+        NodeSnapshot {
+            key: key(n),
+            role,
+            states: if matches!(role, Role::Button | Role::TextEntry) {
+                StateSet::SHOWING | StateSet::VISIBLE | StateSet::FOCUSABLE
+            } else {
+                StateSet::SHOWING | StateSet::VISIBLE
+            },
+            name: (!name.is_empty()).then(|| Arc::from(name)),
+            description: None,
+            value: None,
+            parent: parent.map(key),
+            children: ChildList::Known(kids.iter().map(|k| key(*k)).collect()),
+            interfaces: Ifaces::empty(),
+            attrs: AttrMap::default(),
+            relations: Relations::default(),
+            bounds: r,
+            have,
+            confirmed_seq: 0,
+            fresh: Freshness::Fresh { at: Instant::now() },
+            sem: gorca_model::NodeSem::NONE,
+        }
+        .with_test_record(),
+    )
 }
 
 fn rect(x: i32, y: i32, w: u32, h: u32) -> Option<Rect> {

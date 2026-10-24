@@ -21,6 +21,8 @@ pub mod redact;
 pub mod role;
 pub mod sem;
 pub mod speech;
+#[cfg(feature = "testing")]
+pub mod testing;
 pub mod text;
 
 pub use doc::{

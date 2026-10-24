@@ -12,48 +12,24 @@
 # Counts come from `cargo xtask legacy --print`. Test code is not scanned (it is deleted with the
 # path it exercises).
 
-aria-words | crates/gorca-core/src/present/flow.rs | 3 | 2026-11-07 | M22b1-5
-aria-words | crates/gorca-core/src/present/utterance.rs | 10 | 2026-11-07 | M22b1-5
-attrs-field | crates/gorca-core/src/present/flow.rs | 1 | 2026-11-07 | M22b1-5
-attrs-field | crates/gorca-core/src/present/utterance.rs | 2 | 2026-11-07 | M22b1-5
-legacy-name | crates/gorca-core/src/browse/commands.rs | 2 | 2026-11-07 | M22b1-5
-legacy-struct | crates/gorca-core/src/browse/commands.rs | 4 | 2026-11-07 | M22b1-5
-overlay-from-meta | crates/gorca-core/src/browse/commands.rs | 2 | 2026-11-07 | M22b1-5
-present-change | crates/gorca-core/src/present/flow.rs | 5 | 2026-11-07 | M22b1-5
-present-change | crates/gorca-core/src/present/mod.rs | 1 | 2026-11-07 | M22b1-5
-present-change | crates/gorca-core/src/present/utterance.rs | 1 | 2026-11-07 | M22b1-5
-present-focus | crates/gorca-core/src/lib.rs | 1 | 2026-11-07 | M22b1-5
-present-focus | crates/gorca-core/src/present/mod.rs | 2 | 2026-11-07 | M22b1-5
-present-focus | crates/gorca-core/src/present/utterance.rs | 1 | 2026-11-07 | M22b1-5
-present-selected-item | crates/gorca-core/src/lib.rs | 1 | 2026-11-07 | M22b1-5
-present-selected-item | crates/gorca-core/src/present/mod.rs | 2 | 2026-11-07 | M22b1-5
-present-selected-item | crates/gorca-core/src/present/utterance.rs | 1 | 2026-11-07 | M22b1-5
-present-web | crates/gorca-core/src/present/utterance.rs | 2 | 2026-11-07 | M22b1-5
-present-with | crates/gorca-core/src/present/flow.rs | 3 | 2026-11-07 | M22b1-5
-present-with | crates/gorca-core/src/present/utterance.rs | 3 | 2026-11-07 | M22b1-5
-role-spoken | crates/gorca-core/src/present/utterance.rs | 4 | 2026-11-07 | M22b1-5
-state-words | crates/gorca-core/src/present/utterance.rs | 1 | 2026-11-07 | M22b1-5
-subtree-label | crates/gorca-core/src/browse/commands.rs | 2 | 2026-11-07 | M22b1-5
-web-overlay | crates/gorca-core/src/browse/commands.rs | 1 | 2026-11-07 | M22b1-5
-web-overlay | crates/gorca-core/src/present/flow.rs | 1 | 2026-11-07 | M22b1-5
 
 aria-module | crates/gorca-core/src/lib.rs | 1 | 2026-11-21 | M22b2
-aria-words | crates/gorca-core/src/browse/commands.rs | 2 | 2026-11-21 | M22b2
+aria-words | crates/gorca-core/src/browse/commands.rs | 1 | 2026-11-21 | M22b2
 aria-words | crates/gorca-core/src/browse/present.rs | 13 | 2026-11-21 | M22b2
 attrs-field | crates/gorca-core/src/aria.rs | 1 | 2026-11-21 | M22b2
-attrs-field | crates/gorca-core/src/browse/commands.rs | 9 | 2026-11-21 | M22b2
+attrs-field | crates/gorca-core/src/browse/commands.rs | 3 | 2026-11-21 | M22b2
 attrs-field | crates/gorca-core/src/browse/present.rs | 4 | 2026-11-21 | M22b2
-meta-field | crates/gorca-core/src/browse/commands.rs | 4 | 2026-11-21 | M22b2
+meta-field | crates/gorca-core/src/browse/commands.rs | 3 | 2026-11-21 | M22b2
 meta-field | crates/gorca-core/src/browse/present.rs | 10 | 2026-11-21 | M22b2
-node-meta | crates/gorca-core/src/browse/commands.rs | 2 | 2026-11-21 | M22b2
 role-spoken | crates/gorca-core/src/browse/present.rs | 3 | 2026-11-21 | M22b2
 state-words | crates/gorca-core/src/aria.rs | 1 | 2026-11-21 | M22b2
 state-words | crates/gorca-core/src/browse/present.rs | 1 | 2026-11-21 | M22b2
-web-attrs | crates/gorca-core/src/aria.rs | 7 | 2026-11-21 | M22b2
-web-attrs | crates/gorca-core/src/browse/commands.rs | 4 | 2026-11-21 | M22b2
+web-attrs | crates/gorca-core/src/aria.rs | 6 | 2026-11-21 | M22b2
+web-attrs | crates/gorca-core/src/browse/commands.rs | 2 | 2026-11-21 | M22b2
 web-attrs | crates/gorca-core/src/browse/present.rs | 5 | 2026-11-21 | M22b2
 
 role-spoken | crates/gorca-core/src/review/cluster.rs | 1 | 2026-11-28 | M22b3
+role-spoken | crates/gorca-core/src/present/utterance.rs | 1 | 2026-11-28 | M22b3
 role-spoken | crates/gorca-core/src/review/commands.rs | 1 | 2026-11-28 | M22b3
 
 agree-shadow | crates/gorca-core/src/app_actor.rs | 1 | 2026-12-12 | M22b4
@@ -76,7 +52,7 @@ node-meta | crates/gorca-doc/src/web/mod.rs | 1 | 2026-12-12 | M22b4
 policy-facts | crates/gorca-core/src/builtin_ext.rs | 2 | 2026-12-12 | M22b4
 policy-facts | crates/gorca-core/src/ext.rs | 1 | 2026-12-12 | M22b4
 policy-facts | crates/gorca-core/src/lib.rs | 1 | 2026-12-12 | M22b4
-policy-facts | crates/gorca-core/src/present/flow.rs | 2 | 2026-12-12 | M22b4
+policy-facts | crates/gorca-core/src/present/node.rs | 2 | 2026-12-12 | M22b4
 policy-facts | crates/gorca-core/src/present/notification.rs | 4 | 2026-12-12 | M22b4
 policy-facts | crates/gorca-core/src/present/window.rs | 2 | 2026-12-12 | M22b4
 policy-facts | crates/gorca-core/src/reader.rs | 1 | 2026-12-12 | M22b4

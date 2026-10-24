@@ -132,7 +132,11 @@ pub enum DocCtl {
     },
     /// The label the layout inference chose for `node` (sent by the label task to its own
     /// actor): admitted to fusion as the lowest-trust S4 fact.
-    LabelFact { node: DocNodeId, text: Arc<str> },
+    LabelFact {
+        req: u32,
+        node: DocNodeId,
+        text: Arc<str>,
+    },
     /// An `atspi` fact about a node of this document (SM-8): the app actor fetched it (a focus
     /// fetch of a web node) and the document, the node's single writer, fuses it. `issued_at` is
     /// [`DocHandle::timeline`] read when the fetch was issued, so a fact never overwrites what a
@@ -191,12 +195,12 @@ pub enum DocNotice {
     /// A live region changed (ADR-0003 13): already classified, deduplicated and rate-limited by
     /// the document, so the Reader only decides whether this document is the one in front.
     Live { doc: DocId, msg: LiveMsg },
-    /// The label [`DocCtl::Label`] inferred for `node`.
+    /// The label [`DocCtl::Label`] inferred for `node` is in the document's fused entry (an S4
+    /// fact, published before this notice): the Reader reads it from there.
     Label {
         doc: DocId,
         req: u32,
         node: DocNodeId,
-        text: Arc<str>,
     },
     /// The result of a [`DocCtl::Select`].
     SelectionDone {
@@ -585,7 +589,7 @@ impl Actor {
 
     /// The layout inference chose `text` for the nameless control `node`: admit it to fusion as
     /// the lowest-trust S4 fact (C3b). The fused entry then carries the name, hedged and tainted.
-    fn on_label_fact(&mut self, node: DocNodeId, text: &str) {
+    fn on_label_fact(&mut self, req: u32, node: DocNodeId, text: &str) {
         if self.fuse.is_none() {
             return;
         }
@@ -599,6 +603,12 @@ impl Actor {
                 self.flush();
             }
         }
+        // The entry is published: now the Reader may read the label from it.
+        self.notify(DocNotice::Label {
+            doc: self.spec_doc,
+            req,
+            node,
+        });
     }
 
     /// Deliver the live-region messages that are due.
@@ -993,7 +1003,7 @@ async fn run(
                         label_task = spawn_label(&a, req, node, role);
                     }
                     DocCtl::Fact { local, rec, issued_at } => a.on_fact(local, &rec, issued_at),
-                    DocCtl::LabelFact { node, text } => a.on_label_fact(node, &text),
+                    DocCtl::LabelFact { req, node, text } => a.on_label_fact(req, node, &text),
                     DocCtl::Select { req, node, act } => {
                         if actions.len() < MAX_ACTIONS {
                             // One selection at a time, in request order (ADR-0021 I-3): this
@@ -1164,9 +1174,7 @@ fn spawn_label(
         return None;
     };
     let requests = a.requests.clone();
-    let notices = a.notices.clone();
     let ctl = a.ctl_weak.clone();
-    let doc = a.spec_doc;
     Some(tokio::spawn(async move {
         let (reply, rx) = oneshot::channel();
         let deadline = Deadline(Instant::now() + LABEL_DEADLINE);
@@ -1198,21 +1206,15 @@ fn spawn_label(
             rects = ?rects,
         );
         if let Some(text) = chosen {
-            let text: Arc<str> = Arc::from(text);
-            // The fact goes to the actor first: its entry then carries the label for the next
-            // presentation; the notice is the legacy refine path (deleted with the cut-over).
+            // The fact goes to the actor, which fuses it, publishes the entry and then tells
+            // the Reader (`DocNotice::Label`).
             if let Some(ctl) = ctl.upgrade() {
                 let _ = ctl.try_send(DocCtl::LabelFact {
+                    req,
                     node,
-                    text: Arc::clone(&text),
+                    text: Arc::from(text),
                 });
             }
-            let _ = notices.try_send(DocNotice::Label {
-                doc,
-                req,
-                node,
-                text,
-            });
         }
     }))
 }

@@ -9,9 +9,8 @@
 //! * [`render`] - the only producer of text.
 //! * [`diff`], [`deviations`] - the shadow diff against the legacy presenter and its allowed
 //!   differences (`deviations.toml`).
-//! * [`shadow`] - the presenter actor that runs next to the legacy presenter and only counts.
 //!
-//! Everything but [`shadow`] is pure and synchronous.
+//! Everything here is pure and synchronous (no runtime).
 
 pub mod change;
 pub mod compose;
@@ -22,11 +21,12 @@ pub mod edit;
 pub use gorca_present_ir as ir;
 pub mod render;
 pub mod roles;
-pub mod shadow;
 mod web;
 
 pub use change::{changed_groups, compose_change};
-pub use compose::{ComposeCtx, ComposeError, ReportFlags, compose};
+pub use compose::{
+    ComposeCtx, ComposeError, LABEL_CAP, ReportFlags, compose, name_is_blank, one_line_label,
+};
 pub use deviations::{Deviations, DeviationsError};
 pub use diff::{DiffCtx, DiffOutcome, LegacyToken, diff, diff_report};
 pub use edit::{IrEdit, apply as apply_edits, fields_from_tokens, kind_of_token};
@@ -36,7 +36,3 @@ pub use ir::{
     FlatSpan, IrFlags, LangId, LangTags, Origin, PRES_IR_VERSION, PresIr, Reason, Redacted, RowId,
 };
 pub use render::{RenderOpts, Token, TokenText, render};
-pub use shadow::{
-    ChangeSample, FocusSample, SHADOW_QUEUE, ShadowActor, ShadowHandle, ShadowMsg, ShadowSnapshot,
-    SkipWhy, channel, channel_with,
-};

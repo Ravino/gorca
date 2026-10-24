@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use common::{BACKENDS, Backend, RESET_BUDGET, app, best_within, host, info, settle, snap};
 use gorca_core::{AppExt, ExtSource, ExtVerdict, PresentContext, PresenterRegistry, segments_text};
-use gorca_model::{Epoch, NodeEvent, Politeness, Role, UttId};
+use gorca_model::{Epoch, NodeEvent, Politeness, Role};
 
 fn announce(text: &str) -> NodeEvent {
     NodeEvent::Announcement {
@@ -248,18 +248,12 @@ fn the_core_still_presents_when_the_extension_faults() {
                 let reg = PresenterRegistry::builtin().with_ext(h.clone());
                 let n = snap(app(1), 1, Role::Button, Some(name));
                 let t = Instant::now();
-                let u = reg.present(PresentContext::Focus, &n, UttId(1), Epoch(1));
+                let u = reg.ext_segments(PresentContext::Focus, &n, Epoch(1));
                 let took = t.elapsed();
                 settle(&h);
-                let said = u
-                    .segments
-                    .iter()
-                    .map(|s| s.text.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" ");
                 assert!(
-                    said.contains(name),
-                    "core presentation spoke the node: {said} ({b:?})"
+                    u.is_none(),
+                    "a crashing or looping hook gives no opinion, the core composes ({b:?})"
                 );
                 took
             });
@@ -270,9 +264,11 @@ fn the_core_still_presents_when_the_extension_faults() {
         let _ae = attach(&h, 1, "x");
         let reg = PresenterRegistry::builtin().with_ext(h.clone());
         let ok = snap(app(1), 2, Role::Button, Some("gorca-ext-present"));
-        let u = reg.present(PresentContext::Focus, &ok, UttId(2), Epoch(1));
-        assert_eq!(u.segments.len(), 1);
-        assert_eq!(&*u.segments[0].text, "ext presented");
+        let u = reg
+            .ext_segments(PresentContext::Focus, &ok, Epoch(1))
+            .expect("the extension presented");
+        assert_eq!(u.len(), 1);
+        assert_eq!(&*u[0].text, "ext presented");
     }
 }
 

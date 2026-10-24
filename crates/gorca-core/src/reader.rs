@@ -466,8 +466,6 @@ pub struct Reader {
     pub(crate) app_policy: Option<Arc<dyn crate::builtin_ext::AppPolicy>>,
     /// The native terminal policy, used when no extension of the application is one.
     pub(crate) term_provider: Option<Arc<dyn crate::TermProvider>>,
-    /// M22b1 shadow presenter: focus utterances are offered to `gorca-present` and diffed.
-    pub(crate) present_shadow: Option<gorca_present::ShadowHandle>,
 }
 
 /// Revalidation and correction counters (B-1 M-6).
@@ -545,15 +543,7 @@ impl Reader {
             notice: crate::present::NoticeCtx::new(),
             app_policy: None,
             term_provider: None,
-            present_shadow: None,
         }
-    }
-
-    /// Run `gorca-present` in shadow mode beside the legacy presenter (ADR-0022 M22b1).
-    #[must_use]
-    pub fn with_present_shadow(mut self, handle: gorca_present::ShadowHandle) -> Self {
-        self.present_shadow = Some(handle);
-        self
     }
 
     /// Set once at construction from `CoreConfig::lazy_attrs`.
@@ -837,24 +827,27 @@ mod tests {
     }
 
     fn snap(n: u64, role: Role, name: &str) -> Arc<NodeSnapshot> {
-        Arc::new(NodeSnapshot {
-            key: key(n),
-            role,
-            states: StateSet::empty(),
-            name: Some(Arc::from(name)),
-            description: None,
-            value: None,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: gorca_model::PropMask::PRESENT | gorca_model::PropMask::ATTRS,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        })
+        Arc::new(
+            NodeSnapshot {
+                key: key(n),
+                role,
+                states: StateSet::empty(),
+                name: Some(Arc::from(name)),
+                description: None,
+                value: None,
+                parent: None,
+                children: ChildList::Unknown,
+                interfaces: Ifaces::empty(),
+                attrs: gorca_model::AttrMap::default(),
+                relations: gorca_model::Relations::default(),
+                bounds: None,
+                have: gorca_model::PropMask::PRESENT | gorca_model::PropMask::ATTRS,
+                confirmed_seq: 0,
+                fresh: Freshness::Fresh { at: Instant::now() },
+                sem: gorca_model::NodeSem::NONE,
+            }
+            .with_test_record(),
+        )
     }
 
     struct Fixture {
@@ -917,112 +910,115 @@ mod tests {
             .collect()
     }
 
-    /// A snapshot of a native node that carries a fused entry (M22b1 shadow tests).
-    fn fused_snap(
-        n: u64,
-        role: Role,
-        sem_role: gorca_model::SemRole,
-        name: &str,
-    ) -> Arc<NodeSnapshot> {
-        let mut s = (*snap(n, role, name)).clone();
-        let mut e = gorca_model::SemEntry::default();
-        e.sem.role = sem_role;
-        e.name = Some(Arc::from(name));
-        s.sem.entry = Some(Arc::new(e));
-        Arc::new(s)
-    }
-
+    // BENCH-BEGIN (bench/m6/focus-latency.sh copies this block into the legacy tree)
+    /// M-6: `Reader::handle(FocusChanged)` on a cache hit, from the message to the speech
+    /// effect. Prints p50/p99/p99.9 in nanoseconds on one `M6 ...` line.
+    /// `cargo test --release -p gorca-core --lib m6_focus_latency -- --ignored --nocapture`
     #[test]
-    fn shadow_presenter_agrees_on_a_plain_native_focus_and_never_changes_speech() {
-        use gorca_model::SemRole as S;
-        let (h, mut actor) = gorca_present::channel(gorca_present::Deviations::builtin());
-        // One reader per focus: a second focus inside one fixture is rate-limited by the Reader.
-        let cases = [
-            (fused_snap(1, Role::Button, S::Button, "OK"), "OK button"),
-            // The model says link, the legacy snapshot says button: a real difference.
-            (fused_snap(2, Role::Button, S::Link, "OK"), "OK button"),
-            // No fused entry yet: not offered.
-            (snap(3, Role::Button, "Plain"), "Plain button"),
+    #[ignore = "latency measurement: run in release on a quiet host"]
+    fn m6_focus_latency() {
+        const NODES: u64 = 64;
+        const ROUNDS: u64 = 20_000;
+        let mut f = fixture();
+        let roles = [
+            Role::Button,
+            Role::Link,
+            Role::Label,
+            Role::TextEntry,
+            Role::ListItem,
+            Role::Heading,
         ];
-        for (node, want) in cases {
-            let mut f = fixture();
-            f.reader = f.reader.with_present_shadow(h.clone());
-            let n = node.key.local.0;
-            f.writer.apply(
-                SnapshotBatch {
-                    nodes: vec![node],
-                    ..Default::default()
-                },
-                gorca_mirror::ApplyOrigin::Push,
-            );
-            let fx = f.reader.handle(
-                ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(n) }),
-                Instant::now(),
-            );
-            assert_eq!(spoken(&fx), [want], "speech is the legacy presenter's");
-        }
-        assert_eq!(actor.drain_pending(), 2);
-        let s = h.stats();
-        assert_eq!((s.offered, s.equal, s.different), (2, 1, 1), "{s:?}");
-        assert_eq!(s.skipped_no_entry, 1);
-    }
-
-    /// M-6 guard: what the shadow hook adds to the focus path (token clones and one `try_send`).
-    /// The number is printed for the plan; the bound is loose so a debug build passes.
-    #[test]
-    fn shadow_hook_cost_on_the_focus_path_is_microseconds() {
-        use gorca_model::SemRole as S;
-        const N: u32 = 20_000;
-        let (h, mut actor) = gorca_present::channel(gorca_present::Deviations::builtin());
-        let mut f = fixture();
-        f.reader = f.reader.with_present_shadow(h.clone());
-        let snap = fused_snap(1, Role::CheckBox, S::Checkbox, "Remember this choice");
-        let u = f.reader.presenters.present(
-            crate::present::PresentContext::Focus,
-            &snap,
-            gorca_model::UttId(1),
-            gorca_model::Epoch(1),
-        );
-        let mut total = std::time::Duration::ZERO;
-        for i in 0..N {
-            let t = Instant::now();
-            let sample =
-                f.reader
-                    .shadow_focus(crate::present::PresentContext::Focus, &snap, &u, false);
-            f.reader.shadow_offer(sample);
-            total += t.elapsed();
-            if i % 32 == 31 {
-                actor.drain_pending();
-            }
-        }
-        actor.drain_pending();
-        let mean = total / N;
-        eprintln!("shadow_focus mean = {mean:?} over {N} calls");
-        assert!(mean < std::time::Duration::from_micros(50), "{mean:?}");
-        assert_eq!(h.stats().offered, u64::from(N));
-    }
-
-    #[test]
-    fn shadow_presenter_off_by_default_costs_nothing() {
-        let mut f = fixture();
+        let nodes = (1..=NODES)
+            .map(|n| {
+                let role = roles[usize::try_from(n).unwrap_or(0) % roles.len()];
+                snap(n, role, &format!("Item number {n}"))
+            })
+            .collect();
         f.writer.apply(
             SnapshotBatch {
-                nodes: vec![fused_snap(
-                    1,
-                    Role::Button,
-                    gorca_model::SemRole::Button,
-                    "OK",
-                )],
+                nodes,
                 ..Default::default()
             },
             gorca_mirror::ApplyOrigin::Push,
         );
-        assert!(f.reader.present_shadow.is_none());
-        let fx = f.reader.handle(
-            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
-            Instant::now(),
+        let mut ns = Vec::with_capacity(usize::try_from(ROUNDS).unwrap_or(0));
+        let mut spoke = 0u64;
+        let clock = Instant::now();
+        for i in 0..ROUNDS + 500 {
+            let node = key(1 + i % NODES);
+            let msg = ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node });
+            // Synthetic time, one focus change per 200 ms, so none is coalesced with the last.
+            let now = clock + Duration::from_millis(200 * i);
+            let t0 = Instant::now();
+            let fx = f.reader.handle(msg, now);
+            let took = t0.elapsed();
+            if !spoken(&fx).is_empty() {
+                spoke += 1;
+            }
+            // The first 500 rounds warm the caches.
+            if i >= 500 {
+                ns.push(u64::try_from(took.as_nanos()).unwrap_or(u64::MAX));
+            }
+        }
+        assert!(
+            spoke > ROUNDS / 2,
+            "the bench must measure real speech: {spoke}"
         );
-        assert_eq!(spoken(&fx), ["OK button"]);
+        ns.sort_unstable();
+        let at = |permille: usize| ns[(ns.len() * permille / 1000).min(ns.len() - 1)];
+        eprintln!(
+            "M6 n={} spoke={} p50_ns={} p99_ns={} p999_ns={} max_ns={}",
+            ns.len(),
+            spoke,
+            at(500),
+            at(990),
+            at(999),
+            ns[ns.len() - 1]
+        );
+    }
+    // BENCH-END
+
+    /// The state-change read asks for the role too: the check, press, select and availability
+    /// groups of the source record are known only when the role was read with the states, and a
+    /// change in them would never reach the fused entry (found by the P1 wired-path check).
+    #[test]
+    fn a_state_change_read_asks_for_the_role_with_the_states() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::CheckBox, "Subscribe")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::StateChanged {
+                node: key(1),
+                mask: PropMask::STATES,
+            }),
+            now,
+        );
+        let masks: Vec<PropMask> = fx
+            .iter()
+            .filter_map(|e| {
+                if let ReaderEffect::Fetch {
+                    kind: FetchKind::StateChange,
+                    mask,
+                    ..
+                } = e
+                {
+                    Some(*mask)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let [mask] = masks[..] else {
+            panic!("one state-change fetch, got {masks:?}")
+        };
+        assert!(mask.contains(PropMask::ROLE | PropMask::STATES), "{mask:?}");
     }
 
     #[test]
@@ -1239,7 +1235,7 @@ mod tests {
     fn selected_snap(n: u64, name: &str) -> Arc<NodeSnapshot> {
         let mut s = (*snap(n, Role::Button, name)).clone();
         s.states = StateSet::SELECTED;
-        Arc::new(s)
+        Arc::new(s.with_test_record())
     }
 
     fn press(keysym: u32, modifiers: Modifiers, epoch: u64) -> ReaderMsg {
@@ -2270,7 +2266,7 @@ mod tests {
     fn with_name(n: u64, name: &str, states: StateSet) -> Arc<NodeSnapshot> {
         let mut s = (*snap(n, Role::CheckBox, name)).clone();
         s.states = states;
-        Arc::new(s)
+        Arc::new(s.with_test_record())
     }
 
     /// A node confirmed before the focus began is served from memory, spoken as `may_refine`,
@@ -2701,44 +2697,6 @@ mod tests {
         assert!(timer_of(&again).is_none() || !effects_of(&again).contains(&"fetch-name"));
     }
 
-    /// The late-name change is shadowed too: the model's change words equal the legacy ones.
-    #[test]
-    fn shadow_change_covers_the_late_name_site() {
-        let fused = |name: &str| {
-            let mut s = (*selected_snap(1, name)).clone();
-            let mut e = gorca_model::SemEntry::default();
-            e.sem.role = gorca_model::SemRole::Button;
-            if !name.is_empty() {
-                e.name = Some(Arc::from(name));
-            }
-            s.sem.entry = Some(Arc::new(e));
-            Arc::new(s)
-        };
-        let (h, mut actor) = gorca_present::channel(gorca_present::Deviations::builtin());
-        let mut f = fixture();
-        f.reader = f.reader.with_present_shadow(h.clone());
-        let t = Instant::now();
-        f.reader.handle(
-            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
-            t,
-        );
-        f.reader
-            .handle(ReaderMsg::Timer, t + std::time::Duration::from_millis(5));
-        let fx = f.reader.handle(
-            reply(&f, 1, FetchKind::Focus, fused("")),
-            t + std::time::Duration::from_millis(6),
-        );
-        let at = timer_of(&fx).expect("the late name read is armed");
-        f.reader.handle(ReaderMsg::Timer, at);
-        let fx = f
-            .reader
-            .handle(reply(&f, 1, FetchKind::Name, fused("Files")), at);
-        assert_eq!(spoken(&fx), ["Files"]);
-        actor.drain_pending();
-        let s = h.stats();
-        assert_eq!((s.change_equal, s.change_different), (1, 0), "{s:?}");
-    }
-
     /// Nothing is added when the late read is still nameless or the focus moved on.
     #[test]
     fn a_late_name_that_is_still_empty_or_stale_says_nothing() {
@@ -2906,63 +2864,6 @@ mod tests {
         assert_eq!(spoken(&fx), ["Row check box not checked"]);
         assert!(utterance(&fx).may_refine);
         assert!(!matches!(f.reader.focus(), FocusState::Orphaned { .. }));
-    }
-
-    /// A check box snapshot with a fused entry whose check group follows `checked`.
-    fn fused_check(n: u64, name: &str, checked: bool) -> Arc<NodeSnapshot> {
-        let mut s = (*with_name(
-            n,
-            name,
-            if checked {
-                StateSet::CHECKED
-            } else {
-                StateSet::empty()
-            },
-        ))
-        .clone();
-        let mut e = gorca_model::SemEntry::default();
-        e.sem.role = gorca_model::SemRole::Checkbox;
-        e.sem.check = if checked {
-            gorca_model::sem::Check::On
-        } else {
-            gorca_model::sem::Check::Off
-        };
-        e.name = Some(Arc::from(name));
-        s.sem.entry = Some(Arc::new(e));
-        Arc::new(s)
-    }
-
-    /// M22b1 shadow for Reason::Change: the legacy change tokens and the model's agree, the
-    /// speech is the legacy one, and the sample is offered after the speech effect.
-    #[test]
-    fn shadow_change_agrees_with_the_legacy_state_change_words() {
-        let (h, mut actor) = gorca_present::channel(gorca_present::Deviations::builtin());
-        let mut f = fixture();
-        f.reader = f.reader.with_present_shadow(h.clone());
-        f.writer.apply(
-            SnapshotBatch::new(vec![fused_check(1, "Wi-Fi", false)]),
-            gorca_mirror::ApplyOrigin::Push,
-        );
-        let now = Instant::now();
-        focus_on(&mut f, 1, now);
-        let fx = f.reader.handle(
-            reply(&f, 1, FetchKind::StateChange, fused_check(1, "Wi-Fi", true)),
-            now,
-        );
-        assert_eq!(spoken(&fx), ["checked"]);
-        let fx = f.reader.handle(
-            reply(
-                &f,
-                1,
-                FetchKind::StateChange,
-                fused_check(1, "Wi-Fi", false),
-            ),
-            now,
-        );
-        assert_eq!(spoken(&fx), ["not checked"]);
-        actor.drain_pending();
-        let s = h.stats();
-        assert_eq!((s.change_equal, s.change_different), (2, 0), "{s:?}");
     }
 
     /// S1 (5.6): a state change of the focused node is fetched and spoken as the change.
@@ -3137,6 +3038,11 @@ mod tests {
         if web {
             s.attrs
                 .push((gorca_doc_source_api::web_attrs::TAG, Arc::from("li")));
+            if let Some(rec) = s.sem.rec.take() {
+                let mut rec = (*rec).clone();
+                rec.tag = gorca_model::sem::TagName::new("li").0;
+                s.sem.rec = Some(Arc::new(rec));
+            }
         }
         Arc::new(s)
     }

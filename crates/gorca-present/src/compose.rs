@@ -70,33 +70,21 @@ fn word(kind: FieldKind, id: M, group: Group) -> Field {
 /// What a mixed (tri-state) value says for a role class.
 /// The name field of an entry. A name the layout inference gave (provenance `Inferred`, the S4
 /// lowest-trust fact) is an `INFERRED_LABEL` field, and `hedge_inferred` says it as "probably ...".
-pub(crate) fn name_field(entry: &SemEntry, ctx: ComposeCtx, row: RowId) -> Option<Field> {
-    let name = entry.name.as_ref().filter(|s| !s.is_empty())?;
-    let origin = Origin {
-        row,
-        group: Group::Name.slot(),
-        via: 0,
-    };
-    // A name is spoken as a one-line label (collapsed white space, icon glyphs dropped): the label
-    // does not depend on where the name came from (P2.3: provenance is no input of the words).
-    // The renderer caps its length.
-    let text: Arc<str> = match collapse_label(name) {
-        Some(t) if t != **name => Arc::from(t),
-        _ => Arc::clone(name),
-    };
-    if entry.prov.get(Group::Name) != Some(ProvCode::Inferred) {
-        return Some(Field::new(FieldKind::NAME, Content::Text(text), origin));
-    }
-    let content = if ctx.hedge_inferred {
-        Content::msg(M::HedgeProbably, vec![Arg::text("text", &text)])
-    } else {
-        Content::Text(text)
-    };
-    Some(Field::new(FieldKind::INFERRED_LABEL, content, origin))
+/// A name that says nothing: empty, white space, control characters, object markers or only icon
+/// glyphs (a button named by its icon font). Counted as no name.
+pub fn name_is_blank(name: Option<&str>) -> bool {
+    name.is_none_or(|n| {
+        n.chars().all(|c| {
+            c.is_whitespace()
+                || c.is_control()
+                || gorca_model::text::is_object_marker(c)
+                || gorca_model::text::is_icon_glyph(c)
+        })
+    })
 }
 
 /// Text as a one-line label: whitespace collapsed, icon glyphs and object markers dropped. `None`
-/// when nothing speakable is left.
+/// when nothing speakable is left. The length is not limited (the renderer caps a spoken name).
 pub fn collapse_label(s: &str) -> Option<String> {
     let kept: String = s
         .chars()
@@ -105,7 +93,128 @@ pub fn collapse_label(s: &str) -> Option<String> {
         })
         .collect();
     let label = kept.split_whitespace().collect::<Vec<_>>().join(" ");
-    (!label.is_empty()).then_some(label)
+    (!name_is_blank(Some(&label))).then_some(label)
+}
+
+/// A name taken from the text around a control: [`collapse_label`] capped at [`LABEL_CAP`]
+/// characters.
+pub fn one_line_label(s: &str) -> Option<String> {
+    let label = collapse_label(s)?;
+    let capped: String = label.chars().take(LABEL_CAP).collect();
+    (!name_is_blank(Some(&capped))).then_some(capped)
+}
+
+/// Longest label a nameless control takes from the text around it (a control is not read out as a
+/// paragraph).
+pub const LABEL_CAP: usize = 160;
+
+/// Roles that are spoken with a name and take one from the description or the placeholder when
+/// nothing gave one (Orca: `_generate_accessible_name` takes the description, the entry
+/// presenters the placeholder).
+const fn takes_fallback_name(role: SemRole) -> bool {
+    matches!(
+        role,
+        SemRole::Button
+            | SemRole::Switch
+            | SemRole::Checkbox
+            | SemRole::MenuItemCheckbox
+            | SemRole::Radio
+            | SemRole::MenuItemRadio
+            | SemRole::MenuItem
+            | SemRole::Link
+            | SemRole::Tab
+            | SemRole::ListItem
+            | SemRole::Option
+            | SemRole::Term
+            | SemRole::Definition
+            | SemRole::Combobox
+            | SemRole::TextBox
+            | SemRole::SearchBox
+            | SemRole::PasswordBox
+            | SemRole::SpinButton
+            | SemRole::Slider
+            | SemRole::Scrollbar
+    )
+}
+
+/// What the name field of an entry came to.
+pub(crate) struct NameOut {
+    pub field: Option<Field>,
+    /// The description became the name: it is not said again after it.
+    pub from_description: bool,
+}
+
+/// The name field of an entry. A name the layout inference gave (provenance `Inferred`, the S4
+/// lowest-trust fact) is an `INFERRED_LABEL` field, and `hedge_inferred` says it as "probably ...".
+/// In web content a nameless control that takes one gets the one-line description, else the
+/// placeholder, as its name (the C3b ladder: description, placeholder, inferred label).
+pub(crate) fn name_field(entry: &SemEntry, ctx: ComposeCtx, row: RowId) -> NameOut {
+    let origin = Origin {
+        row,
+        group: Group::Name.slot(),
+        via: 0,
+    };
+    let own = entry
+        .name
+        .as_ref()
+        .filter(|s| !name_is_blank(Some(s.as_ref())));
+    let Some(name) = own else {
+        if ctx.web && takes_fallback_name(entry.sem.role) {
+            let text = entry.sem.text.as_deref();
+            let from_desc = text
+                .and_then(|t| t.description.as_deref())
+                .and_then(one_line_label);
+            if let Some(n) = from_desc {
+                return NameOut {
+                    field: Some(Field::new(
+                        FieldKind::NAME,
+                        Content::Text(Arc::from(n)),
+                        origin,
+                    )),
+                    from_description: true,
+                };
+            }
+            let ph = text
+                .and_then(|t| t.placeholder.as_deref())
+                .and_then(one_line_label);
+            if let Some(n) = ph {
+                return NameOut {
+                    field: Some(Field::new(
+                        FieldKind::NAME,
+                        Content::Text(Arc::from(n)),
+                        origin,
+                    )),
+                    from_description: false,
+                };
+            }
+        }
+        return NameOut {
+            field: None,
+            from_description: false,
+        };
+    };
+    // A name is spoken as a one-line label (collapsed white space, icon glyphs dropped, capped):
+    // a name derived from content is a subtree's text, and the label does not depend on where the
+    // name came from (P2.3: provenance is no input of the words).
+    let text: Arc<str> = match collapse_label(name) {
+        Some(t) if t != **name => Arc::from(t),
+        _ => Arc::clone(name),
+    };
+    if entry.prov.get(Group::Name) != Some(ProvCode::Inferred) {
+        return NameOut {
+            field: Some(Field::new(FieldKind::NAME, Content::Text(text), origin)),
+            from_description: false,
+        };
+    }
+    let content = if ctx.hedge_inferred {
+        Content::msg(M::HedgeProbably, vec![Arg::text("text", &text)])
+    } else {
+        Content::Text(text)
+    };
+    NameOut {
+        field: Some(Field::new(FieldKind::INFERRED_LABEL, content, origin)),
+        from_description: false,
+    }
 }
 
 const fn tri_state_word(class: Class) -> Option<M> {
@@ -148,7 +257,7 @@ fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
     let class = info.class;
     let mut fields: SmallVec<[Field; 6]> = SmallVec::new();
 
-    if let Some(f) = name_field(entry, ctx, ROW_NATIVE_FOCUS) {
+    if let Some(f) = name_field(entry, ctx, ROW_NATIVE_FOCUS).field {
         fields.push(f);
     }
     if let Some(role_word) = info.word {

@@ -199,7 +199,7 @@ fn key_to_speech_is_unaffected_by_hostile_extension_traffic() {
 #[test]
 fn a_looping_present_delays_the_reader_by_at_most_its_fuel_limit_three_times() {
     use gorca_core::{PresentContext, PresenterRegistry};
-    use gorca_model::{Epoch, Role, UttId};
+    use gorca_model::{Epoch, Role};
     let (h, _sink, _) = host(Backend::Wasm);
     let h = Arc::new(h);
     let _ae = h.attach(app(1), &info("x")).expect("attach");
@@ -210,10 +210,13 @@ fn a_looping_present_delays_the_reader_by_at_most_its_fuel_limit_three_times() {
     for i in 0..20 {
         // The Reader runs the hook on this thread: its CPU time is the work it is held for, and
         // unlike wall time it excludes the host descheduling the test thread.
-        let (u, took) = gorca_testkit::cpu::cpu_time(|| {
-            reg.present(PresentContext::Focus, &n, UttId(i), Epoch(1))
-        });
-        assert!(!u.segments.is_empty(), "the core presented");
+        let _ = i;
+        let (u, took) =
+            gorca_testkit::cpu::cpu_time(|| reg.ext_segments(PresentContext::Focus, &n, Epoch(1)));
+        assert!(
+            u.is_none(),
+            "a looping hook gives no opinion: the core composes"
+        );
         worst = worst.max(took);
         total += took;
         // The replacement is built by a worker, never by the Reader.
@@ -224,8 +227,8 @@ fn a_looping_present_delays_the_reader_by_at_most_its_fuel_limit_three_times() {
     // After three strikes the slot is disabled and costs nothing.
     assert_eq!(h.stats().disabled, 1);
     let ((), spent) = gorca_testkit::cpu::cpu_time(|| {
-        for i in 0..1000 {
-            reg.present(PresentContext::Focus, &n, UttId(100 + i), Epoch(1));
+        for _ in 0..1000 {
+            let _ = reg.ext_segments(PresentContext::Focus, &n, Epoch(1));
         }
     });
     assert!(

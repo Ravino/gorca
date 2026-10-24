@@ -38,15 +38,13 @@ tracing = { workspace = true }
 legacy-agree = []
 # Segments carry a message id and an origin id (ADR-0022 2.5): tests and the explain trace.
 seg-origin = ["gorca-model/seg-origin"]
-# Test-only hook for the cut-over gate (`cargo xtask cutover`): the legacy change presenter as a
-# function over two snapshots. Dies with the legacy path (ADR-0022 section 8.9).
-cutover-probe = []
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 serde_json = "1"
+gorca-model = { workspace = true, features = ["testing"] }
 ext-vte = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 gorca-testkit = { workspace = true }

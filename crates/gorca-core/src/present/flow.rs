@@ -23,7 +23,8 @@ pub const MENU_START_WINDOW: Duration = Duration::from_millis(100);
 pub const STORM_HOLD: Duration = Duration::from_millis(4);
 
 use super::log::{PresentRecord, PresentSource};
-use super::{Changed, PresentContext, changed, message, present_change};
+use super::node::spoken_name;
+use super::{PresentContext, message};
 use crate::SpeechIntent;
 use crate::focus::{FocusEffect, FocusMsg, FocusState, settle_delay};
 use crate::reader::{
@@ -64,14 +65,7 @@ pub const NAME_FOLLOW_WINDOW: Duration = Duration::from_millis(2000);
 /// A name that is nothing to say: empty, blank, or made only of private-use glyphs (an icon font
 /// draws its symbol with a code point that speaks as nothing).
 pub(crate) fn name_is_blank(name: Option<&str>) -> bool {
-    name.is_none_or(|n| {
-        n.chars().all(|c| {
-            c.is_whitespace()
-                || c.is_control()
-                || gorca_model::text::is_object_marker(c)
-                || gorca_model::text::is_icon_glyph(c)
-        })
-    })
+    gorca_present::name_is_blank(name)
 }
 
 /// A presented node without a name, waiting for its one late re-read.
@@ -234,7 +228,7 @@ impl Reader {
     fn menu_start_redirect(&mut self, snap: &Arc<NodeSnapshot>, fx: &mut ReaderEffects) -> bool {
         if !matches!(snap.role, Role::Menu | Role::MenuBar)
             || self.selection_node.is_some()
-            || !Self::shadow_node_is_web(snap)
+            || !self.snap_is_web(snap)
         {
             return false;
         }
@@ -272,31 +266,13 @@ impl Reader {
         if snap.role != Role::MenuItem {
             return None;
         }
-        let base = if let Some(m) = folded {
-            NodeSnapshot {
-                states: StateSet::ENABLED,
-                value: None,
-                description: None,
-                ..(*m).clone()
-            }
+        let (role, name) = if let Some(m) = folded {
+            (m.role, m.name.clone()?)
         } else {
             let from = self.presented.as_ref().map(|p| p.node);
-            let (role, name) = self.web_menu_entered(snap.key, from)?;
-            NodeSnapshot {
-                role,
-                name: Some(name),
-                states: StateSet::ENABLED,
-                value: None,
-                description: None,
-                attrs: smallvec::SmallVec::default(),
-                sem: gorca_model::NodeSem::NONE,
-                ..snap.clone()
-            }
+            self.web_menu_entered(snap.key, from)?
         };
-        let lead = self
-            .presenters
-            .present(PresentContext::Focus, &base, id, epoch);
-        Some(lead.segments.into_vec())
+        Some(self.menu_lead_segments(snap.key, role, name, id, epoch))
     }
 
     /// A web menu item the document mirror does not know yet (a menu the page has just inserted)
@@ -306,7 +282,7 @@ impl Reader {
             || self.selection_node.is_some()
             || self.menu_waited == Some(snap.key)
             || self.menu_lead_snap.is_some()
-            || !Self::shadow_node_is_web(snap)
+            || !self.snap_is_web(snap)
             || self.web_knows(snap.key)
         {
             return false;
@@ -399,7 +375,7 @@ impl Reader {
         if self.presented.as_ref().is_some_and(|p| p.node == node) {
             self.ask_state(node, fx);
         } else {
-            // The first presentation is still on its way; `present_with` asks when it is done.
+            // The first presentation is still on its way; `speak_focus` asks when it is done.
             self.reconfirm = Reconfirm::Pending(node);
         }
     }
@@ -483,7 +459,7 @@ impl Reader {
         self.counters.focus_reconfirms += 1;
         fx.push(Self::fetch_effect(
             node,
-            PropMask::STATES | PropMask::VALUE | PropMask::NAME,
+            STATE_READ,
             self.epoch.current(),
             FetchKind::StateChange,
         ));
@@ -510,64 +486,6 @@ impl Reader {
                 );
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
             }
-        }
-    }
-
-    /// Ask the installed application policy (ADR-0008 W3) how to present `snap`; returns `true`
-    /// when it says to stay silent. Only applications whose profile asks for it are asked.
-    fn apply_policy(&self, snap: &NodeSnapshot, u: &mut Utterance) -> bool {
-        use crate::builtin_ext::{PolicyFacts, PolicyMoment, PolicyVerdict};
-        if !self.policy_active(snap.key.app) {
-            return false;
-        }
-        let range = match &snap.value {
-            Some(gorca_model::Value::Range { current, min, max }) => Some((*current, *min, *max)),
-            Some(gorca_model::Value::Text(_)) | None => None,
-        };
-        let facts = PolicyFacts {
-            moment: PolicyMoment::Focus,
-            role: snap.role,
-            states: snap.states,
-            name: snap.name.as_deref(),
-            description: snap.description.as_deref(),
-            range,
-        };
-        match self.decide_policy(snap.key.app, &facts) {
-            PolicyVerdict::Default | PolicyVerdict::Notice => false,
-            PolicyVerdict::Silence => true,
-            PolicyVerdict::Value(text) => {
-                let seg =
-                    gorca_model::Segment::new(Arc::from(text), gorca_model::SegmentKind::Value);
-                match u
-                    .segments
-                    .iter_mut()
-                    .find(|g| g.kind == gorca_model::SegmentKind::Value)
-                {
-                    Some(g) => *g = seg,
-                    None => u.segments.push(seg),
-                }
-                false
-            }
-            PolicyVerdict::Say(segs) => {
-                u.segments = segs.into_iter().collect();
-                false
-            }
-        }
-    }
-
-    /// N7: Gecko reports no Sensitive on static content, which the connector maps to DISABLED.
-    /// In a web application the "unavailable" of a static role is dropped; native applications
-    /// (a GTK row or cell that really is insensitive) keep it.
-    fn drop_web_unavailable(&self, u: &mut Utterance, snap: &NodeSnapshot) {
-        let web = self
-            .web
-            .as_ref()
-            .is_some_and(|b| b.web_apps.contains(&snap.key.app));
-        if web && super::utterance::never_disabled(snap.role) {
-            u.segments.retain(|s| {
-                !(s.kind == gorca_model::SegmentKind::State
-                    && &*s.text == gorca_i18n::t(gorca_i18n::MsgId::StateUnavailable))
-            });
         }
     }
 
@@ -679,7 +597,7 @@ impl Reader {
         fx: &mut ReaderEffects,
     ) {
         self.counters.cached_presentations += 1;
-        self.present_with(&v.snap, source, true, fx);
+        self.speak_focus(&v.snap, source, true, fx);
         // Only a request issued strictly after the focus began can have confirmed the content.
         let confirmed_after_trigger =
             v.snap.confirmed_seq > self.focus_seq && v.stale.is_empty() && !v.aged;
@@ -704,120 +622,21 @@ impl Reader {
         }
     }
 
-    /// Whether the shadow compares this node on the web surface (one place for the legacy test,
-    /// deleted with the shadow hook).
-    fn shadow_node_is_web(snap: &NodeSnapshot) -> bool {
-        crate::aria::Node {
-            role: snap.role,
-            states: snap.states,
-            attrs: &snap.attrs,
-        }
-        .is_web()
-    }
-
-    /// M22b1 shadow mode, step 1: take the legacy presenter's raw focus tokens and the fused
-    /// entry (Arc clones only, before policy and lead-in edit the utterance). Nothing is sent
-    /// here; `shadow_offer` does that after the speech effect is issued (R-1: off the
-    /// keypress-to-speech path).
-    pub(crate) fn shadow_focus(
-        &self,
-        ctx: PresentContext,
-        snap: &NodeSnapshot,
-        u: &gorca_model::Utterance,
-        from_cache: bool,
-    ) -> Option<gorca_present::FocusSample> {
-        use gorca_present::{FocusSample, LegacyToken, SkipWhy};
-        let h = self.present_shadow.as_ref()?;
-        if ctx != PresentContext::Focus {
-            h.skipped(SkipWhy::Context);
-            return None;
-        }
-        let web = Self::shadow_node_is_web(snap);
-        let Some(entry) = &snap.sem.entry else {
-            h.skipped(SkipWhy::NoEntry);
-            return None;
-        };
-        Some(FocusSample {
-            node: snap.key,
-            entry: Arc::clone(entry),
-            legacy: u
-                .segments
-                .iter()
-                .map(|s| LegacyToken {
-                    kind: s.kind,
-                    text: Arc::clone(&s.text),
-                })
-                .collect(),
-            may_refine: from_cache || u.may_refine,
-            secret: snap.role == Role::PasswordEntry,
-            // The raw web presenter output carries description segments whatever the setting.
-            description_pause: web || self.cmd.effective.browse.description_pause,
-            web,
-        })
-    }
-
-    /// Shadow mode for a state change of the focused node: both fused entries and the legacy
-    /// change tokens. `None` when shadow is off or either side has no fused entry yet.
-    fn shadow_change(
-        &self,
-        old: &NodeSnapshot,
-        new: &NodeSnapshot,
-        u: &gorca_model::Utterance,
-        ctx: PresentContext,
-    ) -> Option<gorca_present::ChangeSample> {
-        use gorca_present::{ChangeSample, LegacyToken};
-        self.present_shadow.as_ref()?;
-        let (old_e, new_e) = (old.sem.entry.as_ref()?, new.sem.entry.as_ref()?);
-        let web = Self::shadow_node_is_web(new);
-        Some(ChangeSample {
-            node: new.key,
-            old: Arc::clone(old_e),
-            new: Arc::clone(new_e),
-            legacy: u
-                .segments
-                .iter()
-                .map(|s| LegacyToken {
-                    kind: s.kind,
-                    text: Arc::clone(&s.text),
-                })
-                .collect(),
-            skip_selected: skip_states(ctx).contains(StateSet::SELECTED),
-            secret: new.role == Role::PasswordEntry,
-            web,
-        })
-    }
-
-    /// A snapshot copy whose fused entry carries `name` too (the legacy code patched only the
-    /// snapshot), so the shadow compares the model with what was really spoken.
-    fn with_entry_name(snap: &mut NodeSnapshot, name: &Arc<str>) {
-        if let Some(e) = &snap.sem.entry {
-            let mut ne = (**e).clone();
-            ne.name = Some(Arc::clone(name));
-            snap.sem.entry = Some(Arc::new(ne));
-        }
-    }
-
-    /// Hand a prepared message to the shadow actor (after the speech effect).
-    pub(crate) fn shadow_send(&self, msg: Option<gorca_present::ShadowMsg>) {
-        if let (Some(h), Some(msg)) = (&self.present_shadow, msg) {
-            h.offer_msg(msg);
-        }
-    }
-
-    /// Step 2: hand the sample to the shadow actor (one `try_send`, never waits).
-    pub(crate) fn shadow_offer(&self, sample: Option<gorca_present::FocusSample>) {
-        if let (Some(h), Some(sample)) = (&self.present_shadow, sample) {
-            h.offer(sample);
-        }
+    /// `snap` with its fused entry carrying `name` too (a late name, an inferred label): the
+    /// entry is what is spoken and what a later change is compared against.
+    fn with_entry_name(&self, snap: &mut NodeSnapshot, name: &Arc<str>) {
+        let mut e = (*self.fused_entry(snap)).clone();
+        e.name = Some(Arc::clone(name));
+        snap.sem.entry = Some(Arc::new(e));
     }
 
     /// Step `Presented` for the snapshot's node and, if that produced the `Speak` effect, build
     /// the utterance from the snapshot at hand.
     pub(crate) fn present(&mut self, snap: &Arc<NodeSnapshot>, fx: &mut ReaderEffects) {
-        self.present_with(snap, PresentSource::MissReply, false, fx);
+        self.speak_focus(snap, PresentSource::MissReply, false, fx);
     }
 
-    fn present_with(
+    fn speak_focus(
         &mut self,
         snap: &Arc<NodeSnapshot>,
         source: PresentSource,
@@ -842,8 +661,10 @@ impl Reader {
                 } else {
                     PresentContext::Focus
                 };
-                let mut u = self.presenters.present(ctx, snap, id, epoch);
-                let shadow = self.shadow_focus(ctx, snap, &u, from_cache);
+                let super::node::Built {
+                    utterance: mut u,
+                    silent,
+                } = self.build_focus(ctx, snap, id, epoch, true);
                 if ctx == PresentContext::Focus
                     && let Some(lead) = self.menu_lead(snap, id, epoch)
                 {
@@ -851,11 +672,6 @@ impl Reader {
                         u.segments.insert(at, seg);
                     }
                 }
-                if !self.cmd.effective.browse.description_pause {
-                    crate::aria::strip_pause(&mut u);
-                }
-                self.drop_web_unavailable(&mut u, snap);
-                let silent = ctx == PresentContext::Focus && self.apply_policy(snap, &mut u);
                 let hold = ctx == PresentContext::Focus
                     && !silent
                     && self.window_lead_in(snap, epoch, &mut u);
@@ -899,8 +715,6 @@ impl Reader {
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                     self.web_label_arm(snap, fx);
                 }
-                // After the speech effect: the shadow is off the latency path.
-                self.shadow_offer(shadow);
                 fx.push(ReaderEffect::FocusSettled { node: snap.key });
                 self.name_retry_arm(snap, epoch, fx);
                 if self.selection_node != Some(snap.key) {
@@ -1055,23 +869,16 @@ impl Reader {
         }
     }
 
-    /// The snapshot as it is spoken: with what the document's fused entry adds (M8b, M22a-C3: the
-    /// name of a control the engine left nameless, the quirk-stripped name, description and the
-    /// read-only and popup states), and a name that is only an icon glyph counted as none.
+    /// The snapshot as it is spoken: with its fused entry attached (the document's entry for a
+    /// web node, M22b1 cut-over).
     fn spoken_snapshot(&self, snap: &Arc<NodeSnapshot>) -> Arc<NodeSnapshot> {
-        let overlaid = self.web_overlay(snap);
-        if overlaid.name.is_some() && name_is_blank(overlaid.name.as_deref()) {
-            let mut c = (*overlaid).clone();
-            c.name = None;
-            return Arc::new(c);
-        }
-        overlaid
+        self.with_fused_entry(snap)
     }
 
     /// A node presented without a name gets one late re-read (once per node, only for roles
     /// that need a name and only if the speech was not silenced by policy).
     fn name_retry_arm(&mut self, snap: &Arc<NodeSnapshot>, epoch: Epoch, fx: &mut ReaderEffects) {
-        let nameless = name_is_blank(snap.name.as_deref());
+        let nameless = name_is_blank(spoken_name(snap));
         if !nameless || !needs_name(snap.role) || self.name_retried == Some(snap.key) {
             return;
         }
@@ -1122,25 +929,19 @@ impl Reader {
         let Some(name) = new.name.as_deref().filter(|n| !name_is_blank(Some(n))) else {
             return;
         };
-        if !name_is_blank(p.snap.name.as_deref()) {
+        if !name_is_blank(spoken_name(&p.snap)) {
             return;
         }
-        let ch = Changed {
-            name: true,
-            role: false,
-            states: StateSet::empty(),
-            value: false,
-            description: false,
-        };
         let mut merged = (*p.snap).clone();
         merged.name = Some(name.into());
-        Self::with_entry_name(&mut merged, &Arc::from(name));
+        self.with_entry_name(&mut merged, &Arc::from(name));
         let merged = Arc::new(merged);
-        let id = self.utt_id();
-        let u = present_change(&merged, ch, id, self.epoch.current(), None);
-        let shadow = self
-            .shadow_change(&p.snap, &merged, &u, p.ctx)
-            .map(gorca_present::ShadowMsg::Change);
+        let Some(mut u) = self.build_change(&p.snap, &merged, p.ctx, self.epoch.current(), None)
+        else {
+            return;
+        };
+        u.id = self.utt_id();
+        let id = u.id;
         self.log_presentation(&u, &merged, PresentSource::StateChange, None);
         self.presented = Some(Presented {
             node: p.node,
@@ -1151,14 +952,13 @@ impl Reader {
             ctx: p.ctx,
         });
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
-        self.shadow_send(shadow);
     }
 
     /// A web control spoken without a name, of a kind Orca infers a label for, asks its document
     /// for one (C3b): the text next to it, picked by layout, with a deadline. The answer
     /// ([`Self::web_label_done`]) refines or follows the utterance; no answer leaves it as it was.
     fn web_label_arm(&mut self, snap: &Arc<NodeSnapshot>, fx: &mut ReaderEffects) {
-        if !name_is_blank(snap.name.as_deref()) || !gorca_doc::web::label::infers_for(snap.role) {
+        if !name_is_blank(spoken_name(snap)) || !gorca_doc::web::label::infers_for(snap.role) {
             return;
         }
         let Some(b) = self.web.as_mut() else { return };
@@ -1176,11 +976,12 @@ impl Reader {
         }));
     }
 
-    /// The inferred label of the control in focus arrived. Spoken plainly, as Orca speaks an
-    /// inferred label: within the refine window it replaces the utterance (label first, then the
-    /// role), later it follows as the name alone. Dropped when the focus has moved on or the
-    /// control got a name meanwhile.
-    pub(crate) fn web_label_done(&mut self, req: u32, text: &str, fx: &mut ReaderEffects) {
+    /// The inferred label of the control in focus is in the document's fused entry now (an S4
+    /// fact, C3b): the document actor fused it and published it before it said so. Spoken plainly,
+    /// as Orca speaks an inferred label: within the refine window it replaces the utterance (label
+    /// first, then the role), later it follows as the name alone. Dropped when the focus has moved
+    /// on or the control got a name meanwhile.
+    pub(crate) fn web_label_done(&mut self, req: u32, fx: &mut ReaderEffects) {
         let Some(b) = self.web.as_mut() else { return };
         let Some((r, key)) = b.label_pending else {
             return;
@@ -1192,34 +993,19 @@ impl Reader {
         let Some(p) = self.presented.clone() else {
             return;
         };
-        if p.node != key
-            || p.epoch != self.epoch.current()
-            || !name_is_blank(p.snap.name.as_deref())
+        if p.node != key || p.epoch != self.epoch.current() || !name_is_blank(spoken_name(&p.snap))
         {
             return;
         }
-        let Some(label) = crate::browse::commands::one_line_label(text) else {
+        let merged = self.with_fused_entry(&p.snap);
+        if name_is_blank(spoken_name(&merged)) {
             return;
-        };
-        let mut merged = (*p.snap).clone();
-        merged.name = Some(Arc::from(label.as_str()));
-        Self::with_entry_name(&mut merged, &Arc::from(label.as_str()));
-        // The words are not said twice: a description that is the label stays unsaid.
-        if crate::aria::speakable_description(merged.description.as_deref(), Some(&label)).is_none()
-        {
-            merged.description = None;
         }
-        let merged = Arc::new(merged);
-        let id = self.utt_id();
         let epoch = self.epoch.current();
         let refine = self.now.saturating_duration_since(p.at) < REFINE_WINDOW;
-        let mut shadow = None;
         let (mut u, source) = if refine {
-            let mut u = self.presenters.present(p.ctx, &merged, id, epoch);
-            shadow = self
-                .shadow_focus(p.ctx, &merged, &u, false)
-                .map(gorca_present::ShadowMsg::Focus);
-            self.drop_web_unavailable(&mut u, &merged);
+            let id = self.utt_id();
+            let mut u = self.build_focus(p.ctx, &merged, id, epoch, false).utterance;
             u.refines = Some(p.utt);
             if let Some((_, word, tail)) = self.web_extra.as_ref().filter(|e| e.0 == p.utt) {
                 apply_web_extra(&mut u, *word, tail, self.verbalize_opts());
@@ -1227,25 +1013,15 @@ impl Reader {
             self.counters.refined += 1;
             (u, PresentSource::Refine)
         } else {
-            let ch = Changed {
-                name: true,
-                role: false,
-                states: StateSet::empty(),
-                value: false,
-                description: false,
+            let Some(mut u) = self.build_change(&p.snap, &merged, p.ctx, epoch, Some(p.utt)) else {
+                return;
             };
+            u.id = self.utt_id();
             self.counters.followups += 1;
-            (
-                present_change(&merged, ch, id, epoch, Some(p.utt)),
-                PresentSource::Followup,
-            )
+            (u, PresentSource::Followup)
         };
         u.may_refine = false;
-        if matches!(source, PresentSource::Followup) {
-            shadow = self
-                .shadow_change(&p.snap, &merged, &u, p.ctx)
-                .map(gorca_present::ShadowMsg::Change);
-        }
+        let id = u.id;
         self.log_presentation(&u, &merged, source, Some(p.utt));
         self.presented = Some(Presented {
             node: p.node,
@@ -1256,7 +1032,6 @@ impl Reader {
             ctx: p.ctx,
         });
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
-        self.shadow_send(shadow);
     }
 
     /// Schedule the next delayed try of a `Busy` focus fetch. False when the tries are used up.
@@ -1336,7 +1111,11 @@ impl Reader {
             && !new.states.contains(StateSet::DEFUNCT)
             && p.snap.name == new.name
         {
-            if changed(&p.snap, new, skip_states(p.ctx)).is_empty() {
+            let after = self.with_entry_after(&p.snap, new);
+            if self
+                .build_change(&p.snap, &after, p.ctx, self.epoch.current(), None)
+                .is_none()
+            {
                 self.counters.revalidations_agreed += 1;
             } else {
                 self.counters.revalidations_suppressed += 1;
@@ -1348,23 +1127,18 @@ impl Reader {
                 self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
             }
             Ok(new) => {
-                let new = &self.spoken_snapshot(new);
-                let ch = changed(&p.snap, new, skip_states(p.ctx));
-                if ch.is_empty() {
+                let new = &self.with_entry_after(&p.snap, new);
+                let Some(change) = self.build_change(&p.snap, new, p.ctx, r.epoch, Some(p.utt))
+                else {
                     self.counters.revalidations_agreed += 1;
                     return;
-                }
+                };
                 let id = self.utt_id();
                 let refine = self.now.saturating_duration_since(p.at) < REFINE_WINDOW
                     && r.epoch == self.epoch.current();
-                let mut shadow = None;
                 let (mut u, source) = if refine {
                     // Replace: the whole node again, interrupting the earlier utterance.
-                    let mut u = self.presenters.present(p.ctx, new, id, r.epoch);
-                    shadow = self
-                        .shadow_focus(p.ctx, new, &u, false)
-                        .map(gorca_present::ShadowMsg::Focus);
-                    self.drop_web_unavailable(&mut u, new);
+                    let mut u = self.build_focus(p.ctx, new, id, r.epoch, false).utterance;
                     u.refines = Some(p.utt);
                     if let Some((_, word, tail)) = self.web_extra.as_ref().filter(|e| e.0 == p.utt)
                     {
@@ -1374,17 +1148,11 @@ impl Reader {
                     (u, PresentSource::Refine)
                 } else {
                     self.counters.followups += 1;
-                    (
-                        present_change(new, ch, id, r.epoch, Some(p.utt)),
-                        PresentSource::Followup,
-                    )
+                    let mut u = change;
+                    u.id = id;
+                    (u, PresentSource::Followup)
                 };
                 u.may_refine = false;
-                if matches!(source, PresentSource::Followup) {
-                    shadow = self
-                        .shadow_change(&p.snap, new, &u, p.ctx)
-                        .map(gorca_present::ShadowMsg::Change);
-                }
                 self.log_presentation(&u, new, source, Some(p.utt));
                 self.presented = Some(Presented {
                     node: p.node,
@@ -1395,7 +1163,6 @@ impl Reader {
                     ctx: p.ctx,
                 });
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
-                self.shadow_send(shadow);
             }
             // The node vanished between presenting and checking: the focus machine decides.
             Err(gorca_connector_api::BackendError::Gone) => {
@@ -1460,7 +1227,7 @@ impl Reader {
         });
         fx.push(Self::fetch_effect(
             node,
-            PropMask::STATES | PropMask::VALUE | PropMask::NAME,
+            STATE_READ,
             self.epoch.current(),
             FetchKind::StateChange,
         ));
@@ -1503,14 +1270,12 @@ impl Reader {
         if p.snap.role == Role::Terminal && !new.states.contains(StateSet::FOCUSED) {
             return;
         }
-        let new = &self.spoken_snapshot(new);
-        let ch = changed(&p.snap, new, skip_states(p.ctx));
-        if ch.is_empty() {
+        let new = &self.with_entry_after(&p.snap, new);
+        let Some(mut u) = self.build_change(&p.snap, new, p.ctx, self.epoch.current(), None) else {
             return;
-        }
-        let id = self.utt_id();
-        let u = present_change(new, ch, id, self.epoch.current(), None);
-        let shadow = self.shadow_change(&p.snap, new, &u, p.ctx);
+        };
+        u.id = self.utt_id();
+        let id = u.id;
         self.counters.state_changes_spoken += 1;
         self.log_presentation(&u, new, PresentSource::StateChange, None);
         self.presented = Some(Presented {
@@ -1522,15 +1287,20 @@ impl Reader {
             ctx: p.ctx,
         });
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
-        // After the speech effect: the shadow is off the latency path.
-        if let (Some(h), Some(sample)) = (&self.present_shadow, shadow) {
-            h.offer_change(sample);
-        }
     }
 }
 
+/// What a state-change read asks for. The role is part of it: the check, press, select and
+/// availability groups of the source record are only known when the role was read with the states
+/// (the same states mean different things on a check box and on a label), so without it the new
+/// state would never reach the fused entry and a change would be silent.
+const STATE_READ: PropMask = PropMask::ROLE
+    .union(PropMask::STATES)
+    .union(PropMask::VALUE)
+    .union(PropMask::NAME);
+
 /// States a context does not speak, so their change is not a correction.
-fn skip_states(ctx: PresentContext) -> StateSet {
+pub(super) fn skip_states(ctx: PresentContext) -> StateSet {
     match ctx {
         PresentContext::Focus => StateSet::empty(),
         PresentContext::SelectedItem => StateSet::SELECTED,

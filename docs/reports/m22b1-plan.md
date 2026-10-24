@@ -211,3 +211,44 @@ themselves go in the same commit as the switch, below.
    become documentation of intended wording (the gate keeps them dated).
 5. Gates: full workspace tests, `cargo xtask cutover --check`, e2e M8 and the M-6 bench (interleaved
    on/off is impossible after deletion: compare against the tagged `legacy/focus-last` build).
+
+## Focus/change cut-over: what the single commit did (branch `cutover-focus`, 2026-10-24)
+
+The recipe above, as built. `gorca-core/src/present/node.rs` is the one place a focus or change
+utterance is made: `Reader::fused_entry` (attached `snap.sem.entry`, then the document mirror's
+entry, then the provisional entry, then a name-only entry), `build_focus` (compose, policy verdict
+and field contents as IR edits, render) and `build_change` (`compose_change`, render). The
+Reader's input is the fused node. `present_with` is now `speak_focus`; window lead-in and web
+extras stay segment producers for b4 and b2. The browse overlay machinery, the shadow, the
+`cutover-probe` feature and `GORCA_PRESENT_SHADOW` are gone; `PresenterRegistry` is an
+extension-only hook (`ext_segments`). The name ladder for web nodes (description, placeholder) and
+the one-line label moved into `compose`. A GTK3 toggle button's CHECKED bit is its pressed state
+(`map_press`), and the change surface says "pressed" where the legacy presenter said "checked"
+(deviation `toggle-state-word`). The replay corpora became golden tests
+(`crates/gorca-connector-atspi/src/golden_tests.rs`, records in `tests/fixtures/sem/golden/`;
+`GORCA_BLESS=1` rewrites them). All 24 `M22b1-5` rows are gone from `xtask/legacy.allow`; the
+uses the new code still has belong to other slices' rows (policy facts in `node.rs`, review
+`flat_zone_text`). M-6: `bench/m6/focus-latency.sh [legacy/focus-last]` compares
+`Reader::handle(FocusChanged)` p99 against the tagged build, gate delta <= 0.1 ms.
+
+Judgement round (2026-10-24, `m22b1-cutover-judgement.md`): the model, not the rows, was fixed.
+`SemRole::is_disableable` is the one disableable list (the fusion rules and the AT-SPI state
+mapping read it); a web `<option>` is an `Option` role; a `<select>` option (exported as a menu
+item) is selectable when the engine says so; a native node without `SENSITIVE` is unavailable even
+when it reports `ENABLED`; Gecko's list-ordinal quirk row is gone, so "1. Home" keeps its number
+(the legacy agreement check lists that as a deviation); the bullet row only strips bullets and the
+focus-web `unavailable-static` row no longer covers a group. A name is spoken as a one-line label
+whatever its provenance (P2.3). The web menu popup fold (main) goes through `compose`:
+`Reader::menu_lead_segments` composes the menu's name and role from an entry that has only those.
+
+Re-judgement items (2026-10-24, APPROVE AFTER): (1) `golden_tests.rs` is the hardened replay
+without the legacy side: `web_flags`, `match_nodes` (real changes paired by path or fixture id,
+expand and value cases included), `spoken_facts_differ`, English and Russian; the goldens are
+`tests/fixtures/sem/golden/{focus,change}.{en,ru}.tsv` and a test pins the gate's record counts
+(6497 focus, 3750 change). (2) `tests/shell/run_p1.sh` is the keypress-to-speech check of the
+wired path in a private Shell world (real GTK4 window, real Firefox on a local page, the real
+GNOME Shell: Alt+Tab switcher and the quick settings toggles): 21 steps, focus plus a check,
+expand, value or toggle change on each; logs in `bench/results/e2e/p1-wired-cutover/`. It found
+one real defect the goldens cannot see: the state-change read did not ask for the role, so the
+check, press, select and availability groups of the record stayed unknown and a toggle changed
+silently; the read now includes `PropMask::ROLE`. (3) M-6: `bench/results/m6/focus-latency-2026-10-24.txt`.

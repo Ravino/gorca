@@ -1,42 +1,32 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The replay half of the cut-over gate (`cargo xtask cutover <surface>`, ADR-0022 section 8.9).
+//! Golden tests of `compose` (M22b1 cut-over): the replay half of the cut-over gate, kept after the
+//! legacy presenters were deleted. Every recorded corpus family is fused the way the app actor
+//! fuses it and run through `gorca-present`, in English and in Russian: the focus utterance of
+//! every node, the utterance of every synthetic state flip and of every recorded real change
+//! (nodes paired by path or fixture id, value changes included) must equal the checked-in
+//! records `tests/fixtures/sem/golden/{focus,change}.{en,ru}.tsv`.
 //!
-//! `cutover_emit` replays every recorded corpus family of one surface through the legacy presenter
-//! and through `gorca-present`, and writes one canonical record per node to the file named by
-//! `GORCA_CUTOVER_OUT`. It does not judge: `xtask` classifies the records against the dated
-//! `deviations.toml` rows. Without `GORCA_CUTOVER_OUT` the test is a no-op (the xtask runs it).
+//! The replay selects exactly the nodes and cases the gate compared (`web_flags`, `match_nodes`,
+//! `spoken_facts_differ`), and `the_goldens_hold_every_record_the_gate_compared` pins the counts
+//! the gate reported when it passed (6497 focus and 3750 change records per language). Every
+//! difference to the legacy presenter was zero or a dated, reasoned deviation row at that point.
 //!
-//! Environment: `GORCA_CUTOVER_SURFACE` (`focus` or `change`), `GORCA_CUTOVER_OUT` (file),
-//! `GORCA_CUTOVER_LANG` (`en` or `ru`: the catalog language of both presenters, the diff and the
-//! render; the gate runs both), `GORCA_CUTOVER_SHUFFLE` (non-zero seed: feed every page to the
-//! fusion writer in a seeded shuffled order, which also moves nodes between its 512-node batches;
-//! the records must not change, because fused values are a function of the final state, not of
-//! arrival order).
+//! `GORCA_BLESS=1 cargo test -p gorca-connector-atspi --lib golden` rewrites the files (review the
+//! diff: every changed line is a change of what a screen reader user hears). The replay is
+//! repeatable and independent of the arrival order of the nodes (a seeded shuffle gives the same
+//! records).
 //!
-//! Record format, one line per record, tab separated and sorted:
-//! `corpus  node  case  surface  outcome  deviation  legacy  new  witness` with `\`, tab and
-//! newline escaped. `case` is `focus`, the state mutation applied for `change`, or `real-<case>`.
-//! `outcome` is one of:
-//! * `equal`, `silent` (both presenters say nothing), `order-only`, `different`;
-//! * `allowed` (with the row id in `deviation`). `witness` is empty unless the row's predicate
-//!   reads a fused model fact that the source record (the legacy side) contradicts: then the gate
-//!   treats the difference as unclassified, because a row must not justify a regression with the
-//!   very model fact that causes it;
-//! * `dropped`: nodes or cases the replay did not compare. `deviation` is the reason code, `legacy`
-//!   the number of drops, `new` the first example. Nothing is skipped silently: every drop is a
-//!   record, and `xtask` fails the gate on a reason it has no explanation for.
+//! Record format, one line per compared node, tab separated and sorted:
+//! `corpus  node  case  surface  tokens` with `\`, tab and newline escaped; `case` is `focus`, the
+//! state mutation applied for `change`, or `real-<case>`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::sync::Arc;
 
-use gorca_model::sem::{Group, Select, SemRole, SrcRecord};
 use gorca_model::{NodeSnapshot, Role, StateSet, WebEngine};
-use gorca_present::{
-    ComposeCtx, Deviations, DiffCtx, DiffOutcome, LegacyToken, Reason, RenderOpts, ReportFlags,
-    compose, compose_change, diff_report, render,
-};
+use gorca_present::{ComposeCtx, Reason, RenderOpts, ReportFlags, compose, compose_change, render};
 
 use crate::decode::RawNode;
 use crate::legacy_agreement_tests::{NodeMeta, page, page_meta, page_with, pages_of, root};
@@ -95,17 +85,15 @@ const FAMILIES: &[Family] = &[
     },
 ];
 
-/// One output line.
+/// One output line: a compared node, or the drops of one (corpus, case).
 struct Record {
     corpus: String,
     node: u64,
     case: String,
     surface: &'static str,
-    outcome: &'static str,
-    deviation: &'static str,
-    legacy: String,
+    /// `Some((reason, count))` for dropped nodes or cases: they are not golden lines.
+    dropped: Option<(&'static str, u64)>,
     new: String,
-    witness: String,
 }
 
 fn esc(s: &str) -> String {
@@ -162,11 +150,8 @@ fn dropped(
         node: 0,
         case: case.to_owned(),
         surface,
-        outcome: "dropped",
-        deviation: reason,
-        legacy: n.to_string(),
+        dropped: Some((reason, n)),
         new: example,
-        witness: String::new(),
     }
 }
 
@@ -287,112 +272,6 @@ fn web_flags(snaps: &[Arc<NodeSnapshot>]) -> Vec<bool> {
     out
 }
 
-fn classify(
-    outcome: &DiffOutcome,
-    legacy_empty: bool,
-    new_empty: bool,
-) -> (&'static str, &'static str) {
-    match outcome {
-        DiffOutcome::Equal if legacy_empty && new_empty => ("silent", ""),
-        DiffOutcome::Equal => ("equal", ""),
-        DiffOutcome::OrderOnly => ("order-only", ""),
-        DiffOutcome::Allowed(id) => ("allowed", id),
-        DiffOutcome::Different { .. } => ("different", ""),
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// The model-fact check
-// ---------------------------------------------------------------------------------------------
-
-/// The AT-SPI role number of a toggle button.
-const RAW_TOGGLE_BUTTON: u32 = 62;
-
-/// A deviation row must not justify a regression with the model fact that causes it. Some
-/// classifiers apply because of a fused fact (`not_toggle`, `not_selectable`, `avail_na`,
-/// `toggle_button`, a fused value). When the source record (the connector's own normalisation of
-/// the same node, which the legacy presenter was built on) contradicts that fact, the difference
-/// is a model defect and not an intended improvement. Returns the contradictions, empty when the
-/// row rests on nothing but evidence both sides share.
-fn model_fact_witness(
-    fired: &[&'static str],
-    ctx: &DiffCtx<'_>,
-    rec: Option<&SrcRecord>,
-    legacy_states: StateSet,
-    meta: &NodeMeta,
-) -> String {
-    let change = ctx.surface.starts_with("change");
-    let mut why: Vec<String> = Vec::new();
-    for &id in fired {
-        let w = match id {
-            // The engine's own SELECTABLE state is what the legacy presenter reads; a source record
-            // that says selectable says the same. Either contradicts "cannot be selected".
-            "select-not-applicable" => {
-                let source = rec.filter(|r| {
-                    r.known.has(Group::Select) && r.sem.select != Select::NotSelectable
-                });
-                let state = legacy_states.contains(StateSet::SELECTABLE);
-                (ctx.not_selectable && (state || source.is_some())).then(|| {
-                    format!(
-                        "the engine marks the node selectable (state {state}, source record {:?}), the fused entry says it cannot be selected",
-                        source.map(|r| r.sem.select)
-                    )
-                })
-            }
-            // Availability: the independent table of gorca-sem-atspi lists the roles a disabled
-            // state is meaningful on. The fused profile has its own copy; a role the source table
-            // disables and the fused entry calls "not applicable" is the defect, not a deviation.
-            "unavailable-static" => rec
-                .filter(|r| gorca_sem_atspi::states::is_disableable(r.sem.role))
-                .map(|r| {
-                    format!(
-                        "source role {:?} can be disabled (gorca-sem-atspi is_disableable), the row calls availability not applicable",
-                        r.sem.role
-                    )
-                }),
-            // An ARIA switch is exported as a toggle button too (with the checkable state); the
-            // model's Switch role is the right reading there. A node the model calls a plain
-            // button while the engine calls it a toggle button is the contradiction.
-            "pressed-without-toggle" => (change
-                && ctx.not_toggle
-                && ctx.role == SemRole::Button
-                && meta.raw_role == RAW_TOGGLE_BUTTON)
-                .then(|| {
-                    "the engine role is a toggle button, the fused entry is a button with no pressed state"
-                        .to_owned()
-                }),
-            "toggle-state-word" => (ctx.toggle_button && meta.raw_role != RAW_TOGGLE_BUTTON)
-                .then(|| {
-                    format!(
-                        "the fused entry says toggle button, the engine role {} is not one",
-                        meta.raw_role
-                    )
-                }),
-            // The legacy connector fetches the Value reading of sliders, progress bars and spin
-            // buttons; a node that has one must be spoken by the legacy side as well, so the row
-            // cannot be the reason it is silent.
-            "value-from-attrs" => (meta.has_value
-                && matches!(
-                    ctx.role,
-                    SemRole::Slider | SemRole::ProgressBar | SemRole::SpinButton
-                ))
-            .then(|| {
-                "the recorded node has a Value reading the legacy connector fetches, so the legacy side must speak it"
-                    .to_owned()
-            }),
-            _ => None,
-        };
-        if let Some(w) = w {
-            why.push(format!("{id}: {w}"));
-        }
-    }
-    why.join("; ")
-}
-
-// ---------------------------------------------------------------------------------------------
-// Focus
-// ---------------------------------------------------------------------------------------------
-
 struct Run {
     lang: gorca_present::Lang,
     seed: u64,
@@ -406,7 +285,7 @@ fn render_opts(run: &Run, description_pause: bool) -> RenderOpts<'static> {
     }
 }
 
-fn focus_records(family: &Family, run: &Run, dev: &Deviations, out: &mut Vec<Record>) {
+fn focus_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
     let web_run = family.web != WebEngine::None;
     let surface = if web_run { "focus-web" } else { "focus" };
     let tables = crate::sem_profile::tables_for(family.toolkit, "app", family.web);
@@ -443,7 +322,7 @@ fn focus_records(family: &Family, run: &Run, dev: &Deviations, out: &mut Vec<Rec
         let fused = fuse(tables, &label, &snaps, run.seed);
         let mut compared = 0u64;
         let webs = web_flags(&fused);
-        for ((s, meta), web) in fused.iter().zip(&metas).zip(&webs) {
+        for (s, web) in fused.iter().zip(&webs) {
             if *web != web_run {
                 drops.add(kind_mismatch_reason(web_run), || describe(s));
                 continue;
@@ -453,15 +332,6 @@ fn focus_records(family: &Family, run: &Run, dev: &Deviations, out: &mut Vec<Rec
                 continue;
             };
             compared += 1;
-            let u = gorca_core::present_focus(s, gorca_model::UttId(1), gorca_model::Epoch(1));
-            let legacy: Vec<LegacyToken> = u
-                .segments
-                .iter()
-                .map(|g| LegacyToken {
-                    kind: g.kind,
-                    text: Arc::clone(&g.text),
-                })
-                .collect();
             let ctx = ComposeCtx {
                 flags: ReportFlags::default(),
                 may_refine: false,
@@ -470,39 +340,21 @@ fn focus_records(family: &Family, run: &Run, dev: &Deviations, out: &mut Vec<Rec
                 hedge_inferred: false,
                 lang: run.lang,
             };
-            let Ok(ir) = compose(entry, s.key, Reason::Focus, ctx) else {
-                out.push(Record {
-                    corpus: label.clone(),
-                    node: s.key.local.0,
-                    case: "focus".to_owned(),
-                    surface,
-                    outcome: "different",
-                    deviation: "",
-                    legacy: join(legacy.iter().map(|t| (t.kind, &*t.text))),
-                    new: "<no rule row>".to_owned(),
-                    witness: String::new(),
-                });
-                continue;
-            };
-            let tokens = render(&ir, render_opts(run, web_run));
-            let dctx = DiffCtx::for_entry(surface, entry, run.lang);
-            let (d, fired) = diff_report(&legacy, &tokens, dev, dctx);
-            let (outcome, deviation) = classify(&d, legacy.is_empty(), tokens.is_empty());
-            let witness = if outcome == "allowed" {
-                model_fact_witness(&fired, &dctx, s.sem.rec.as_deref(), s.states, meta)
-            } else {
-                String::new()
+            let new = match compose(entry, s.key, Reason::Focus, ctx) {
+                Ok(ir) => join(
+                    render(&ir, render_opts(run, web_run))
+                        .iter()
+                        .map(|t| (t.kind, t.text.as_str())),
+                ),
+                Err(_) => "<no rule row>".to_owned(),
             };
             out.push(Record {
                 corpus: label.clone(),
                 node: s.key.local.0,
                 case: "focus".to_owned(),
                 surface,
-                outcome,
-                deviation,
-                legacy: join(legacy.iter().map(|t| (t.kind, &*t.text))),
-                new: join(tokens.iter().map(|t| (t.kind, t.text.as_str()))),
-                witness,
+                dropped: None,
+                new,
             });
         }
         drops.flush(&label, "focus", surface, out);
@@ -668,30 +520,19 @@ const MUTATIONS: &[(&str, Mutation)] = &[
     }),
 ];
 
-/// Both presenters on one `old -> new` change of a node; pushes one record.
-#[allow(clippy::too_many_arguments)]
+/// The change utterance of one `old -> new` change of a node; pushes one record.
 fn compare_change(
     o: &Arc<NodeSnapshot>,
     n: &Arc<NodeSnapshot>,
-    meta: &NodeMeta,
     label: &str,
     case: &str,
     web_run: bool,
     run: &Run,
-    dev: &Deviations,
     out: &mut Vec<Record>,
 ) {
     let (Some(oe), Some(ne)) = (o.sem.entry.as_ref(), n.sem.entry.as_ref()) else {
         return;
     };
-    let legacy_pairs = gorca_core::legacy_change_tokens(o, n, false);
-    let legacy: Vec<LegacyToken> = legacy_pairs
-        .iter()
-        .map(|(kind, text)| LegacyToken {
-            kind: *kind,
-            text: Arc::clone(text),
-        })
-        .collect();
     let ctx = ComposeCtx {
         flags: ReportFlags::default(),
         may_refine: false,
@@ -702,29 +543,17 @@ fn compare_change(
     };
     let ir = compose_change(oe, ne, n.key, ctx);
     let tokens = render(&ir, render_opts(run, false));
-    let surface = if web_run { "change-web" } else { "change" };
-    let dctx = DiffCtx::for_entry(surface, ne, run.lang);
-    let (d, fired) = diff_report(&legacy, &tokens, dev, dctx);
-    let (outcome, deviation) = classify(&d, legacy.is_empty(), tokens.is_empty());
-    let witness = if outcome == "allowed" {
-        model_fact_witness(&fired, &dctx, n.sem.rec.as_deref(), n.states, meta)
-    } else {
-        String::new()
-    };
     out.push(Record {
         corpus: label.to_owned(),
         node: n.key.local.0,
         case: case.to_owned(),
-        surface,
-        outcome,
-        deviation,
-        legacy: join(legacy.iter().map(|t| (t.kind, &*t.text))),
+        surface: if web_run { "change-web" } else { "change" },
+        dropped: None,
         new: join(tokens.iter().map(|t| (t.kind, t.text.as_str()))),
-        witness,
     });
 }
 
-fn change_records(family: &Family, run: &Run, dev: &Deviations, out: &mut Vec<Record>) {
+fn change_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
     let web_run = family.web != WebEngine::None;
     let surface = if web_run { "change-web" } else { "change" };
     let tables = crate::sem_profile::tables_for(family.toolkit, "app", family.web);
@@ -808,7 +637,7 @@ fn change_records(family: &Family, run: &Run, dev: &Deviations, out: &mut Vec<Re
                     drops.add(no_entry_reason(n), || describe(n));
                     continue;
                 }
-                compare_change(o, n, &metas[i], &label, case, web_run, run, dev, out);
+                compare_change(o, n, &label, case, web_run, run, out);
             }
             drops.flush(&label, case, surface, out);
         }
@@ -899,7 +728,7 @@ fn match_nodes(
 /// a popup menu) is diffed like any other: every node whose spoken facts differ (states other than
 /// FOCUSED, name, value) is one change; the trigger buttons (`do:*`) are not, and the nodes that
 /// appeared or vanished are counted as drops, never skipped.
-fn real_change_records(family: &Family, run: &Run, dev: &Deviations, out: &mut Vec<Record>) {
+fn real_change_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
     let web_run = family.web != WebEngine::None;
     let surface = if web_run { "change-web" } else { "change" };
     let tables = crate::sem_profile::tables_for(family.toolkit, "app", family.web);
@@ -962,7 +791,7 @@ fn real_change_records(family: &Family, run: &Run, dev: &Deviations, out: &mut V
                 continue;
             }
             compared += 1;
-            compare_change(o, n, &am[ni], &label, &rcase, web_run, run, dev, out);
+            compare_change(o, n, &label, &rcase, web_run, run, out);
         }
         for i in removed {
             drops.add("node-removed", || describe(&old[i]));
@@ -984,466 +813,185 @@ fn real_change_records(family: &Family, run: &Run, dev: &Deviations, out: &mut V
     }
 }
 
-/// Replay `surface` over every family present in the fixture tree; records sorted for byte
-/// comparison. `None` for a surface that has no new presenter yet.
-fn emit(surface: &str, seed: u64, lang: gorca_present::Lang) -> Option<String> {
+/// A dropped (corpus, case, reason, count).
+type Drop = (String, String, &'static str, u64);
+
+/// Replay `surface` over every family present in the fixture tree: the golden text (compared
+/// records only, sorted for byte comparison) and the dropped (corpus, case, reason, count) list.
+fn emit(surface: &str, seed: u64, lang: gorca_present::Lang) -> (String, usize, Vec<Drop>) {
     // Hidden inputs of `render` are pinned: the catalog language is `lang` on this thread whatever
-    // the process language is (and `RenderOpts`, `ComposeCtx` and `DiffCtx` carry the same
-    // language), and no extension registry is passed (compose and render take none, so add-on
-    // kinds cannot reach the output). The replay calls compose/render/diff synchronously, the same
-    // functions `ShadowActor::process` runs, so no sample is ever dropped by a bounded queue.
+    // the process language is, and no extension registry is passed (compose and render take none,
+    // so add-on kinds cannot reach the output).
     let _lang = gorca_i18n::scoped(lang);
-    let dev = Deviations::builtin();
     let run = Run { lang, seed };
     let mut recs = Vec::new();
     for family in FAMILIES {
         if !root().join(family.dir).is_dir() {
             continue;
         }
-        match surface {
-            "focus" => focus_records(family, &run, &dev, &mut recs),
-            "change" => {
-                change_records(family, &run, &dev, &mut recs);
-                real_change_records(family, &run, &dev, &mut recs);
-            }
-            _ => return None,
+        if surface == "focus" {
+            focus_records(family, &run, &mut recs);
+        } else {
+            change_records(family, &run, &mut recs);
+            real_change_records(family, &run, &mut recs);
         }
     }
-    recs.sort_by(|a, b| {
-        (
-            &a.corpus,
-            a.node,
-            &a.case,
-            a.surface,
-            a.outcome,
-            a.deviation,
-            &a.legacy,
-            &a.new,
-        )
-            .cmp(&(
-                &b.corpus,
-                b.node,
-                &b.case,
-                b.surface,
-                b.outcome,
-                b.deviation,
-                &b.legacy,
-                &b.new,
-            ))
+    let drops: Vec<_> = recs
+        .iter()
+        .filter_map(|r| {
+            r.dropped
+                .map(|(why, n)| (r.corpus.clone(), r.case.clone(), why, n))
+        })
+        .collect();
+    let mut kept: Vec<&Record> = recs.iter().filter(|r| r.dropped.is_none()).collect();
+    kept.sort_by(|a, b| {
+        (&a.corpus, a.node, &a.case, a.surface, &a.new)
+            .cmp(&(&b.corpus, b.node, &b.case, b.surface, &b.new))
     });
     let mut text = String::new();
-    for r in &recs {
+    for r in &kept {
         let _ = writeln!(
             text,
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}",
             r.corpus,
             r.node,
             r.case,
             r.surface,
-            r.outcome,
-            r.deviation,
-            esc(&r.legacy),
-            esc(&r.new),
-            esc(&r.witness)
+            esc(&r.new)
         );
     }
-    Some(text)
+    (text, kept.len(), drops)
 }
 
-fn lang_of(s: &str) -> Option<gorca_present::Lang> {
-    match s {
-        "en" => Some(gorca_present::Lang::En),
-        "ru" => Some(gorca_present::Lang::Ru),
-        _ => None,
+fn golden_path(surface: &str, lang: &str) -> std::path::PathBuf {
+    root().join("golden").join(format!("{surface}.{lang}.tsv"))
+}
+
+fn check(surface: &str, lang_name: &str, lang: gorca_present::Lang) {
+    let (got, _, _) = emit(surface, 0, lang);
+    let path = golden_path(surface, lang_name);
+    if std::env::var("GORCA_BLESS").is_ok_and(|v| v == "1") {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, &got).unwrap();
+        return;
+    }
+    let want = std::fs::read_to_string(&path).unwrap_or_default();
+    if want != got {
+        let (w, g): (Vec<&str>, Vec<&str>) = (want.lines().collect(), got.lines().collect());
+        let first = w
+            .iter()
+            .zip(&g)
+            .position(|(a, b)| a != b)
+            .unwrap_or(w.len().min(g.len()));
+        panic!(
+            "{surface}.{lang_name}: the golden records differ ({} lines recorded, {} now); first difference at line {}:\n recorded: {:?}\n now:      {:?}\n(GORCA_BLESS=1 rewrites them)",
+            w.len(),
+            g.len(),
+            first + 1,
+            w.get(first),
+            g.get(first)
+        );
     }
 }
 
-/// The gate's replay entry (run by `cargo xtask cutover`; a no-op otherwise).
 #[test]
-fn cutover_emit() {
-    let (Ok(surface), Ok(path)) = (
-        std::env::var("GORCA_CUTOVER_SURFACE"),
-        std::env::var("GORCA_CUTOVER_OUT"),
-    ) else {
-        return;
-    };
-    let seed: u64 = std::env::var("GORCA_CUTOVER_SHUFFLE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
-    let lang_name = std::env::var("GORCA_CUTOVER_LANG").unwrap_or_else(|_| "en".to_owned());
-    let lang = lang_of(&lang_name).expect("GORCA_CUTOVER_LANG is en or ru");
-    let text = emit(&surface, seed, lang).expect("surface has a replay");
-    std::fs::write(path, text).expect("write records");
+fn the_focus_utterance_of_every_recorded_node_is_golden() {
+    check("focus", "en", gorca_present::Lang::En);
+    check("focus", "ru", gorca_present::Lang::Ru);
+}
+
+#[test]
+fn the_change_utterance_of_every_recorded_state_flip_is_golden() {
+    check("change", "en", gorca_present::Lang::En);
+    check("change", "ru", gorca_present::Lang::Ru);
+}
+
+/// The records the cut-over gate compared when it passed (`cargo xtask cutover focus` / `change`,
+/// 8 of 8 families, en and ru): a golden file that holds fewer has lost coverage.
+const GATE_FOCUS_RECORDS: usize = 6497;
+const GATE_CHANGE_RECORDS: usize = 3750;
+
+#[test]
+fn the_goldens_hold_every_record_the_gate_compared() {
+    for (lang_name, lang) in [
+        ("en", gorca_present::Lang::En),
+        ("ru", gorca_present::Lang::Ru),
+    ] {
+        for (surface, want) in [
+            ("focus", GATE_FOCUS_RECORDS),
+            ("change", GATE_CHANGE_RECORDS),
+        ] {
+            let (_, n, _) = emit(surface, 0, lang);
+            assert_eq!(
+                n, want,
+                "{surface}.{lang_name}: records the replay compares"
+            );
+            let lines = std::fs::read_to_string(golden_path(surface, lang_name))
+                .unwrap_or_default()
+                .lines()
+                .count();
+            assert_eq!(
+                lines, want,
+                "{surface}.{lang_name}: lines in the golden file"
+            );
+        }
+    }
 }
 
 #[test]
 fn the_replay_is_repeatable_and_order_free_on_the_checked_in_corpus() {
-    // The same contract the gate checks, kept as a plain test so a regression shows without xtask.
     for lang in [gorca_present::Lang::En, gorca_present::Lang::Ru] {
         for surface in ["focus", "change"] {
-            let a = emit(surface, 0, lang).unwrap();
+            let a = emit(surface, 0, lang).0;
             assert!(!a.is_empty(), "{surface}: empty replay");
+            assert_eq!(a, emit(surface, 0, lang).0, "{surface}: two runs differ");
             assert_eq!(
                 a,
-                emit(surface, 0, lang).unwrap(),
-                "{surface}: two runs differ"
-            );
-            assert_eq!(
-                a,
-                emit(surface, 0x5eed, lang).unwrap(),
+                emit(surface, 0x5eed, lang).0,
                 "{surface}: shuffled arrival changed the output"
             );
         }
     }
 }
 
+/// Real expand and value cases are in the goldens (the pairing by path or fixture id compares
+/// them even when the tree changed shape).
 #[test]
-fn every_new_family_has_recorded_pages_and_every_page_compares_something() {
-    // A family or page that decodes to nothing must not count as coverage (the empty
-    // firefox/exotic-date page did, once). The replay reports `empty-corpus`; this keeps the same
-    // rule visible without xtask.
-    let text = emit("focus", 0, gorca_present::Lang::En).unwrap();
+fn the_real_expand_and_value_cases_are_golden() {
+    let (text, _, _) = emit("change", 0, gorca_present::Lang::En);
+    for case in ["real-expand", "real-expand-tree", "real-value-progress"] {
+        assert!(
+            text.lines().any(|l| l.split('\t').nth(2) == Some(case)),
+            "no golden record for {case}"
+        );
+    }
+    let value = text
+        .lines()
+        .filter(|l| {
+            l.split('\t')
+                .nth(2)
+                .is_some_and(|c| c.starts_with("real-value"))
+        })
+        .count();
+    assert!(value >= 3, "real value cases: {value}");
+}
+
+#[test]
+fn every_family_has_recorded_pages_and_every_page_compares_something() {
+    // A family or page that decodes to nothing must not count as coverage.
+    let (text, _, drops) = emit("focus", 0, gorca_present::Lang::En);
     for family in FAMILIES {
         assert!(
             text.lines()
-                .any(|l| l.starts_with(&format!("{}/", family.dir))
-                    && l.split('\t').nth(4).is_none_or(|o| o != "dropped")),
+                .any(|l| l.starts_with(&format!("{}/", family.dir))),
             "family {} compared no node",
             family.dir
         );
     }
     assert!(
-        !text
-            .lines()
-            .any(|l| l.split('\t').nth(5) == Some("empty-corpus")
-                || l.split('\t').nth(5) == Some("page-unparsable")),
-        "a recorded page is empty or unparsable:\n{}",
-        text.lines()
-            .filter(|l| l.contains("\tempty-corpus\t") || l.contains("\tpage-unparsable\t"))
-            .collect::<Vec<_>>()
-            .join("\n")
+        !drops
+            .iter()
+            .any(|(_, _, why, _)| *why == "empty-corpus" || *why == "page-unparsable"),
+        "a recorded page is empty or unparsable: {drops:?}"
     );
-}
-
-#[cfg(test)]
-mod witness_tests {
-    use super::*;
-    use gorca_model::sem::{Avail, GroupMask, Press, Semantics};
-
-    fn meta(raw_role: u32, has_value: bool) -> NodeMeta {
-        NodeMeta {
-            path_key: String::new(),
-            fixture_id: None,
-            raw_role,
-            has_value,
-        }
-    }
-
-    fn rec(role: SemRole, select: Select) -> SrcRecord {
-        SrcRecord {
-            sem: Semantics {
-                role,
-                select,
-                ..Semantics::default()
-            },
-            known: GroupMask::EMPTY.with(Group::Select),
-            ..SrcRecord::default()
-        }
-    }
-
-    fn ctx(surface: &str) -> DiffCtx<'_> {
-        DiffCtx {
-            surface,
-            role: SemRole::MenuItem,
-            name_derived: false,
-            untoggled: false,
-            not_toggle: false,
-            not_selectable: false,
-            toggle_button: false,
-            has_value_text: false,
-            avail_na: false,
-            lang: gorca_present::Lang::En,
-        }
-    }
-
-    #[test]
-    fn a_selectable_source_node_the_model_calls_not_selectable_is_flagged() {
-        let c = DiffCtx {
-            not_selectable: true,
-            ..ctx("change-web")
-        };
-        let r = rec(SemRole::MenuItem, Select::On);
-        let w = model_fact_witness(
-            &["select-not-applicable"],
-            &c,
-            Some(&r),
-            StateSet::empty(),
-            &meta(35, false),
-        );
-        assert!(w.contains("select-not-applicable"), "{w}");
-        // The source agrees that it cannot be selected: the row stands on shared evidence.
-        let r2 = rec(SemRole::Button, Select::NotSelectable);
-        assert!(
-            model_fact_witness(
-                &["select-not-applicable"],
-                &c,
-                Some(&r2),
-                StateSet::empty(),
-                &meta(43, false)
-            )
-            .is_empty()
-        );
-    }
-
-    #[test]
-    fn a_disableable_source_role_the_model_calls_not_applicable_is_flagged() {
-        let c = DiffCtx {
-            avail_na: true,
-            ..ctx("change")
-        };
-        let tree = rec(SemRole::Tree, Select::NotSelectable);
-        assert!(
-            !model_fact_witness(
-                &["unavailable-static"],
-                &c,
-                Some(&tree),
-                StateSet::empty(),
-                &meta(65, false)
-            )
-            .is_empty(),
-            "a tree can be disabled"
-        );
-        let doc = rec(SemRole::Document, Select::NotSelectable);
-        assert!(
-            model_fact_witness(
-                &["unavailable-static"],
-                &c,
-                Some(&doc),
-                StateSet::empty(),
-                &meta(95, false)
-            )
-            .is_empty(),
-            "a document cannot"
-        );
-        // The focus row, gated by role, is held to the same table.
-        let group = rec(SemRole::Group, Select::NotSelectable);
-        let f = DiffCtx {
-            role: SemRole::Group,
-            ..ctx("focus-web")
-        };
-        assert!(
-            !model_fact_witness(
-                &["unavailable-static"],
-                &f,
-                Some(&group),
-                StateSet::empty(),
-                &meta(87, false)
-            )
-            .is_empty(),
-            "a disabled fieldset is a group that can be disabled"
-        );
-    }
-
-    #[test]
-    fn toggle_facts_are_checked_against_the_engine_role() {
-        let c = DiffCtx {
-            not_toggle: true,
-            role: SemRole::Button,
-            ..ctx("change")
-        };
-        let r = SrcRecord {
-            sem: Semantics {
-                press: Press::Off,
-                avail: Avail::Enabled,
-                ..Semantics::default()
-            },
-            ..SrcRecord::default()
-        };
-        assert!(
-            !model_fact_witness(
-                &["pressed-without-toggle"],
-                &c,
-                Some(&r),
-                StateSet::empty(),
-                &meta(62, false)
-            )
-            .is_empty(),
-            "the engine says toggle button, the model a plain button"
-        );
-        // An ARIA switch is exported as a toggle button; the model's Switch is the right reading.
-        let sw = DiffCtx {
-            role: SemRole::Switch,
-            ..c
-        };
-        assert!(
-            model_fact_witness(
-                &["pressed-without-toggle"],
-                &sw,
-                Some(&r),
-                StateSet::empty(),
-                &meta(62, false)
-            )
-            .is_empty()
-        );
-        assert!(
-            model_fact_witness(
-                &["pressed-without-toggle"],
-                &c,
-                Some(&r),
-                StateSet::empty(),
-                &meta(4, false)
-            )
-            .is_empty(),
-            "a check box flipped to pressed is not a toggle"
-        );
-        let t = DiffCtx {
-            toggle_button: true,
-            ..ctx("change")
-        };
-        assert!(
-            !model_fact_witness(
-                &["toggle-state-word"],
-                &t,
-                Some(&r),
-                StateSet::empty(),
-                &meta(43, false)
-            )
-            .is_empty()
-        );
-        assert!(
-            model_fact_witness(
-                &["toggle-state-word"],
-                &t,
-                Some(&r),
-                StateSet::empty(),
-                &meta(62, false)
-            )
-            .is_empty()
-        );
-    }
-
-    #[test]
-    fn a_value_the_recorded_node_has_cannot_be_the_reason_the_legacy_side_is_silent() {
-        let c = DiffCtx {
-            role: SemRole::Slider,
-            ..ctx("focus-web")
-        };
-        assert!(
-            !model_fact_witness(
-                &["value-from-attrs"],
-                &c,
-                None,
-                StateSet::empty(),
-                &meta(51, true)
-            )
-            .is_empty()
-        );
-        assert!(
-            model_fact_witness(
-                &["value-from-attrs"],
-                &c,
-                None,
-                StateSet::empty(),
-                &meta(51, false)
-            )
-            .is_empty()
-        );
-        // A row the check knows nothing about is not touched.
-        assert!(
-            model_fact_witness(
-                &["role-from-model"],
-                &c,
-                None,
-                StateSet::empty(),
-                &meta(51, true)
-            )
-            .is_empty()
-        );
-    }
-
-    #[test]
-    fn nodes_are_paired_by_identity_when_the_tree_changes_shape() {
-        let m = |p: &str, id: Option<&str>| NodeMeta {
-            path_key: p.to_owned(),
-            fixture_id: id.map(str::to_owned),
-            raw_role: 0,
-            has_value: false,
-        };
-        let before = vec![m("a|1", None), m("a|2", Some("x")), m("a|3", None)];
-        // Node 2 was re-created under a new path but keeps its id; node 3 vanished; a new one
-        // appeared between.
-        let after = vec![m("a|1", None), m("a|9", None), m("a|7", Some("x"))];
-        let (pairs, removed, added) = match_nodes(&before, &after);
-        assert_eq!(pairs, vec![(0, 0), (1, 2)]);
-        assert_eq!(removed, vec![2]);
-        assert_eq!(added, vec![1]);
-    }
-
-    /// The defect the judge found (reports `change-2026-10-24-3`): the model called the options of
-    /// a `<select>` "not selectable", and `select-not-applicable` accepted every selection change
-    /// on them as intended. Rebuilt here on the real Firefox corpus by forcing the fused fact: the
-    /// replay must mark the record, so the gate refuses it however the row reads. This failed
-    /// (the record carried no witness) before the check existed.
-    #[test]
-    fn the_select_defect_is_caught_on_the_real_corpus_however_the_row_reads() {
-        let _lang = gorca_i18n::scoped(gorca_present::Lang::En);
-        let row = "[[deviation]]\nid = \"select-not-applicable\"\nsurface = \"change-web\"\nreason = \"r\"\nuntil = \"2099-01-01\"\n";
-        let dev = Deviations::parse(row).expect("row parses");
-        let run = Run {
-            lang: gorca_present::Lang::En,
-            seed: 0,
-        };
-        let tables = crate::sem_profile::tables_for("", "app", WebEngine::Gecko);
-        let (base, (metas, _)) = (
-            page("firefox", "disabled").expect("page"),
-            page_meta("firefox", "disabled").expect("meta"),
-        );
-        let old = fuse(tables, "t/old", &base, 0);
-        // The option nodes: AT-SPI menu items (role 35) of the select combo box, selectable.
-        let mut hit = None;
-        for (i, m) in metas.iter().enumerate() {
-            if m.raw_role != 35 {
-                continue;
-            }
-            let mutated = page_with("firefox", "disabled", &|raw| {
-                if has(&raw.state_words, st::SELECTABLE) {
-                    let on = has(&raw.state_words, st::SELECTED);
-                    put(&mut raw.state_words, st::SELECTED, !on);
-                }
-            })
-            .expect("mutated page");
-            let new = fuse(tables, "t/new", &mutated, 0);
-            let force = |s: &Arc<NodeSnapshot>| {
-                let mut n = (**s).clone();
-                let mut e = (**n.sem.entry.as_ref().expect("entry")).clone();
-                e.sem.select = Select::NotSelectable;
-                n.sem.entry = Some(Arc::new(e));
-                Arc::new(n)
-            };
-            let mut out = Vec::new();
-            compare_change(
-                &force(&old[i]),
-                &force(&new[i]),
-                m,
-                "firefox/disabled",
-                "select",
-                true,
-                &run,
-                &dev,
-                &mut out,
-            );
-            if out[0].outcome == "allowed" {
-                hit = Some(out.remove(0));
-                break;
-            }
-        }
-        let rec = hit.expect("a selection change on an option is allowed by the row");
-        assert!(
-            rec.witness.contains("select-not-applicable")
-                && rec.witness.contains("engine marks the node selectable"),
-            "the contradicted fact must be named: {:?}",
-            rec.witness
-        );
-    }
 }

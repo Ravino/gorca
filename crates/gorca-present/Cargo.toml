@@ -1,6 +1,6 @@
 [package]
 name = "gorca-present"
-description = "Semantic presentation pipeline: SemEntry to PresIr to tokens, shadow mode (ADR-0022 M22b1)."
+description = "Semantic presentation pipeline: SemEntry to PresIr to tokens, IR edits, the diff engine (ADR-0022 M22b1)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,12 +14,6 @@ gorca-i18n = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 toml_edit = { workspace = true }
-tokio = { workspace = true }
-tokio-util = { workspace = true }
-tracing = { workspace = true }
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

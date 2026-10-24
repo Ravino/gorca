@@ -10,7 +10,7 @@
 //! to `compose`, its adapter call goes away and the edit stays.
 //!
 //! Order of application (fixed, so a result never depends on the order the producers ran in):
-//! `Silence`, `ReplaceAll`, `SetValue`, `DropKind`, `Prepend`, `Append`.
+//! `Silence`, `ReplaceAll`, `SetValue`, `DropKind` / `DropMsg`, `Prepend`, `Append`.
 
 use std::sync::Arc;
 
@@ -27,6 +27,9 @@ pub enum IrEdit {
     ReplaceAll(Vec<Field>),
     /// Replace the first `VALUE` field with `text`, or append one (the policy's value).
     SetValue(Arc<str>),
+    /// Remove every field that says the catalog message `MsgId` (the "selected" word in a
+    /// switcher, where being selected is the reason it is spoken at all).
+    DropMsg(gorca_i18n::MsgId),
     /// Remove every field of the kind (a web "unavailable" on static content, a description).
     DropKind(FieldKind),
     /// Insert fields in front of the utterance (a window title, the mode word), in order.
@@ -97,8 +100,16 @@ pub fn apply(ir: &mut PresIr, edits: &[IrEdit]) -> bool {
         }
     }
     for e in edits {
-        if let IrEdit::DropKind(k) = e {
-            ir.fields.retain(|f| f.kind != *k);
+        match e {
+            IrEdit::DropKind(k) => ir.fields.retain(|f| f.kind != *k),
+            IrEdit::DropMsg(id) => ir
+                .fields
+                .retain(|f| !matches!(&f.content, Content::Msg { id: m, .. } if m == id)),
+            IrEdit::Silence
+            | IrEdit::ReplaceAll(_)
+            | IrEdit::SetValue(_)
+            | IrEdit::Prepend(_)
+            | IrEdit::Append(_) => {}
         }
     }
     let mut at = 0;
@@ -215,6 +226,28 @@ mod tests {
         assert_eq!(i.fields[0].origin.via, 9);
         assert_eq!(i.fields[0].kind, FieldKind::TEXT);
         assert_eq!(i.fields[1].kind, FieldKind::ROLE);
+    }
+
+    #[test]
+    fn drop_msg_removes_only_that_word() {
+        let mut i = ir(&[(FieldKind::NAME, "Row")]);
+        i.fields.push(Field::new(
+            FieldKind::STATE,
+            Content::word(gorca_i18n::MsgId::StateSelected),
+            Origin::default(),
+        ));
+        i.fields.push(Field::new(
+            FieldKind::STATE,
+            Content::word(gorca_i18n::MsgId::StateExpanded),
+            Origin::default(),
+        ));
+        apply(&mut i, &[IrEdit::DropMsg(gorca_i18n::MsgId::StateSelected)]);
+        assert_eq!(i.fields.len(), 2);
+        assert!(
+            i.fields
+                .iter()
+                .all(|f| f.content != Content::word(gorca_i18n::MsgId::StateSelected))
+        );
     }
 
     #[test]

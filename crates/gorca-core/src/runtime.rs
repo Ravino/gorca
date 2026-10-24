@@ -93,9 +93,6 @@ pub struct CoreConfig {
     pub max_reader_restarts: usize,
     /// M-6b fallback: the cold focus fetch leaves `ATTRS` out (`GORCA_LAZY_ATTRS=1`).
     pub lazy_attrs: bool,
-    /// M22b1: run the `gorca-present` shadow presenter beside the legacy one and count the
-    /// differences (`GORCA_PRESENT_SHADOW=1`). Speaks nothing.
-    pub present_shadow: bool,
 }
 
 impl Default for CoreConfig {
@@ -105,7 +102,6 @@ impl Default for CoreConfig {
             slot_budget: GLOBAL_SLOT_BUDGET,
             max_reader_restarts: MAX_READER_RESTARTS,
             lazy_attrs: false,
-            present_shadow: false,
         }
     }
 }
@@ -272,7 +268,6 @@ struct Shared {
     /// Text events the app actors could not queue for the Reader (ADR-0007 EV-5).
     text_dropped: Arc<AtomicU64>,
     lazy_attrs: bool,
-    present_shadow: bool,
     /// The extension host (ADR-0001 section 10), when the daemon wires one.
     ext: Option<Arc<dyn crate::ExtSource>>,
     /// The application policy the Reader consults (ADR-0008 W3), if the daemon installed one.
@@ -325,7 +320,6 @@ impl Core {
         let (config, config_rx) = mpsc::channel(CONFIG_QUEUE);
         let (hub, hub_rx) = hub_channel();
         let lazy_attrs = cfg.lazy_attrs;
-        let present_shadow = cfg.present_shadow;
         Self {
             cfg,
             shared: Arc::new(Shared {
@@ -361,7 +355,6 @@ impl Core {
                 },
                 text_dropped: Arc::new(AtomicU64::new(0)),
                 lazy_attrs,
-                present_shadow,
                 ext: None,
                 app_policy: None,
                 term_provider: None,
@@ -626,18 +619,8 @@ impl Core {
             let (shared, token, dead) =
                 (Arc::clone(&shared), lane_token.clone(), lane_dead.clone());
             let max_restarts = cfg.max_reader_restarts;
-            // R-1: the shadow presenter runs on this multi-thread runtime, not on the lane.
-            let pool = tokio::runtime::Handle::current();
             spawn_lane(Lane::Reader, move || {
-                reader_lane(
-                    &shared,
-                    inbox,
-                    &fetch_tx,
-                    &token,
-                    &dead,
-                    max_restarts,
-                    &pool,
-                );
+                reader_lane(&shared, inbox, &fetch_tx, &token, &dead, max_restarts);
             })
             .map_err(|e| CoreError::Lane(e.to_string()))?
         };
@@ -1066,7 +1049,6 @@ fn reader_lane(
     token: &CancellationToken,
     dead: &CancellationToken,
     max_restarts: usize,
-    pool: &tokio::runtime::Handle,
 ) {
     let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_time()
@@ -1082,7 +1064,7 @@ fn reader_lane(
     let mut restarts: Vec<Instant> = Vec::new();
     loop {
         let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            rt.block_on(reader_loop(shared, &mut inbox, fetch_tx, token, pool));
+            rt.block_on(reader_loop(shared, &mut inbox, fetch_tx, token));
         }));
         if run.is_ok() {
             return;
@@ -1102,32 +1084,11 @@ fn reader_lane(
     }
 }
 
-/// Aborts the task it owns when dropped (the owner's cancellation path).
-struct AbortOnDrop(tokio::task::JoinHandle<()>);
-
-impl Drop for AbortOnDrop {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
-}
-
-/// Logs the shadow presenter's counters when the Reader lane ends (M22b1).
-struct ShadowReport(Option<gorca_present::ShadowHandle>);
-
-impl Drop for ShadowReport {
-    fn drop(&mut self) {
-        if let Some(h) = &self.0 {
-            tracing::info!(stats = ?h.stats(), "present shadow summary");
-        }
-    }
-}
-
 async fn reader_loop(
     shared: &Arc<Shared>,
     inbox: &mut crate::reader::ReaderInbox,
     fetch_tx: &mpsc::Sender<FetchJob>,
     token: &CancellationToken,
-    pool: &tokio::runtime::Handle,
 ) {
     let mut reader = Reader::new(
         Arc::clone(&shared.epoch),
@@ -1154,18 +1115,6 @@ async fn reader_loop(
     if let Some(p) = &shared.term_provider {
         reader = reader.with_term_provider(Arc::clone(p));
     }
-    // M22b1: the shadow presenter is an actor on the multi-thread pool (R-1), fed by a bounded
-    // channel that drops when full. This loop owns its task: the guard aborts it on exit.
-    let (shadow_task, shadow_stats) = if shared.present_shadow {
-        let (handle, actor) = gorca_present::channel(gorca_present::Deviations::builtin());
-        let task = pool.spawn(actor.run(token.child_token()));
-        reader = reader.with_present_shadow(handle.clone());
-        (Some(AbortOnDrop(task)), Some(handle))
-    } else {
-        (None, None)
-    };
-    let _shadow_task = shadow_task;
-    let _shadow_report = ShadowReport(shadow_stats);
     // N1: every armed deadline stays armed until it fires (a set, not one slot).
     let mut timers: std::collections::BTreeSet<Instant> = std::collections::BTreeSet::new();
     // Review fetches, builds and actions: each in a task this loop owns (aborted with it).
