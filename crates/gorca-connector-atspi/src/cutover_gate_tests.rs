@@ -66,8 +66,8 @@ const FAMILIES: &[Family] = &[
     },
     Family {
         dir: "telegram",
-        toolkit: "Qt",
-        web: WebEngine::None,
+        toolkit: "",
+        web: WebEngine::Blink,
     },
 ];
 
@@ -75,7 +75,7 @@ const FAMILIES: &[Family] = &[
 struct Record {
     corpus: String,
     node: u64,
-    case: &'static str,
+    case: String,
     surface: &'static str,
     outcome: &'static str,
     deviation: &'static str,
@@ -222,7 +222,7 @@ fn focus_records(family: &Family, seed: u64, dev: &Deviations, out: &mut Vec<Rec
                 out.push(Record {
                     corpus: label.clone(),
                     node: s.key.local.0,
-                    case: "focus",
+                    case: "focus".to_owned(),
                     surface: if web_run { "focus-web" } else { "focus" },
                     outcome: "different",
                     deviation: "",
@@ -243,7 +243,7 @@ fn focus_records(family: &Family, seed: u64, dev: &Deviations, out: &mut Vec<Rec
             out.push(Record {
                 corpus: label.clone(),
                 node: s.key.local.0,
-                case: "focus",
+                case: "focus".to_owned(),
                 surface,
                 outcome,
                 deviation,
@@ -409,44 +409,91 @@ fn change_records(family: &Family, seed: u64, dev: &Deviations, out: &mut Vec<Re
                 if is_web(n) != web_run {
                     continue;
                 }
-                let (Some(oe), Some(ne)) = (o.sem.entry.as_ref(), n.sem.entry.as_ref()) else {
-                    continue;
-                };
-                let legacy_pairs = gorca_core::legacy_change_tokens(o, n, false);
-                let legacy: Vec<LegacyToken> = legacy_pairs
-                    .iter()
-                    .map(|(kind, text)| LegacyToken {
-                        kind: *kind,
-                        text: Arc::clone(text),
-                    })
-                    .collect();
-                let ctx = ComposeCtx {
-                    flags: ReportFlags::default(),
-                    may_refine: false,
-                    web: web_run,
-                    skip_selected: false,
-                };
-                let ir = compose_change(oe, ne, n.key, ctx);
-                let tokens = render(
-                    &ir,
-                    RenderOpts {
-                        description_pause: false,
-                    },
-                );
-                let surface = if web_run { "change-web" } else { "change" };
-                let d = diff(&legacy, &tokens, dev, DiffCtx::for_entry(surface, ne));
-                let (outcome, deviation) = classify(&d, legacy.is_empty(), tokens.is_empty());
-                out.push(Record {
-                    corpus: label.clone(),
-                    node: n.key.local.0,
-                    case,
-                    surface,
-                    outcome,
-                    deviation,
-                    legacy: join(legacy.iter().map(|t| (t.kind, &*t.text))),
-                    new: join(tokens.iter().map(|t| (t.kind, t.text.as_str()))),
-                });
+                compare_change(o, n, &label, case, web_run, dev, out);
             }
+        }
+    }
+}
+
+/// Both presenters on one `old -> new` change of a node; pushes one record.
+fn compare_change(
+    o: &Arc<NodeSnapshot>,
+    n: &Arc<NodeSnapshot>,
+    label: &str,
+    case: &str,
+    web_run: bool,
+    dev: &Deviations,
+    out: &mut Vec<Record>,
+) {
+    let (Some(oe), Some(ne)) = (o.sem.entry.as_ref(), n.sem.entry.as_ref()) else {
+        return;
+    };
+    let legacy_pairs = gorca_core::legacy_change_tokens(o, n, false);
+    let legacy: Vec<LegacyToken> = legacy_pairs
+        .iter()
+        .map(|(kind, text)| LegacyToken {
+            kind: *kind,
+            text: Arc::clone(text),
+        })
+        .collect();
+    let ctx = ComposeCtx {
+        flags: ReportFlags::default(),
+        may_refine: false,
+        web: web_run,
+        skip_selected: false,
+    };
+    let ir = compose_change(oe, ne, n.key, ctx);
+    let tokens = render(
+        &ir,
+        RenderOpts {
+            description_pause: false,
+        },
+    );
+    let surface = if web_run { "change-web" } else { "change" };
+    let d = diff(&legacy, &tokens, dev, DiffCtx::for_entry(surface, ne));
+    let (outcome, deviation) = classify(&d, legacy.is_empty(), tokens.is_empty());
+    out.push(Record {
+        corpus: label.to_owned(),
+        node: n.key.local.0,
+        case: case.to_owned(),
+        surface,
+        outcome,
+        deviation,
+        legacy: join(legacy.iter().map(|t| (t.kind, &*t.text))),
+        new: join(tokens.iter().map(|t| (t.kind, t.text.as_str()))),
+    });
+}
+
+/// The recorded state-change corpus (`tests/fixtures/sem-change/<family>/<case>.before|after`):
+/// the toolkit or the page script made the change, the recorder saw the tree before and after.
+/// Every node whose spoken facts differ (states other than FOCUSED, name) is one change; the
+/// trigger buttons (`do:*`) are not.
+fn real_change_records(family: &Family, seed: u64, dev: &Deviations, out: &mut Vec<Record>) {
+    let web_run = family.web != WebEngine::None;
+    let tables = crate::sem_profile::tables_for(family.toolkit, "app", family.web);
+    let dir = format!("../sem-change/{}", family.dir);
+    for name in pages_of(&dir) {
+        let Some(case) = name.strip_suffix(".before") else {
+            continue;
+        };
+        let (Some(before), Some(after)) = (page(&dir, &name), page(&dir, &format!("{case}.after")))
+        else {
+            continue;
+        };
+        if before.len() != after.len() {
+            continue; // the tree changed shape: not a state change
+        }
+        let label = format!("{}/change:{case}", family.dir);
+        let old = fuse(tables, &format!("{label}.before"), &before, seed);
+        let new = fuse(tables, &format!("{label}.after"), &after, seed);
+        for (o, n) in old.iter().zip(&new) {
+            let states = (o.states ^ n.states) & !gorca_model::StateSet::FOCUSED;
+            let renamed = o.name != n.name;
+            let trigger = n.name.as_deref().is_some_and(|x| x.starts_with("do:"));
+            if trigger || is_web(n) != web_run || (states.is_empty() && !renamed) {
+                continue;
+            }
+            compare_change(o, n, &label, &format!("real-{case}"), web_run, dev, out);
         }
     }
 }
@@ -468,12 +515,15 @@ fn emit(surface: &str, seed: u64) -> Option<String> {
         }
         match surface {
             "focus" => focus_records(family, seed, &dev, &mut recs),
-            "change" => change_records(family, seed, &dev, &mut recs),
+            "change" => {
+                change_records(family, seed, &dev, &mut recs);
+                real_change_records(family, seed, &dev, &mut recs);
+            }
             _ => return None,
         }
     }
     recs.sort_by(|a, b| {
-        (&a.corpus, a.node, a.case, a.surface).cmp(&(&b.corpus, b.node, b.case, b.surface))
+        (&a.corpus, a.node, &a.case, a.surface).cmp(&(&b.corpus, b.node, &b.case, b.surface))
     });
     let mut text = String::new();
     for r in &recs {
