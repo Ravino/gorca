@@ -123,3 +123,78 @@ and does not vary the thread count.
 5. Run the gate in Russian (`Lang::Ru`) too.
 6. In the cut-over slice, add one end-to-end check of the wired live path (keypress to speech
    text) on Firefox, GTK4 and Shell before the deletion commit.
+
+## Re-judgement 2026-10-24 (main 556f4515, branch `cutover-focus` 36548eda)
+
+Verdict: **APPROVE AFTER** the three items in "Required before the tag" below.
+
+Method: the replay was re-run on main (`cutover_emit`, en, seed 0). Its records were joined with the
+fixtures and with the goldens on the branch. main plus the commit (`git cherry-pick -n` in a
+detached worktree; the commit applies cleanly although its parent is d74abca3) passes:
+
+- fmt;
+- `clippy --workspace --all-targets -D warnings`;
+- the tests of gorca-core (1004), gorca-present, gorca-connector-atspi, gorca-model,
+  gorca-ext-host and xtask, with 0 failures;
+- `xtask legacy`: ok, 58 rows;
+- `xtask cutover --check`: ok.
+
+### 1. The new rows: none hides a regression
+
+- **unavailable-static@focus (1003)**: the evidence is real. Clutter removes SENSITIVE and ENABLED
+  together whenever an actor is not reactive (`refs/mutter/clutter/clutter/clutter-actor.c:12140-12146`),
+  and non-reactive is the default for St actors. The 1002 Shell hits are all role panel (931) or
+  label (71), and none of them is sensitive. The predicate is avail_na plus 5 static roles, so the
+  row is narrow. Disabled Shell controls still say "unavailable" on both sides: date-menu node 81
+  and notification-list node 181 are buttons and compare equal. The 3 remaining hits (a web
+  section, a web panel, a VTE icon) are benign.
+- **value-text-spoken (17 focus, 3 change)**: every hit is a genuine text reading: "Tuesday",
+  "PM", "October", "40 percent", "five", "High", "80%". There is no witness for it, so a wrong
+  value_text in the model would pass. Low risk.
+- **name-whitespace (97)**: it fires only when the new name is exactly the whitespace-collapsed
+  legacy name (trailing spaces after bullets, the en spaces in the Shell date label). Benign.
+
+### 2. Drops: the explanation is sound
+
+- **mutation-not-focusable (6557)**: the live path builds a change utterance only for the
+  presented focus (`flow.rs` callers of `build_change`), so dropping these is sound.
+- **Real expand cases**: they are now compared on the gate. The expanded node is paired by path or
+  fixture id and compares equal in all 8 web cases. Only children that appeared or vanished are
+  dropped.
+- **The goldens are a different matter.** `golden_tests.rs` still skips a real case whose tree
+  changed shape (`before.len() != after.len()`), ignores value changes, uses the old `is_web` test
+  instead of `web_flags`, and runs in English only. Measured against the gate records:
+  - focus: the golden holds 5578 of the 6497 compared records. The 919 missing ones are web static
+    text: 861 equal and 58 intended.
+  - change: the golden holds 3697 of 3750. The 53 missing ones include every real expand case and
+    the real value cases.
+  - The records the two have in common show 0 differences.
+
+  Once the commit deletes the gate, none of these records is guarded by anything.
+
+### 3. The commit
+
+- All 24 `M22b1-5` rows are gone. The changed M22b2/M22b4 counts and the one new M22b3
+  `role-spoken` row (review `flat_zone_text`) are consistent with the code that moved.
+- The shadow, `present_focus`/`present_change` and `GORCA_PRESENT_SHADOW` are gone.
+- The live path is `present/node.rs`: `compose`/`compose_change` produce a PresIr, IR edits are
+  applied, then `render`. This is the right shape.
+- **No end-to-end check exists.** The commit has none, and no e2e result is newer than the gate
+  reports. The live change path (`with_entry_after`, which lays the observed groups over the
+  spoken entry) is not what the goldens replay, since they fuse before and after from scratch.
+- **M-6 is weak.** The only evidence is one microbench run of `Reader::handle` against main
+  ("25 ns", from the implementer's memory). No result file is committed. The plan asks for the
+  e2e Δp99 against `legacy/focus-last` with the load and governor recorded.
+
+### Required before the tag
+
+1. Port the hardened replay into `golden_tests.rs`: `web_flags`, `match_nodes`,
+   `spoken_facts_differ` including value changes, and both en and ru. Re-bless. Add a test that
+   golden lines equal the gate's equal and intended records: 6497 focus and 3750 change, en and ru.
+2. Run one wired keypress-to-speech e2e check on Firefox, GTK4 and Shell, covering focus plus one
+   change each (check, expand, value). Do it on the cherry-picked tree and commit the logs.
+3. Commit an M-6 result file with its conditions.
+
+Follow-ups (low): a witness for value-text-spoken; the Shell quick-settings button gets a derived
+name of the whole menu ("100% Take Screenshot Settings Power Off Menu", content-derived-name,
+pre-existing row).
