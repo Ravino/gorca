@@ -6,6 +6,8 @@
 //! > `cpu`, and the results go straight to the speech lane with their epoch, without passing
 //! > back through the Reader."
 
+#[cfg(feature = "cutover-probe")]
+pub mod cutover_probe_tests;
 mod echo;
 mod fair;
 mod flow;

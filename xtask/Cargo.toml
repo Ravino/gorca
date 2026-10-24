@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 cargo_metadata = { workspace = true }
+toml_edit = { workspace = true }
 
 [lints]
 workspace = true
