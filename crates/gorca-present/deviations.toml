@@ -3,84 +3,100 @@
 #   id       a classifier name from `src/diff.rs` (`Classifier`); a missing row allows nothing
 #   surface  where it applies (`focus`); the same id on another surface is NOT allowed
 #   reason   why the difference is acceptable
+#   epoch    the epoch change that makes the difference intended (m22b1: legacy presenters -> fused
+#            model and PresIr v1); the cut-over gate (`cargo xtask cutover`) calls a row without it
+#            unusable, so a difference it names stays UNCLASSIFIED
 #   until    ISO date after which the row is expired; a unit test fails once it passes, so the gap
 #            is closed or the row is renewed with a new reason
 
 [[deviation]]
 id = "field-contents-not-fused"
 surface = "focus"
+epoch = "m22b1"
 reason = "The legacy presenter speaks a field's contents as its value. Contents are text-layer data (they change per keystroke), not a fused group; the text layer speaks them. Closes when the focus switch moves the contents field into the compose row (slice 5)."
 until = "2026-11-07"
 
 [[deviation]]
 id = "content-derived-name"
 surface = "focus"
+epoch = "m22b1"
 reason = "The fused name of a list row, tab or similar is derived from its content (ProvCode::Derived); the legacy snapshot carries no name and speaks the role alone. The fused result is the intended improvement."
 until = "2026-11-07"
 
 [[deviation]]
 id = "pressed-without-toggle"
 surface = "focus"
+epoch = "m22b1"
 reason = "The legacy presenter says pressed for a native tab whose AT-SPI state set has PRESSED; the model says it is not a toggle (agreement deviation pressed-without-toggle) and selected already carries the meaning."
 until = "2026-11-07"
 
 [[deviation]]
 id = "role-from-model"
 surface = "focus"
+epoch = "m22b1"
 reason = "The legacy role mapping gave Unknown (no role word) for nodes whose fused role is known (landmark, popover, slider, panel); the model's word is the intended improvement."
 until = "2026-11-07"
 
 [[deviation]]
 id = "content-derived-name"
 surface = "focus-web"
+epoch = "m22b1"
 reason = "A row, list item or similar is named from its content in the model; the legacy web snapshot carries no name."
 until = "2026-11-07"
 
 [[deviation]]
 id = "role-from-model"
 surface = "focus-web"
+epoch = "m22b1"
 reason = "The legacy web mapping spoke no role word for these roles; the model's word is the intended improvement (article is still spoken as landmark: a catalog word is slice 4 work)."
 until = "2026-11-07"
 
 [[deviation]]
 id = "marker-stripped-name"
 surface = "focus"
+epoch = "m22b1"
 reason = "A quirk row strips the CSS list marker the engine put into the name; the model name is the intended one."
 until = "2026-11-07"
 
 [[deviation]]
 id = "marker-stripped-name"
 surface = "focus-web"
+epoch = "m22b1"
 reason = "A quirk row strips the CSS list marker the engine put into the name; the model name is the intended one."
 until = "2026-11-07"
 
 [[deviation]]
 id = "static-text-word"
 surface = "focus-web"
+epoch = "m22b1"
 reason = "The engine reports label and static text as two roles; the model has one StaticText, spoken text."
 until = "2026-11-07"
 
 [[deviation]]
 id = "grouping-word"
 surface = "focus-web"
+epoch = "m22b1"
 reason = "NVDA says grouping for a fieldset or group; the legacy mapping said panel."
 until = "2026-11-07"
 
 [[deviation]]
 id = "role-not-in-table"
 surface = "focus-web"
+epoch = "m22b1"
 reason = "Roles without an NVDA word say nothing in the web row; the legacy mapping spoke the engine's role (log, figure, inline text roles, an unnamed form)."
 until = "2026-11-07"
 
 [[deviation]]
 id = "value-from-attrs"
 surface = "focus-web"
+epoch = "m22b1"
 reason = "The model holds aria-valuetext and aria-valuenow; the recorded fixture snapshots carry no Value interface, so the legacy side is silent. Live, both speak a value."
 until = "2026-11-07"
 
 [[deviation]]
 id = "read-only-from-model"
 surface = "focus-web"
+epoch = "m22b1"
 reason = "The model holds aria-readonly and the readonly attribute; NVDA says read only. The legacy snapshot state set does not carry it."
 until = "2026-11-07"
 

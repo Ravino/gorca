@@ -38,6 +38,9 @@ const EXEMPT: &[&str] = &[
     "crates/gorca-testkit/",
     // Test-only module (`#[cfg(test)] mod statemodel` in lib.rs): seed and case-count knobs.
     "crates/gorca-core/src/statemodel/",
+    // Test-only module (`#[cfg(test)] mod cutover_gate_tests`): the gate passes surface, output
+    // path and shuffle seed in by environment, because `xtask cutover` runs the test binary.
+    "crates/gorca-connector-atspi/src/cutover_gate_tests.rs",
     "xtask/",
 ];
 
