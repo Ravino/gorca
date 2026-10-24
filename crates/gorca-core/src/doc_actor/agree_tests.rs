@@ -21,6 +21,8 @@ use super::live::props_of;
 use super::translate::{Translator, derive_flags};
 
 struct Rec {
+    /// The first 400 scalars of the Text interface (`GetText`), when the node has one.
+    text: Option<String>,
     role: u32,
     states: u64,
     attrs: Vec<(String, String)>,
@@ -56,6 +58,7 @@ fn load(engine: &str, page: &str) -> Vec<Rec> {
         let hi = words.get(1).copied().unwrap_or(0);
         let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_owned();
         out.push(Rec {
+            text: v.get("text").and_then(|t| t.as_str()).map(str::to_owned),
             role: u32::try_from(role).unwrap_or(0),
             states: lo | (hi << 32),
             attrs: v
@@ -78,7 +81,7 @@ fn load(engine: &str, page: &str) -> Vec<Rec> {
     out
 }
 
-fn pages(engine: &str) -> Vec<String> {
+pub(crate) fn pages(engine: &str) -> Vec<String> {
     let mut v: Vec<String> = std::fs::read_dir(root().join(engine))
         .map(|d| {
             d.filter_map(Result::ok)
@@ -127,8 +130,13 @@ fn build(
     legacy: WebQuirks,
     page: &str,
     dir: &str,
+    synth_text: bool,
+    shuffle: u64,
 ) -> Result<Built, String> {
-    let recs = load(dir, page);
+    let mut recs = load(dir, page);
+    if synth_text {
+        recs = web_document_of(recs);
+    }
     let interner = AttrInterner::default();
     let alias_rows: Vec<Vec<(&'static str, Arc<str>)>> = recs
         .iter()
@@ -157,6 +165,11 @@ fn build(
         })
         .collect();
     let names = KeyNames::of(&interner);
+    let texts = if synth_text {
+        recorded_texts(&recs)
+    } else {
+        vec![None; recs.len()]
+    };
     let mut nodes: Vec<SrcNode> = Vec::new();
     for (i, r) in recs.iter().enumerate() {
         let role = roles::map_role(r.role);
@@ -178,7 +191,7 @@ fn build(
             role,
             states: legacy.states(role, roles::map_web_states(r.states)),
             name: legacy.name(role, authored, raw_name),
-            text: None,
+            text: texts[i].clone(),
             attrs: attrs.into_iter().collect(),
             local: None,
             rec: Some(rec),
@@ -194,18 +207,44 @@ fn build(
             kids.entry(p).or_default().push(SrcNodeId(i as u64 + 1));
         }
     }
+    // A non-zero seed hands the nodes to the fusion stage in a shuffled order: the fused values
+    // are a function of the final state, so nothing downstream may change.
+    let mut arrival = nodes.clone();
+    let mut x = shuffle;
+    if x != 0 {
+        for i in (1..arrival.len()).rev() {
+            x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = x;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^= z >> 31;
+            let j = usize::try_from(z % (i as u64 + 1)).unwrap_or(0);
+            arrival.swap(i, j);
+        }
+    }
     let mut batch = vec![
         DocDelta::Reset {
             root: SrcNodeId(1),
             nav_id: 1,
         },
-        DocDelta::Upsert(nodes.clone()),
+        DocDelta::Upsert(arrival),
     ];
     for (p, k) in kids {
         batch.push(DocDelta::Children {
             parent: SrcNodeId(p as u64 + 1),
             children: k.into_iter().collect(),
         });
+    }
+    if synth_text {
+        // The document source rewrites hypertext into text runs between its fetch and the actor
+        // (Gecko: split at the embedded-object marks; Blink: its static children repeat the
+        // parent's text and are dropped): do the same, so the document has the shape it has live.
+        let mut layer = if engine == WebEngine::Blink {
+            gorca_doc_source_atspi::runs::RunLayer::dropping_static_children()
+        } else {
+            gorca_doc_source_atspi::runs::RunLayer::new()
+        };
+        batch = layer.process(batch);
     }
     stage.apply(&batch);
     // The engine fuses under a time budget; the page is complete before anything is compared.
@@ -218,6 +257,79 @@ fn build(
         stage,
         batch,
     })
+}
+
+/// The recorded Text interface of every node, as the document source would read it (`GetText`).
+/// A node without one has no text of its own.
+fn recorded_texts(recs: &[Rec]) -> Vec<Option<Arc<str>>> {
+    recs.iter()
+        .map(|r| {
+            r.text
+                .as_deref()
+                .filter(|t| !t.is_empty())
+                .map(Arc::<str>::from)
+        })
+        .collect()
+}
+
+/// Keep the subtree of the first web document of a recording (an Electron or Telegram recording
+/// starts at the application, with the window chrome around the page), re-indexed from 0. A page
+/// whose first node is already the document is returned as it is.
+fn web_document_of(recs: Vec<Rec>) -> Vec<Rec> {
+    let Some(root) = recs
+        .iter()
+        .position(|r| roles::map_role(r.role) == Role::DocumentWeb)
+    else {
+        return recs;
+    };
+    if root == 0 {
+        return recs;
+    }
+    let mut keep = vec![false; recs.len()];
+    keep[root] = true;
+    for (i, r) in recs.iter().enumerate().skip(root + 1) {
+        if r.parent.is_some_and(|p| keep[p]) {
+            keep[i] = true;
+        }
+    }
+    let mut new_index = vec![usize::MAX; recs.len()];
+    let mut next = 0;
+    for (i, k) in keep.iter().enumerate() {
+        if *k {
+            new_index[i] = next;
+            next += 1;
+        }
+    }
+    recs.into_iter()
+        .enumerate()
+        .filter(|(i, _)| keep[*i])
+        .map(|(i, mut r)| {
+            r.parent = if i == root {
+                None
+            } else {
+                r.parent.map(|p| new_index[p])
+            };
+            r
+        })
+        .collect()
+}
+
+/// The document of one recorded page, built the way the document actor builds it: the real
+/// normalisation, the fusion stage (every node carries its entry) and the translator's flags.
+/// `None` for a page with no node or no fusion tables.
+pub(crate) fn recorded_doc(
+    engine: WebEngine,
+    app: &str,
+    legacy: WebQuirks,
+    page: &str,
+    dir: &str,
+    shuffle: u64,
+) -> Option<gorca_doc::web::WebDoc> {
+    let Built { stage, batch, .. } = build(engine, app, legacy, page, dir, true, shuffle).ok()?;
+    let (mut w, _read) = gorca_doc::web::channel(1);
+    let mut t = Translator::new();
+    t.apply_fused(&mut w, batch, &stage, &[]).ok()?;
+    Some(w.doc().clone())
 }
 
 /// Compare one recorded page: the nodes compared and the disagreements found.
@@ -233,7 +345,7 @@ fn run_page(
         stage,
         batch,
         ..
-    } = match build(engine, app, legacy, page, dir) {
+    } = match build(engine, app, legacy, page, dir, false, 0) {
         Ok(b) => b,
         Err(e) => return (0, vec![(Aspect::Role, e)]),
     };
@@ -297,6 +409,38 @@ fn run_page(
         }
     }
     (nodes.len(), bad)
+}
+
+#[test]
+fn a_recorded_page_builds_a_document_with_text_and_entries() {
+    let doc = recorded_doc(
+        WebEngine::Gecko,
+        "Firefox",
+        WebQuirks::GECKO,
+        "m8-forms",
+        "firefox",
+        0,
+    )
+    .expect("document");
+    assert!(doc.text_len() > 20, "{}", doc.text_len());
+    let with_sem = doc
+        .preorder()
+        .filter_map(|id| doc.node(id))
+        .filter(|v| v.meta.is_some_and(|m| m.sem.is_some()))
+        .count();
+    assert!(with_sem > 20, "{with_sem}");
+    for k in 0..doc.line_count().min(40) {
+        let Some(a) = doc.line_start(k) else { continue };
+        let (s, e) = doc.line_range(a);
+        let items = crate::browse::present::describe(&doc, s, e);
+        eprintln!(
+            "L{k}: {:?}",
+            items
+                .iter()
+                .map(|i| i.text().to_owned())
+                .collect::<Vec<_>>()
+        );
+    }
 }
 
 #[test]
@@ -396,7 +540,7 @@ fn parity_of_page(
         nodes,
         stage,
         batch,
-    }) = build(engine, app, legacy, page, dir)
+    }) = build(engine, app, legacy, page, dir, false, 0)
     else {
         return;
     };

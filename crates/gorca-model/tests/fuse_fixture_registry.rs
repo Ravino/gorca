@@ -34,12 +34,13 @@ fn rows(r: Vec<Row>) -> BTreeMap<String, u64> {
 }
 
 /// Registered groups with no oracle row, in code order.
-const APPENDED_GROUPS: [&str; 5] = [
+const APPENDED_GROUPS: [&str; 6] = [
     "roledescription",
     "placeholder",
     "keyshortcuts",
     "valuetext",
     "namefrom",
+    "errortext",
 ];
 
 #[test]

@@ -302,6 +302,9 @@ pub fn rebuild_slot(e: &SemEntry, g: Group) -> Slot {
         Group::ValueText => Val::ValueText(text_or_empty(
             s.text.as_deref().and_then(|t| t.value_text.as_deref()),
         )),
+        Group::ErrorText => Val::ErrorText(text_or_empty(
+            s.text.as_deref().and_then(|t| t.error_text.as_deref()),
+        )),
         Group::NameFrom => Val::NameFrom(s.name_from),
     })
 }
@@ -843,6 +846,7 @@ pub fn default_slot(g: Group, default_role: SemRole) -> Slot {
         | Group::Placeholder
         | Group::KeyShortcuts
         | Group::ValueText
+        | Group::ErrorText
         | Group::Level
         | Group::SetPos
         | Group::Grid

@@ -51,6 +51,9 @@ coded_enum! {
         KeyShortcuts = 20 => "keyshortcuts",
         ValueText = 21 => "valuetext",
         NameFrom = 22 => "namefrom",
+        // The error message of an invalid node (`aria-errormessage` target text): a rare text
+        // register like the others, primary-only.
+        ErrorText = 23 => "errortext",
     }
 }
 
@@ -80,6 +83,7 @@ impl Group {
                 | Group::KeyShortcuts
                 | Group::ValueText
                 | Group::NameFrom
+                | Group::ErrorText
         )
     }
 
@@ -395,7 +399,7 @@ mod tests {
 
     #[test]
     fn groups_are_dense_in_slot_order() {
-        assert_eq!(GROUP_COUNT, 23);
+        assert_eq!(GROUP_COUNT, 24);
         for (i, g) in Group::ALL.iter().enumerate() {
             assert_eq!(usize::from(g.slot()), i);
             assert_eq!(g.group_code().classify(), GroupClass::Semantic(*g));
@@ -403,7 +407,8 @@ mod tests {
         assert_eq!(Group::Orientation.code(), 16);
         assert_eq!(Group::Sort.code(), 17);
         assert_eq!(Group::NameFrom.code(), 22);
-        assert_eq!(Group::ALL.iter().filter(|g| g.is_primary_only()).count(), 5);
+        assert_eq!(Group::ErrorText.code(), 23);
+        assert_eq!(Group::ALL.iter().filter(|g| g.is_primary_only()).count(), 6);
     }
 
     #[test]
@@ -415,8 +420,8 @@ mod tests {
         }
         assert!(GroupCode(0x8007).is_evidence());
         assert!(!GroupCode(0x8007).is_registered());
-        assert!(GroupCode(22).is_registered());
-        assert!(!GroupCode(23).is_registered());
+        assert!(GroupCode(23).is_registered());
+        assert!(!GroupCode(24).is_registered());
         assert!(!GroupCode(0x0100).is_registered());
     }
 

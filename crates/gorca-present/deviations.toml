@@ -246,3 +246,59 @@ surface = "change-web"
 epoch = "m22b1"
 reason = "aria-valuetext is spoken where the legacy presenter spoke the raw number; applies only where the fused entry holds a value text."
 until = "2026-11-07"
+
+[[deviation]]
+id = "unavailable-item"
+surface = "browse"
+epoch = "m22b2"
+reason = "A disabled tab, menu item, tree item or option says unavailable. The legacy words listed only form controls as things that can be disabled, so a disabled tab was read like an enabled one; the fused model has the state (the engine reports no ENABLED on it) and every role that can be disabled says it (SM-5)."
+until = "2026-11-21"
+
+[[deviation]]
+id = "unavailable-item"
+surface = "quicknav"
+epoch = "m22b2"
+reason = "A disabled tab, menu item, tree item or option says unavailable (see the browse row)."
+until = "2026-11-21"
+
+[[deviation]]
+id = "canvas-graphic"
+surface = "browse"
+epoch = "m22b2"
+reason = "An engine canvas (no legacy role) is a graphic in the fused model and is announced as one, like an image."
+until = "2026-11-21"
+
+[[deviation]]
+id = "canvas-graphic"
+surface = "quicknav"
+epoch = "m22b2"
+reason = "An engine canvas is a graphic (see the browse row)."
+until = "2026-11-21"
+
+[[deviation]]
+id = "alert-dialog-parity"
+surface = "browse"
+epoch = "m22b2"
+reason = "An alertdialog is a dialog on every engine. The legacy mapping gave Gecko a dialog role for it and Blink an alert role, so only Firefox announced it; the container is also spoken by its first line."
+until = "2026-11-21"
+
+[[deviation]]
+id = "alert-dialog-parity"
+surface = "quicknav"
+epoch = "m22b2"
+reason = "An alertdialog is a dialog on every engine (see the browse row)."
+until = "2026-11-21"
+
+[[deviation]]
+id = "name-cap-differs"
+surface = "browse"
+epoch = "m22b2"
+reason = "A name longer than the page string cap (1024 bytes) is cut by the normaliser; the legacy line carried the document's full name."
+until = "2026-11-21"
+
+[[deviation]]
+id = "name-cap-differs"
+surface = "quicknav"
+epoch = "m22b2"
+reason = "A name longer than the page string cap is cut by the normaliser (see the browse row)."
+until = "2026-11-21"

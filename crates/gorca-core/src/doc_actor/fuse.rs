@@ -496,6 +496,7 @@ pub fn writes_of(rec: &SrcRecord) -> Vec<Write> {
             | Group::Placeholder
             | Group::KeyShortcuts
             | Group::ValueText
+            | Group::ErrorText
             | Group::NameFrom => gorca_fuse::rare_write(s, g).unwrap_or(Write::Absent(g)),
         });
     }

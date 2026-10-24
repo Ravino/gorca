@@ -185,6 +185,7 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
         known.set(Group::Placeholder, true);
         known.set(Group::KeyShortcuts, true);
         known.set(Group::ValueText, true);
+        known.set(Group::ErrorText, true);
         known.set(Group::NameFrom, have_name);
     } else if have_name && !name_nonempty {
         sem.name_from = NameFrom::None;
@@ -255,6 +256,9 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
         }
     }
 
+    if have_role && rec.role_source == RoleSource::Token {
+        sem.flags |= SemFlags::ROLE_AUTHORED;
+    }
     rec.sem = sem;
     rec.known = known;
     rec.notes = notes;
@@ -755,6 +759,21 @@ mod tests {
         let r = normalise(&n);
         assert!(!r.known.has(Group::Description));
         assert_eq!(r.sem.description(), None);
+    }
+
+    #[test]
+    fn the_error_text_of_the_document_source_is_a_known_text_group() {
+        let r = normalise(&node(
+            all(),
+            79,
+            st(&[bit::INVALID_ENTRY]),
+            &[("tag", "input"), ("error-text", "Enter a valid address")],
+        ));
+        assert!(r.known.has(Group::ErrorText));
+        assert_eq!(
+            r.sem.text.as_deref().and_then(|t| t.error_text.as_deref()),
+            Some("Enter a valid address")
+        );
     }
 
     #[test]

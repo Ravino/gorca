@@ -33,6 +33,7 @@ pub const GROUPS: &[Row] = &[
     ("keyshortcuts", 20),
     ("valuetext", 21),
     ("namefrom", 22),
+    ("errortext", 23),
 ];
 
 /// Evidence kinds (bit 15 set).
@@ -264,6 +265,7 @@ pub const SEM_FLAGS: &[Row] = &[
     ("LAYOUT_TABLE", 8192),
     ("SELECTION_FOLLOWS_FOCUS", 16384),
     ("SYNTHETIC", 32768),
+    ("ROLE_AUTHORED", 65536),
 ];
 
 /// `Relevant` bit values.

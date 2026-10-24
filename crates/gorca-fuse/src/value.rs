@@ -105,6 +105,7 @@ pub enum Val {
     KeyShortcuts(Arc<str>),
     ValueText(Arc<str>),
     NameFrom(NameFrom),
+    ErrorText(Arc<str>),
 }
 
 impl Val {
@@ -134,6 +135,7 @@ impl Val {
             Val::KeyShortcuts(_) => Group::KeyShortcuts,
             Val::ValueText(_) => Group::ValueText,
             Val::NameFrom(_) => Group::NameFrom,
+            Val::ErrorText(_) => Group::ErrorText,
         }
     }
 
@@ -146,7 +148,8 @@ impl Val {
             | Val::RoleDescription(s)
             | Val::Placeholder(s)
             | Val::KeyShortcuts(s)
-            | Val::ValueText(s) => s.is_empty(),
+            | Val::ValueText(s)
+            | Val::ErrorText(s) => s.is_empty(),
             Val::Level(l) => *l == 0,
             _ => false,
         }
@@ -161,7 +164,8 @@ impl Val {
             | Val::RoleDescription(s)
             | Val::Placeholder(s)
             | Val::KeyShortcuts(s)
-            | Val::ValueText(s) => Cow::Borrowed(s),
+            | Val::ValueText(s)
+            | Val::ErrorText(s) => Cow::Borrowed(s),
             Val::NameFrom(v) => Cow::Borrowed(v.name()),
             Val::Check(v) => Cow::Borrowed(v.name()),
             Val::Press(v) => Cow::Borrowed(v.name()),
@@ -218,6 +222,7 @@ impl Val {
             Val::KeyShortcuts(s) => set_text(entry, TextField::KeyShortcuts, non_empty(s)),
             Val::ValueText(s) => set_text(entry, TextField::ValueText, non_empty(s)),
             Val::NameFrom(v) => entry.sem.name_from = *v,
+            Val::ErrorText(s) => set_text(entry, TextField::ErrorText, non_empty(s)),
         }
     }
 }
@@ -247,6 +252,7 @@ pub fn rare_write(sem: &gorca_model::sem::Semantics, g: Group) -> Option<Write> 
             Val::KeyShortcuts,
         ),
         Group::ValueText => text(g, t.and_then(|t| t.value_text.as_deref()), Val::ValueText),
+        Group::ErrorText => text(g, t.and_then(|t| t.error_text.as_deref()), Val::ErrorText),
         Group::NameFrom => Write::Val(Val::NameFrom(sem.name_from)),
         Group::Role
         | Group::Name
@@ -285,6 +291,7 @@ enum TextField {
     Placeholder,
     KeyShortcuts,
     ValueText,
+    ErrorText,
 }
 
 fn set_description(entry: &mut SemEntry, d: Option<Arc<str>>) {
@@ -304,6 +311,7 @@ fn set_text(entry: &mut SemEntry, f: TextField, v: Option<Arc<str>>) {
         TextField::Placeholder => t.placeholder = v,
         TextField::KeyShortcuts => t.key_shortcuts = v,
         TextField::ValueText => t.value_text = v,
+        TextField::ErrorText => t.error_text = v,
     }
     entry.sem.text = if t.is_empty() {
         None
@@ -338,6 +346,7 @@ pub fn write_default(entry: &mut SemEntry, g: Group, default_role: SemRole) {
         Group::Placeholder => set_text(entry, TextField::Placeholder, None),
         Group::KeyShortcuts => set_text(entry, TextField::KeyShortcuts, None),
         Group::ValueText => set_text(entry, TextField::ValueText, None),
+        Group::ErrorText => set_text(entry, TextField::ErrorText, None),
         Group::NameFrom => entry.sem.name_from = NameFrom::default(),
     }
 }
@@ -434,6 +443,10 @@ impl Write {
             ),
             Write::Val(Val::ValueText(s)) if s.len() > max => (
                 Write::Val(Val::ValueText(Arc::from(truncate_str(&s, max)))),
+                true,
+            ),
+            Write::Val(Val::ErrorText(s)) if s.len() > max => (
+                Write::Val(Val::ErrorText(Arc::from(truncate_str(&s, max)))),
                 true,
             ),
             w => (w, false),

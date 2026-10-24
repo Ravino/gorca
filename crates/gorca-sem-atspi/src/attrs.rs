@@ -40,6 +40,8 @@ pub struct ParsedAttrs<'a> {
     pub roledescription: Option<&'a str>,
     pub keyshortcuts: Option<&'a str>,
     pub valuetext: Option<&'a str>,
+    /// The document source reads the `aria-errormessage` target and attaches its text here.
+    pub error_text: Option<&'a str>,
     /// Gecko and GTK4 export `placeholder-text`.
     pub placeholder_text: Option<&'a str>,
     /// Blink exports `placeholder`.
@@ -50,6 +52,8 @@ pub struct ParsedAttrs<'a> {
     pub colspan: Option<&'a str>,
     pub rowindextext: Option<&'a str>,
     pub colindextext: Option<&'a str>,
+    pub rowcount: Option<&'a str>,
+    pub colcount: Option<&'a str>,
     pub details_roles: Option<&'a str>,
     pub details_from: Option<&'a str>,
     pub layout_guess: Option<&'a str>,
@@ -62,7 +66,7 @@ pub struct ParsedAttrs<'a> {
 /// Every attribute name [`ParsedAttrs::parse`] reads. A connector keeps only these from a
 /// `GetAttributes` reply (the app's attribute map is untrusted and can be large); a test checks
 /// that the list and the parser agree.
-pub const WANTED_ATTRS: [&str; 36] = [
+pub const WANTED_ATTRS: [&str; 39] = [
     "xml-roles",
     "tag",
     "toolkit",
@@ -85,6 +89,7 @@ pub const WANTED_ATTRS: [&str; 36] = [
     "roledescription",
     "keyshortcuts",
     "valuetext",
+    "error-text",
     "placeholder-text",
     "placeholder",
     "rowindex",
@@ -93,6 +98,8 @@ pub const WANTED_ATTRS: [&str; 36] = [
     "colspan",
     "rowindextext",
     "colindextext",
+    "rowcount",
+    "colcount",
     "details-roles",
     "details-from",
     "layout-guess",
@@ -134,6 +141,7 @@ impl<'a> ParsedAttrs<'a> {
                 "roledescription" => &mut a.roledescription,
                 "keyshortcuts" => &mut a.keyshortcuts,
                 "valuetext" => &mut a.valuetext,
+                "error-text" => &mut a.error_text,
                 "placeholder-text" => &mut a.placeholder_text,
                 "placeholder" => &mut a.placeholder,
                 "rowindex" => &mut a.rowindex,
@@ -142,6 +150,8 @@ impl<'a> ParsedAttrs<'a> {
                 "colspan" => &mut a.colspan,
                 "rowindextext" => &mut a.rowindextext,
                 "colindextext" => &mut a.colindextext,
+                "rowcount" => &mut a.rowcount,
+                "colcount" => &mut a.colcount,
                 "details-roles" => &mut a.details_roles,
                 "details-from" => &mut a.details_from,
                 "layout-guess" => &mut a.layout_guess,
@@ -233,8 +243,9 @@ pub fn setpos_of(a: &ParsedAttrs<'_>) -> Option<SetPos> {
 /// Grid position from `rowindex`/`colindex`/`rowspan`/`colspan`. A missing index is 0 ("not
 /// exported"); spans default to 1 and are capped at `u16::MAX`.
 pub fn grid_of(a: &ParsedAttrs<'_>) -> Option<GridPos> {
-    let row = a.rowindex.and_then(parse_u32);
-    let col = a.colindex.and_then(parse_u32);
+    // A table carries its declared size (`rowcount`, `colcount`) where a cell carries its index.
+    let row = a.rowindex.or(a.rowcount).and_then(parse_u32);
+    let col = a.colindex.or(a.colcount).and_then(parse_u32);
     let rs = a.rowspan.and_then(parse_u32);
     let cs = a.colspan.and_then(parse_u32);
     if row.is_none() && col.is_none() && rs.is_none() && cs.is_none() {
@@ -472,7 +483,7 @@ pub fn text_of(description: Option<&str>, a: &ParsedAttrs<'_>) -> (Option<Arc<Se
                 .map(|s| cap_scalars(s, ROLE_DESCRIPTION_CAP)),
             &mut cut,
         ),
-        error_text: None,
+        error_text: arc_capped(a.error_text, &mut cut),
         placeholder: arc_capped(a.placeholder_text.or(a.placeholder), &mut cut),
         key_shortcuts: arc_capped(a.keyshortcuts, &mut cut),
         value_text: arc_capped(a.valuetext, &mut cut),
@@ -525,7 +536,7 @@ pub const ARIA_PROPERTIES: &[(&str, AriaUse)] = &[
     ("aria-checked", AriaUse::Mapped("check")),
     (
         "aria-colcount",
-        AriaUse::Unmapped("table dimension: Table interface, read on demand"),
+        AriaUse::Mapped("grid.col (table: declared size)"),
     ),
     ("aria-colindex", AriaUse::Mapped("grid.col")),
     (
@@ -599,7 +610,7 @@ pub const ARIA_PROPERTIES: &[(&str, AriaUse)] = &[
     ),
     (
         "aria-rowcount",
-        AriaUse::Unmapped("table dimension: Table interface, read on demand"),
+        AriaUse::Mapped("grid.row (table: declared size)"),
     ),
     ("aria-rowindex", AriaUse::Mapped("grid.row")),
     (

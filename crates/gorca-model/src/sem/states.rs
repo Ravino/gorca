@@ -156,6 +156,9 @@ bitflags! {
         /// Node owned by a fact, not by a real accessible (ADR-0024 section 2.3.5). Reserved;
         /// the key space and the flag exist, the machinery is M24.
         const SYNTHETIC = 1 << 15;
+        /// The role came from the author's ARIA token (`role="..."`), not from the element or
+        /// the engine. Browse mode announces some containers and items only then.
+        const ROLE_AUTHORED = 1 << 16;
     }
 }
 
@@ -177,7 +180,9 @@ pub struct SetPos {
     pub src: PosSrc,
 }
 
-/// Position in a grid (1-based by convention; spans of at least 1).
+/// Position in a grid (1-based by convention; spans of at least 1). On a table, grid or tree
+/// grid node the same record is the *declared size*: `row` and `col` are `aria-rowcount` and
+/// `aria-colcount` (0 = not given), the spans are 1.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct GridPos {
     pub row: u32,

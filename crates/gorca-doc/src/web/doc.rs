@@ -77,6 +77,18 @@ pub struct NodeView<'a> {
     pub meta: Option<&'a NodeMeta>,
 }
 
+impl<'a> NodeView<'a> {
+    /// The contents of a field (a text entry's text, a slider's reading), borrowed.
+    pub fn field_value(&self) -> Option<&'a gorca_model::Value> {
+        self.meta.and_then(|m| m.value.as_ref())
+    }
+
+    /// The fused semantics, borrowed from the document (no clone).
+    pub fn sem_ref(&self) -> Option<&'a gorca_model::SemEntry> {
+        self.meta.and_then(|m| m.sem.as_deref())
+    }
+}
+
 impl NodeView<'_> {
     /// The fused semantics the document actor attached to the node (ADR-0022 SM-8).
     pub fn sem(&self) -> Option<std::sync::Arc<gorca_model::SemEntry>> {
