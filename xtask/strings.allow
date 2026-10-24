@@ -25,7 +25,6 @@ crates/gorca-daemon/src/rtkit.rs | *
 crates/gorca-daemon/src/topology.rs | *
 crates/gorca-ext-host/src/manifest_file.rs | *
 crates/gorca-core/src/browse/present.rs | \u{FFFC}
-crates/gorca-core/src/browse/ir.rs | \u{FFFC}
 crates/gorca-core/src/commands/compile.rs | unknown key name
 crates/gorca-core/src/commands/compile.rs | extension default chord not bound: the chord is already in use
 crates/gorca-core/src/commands/compile.rs | extension `{}` default chord `{chord}`

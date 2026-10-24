@@ -29,6 +29,11 @@ struct Rec {
     name: String,
     desc: String,
     parent: Option<usize>,
+    /// The index of the target of the `error-message` relation.
+    error_target: Option<usize>,
+    /// The error message of an invalid control, read the way the document source reads it
+    /// (`extras::error_text`): the text of the relation's target, else its name.
+    error_text: Option<String>,
 }
 
 fn root() -> PathBuf {
@@ -76,7 +81,45 @@ fn load(engine: &str, page: &str) -> Vec<Rec> {
                 .get("parent")
                 .and_then(serde_json::Value::as_u64)
                 .and_then(|p| usize::try_from(p).ok()),
+            error_target: v
+                .get("relations")
+                .and_then(|r| r.as_array())
+                .and_then(|rels| {
+                    rels.iter()
+                        .find(|r| r.get("name").and_then(|n| n.as_str()) == Some("error-message"))
+                })
+                .and_then(|r| r.get("targets").and_then(|t| t.as_array()))
+                .and_then(|t| t.first())
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|t| usize::try_from(t).ok()),
+            error_text: None,
         });
+    }
+    // The document source reads the message of an invalid control (state `invalid-entry`) of a
+    // role that takes one from the relation's target.
+    let invalid = 1u64 << roles::state_bit::INVALID_ENTRY;
+    let found: Vec<Option<String>> = out
+        .iter()
+        .map(|r| {
+            if r.states & invalid == 0
+                || !gorca_doc_source_atspi::extras::takes_error_text(roles::map_role(r.role))
+            {
+                return None;
+            }
+            let t = out.get(r.error_target?)?;
+            let raw = t
+                .text
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or(t.name.trim());
+            let text = raw.replace('\u{FFFC}', "").replace('\n', " ");
+            let text = text.trim();
+            (!text.is_empty()).then(|| text.to_owned())
+        })
+        .collect();
+    for (r, f) in out.iter_mut().zip(found) {
+        r.error_text = f;
     }
     out
 }
@@ -161,6 +204,9 @@ fn build(
             if !r.desc.is_empty() {
                 v.push((web_attrs::DESCRIPTION, Arc::from(r.desc.as_str())));
             }
+            if let Some(t) = &r.error_text {
+                v.push((web_attrs::ERROR_TEXT, Arc::from(t.as_str())));
+            }
             v
         })
         .collect();
@@ -181,7 +227,8 @@ fn build(
         let rec = record_interned(
             &names,
             r.role,
-            Some(r.states),
+            // The document source reads states of the stateful roles only (`StatePolicy::Stateful`).
+            roles::is_stateful(r.role).then_some(r.states),
             raw_name.as_deref(),
             &attrs,
             &alias_rows[i],

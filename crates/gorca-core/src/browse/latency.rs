@@ -53,7 +53,8 @@ fn big(nodes: usize) -> Big {
     let docs = Arc::new(DocDirectory::new());
     let join = Arc::new(WebJoin::new());
     let (mut writer, read) = channel(11);
-    let spec = synth::page(nodes, 5);
+    // The nodes carry the entries a live document has (the presenter reads nothing else).
+    let spec = crate::doc_actor::legacy_sem_tests::fuse_spec(synth::page(nodes, 5));
     writer
         .apply(DocOp::InsertSubtree {
             parent: None,

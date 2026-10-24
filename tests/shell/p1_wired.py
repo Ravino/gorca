@@ -29,6 +29,8 @@ sys.path.insert(0, HERE)
 import probe_shell as P  # noqa: E402  (refuses to run outside a private session)
 
 TAB, ENTER, SPACE, RIGHT, LEFT, ALT, CTRL, META, ESC, DOWN, S = 15, 28, 57, 106, 105, 56, 29, 125, 1, 108, 31
+HOME = 102
+KEY_T, KEY_H, KEY_K = 20, 35, 37  # browse-mode quick navigation: table, heading, link
 
 
 class Ssip:
@@ -356,6 +358,13 @@ def firefox(rig):
     time.sleep(8.0)
     rig.click_window("P1 Page")
     rig.settle(longest=10)
+    # Browse mode (M22b2): the browse cursor and quick navigation through the wired presenter.
+    rig.step("firefox", "browse: Ctrl+Home reads the first line", lambda: rig.tap(CTRL, HOME), expect=("heading",))
+    rig.step("firefox", "browse: Down reads a line", lambda: rig.tap(DOWN), expect=("intro",))
+    rig.step("firefox", "quicknav: k lands on a link", lambda: rig.tap(KEY_K), expect=("alpha", "link"))
+    rig.step("firefox", "quicknav: t lands on the table", lambda: rig.tap(KEY_T), expect=("table",))
+    rig.step("firefox", "browse: Ctrl+Home returns to the top", lambda: rig.tap(CTRL, HOME), expect=("heading",))
+    rig.step("firefox", "quicknav: h lands on a heading", lambda: rig.tap(KEY_H), expect=("heading",))
     rig.tab_to("firefox", "focus: check box", "subscribe", ("subscribe", "check box"))
     rig.step("firefox", "change: Space checks", lambda: rig.tap(SPACE), expect=("checked",), forbid=("not checked",))
     rig.tab_to("firefox", "focus: disclosure button", "details", ("details", "button", "collapsed"))

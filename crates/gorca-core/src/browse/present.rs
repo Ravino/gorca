@@ -1,24 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Line presentation (browse-mode design 8.2, LP-1 to LP-4): what the user hears for a range of
-//! the flat text. Everything is built from one published `WebDoc` snapshot, so it costs no IPC
-//! and finishes in microseconds (LP-3).
+//! Line and node presentation (browse-mode design 8.2, LP-1 to LP-4): what the user hears for a
+//! range of the flat text. Everything is built from one published `WebDoc` snapshot, so it costs
+//! no IPC and finishes in microseconds (LP-3).
 //!
-//! A range is described by walking the nodes it covers in document order: text runs give text
-//! segments; a node *entered* on the range whose role is announced inline adds a prefix ("link",
-//! "heading level 2", "button", "edit"); a control that has no text of its own (FFFC marker,
-//! FT-6) is spoken as its role, state and value. Containers (lists, tables, landmarks) are the
-//! field diff of M7b and are not announced here.
+//! A range is described by walking the nodes it covers in document order: text runs give text;
+//! a node *entered* on the range whose role is announced inline adds a prefix ("link", "heading
+//! level 2", "button", "edit"); a control that has no text of its own (FFFC marker, FT-6) is
+//! spoken as its role, state and value; containers (lists, tables, landmarks) are the field diff
+//! of M7b. The walk is geometry; every word comes from the node's fused entry through
+//! `gorca_present::browse` (M22b2), is collected as `PresIr` fields, deduplicated on the fields
+//! and rendered once.
 
-use gorca_i18n::{MsgId as M, msg, t};
 use std::sync::Arc;
 
-use gorca_doc::web::{Cat, NodeFlags, NodeView, WebDoc};
-use gorca_doc_source_api::web_attrs;
-use gorca_model::{DocNodeId, Role, Segment, SegmentKind, StateSet};
+use gorca_doc::web::{NodeFlags, NodeView, WebDoc};
+use gorca_i18n::MsgId as M;
+use gorca_model::sem::{Select, SemEntry, SemRole};
+use gorca_model::{DocNodeId, NodeKey, Segment, SegmentKind};
+use gorca_present::browse as pb;
+use gorca_present::{
+    Content, Field, FieldKind, PresIr, Reason, RenderOpts, TokenText, render_kinds,
+};
 use gorca_speech::{How, VerbalizeOpts, Verbalizer};
 use smallvec::SmallVec;
-
-use crate::aria;
 
 /// Quick navigation speaks at most this many scalars of the target (LP-4).
 pub const QUICK_NAV_CAP: u32 = 400;
@@ -72,370 +76,67 @@ impl Item {
     }
 }
 
-/// The aria facts of a document node.
-fn node_of<'a>(v: &NodeView<'a>) -> aria::Node<'a> {
-    aria::Node {
-        role: v.role,
-        states: v.meta.map_or(StateSet::empty(), |m| m.states),
-        attrs: v.meta.map_or(&[][..], |m| m.attrs.as_slice()),
-    }
+/// Fields of one description, in speaking order.
+type Said = Vec<Field>;
+
+fn sem_of<'a>(v: &NodeView<'a>) -> Option<&'a SemEntry> {
+    v.sem_ref()
 }
 
-/// Roles announced when entered inside a line.
-fn announced(role: Role) -> bool {
-    matches!(
-        role,
-        Role::Link
-            | Role::Heading
-            | Role::Button
-            | Role::ToggleButton
-            | Role::CheckBox
-            | Role::RadioButton
-            | Role::ComboBox
-            | Role::TextEntry
-            | Role::PasswordEntry
-            | Role::Slider
-            | Role::SpinButton
-            | Role::Image
-            | Role::ProgressBar
-    )
-}
-
-/// Is the node announced where it starts, by role: the plain roles above, plus the ARIA items
-/// (tab, tree item, menu item, switch) that have no role of their own in the mirror.
-fn announced_node(v: &NodeView<'_>) -> bool {
-    announced(v.role)
-        || matches!(v.role, Role::Tab | Role::TreeItem)
-        || aria::Kind::is_item(node_of(v).kind())
-}
-
-fn role_phrase(v: &NodeView<'_>) -> String {
-    let st = v.meta.map_or(StateSet::empty(), |m| m.states);
-    if let Some(w) = aria::role_word(&node_of(v)).filter(|_| v.role != Role::Heading) {
-        w.to_owned()
-    } else if v.role == Role::Link {
-        if st.contains(StateSet::VISITED) {
-            t(M::WebVisitedLink).to_owned()
-        } else {
-            v.role.spoken().to_owned()
-        }
-    } else if v.role == Role::Heading {
-        if (1..=6).contains(&v.level) {
-            msg!(WebHeadingLevel, n = v.level)
-        } else {
-            v.role.spoken().to_owned()
-        }
-    } else if v.role == Role::Image {
-        t(M::WebGraphic).to_owned()
-    } else {
-        v.role.spoken().to_owned()
-    }
-}
-
-/// States spoken after a control's role (NVDA order and words: `aria::state_words`).
-fn push_states(v: &NodeView<'_>, out: &mut Vec<Item>) {
-    let st = v.meta.map_or(StateSet::empty(), |m| m.states);
-    let node = node_of(v);
-    // Firefox never sets ENABLED on static content (the document, headings), and clears it on
-    // disabled controls: the absence only means "unavailable" for things that can be disabled.
-    let control = matches!(
-        v.role,
-        Role::Button
-            | Role::ToggleButton
-            | Role::CheckBox
-            | Role::RadioButton
-            | Role::ComboBox
-            | Role::TextEntry
-            | Role::PasswordEntry
-            | Role::SpinButton
-    );
-    let unavailable = st.contains(StateSet::DISABLED)
-        || (control && !st.is_empty() && !st.contains(StateSet::ENABLED));
-    for w in aria::state_words(&node, unavailable, false) {
-        out.push(Item::State(w));
-    }
-    if let Some(c) = aria::current_word(&node) {
-        out.push(Item::State(c));
-    }
-    if let Some(l) = aria::level_phrase(&node) {
-        out.push(Item::Info(l));
-    }
-}
-
-/// The ARIA landmark kind of a landmark node, spoken before the word "landmark".
-fn landmark_kind(v: &NodeView<'_>) -> M {
-    let attr = |k| {
-        v.meta
-            .and_then(|m| m.attrs.iter().find(|(a, _)| *a == k).map(|(_, x)| &**x))
-    };
-    let from_role = attr(web_attrs::XML_ROLES).and_then(|r| {
-        r.split_ascii_whitespace().find_map(|t| match t {
-            "banner" => Some(M::WebLandmarkBanner),
-            "main" => Some(M::WebLandmarkMain),
-            "navigation" => Some(M::WebLandmarkNavigation),
-            "search" => Some(M::WebLandmarkSearch),
-            "complementary" => Some(M::WebLandmarkComplementary),
-            "contentinfo" => Some(M::WebLandmarkContentInfo),
-            "form" => Some(M::WebLandmarkForm),
-            "region" => Some(M::WebLandmarkRegion),
-            _ => None,
-        })
-    });
-    from_role.unwrap_or_else(|| match attr(web_attrs::TAG) {
-        Some("main") => M::WebLandmarkMain,
-        Some("nav") => M::WebLandmarkNavigation,
-        Some("aside") => M::WebLandmarkComplementary,
-        Some("header") => M::WebLandmarkBanner,
-        Some("footer") => M::WebLandmarkContentInfo,
-        Some("form") => M::WebLandmarkForm,
-        _ => M::WebLandmarkRegion,
-    })
-}
-
-/// Rows and columns of a table node, from the tree (rows are `Row` descendants through at most
-/// two group levels; columns are the widest row). `aria-rowcount`/`aria-colcount` win.
-pub fn table_dims(doc: &WebDoc, id: DocNodeId) -> (usize, usize) {
-    let num = |v: &NodeView<'_>, k| -> Option<usize> {
-        v.meta
-            .and_then(|m| m.attrs.iter().find(|(a, _)| *a == k).map(|(_, x)| &**x))
-            .and_then(|x| x.parse::<usize>().ok())
-    };
-    let mut rows = 0usize;
-    let mut cols = 0usize;
-    let mut stack: Vec<(DocNodeId, u8)> = doc.children(id).map(|c| (c, 0)).collect();
-    while let Some((n, depth)) = stack.pop() {
-        let Some(v) = doc.node(n) else { continue };
-        if v.role == Role::Row {
-            rows += 1;
-            let w = doc
-                .children(n)
-                .filter(|c| {
-                    doc.node(*c).is_some_and(|cv| {
-                        matches!(cv.role, Role::Cell | Role::ColumnHeader | Role::RowHeader)
-                            && !cv.flags.contains(NodeFlags::HIDDEN)
-                    })
-                })
-                .count();
-            cols = cols.max(w);
-        } else if depth < 2 && !v.flags.contains(NodeFlags::HIDDEN) {
-            stack.extend(doc.children(n).map(|c| (c, depth + 1)));
-        }
-    }
-    if let Some(v) = doc.node(id) {
-        if let Some(r) = num(&v, web_attrs::ROWCOUNT).filter(|r| *r > 0) {
-            rows = r;
-        }
-        if let Some(c) = num(&v, web_attrs::COLCOUNT).filter(|c| *c > 0) {
-            cols = c;
-        }
-    }
-    (rows, cols)
-}
-
-/// What entering a container says (BM-3 field diff, NVDA `getControlFieldSpeech`): lists and
-/// tables with their sizes, block quotes, landmarks and regions with their names, dialogs and
-/// forms. `None` for nodes that are not announced as containers.
-fn container_items(doc: &WebDoc, v: &NodeView<'_>, id: DocNodeId) -> Option<Vec<Item>> {
-    let mut out = Vec::new();
-    let name = v.name.filter(|n| !n.is_empty());
-    let kind = node_of(v).kind();
-    if v.cats.intersects(Cat::LIST) && v.role == Role::List {
-        let n = doc
-            .children(id)
-            .filter(|c| doc.node(*c).is_some_and(|x| x.role == Role::ListItem))
-            .count();
-        out.push(Item::Role(msg!(WebListWith, n = n)));
-    } else if v.cats.intersects(Cat::TABLE) {
-        let (r, c) = table_dims(doc, id);
-        if let Some(n) = name {
-            out.push(Item::Name(n.to_owned()));
-        }
-        out.push(Item::Role(msg!(WebTableWith, c = c, r = r)));
-    } else if v.cats.intersects(Cat::BLOCKQUOTE) {
-        out.push(Item::Role(t(M::WebBlockQuote).to_owned()));
-    } else if v.cats.intersects(Cat::ANY_LANDMARK) {
-        let kind = landmark_kind(v);
-        let region = v.flags.contains(NodeFlags::REGION) || kind == M::WebLandmarkRegion;
-        if let Some(n) = name {
-            out.push(Item::Name(n.to_owned()));
-        }
-        out.push(Item::Role(if region || kind == M::WebLandmarkForm {
-            t(kind).to_owned()
-        } else {
-            msg!(WebLandmark, kind = t(kind))
-        }));
-    } else if v.cats.intersects(Cat::DIALOG) {
-        if let Some(n) = name {
-            out.push(Item::Name(n.to_owned()));
-        }
-        out.push(Item::Role(t(M::RoleDialog).to_owned()));
-    } else if v.cats.intersects(Cat::EMBEDDED) {
-        // role=application, or an <object>/<embed> (both are ATK_ROLE_EMBEDDED).
-        let application = v.meta.is_some_and(|m| {
-            m.attrs.iter().any(|(k, x)| {
-                *k == web_attrs::XML_ROLES && x.split_ascii_whitespace().any(|t| t == "application")
-            })
-        });
-        if let Some(n) = name {
-            out.push(Item::Name(n.to_owned()));
-        }
-        out.push(Item::Role(
-            if application {
-                t(M::RoleApplication)
-            } else {
-                t(M::WebEmbeddedObject)
-            }
-            .to_owned(),
-        ));
-    } else if kind.is_container()
-        && (name.is_some() || !matches!(kind, aria::Kind::Group | aria::Kind::TabPanel))
-    {
-        // An ARIA container (tab list, tree, menu, tool bar, a named group or tab panel) is
-        // announced with its name and NVDA's word for it.
-        if let Some(n) = name {
-            out.push(Item::Name(n.to_owned()));
-        }
-        if let Some(w) = kind.word() {
-            out.push(Item::Role(w.to_owned()));
-        }
-    } else {
-        return None;
-    }
-    Some(out)
-}
-
-/// Is `name` already part of what is said?
-fn name_spoken(items: &[Item], name: &str) -> bool {
-    let name = name.trim().to_lowercase();
-    items.iter().any(|i| match i {
-        Item::Text(t) | Item::Name(t) => t.to_lowercase().contains(&name),
-        Item::Role(_)
-        | Item::State(_)
-        | Item::Lead(_)
-        | Item::Char(_)
-        | Item::Info(_)
-        | Item::Desc(_) => false,
-    })
-}
-
-/// A form control spoken on its own (quick navigation, focus follow): its accessible name first.
-fn is_named_control(role: Role) -> bool {
-    matches!(
-        role,
-        Role::TextEntry
-            | Role::PasswordEntry
-            | Role::ComboBox
-            | Role::CheckBox
-            | Role::RadioButton
-            | Role::Slider
-            | Role::SpinButton
-            | Role::ToggleButton
-    )
-}
-
-/// The text of the selected option of a combo box or list box.
-fn selected_value(doc: &WebDoc, id: DocNodeId) -> Option<String> {
-    for n in doc.subtree(id).skip(1) {
-        let v = doc.node(n)?;
-        if v.meta
-            .is_some_and(|m| m.states.contains(StateSet::SELECTED))
-            && matches!(v.role, Role::MenuItem | Role::ListItem)
+/// The options of a combo box are its value, not items of their own: nothing inside one is
+/// announced.
+fn within_combobox(doc: &WebDoc, id: DocNodeId) -> bool {
+    let mut cur = doc.parent(id);
+    for _ in 0..8 {
+        let Some(p) = cur else { return false };
+        if doc
+            .node(p)
+            .and_then(|v| sem_of(&v).map(|e| e.sem.role == SemRole::Combobox))
+            .unwrap_or(false)
         {
-            let t = v.name.filter(|t| !t.is_empty()).or(v.text)?;
-            return Some(t.trim().to_owned());
+            return true;
         }
+        cur = doc.parent(p);
     }
-    None
+    false
 }
 
-fn enter_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
-    out.push(Item::Role(role_phrase(v)));
-    let st = v.meta.map_or(StateSet::empty(), |m| m.states);
-    // A control that carries its own text is followed by that text; its states come first. A
-    // link or a heading says only whether it is expanded and which one is current.
-    if matches!(v.role, Role::Link | Role::Heading) {
-        if st.contains(StateSet::EXPANDED) {
-            out.push(Item::State(t(M::StateExpanded)));
-        } else if st.contains(StateSet::COLLAPSED) {
-            out.push(Item::State(t(M::StateCollapsed)));
-        }
-        if let Some(c) = aria::current_word(&node_of(v)) {
-            out.push(Item::State(c));
-        }
-    } else {
-        push_states(v, out);
-        if let Some(e) = aria::error_text(&node_of(v)) {
-            out.push(Item::Info(e.to_owned()));
-        }
+/// A text box whose content is spin buttons (a date or time input) is a wrapper: its parts are
+/// announced, the box is not.
+fn composite_input(doc: &WebDoc, id: DocNodeId, e: &SemEntry) -> bool {
+    e.sem.role == SemRole::TextBox
+        && doc.subtree(id).skip(1).take(8).any(|c| {
+            doc.node(c)
+                .and_then(|v| sem_of(&v).map(|x| x.sem.role == SemRole::SpinButton))
+                .unwrap_or(false)
+        })
+}
+
+fn announced_node(doc: &WebDoc, id: DocNodeId, v: &NodeView<'_>) -> bool {
+    sem_of(v).is_some_and(|e| pb::announced(e) && !composite_input(doc, id, e))
+        && !within_combobox(doc, id)
+}
+
+fn origin() -> gorca_present::Origin {
+    gorca_present::Origin {
+        row: pb::ROW_BROWSE,
+        group: gorca_present::Origin::NO_GROUP,
+        via: 0,
     }
 }
 
-/// A control with no text: its role, state and value (and name where the name is all there is).
-fn marker_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
-    // A graphic or a button is its name; a check box or an edit is labelled by text beside it.
-    // (NVDA also names a check box or radio button whose label is not visible: nameIsContent in
-    // `gecko_ia2.cpp`; a label on the same line makes `dedupe_names` drop the repeat.)
-    let named = matches!(
-        v.role,
-        Role::Image | Role::Button | Role::ToggleButton | Role::ProgressBar | Role::Slider
-    ) || (matches!(v.role, Role::CheckBox | Role::RadioButton)
-        && node_of(v).authored_name());
-    if named && let Some(n) = v.name.filter(|n| !n.is_empty()) {
-        out.push(Item::Name(n.to_owned()));
-    }
-    out.push(Item::Role(role_phrase(v)));
-    push_states(v, out);
-    if matches!(v.role, Role::TextEntry | Role::PasswordEntry) {
-        out.push(Item::State(t(M::WebBlank)));
-    }
-    if v.role == Role::Image && v.name.is_none_or(str::is_empty) {
-        out.insert(0, Item::State(t(M::WebUnlabeled)));
-    }
-    // What is wrong with an invalid field is said with it, in a line as well as on a hit.
-    if let Some(e) = aria::error_text(&node_of(v)) {
-        out.push(Item::Info(e.to_owned()));
-    }
+fn text_run(t: &str) -> Field {
+    Field::new(FieldKind::TEXT, Content::Text(Arc::from(t)), origin())
+}
+
+fn name_field(t: &str) -> Field {
+    Field::new(FieldKind::NAME, Content::Text(Arc::from(t)), origin())
 }
 
 /// Offset where the node's content starts: after its own line break and the blank breaks of
 /// the blocks that open inside it.
-fn eff_start(doc: &WebDoc, id: DocNodeId, _v: &NodeView<'_>) -> Option<u32> {
+fn eff_start(doc: &WebDoc, id: DocNodeId) -> Option<u32> {
     super::cursor::content_start(doc, id)
-}
-
-/// Roles whose accessible name the author may replace (`aria-label`, `aria-labelledby`, `alt`,
-/// `title`): the name is spoken instead of the content text (the browser-computed accname,
-/// M8b), like NVDA's buffer shows the label of such a node. The list is NVDA's `nameIsContent`
-/// (`gecko_ia2.cpp`): link, button, toggle button, menu item, heading, page tab. A tree item is
-/// not in it: its content stays and its label is only its focus name.
-fn takes_authored_name(v: &NodeView<'_>) -> bool {
-    let n = node_of(v);
-    n.authored_name()
-        && (matches!(
-            v.role,
-            Role::Link | Role::Button | Role::ToggleButton | Role::Tab | Role::Heading
-        ) || matches!(
-            n.kind(),
-            aria::Kind::MenuItem | aria::Kind::MenuItemCheckBox | aria::Kind::MenuItemRadio
-        ))
-}
-
-/// A node that was just announced and whose name was written by the author: say the name and
-/// return the offset where its content ends (the content is not spoken). 0 for no override.
-fn authored_name_items(doc: &WebDoc, id: DocNodeId, v: &NodeView<'_>, out: &mut Vec<Item>) -> u32 {
-    let Some(name) = v.name.map(str::trim).filter(|n| !n.is_empty()) else {
-        return 0;
-    };
-    if !takes_authored_name(v) {
-        return 0;
-    }
-    out.push(Item::Name(name.to_owned()));
-    doc.subtree_text_range(id).map_or(0, |(_, e)| e)
-}
-
-/// Describe the flat-text range `[a, b)`.
-pub fn describe(doc: &WebDoc, a: u32, b: u32) -> Vec<Item> {
-    describe_from(doc, a, b, None)
 }
 
 /// Is the flat offset `at` inside the node's text?
@@ -444,30 +145,102 @@ fn node_holds(doc: &WebDoc, id: DocNodeId, at: u32) -> bool {
         .is_some_and(|(s, e)| s <= at && at < e)
 }
 
+/// Rows and columns of a table node, from the tree (rows are `Row` descendants through at most
+/// two group levels; columns are the widest row).
+pub fn table_dims(doc: &WebDoc, id: DocNodeId) -> (usize, usize) {
+    let role_of = |n: DocNodeId| doc.node(n).and_then(|v| sem_of(&v).map(|e| e.sem.role));
+    let mut rows = 0usize;
+    let mut cols = 0usize;
+    let mut stack: Vec<(DocNodeId, u8)> = doc.children(id).map(|c| (c, 0)).collect();
+    while let Some((n, depth)) = stack.pop() {
+        let Some(v) = doc.node(n) else { continue };
+        if role_of(n) == Some(SemRole::Row) {
+            rows += 1;
+            let w = doc
+                .children(n)
+                .filter(|c| {
+                    doc.node(*c).is_some_and(|cv| {
+                        matches!(
+                            role_of(*c),
+                            Some(
+                                SemRole::Cell
+                                    | SemRole::GridCell
+                                    | SemRole::ColumnHeader
+                                    | SemRole::RowHeader
+                            )
+                        ) && !cv.flags.contains(NodeFlags::HIDDEN)
+                    })
+                })
+                .count();
+            cols = cols.max(w);
+        } else if depth < 2 && !v.flags.contains(NodeFlags::HIDDEN) {
+            stack.extend(doc.children(n).map(|c| (c, depth + 1)));
+        }
+    }
+    (rows, cols)
+}
+
+fn facts_of(doc: &WebDoc, id: DocNodeId, e: &SemEntry) -> pb::ContainerFacts {
+    let role = e.sem.role;
+    if matches!(role, SemRole::Table | SemRole::Grid | SemRole::TreeGrid) {
+        let (rows, cols) = table_dims(doc, id);
+        return pb::ContainerFacts {
+            rows,
+            cols,
+            ..pb::ContainerFacts::default()
+        };
+    }
+    if matches!(role, SemRole::List | SemRole::Listbox) {
+        return pb::ContainerFacts {
+            list_items: doc
+                .children(id)
+                .filter(|c| {
+                    doc.node(*c)
+                        .and_then(|x| {
+                            sem_of(&x)
+                                .map(|e| matches!(e.sem.role, SemRole::ListItem | SemRole::Option))
+                        })
+                        .unwrap_or(false)
+                })
+                .count(),
+            ..pb::ContainerFacts::default()
+        };
+    }
+    pb::ContainerFacts::default()
+}
+
+fn container_fields(doc: &WebDoc, id: DocNodeId, v: &NodeView<'_>) -> Option<Said> {
+    if within_combobox(doc, id) {
+        return None;
+    }
+    let e = sem_of(v)?;
+    pb::container_fields(e, facts_of(doc, id, e)).map(smallvec::SmallVec::into_vec)
+}
+
+/// Is `name` already part of what is said?
+fn name_spoken(fields: &[Field], name: &str) -> bool {
+    let name = name.trim().to_lowercase();
+    fields.iter().any(|f| {
+        matches!(f.kind, FieldKind::TEXT | FieldKind::NAME)
+            && matches!(&f.content, Content::Text(t) if t.to_lowercase().contains(&name))
+    })
+}
+
 /// "out of list", "out of table", "out of block quote" for the containers that hold `from` but
 /// not `to` (innermost first).
-fn leaving_items(doc: &WebDoc, from: u32, to: u32) -> Vec<Item> {
+fn leaving_fields(doc: &WebDoc, from: u32, to: u32) -> Said {
     let mut out = Vec::new();
     let Some((mut cur, _)) = doc.at_offset(from.min(doc.text_len().saturating_sub(1))) else {
         return out;
     };
     for _ in 0..64 {
         let Some(v) = doc.node(cur) else { break };
-        let word = if v.cats.intersects(Cat::TABLE) {
-            Some(M::WebOutOfTable)
-        } else if v.role == Role::List && v.cats.intersects(Cat::LIST) {
-            Some(M::WebOutOfList)
-        } else if v.cats.intersects(Cat::BLOCKQUOTE) {
-            Some(M::WebOutOfBlockQuote)
-        } else {
-            None
-        };
-        if let Some(w) = word
+        if let Some(w) = sem_of(&v).and_then(pb::leaving_word)
             && !v.flags.contains(NodeFlags::HIDDEN)
             && node_holds(doc, cur, from)
             && !node_holds(doc, cur, to)
         {
-            out.push(Item::Role(t(w).to_owned()));
+            out.push(pb::role_word_field(w));
         }
         match doc.parent(cur) {
             Some(p) => cur = p,
@@ -477,10 +250,68 @@ fn leaving_items(doc: &WebDoc, from: u32, to: u32) -> Vec<Item> {
     out
 }
 
-/// Describe `[a, b)` as a move from the cursor at `from` (BM-3 field diff): a container or
-/// control that already holds `from` was entered earlier and is not announced again.
-pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Item> {
-    let mut out: Vec<Item> = Vec::new();
+/// A node that was just announced and whose name was written by the author: say the name and
+/// return the offset where its content ends (the content is not spoken). 0 for no override.
+fn authored_name_fields(doc: &WebDoc, id: DocNodeId, v: &NodeView<'_>, out: &mut Said) -> u32 {
+    let Some(name) = v.name.map(str::trim).filter(|n| !n.is_empty()) else {
+        return 0;
+    };
+    if !sem_of(v).is_some_and(pb::takes_authored_name) {
+        return 0;
+    }
+    out.push(name_field(name));
+    doc.subtree_text_range(id).map_or(0, |(_, e)| e)
+}
+
+/// The literal text of a field (a name or a text run), `None` for a catalog word.
+fn text_of(f: &Field) -> Option<&str> {
+    if let Content::Text(t) = &f.content {
+        Some(t)
+    } else {
+        None
+    }
+}
+
+/// A container's name is dropped when its first line says it already ("Fruit table table"). The
+/// error message of an invalid control is dropped when the description already says it: the text
+/// of the error element lies in the same range, or the name or description holds the same text.
+fn dedupe_names(fields: &mut Said) {
+    let texts: Vec<String> = fields
+        .iter()
+        .filter(|f| f.kind == FieldKind::TEXT)
+        .filter_map(|f| text_of(f).map(str::to_lowercase))
+        .collect();
+    let said: Vec<String> = fields
+        .iter()
+        .filter(|f| {
+            f.kind == FieldKind::TEXT
+                || f.kind == FieldKind::NAME
+                || f.kind == FieldKind::DESCRIPTION
+        })
+        .filter_map(|f| text_of(f).map(|t| t.trim().to_lowercase()))
+        .collect();
+    fields.retain(|f| {
+        let Content::Text(n) = &f.content else {
+            return true;
+        };
+        match f.kind {
+            FieldKind::NAME => {
+                let n = n.trim().to_lowercase();
+                n.is_empty() || !texts.iter().any(|t| t.contains(&n))
+            }
+            FieldKind::ERROR_TEXT => {
+                let n = n.trim().to_lowercase();
+                n.is_empty() || !said.iter().any(|t| t.contains(&n))
+            }
+            _ => true,
+        }
+    });
+}
+
+/// Describe the flat-text range `[a, b)` as a move from the cursor at `from` (BM-3 field diff): a
+/// container or control that already holds `from` was entered earlier and is not announced again.
+fn describe_from_fields(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Said {
+    let mut out: Said = Vec::new();
     let total = doc.text_len();
     let b = b.min(total).min(a.saturating_add(LINE_CAP));
     if a >= total {
@@ -489,13 +320,10 @@ pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Ite
     let Some((n0, local0)) = doc.at_offset(a) else {
         return out;
     };
-    // Containers the cursor leaves with this move (NVDA "out of list").
     if let Some(f) = from {
-        out.extend(leaving_items(doc, f, a));
+        out.extend(leaving_fields(doc, f, a));
     }
-    // Text before this offset is replaced by an authored accessible name (`aria-label`, ...).
     let mut skip_to: u32 = 0;
-    // Ancestors whose content starts exactly here were entered on this range.
     let mut chain: Vec<DocNodeId> = Vec::new();
     let mut cur = doc.parent(n0);
     while let Some(p) = cur {
@@ -505,19 +333,20 @@ pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Ite
     for id in chain.into_iter().rev() {
         let Some(v) = doc.node(id) else { continue };
         if v.flags.contains(NodeFlags::HIDDEN)
-            || eff_start(doc, id, &v) != Some(a)
+            || eff_start(doc, id) != Some(a)
             || from.is_some_and(|f| node_holds(doc, id, f))
         {
             continue;
         }
-        if announced_node(&v) {
-            enter_items(&v, &mut out);
-            skip_to = skip_to.max(authored_name_items(doc, id, &v, &mut out));
-        } else if let Some(items) = container_items(doc, &v, id) {
+        if announced_node(doc, id, &v) {
+            if let Some(e) = sem_of(&v) {
+                out.extend(pb::enter_fields(e));
+            }
+            skip_to = skip_to.max(authored_name_fields(doc, id, &v, &mut out));
+        } else if let Some(items) = container_fields(doc, id, &v) {
             out.extend(items);
         }
     }
-    // Then everything from the first node on.
     let mut off = a - local0;
     for id in doc.preorder_from(n0) {
         let Some(v) = doc.node(id) else { continue };
@@ -530,22 +359,31 @@ pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Ite
         }
         let entered = if first { eff == a } else { eff >= a };
         let is_marker = v.text == Some("\u{FFFC}");
-        if entered && announced_node(&v) && !hidden && !is_marker {
-            enter_items(&v, &mut out);
-            skip_to = skip_to.max(authored_name_items(doc, id, &v, &mut out));
+        if entered && announced_node(doc, id, &v) && !hidden && !is_marker {
+            if let Some(e) = sem_of(&v) {
+                out.extend(pb::enter_fields(e));
+            }
+            skip_to = skip_to.max(authored_name_fields(doc, id, &v, &mut out));
         }
         let lo = a.max(off).max(skip_to);
         let hi = b.min(off + own);
         if lo < hi {
             if is_marker {
-                if eff >= lo && eff < hi {
-                    marker_items(&v, &mut out);
+                if eff >= lo
+                    && eff < hi
+                    && let Some(e) = sem_of(&v)
+                {
+                    if let Some(u) = pb::unlabeled_graphic(e) {
+                        // The word leads the whole description.
+                        out.insert(0, u);
+                    }
+                    out.extend(pb::marker_fields(e));
                 }
             } else {
                 let t = doc.text_in(lo, hi);
                 let t = t.trim_matches('\n');
                 if !t.is_empty() {
-                    out.push(Item::Text(t.to_owned()));
+                    out.push(text_run(t));
                 }
             }
         }
@@ -553,6 +391,192 @@ pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Ite
     }
     dedupe_names(&mut out);
     out
+}
+
+/// The text of the selected option of a combo box or list box.
+fn selected_value(doc: &WebDoc, id: DocNodeId) -> Option<String> {
+    for n in doc.subtree(id).skip(1) {
+        let v = doc.node(n)?;
+        if sem_of(&v).is_some_and(|e| {
+            e.sem.select == Select::On
+                && matches!(
+                    e.sem.role,
+                    SemRole::MenuItem | SemRole::ListItem | SemRole::Option
+                )
+        }) {
+            let t = v.name.filter(|t| !t.is_empty()).or(v.text)?;
+            return Some(t.trim().to_owned());
+        }
+    }
+    None
+}
+
+fn describe_node_from_fields(doc: &WebDoc, id: DocNodeId, from: Option<u32>) -> Said {
+    let Some(v) = doc.node(id) else {
+        return Vec::new();
+    };
+    let Some(a) = eff_start(doc, id) else {
+        return Vec::new();
+    };
+    let Some((_, end)) = doc.subtree_text_range(id) else {
+        return Vec::new();
+    };
+    let entry = sem_of(&v);
+    let container = container_fields(doc, id, &v).is_some();
+    let mut b = end.min(a + QUICK_NAV_CAP);
+    if container {
+        let (_, line_end) = doc.line_range(a);
+        b = b.min(line_end.max(a));
+    }
+    let mut items = if a < b {
+        describe_from_fields(doc, a, b, from)
+    } else {
+        Vec::new()
+    };
+    if container
+        && !from.is_some_and(|f| node_holds(doc, id, f))
+        && !items.iter().any(|i| i.kind == FieldKind::ROLE)
+        && let Some(mut head) = container_fields(doc, id, &v)
+    {
+        head.append(&mut items);
+        items = head;
+    }
+    let announced_here = items.iter().any(|i| i.kind == FieldKind::ROLE);
+    if !announced_here
+        && announced_node(doc, id, &v)
+        && let Some(e) = entry
+    {
+        let mut pre: Said = pb::enter_fields(e).into_vec();
+        pre.append(&mut items);
+        items = pre;
+    }
+    if !announced_here && entry.is_some_and(|e| e.sem.role == SemRole::Separator) {
+        items.insert(0, pb::role_word_field(M::RoleSeparator));
+    }
+    if let Some(e) = entry
+        && pb::is_named_control(e)
+        && let Some(n) = v.name.filter(|n| !n.is_empty())
+        && !name_spoken(&items, n)
+    {
+        items.insert(0, name_field(n));
+    }
+    if entry.is_some_and(|e| e.sem.role == SemRole::Combobox)
+        && let Some(val) = selected_value(doc, id)
+        && !val.is_empty()
+    {
+        items.push(text_run(&val));
+    }
+    let mut pre: Said = Vec::new();
+    if v.flags.contains(NodeFlags::FRAME) {
+        pre.push(pb::role_word_field(M::WebFrame));
+        let holder = doc
+            .parent(id)
+            .and_then(|p| doc.node(p))
+            .filter(|p| {
+                sem_of(p).is_none_or(|e| {
+                    matches!(
+                        e.sem.role,
+                        SemRole::Unknown | SemRole::Generic | SemRole::Iframe
+                    )
+                })
+            })
+            .and_then(|p| p.name)
+            .filter(|n| !n.is_empty());
+        if let Some(n) = holder.or(v.name.filter(|n| !n.is_empty())) {
+            pre.push(name_field(n));
+        }
+    } else if v.flags.contains(NodeFlags::ARTICLE) {
+        pre.push(pb::role_word_field(M::WebArticle));
+    }
+    if !pre.is_empty() {
+        pre.append(&mut items);
+        items = pre;
+    }
+    if let Some(e) = entry
+        && let Some(d) = pb::speakable_description(e)
+        && let Content::Text(t) = &d.content
+        && !name_spoken(&items, t)
+    {
+        items.push(d);
+    }
+    dedupe_names(&mut items);
+    items
+}
+
+fn dummy_key() -> NodeKey {
+    NodeKey {
+        app: gorca_model::AppId {
+            connector: gorca_model::ConnectorId(0),
+            serial: 0,
+        },
+        local: gorca_model::LocalId(0),
+    }
+}
+
+/// Render the fields of one description into the items the commands speak.
+pub fn items_of(fields: Said, reason: Reason) -> Vec<Item> {
+    if fields.is_empty() {
+        return Vec::new();
+    }
+    let ir = PresIr::new(reason, dummy_key(), 0, fields.into());
+    let opts = RenderOpts {
+        description_pause: true,
+        lang: gorca_i18n::language(),
+        ..RenderOpts::default()
+    };
+    render_kinds(&ir, opts)
+        .into_iter()
+        .map(|(kind, tok)| {
+            let text = tok.text.as_str().to_owned();
+            match kind {
+                FieldKind::NAME => Item::Name(text),
+                FieldKind::ROLE => Item::Role(text),
+                // A state is always a catalog word.
+                FieldKind::STATE => Item::State(match tok.text {
+                    TokenText::Static(w) => w,
+                    TokenText::Shared(_) | TokenText::Owned(_) => "",
+                }),
+                FieldKind::LEVEL | FieldKind::ERROR_TEXT => Item::Info(text),
+                FieldKind::DESCRIPTION => Item::Desc(text),
+                _ => Item::Text(text),
+            }
+        })
+        .collect()
+}
+
+/// `browse.description_pause = false`: the description follows the other words like any segment.
+pub fn strip_pause(u: &mut gorca_model::Utterance) {
+    for seg in &mut u.segments {
+        if seg.kind == gorca_model::SegmentKind::Description {
+            seg.kind = gorca_model::SegmentKind::Text;
+        }
+    }
+}
+
+/// The items of the range `[a, b)` as a move from the cursor at `from` (BM-3 field diff).
+pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Item> {
+    items_of(
+        describe_from_fields(doc, a, b, from),
+        Reason::BrowseLine {
+            entered: from.is_none(),
+        },
+    )
+}
+
+/// Describe the flat-text range `[a, b)`.
+pub fn describe(doc: &WebDoc, a: u32, b: u32) -> Vec<Item> {
+    describe_from(doc, a, b, None)
+}
+
+/// [`describe_node`] for a move from the cursor at `from`: containers the cursor is already in
+/// are not announced again.
+pub fn describe_node_from(doc: &WebDoc, id: DocNodeId, from: Option<u32>) -> Vec<Item> {
+    items_of(describe_node_from_fields(doc, id, from), Reason::QuickNav)
+}
+
+/// The items for a quick-nav target: its own text range with its role announced first (LP-4).
+pub fn describe_node(doc: &WebDoc, id: DocNodeId) -> Vec<Item> {
+    describe_node_from(doc, id, None)
 }
 
 /// Group items into utterance segments. Text is verbalised with the punctuation level and the
@@ -601,137 +625,6 @@ pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
         .collect()
 }
 
-/// The items for a quick-nav target: its own text range with its role announced first (LP-4).
-pub fn describe_node(doc: &WebDoc, id: DocNodeId) -> Vec<Item> {
-    describe_node_from(doc, id, None)
-}
-
-/// [`describe_node`] for a move from the cursor at `from`: containers the cursor is already in
-/// are not announced again.
-pub fn describe_node_from(doc: &WebDoc, id: DocNodeId, from: Option<u32>) -> Vec<Item> {
-    let Some(v) = doc.node(id) else {
-        return Vec::new();
-    };
-    let Some(a) = eff_start(doc, id, &v) else {
-        return Vec::new();
-    };
-    let Some((_, end)) = doc.subtree_text_range(id) else {
-        return Vec::new();
-    };
-    // A container is announced by what it is, then by its first line; anything else by its
-    // whole text, capped (LP-4).
-    let container = container_items(doc, &v, id).is_some();
-    let mut b = end.min(a + QUICK_NAV_CAP);
-    if container {
-        let (_, line_end) = doc.line_range(a);
-        b = b.min(line_end.max(a));
-    }
-    let mut items = if a < b {
-        describe_from(doc, a, b, from)
-    } else {
-        Vec::new()
-    };
-    // A container whose first line starts later than its own content (a table that opens with
-    // a caption line, an empty list) still gets its head.
-    if container
-        && !from.is_some_and(|f| node_holds(doc, id, f))
-        && !items.iter().any(|i| matches!(i, Item::Role(_)))
-        && let Some(mut head) = container_items(doc, &v, id)
-    {
-        head.append(&mut items);
-        items = head;
-    }
-    // A node with no content on the page (an empty heading, a link that is all image) is still
-    // announced, once.
-    let announced_here = items.iter().any(|i| matches!(i, Item::Role(_)));
-    if !announced_here && announced_node(&v) {
-        let mut pre = Vec::new();
-        enter_items(&v, &mut pre);
-        pre.append(&mut items);
-        items = pre;
-    }
-    if !announced_here && v.role == Role::Separator {
-        items.insert(0, Item::Role(t(M::RoleSeparator).to_owned()));
-    }
-    // A form control alone on its range is a marker: it has no label of its own in the flat
-    // text, so its accessible name leads (NVDA: "Search term edit blank").
-    if is_named_control(v.role)
-        && let Some(n) = v.name.filter(|n| !n.is_empty())
-        && !name_spoken(&items, n)
-    {
-        items.insert(0, Item::Name(n.to_owned()));
-    }
-    if v.role == Role::ComboBox
-        && let Some(val) = selected_value(doc, id)
-        && !val.is_empty()
-    {
-        items.push(Item::Text(val));
-    }
-    // A frame (a nested document) and an article are announced by what they are, then by name.
-    let mut pre: Vec<Item> = Vec::new();
-    if v.flags.contains(NodeFlags::FRAME) {
-        pre.push(Item::Role(t(M::WebFrame).to_owned()));
-        // Blink exposes the iframe element (an object of no mapped role, named by its title
-        // attribute) above the frame's document, whose own name is the page title inside: the
-        // frame is announced by the title the author gave it.
-        let holder = doc
-            .parent(id)
-            .and_then(|p| doc.node(p))
-            .filter(|p| p.role == Role::Unknown)
-            .and_then(|p| p.name)
-            .filter(|n| !n.is_empty());
-        if let Some(n) = holder.or(v.name.filter(|n| !n.is_empty())) {
-            pre.push(Item::Name(n.to_owned()));
-        }
-    } else if v.flags.contains(NodeFlags::ARTICLE) {
-        pre.push(Item::Role(t(M::WebArticle).to_owned()));
-    }
-    if !pre.is_empty() {
-        pre.append(&mut items);
-        items = pre;
-    }
-    // The description (`aria-describedby`, a tooltip title) is said after the rest, unless the
-    // line already says it.
-    if let Some(d) =
-        aria::speakable_description(v.meta.and_then(|m| m.description.as_deref()), v.name)
-        && !name_spoken(&items, d)
-    {
-        items.push(Item::Desc(d.to_owned()));
-    }
-    dedupe_names(&mut items);
-    items
-}
-
-/// A container's name is dropped when its first line says it already ("Fruit table table").
-fn dedupe_names(items: &mut Vec<Item>) {
-    let texts: Vec<String> = items
-        .iter()
-        .filter_map(|i| match i {
-            Item::Text(t) => Some(t.to_lowercase()),
-            Item::Role(_)
-            | Item::State(_)
-            | Item::Name(_)
-            | Item::Lead(_)
-            | Item::Char(_)
-            | Item::Info(_)
-            | Item::Desc(_) => None,
-        })
-        .collect();
-    items.retain(|i| match i {
-        Item::Name(n) => {
-            let n = n.trim().to_lowercase();
-            n.is_empty() || !texts.iter().any(|t| t.contains(&n))
-        }
-        Item::Text(_)
-        | Item::Role(_)
-        | Item::State(_)
-        | Item::Lead(_)
-        | Item::Char(_)
-        | Item::Info(_)
-        | Item::Desc(_) => true,
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -740,6 +633,8 @@ mod tests {
     use gorca_doc_source_api::web_attrs;
 
     use super::*;
+    use crate::doc_actor::legacy_sem_tests::fuse_spec;
+    use gorca_model::{Role, StateSet};
 
     fn leaf(role: Role) -> NodeSpec {
         NodeSpec::new(role)
@@ -781,7 +676,7 @@ mod tests {
             d.apply(&DocOp::InsertSubtree {
                 parent: None,
                 before: None,
-                subtree: Arc::new(root),
+                subtree: Arc::new(fuse_spec(root)),
             })
             .is_ok()
         );
@@ -856,9 +751,12 @@ mod tests {
             named(Role::Landmark, "Main content")
                 .flags(blk)
                 .meta(Arc::new(NodeMeta {
-                    attrs: [(web_attrs::TAG, Arc::<str>::from("main"))]
-                        .into_iter()
-                        .collect(),
+                    attrs: [
+                        (web_attrs::TAG, Arc::<str>::from("main")),
+                        (web_attrs::XML_ROLES, Arc::<str>::from("main")),
+                    ]
+                    .into_iter()
+                    .collect(),
                     ..NodeMeta::default()
                 })),
             vec![ul],
@@ -903,7 +801,7 @@ mod tests {
             d.apply(&DocOp::InsertSubtree {
                 parent: None,
                 before: None,
-                subtree: Arc::new(root),
+                subtree: Arc::new(fuse_spec(root)),
             })
             .is_ok()
         );
@@ -982,7 +880,7 @@ mod tests {
             d.apply(&DocOp::InsertSubtree {
                 parent: None,
                 before: None,
-                subtree: Arc::new(root),
+                subtree: Arc::new(fuse_spec(root)),
             })
             .is_ok()
         );
@@ -1153,6 +1051,46 @@ mod tests {
             line_of(&d, 1),
             "edit required invalid entry blank Enter an address like name@example.com"
         );
+    }
+
+    #[test]
+    fn an_error_message_in_the_range_is_spoken_once() {
+        let msg = "Enter an address like name@example.com";
+        let field = SubtreeSpec::leaf(
+            aria_node(
+                Role::TextEntry,
+                StateSet::ENABLED | StateSet::EDITABLE | StateSet::INVALID,
+                &[(web_attrs::TAG, "input"), (web_attrs::ERROR_TEXT, msg)],
+                None,
+            )
+            .name("Email address")
+            .flags(blk())
+            .text("\u{FFFC}"),
+        );
+        // The error element sits in the same range as the field: its own text says the message.
+        let d = doc_of(vec![field, txt(msg)]);
+        let s = d.line_start(1).unwrap();
+        let (_, e) = d.line_range(s);
+        let (_, end) = d.line_range(d.line_start(d.line_count() - 1).unwrap());
+        let said = say(&describe(&d, s, end.max(e)));
+        assert_eq!(said.matches("Enter an address").count(), 1, "{said}");
+        // Alone, the field still says the message (from the fused entry).
+        assert!(
+            line_of(&d, 1).contains("Enter an address"),
+            "{}",
+            line_of(&d, 1)
+        );
+        // A name or description that holds the same text says it once as well.
+        let mut fields = vec![
+            name_field("Enter an address"),
+            Field::new(
+                FieldKind::ERROR_TEXT,
+                Content::Text(Arc::from("Enter an address")),
+                origin(),
+            ),
+        ];
+        dedupe_names(&mut fields);
+        assert_eq!(fields.len(), 1);
     }
 
     #[test]
@@ -1352,7 +1290,7 @@ mod tests {
                     .collect::<Vec<_>>()
             );
             let before = u.segments.clone();
-            crate::aria::strip_pause(&mut u);
+            strip_pause(&mut u);
             eprintln!(
                 "P5 after strip: {:?}",
                 u.segments

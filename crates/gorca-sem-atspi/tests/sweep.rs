@@ -201,7 +201,16 @@ fn unknown_vs_absent_follows_the_fetched_mask_on_real_nodes() {
             need(Group::Avail, role && states);
             need(Group::Expand, states);
             need(Group::Orientation, states);
-            need(Group::Flags, states);
+            // The authored-role bit travels with the role even without the states.
+            need(
+                Group::Flags,
+                states
+                    || (role
+                        && rec
+                            .sem
+                            .flags
+                            .contains(gorca_model::sem::SemFlags::ROLE_AUTHORED)),
+            );
             need(Group::Invalid, states);
             need(Group::Current, attrs);
             need(Group::Sort, attrs);

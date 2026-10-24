@@ -397,6 +397,7 @@ fn page() -> Vec<DocDelta> {
     link.states |= StateSet::FOCUSABLE;
     let mut edit = src(14, Role::TextEntry, Some(1014));
     edit.states |= StateSet::FOCUSABLE | StateSet::EDITABLE;
+    edit.name = Some(Arc::from("Name"));
     vec![
         DocDelta::Reset {
             root: SrcNodeId(1),
@@ -632,7 +633,7 @@ fn focus_on_a_link_enters_browse_mode_with_the_word_on_the_focus_speech() {
     );
     // Focus on the same kind of node again: no word.
     let fx = r.focus(1002);
-    assert_eq!(spoken(&fx), ["Welcome heading"]);
+    assert_eq!(spoken(&fx), ["Welcome heading level 1"]);
 }
 
 #[test]
@@ -3031,14 +3032,18 @@ fn a_tab_switch_onto_a_link_leads_with_the_new_page_title_once() {
     add_second_doc(&mut r, "Second page");
     r.focus(1006);
     let fx = r.focus(1002);
-    assert_eq!(spoken(&fx), ["Welcome heading"], "same document: no title");
+    assert_eq!(
+        spoken(&fx),
+        ["Welcome heading level 1"],
+        "same document: no title"
+    );
     // The browser focuses the link the other tab had focused (no event for the document).
     let fx = r.focus(3006);
     assert_eq!(spoken(&fx), ["Second page the docs link"]);
     let fx = r.focus(3002);
     assert_eq!(
         spoken(&fx),
-        ["Welcome heading"],
+        ["Welcome heading level 1"],
         "the title leads only once"
     );
     // And back, with the chrome in between: the first page is announced again.

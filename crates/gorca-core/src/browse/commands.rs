@@ -538,27 +538,66 @@ fn quicknav(c: CoreCmd) -> Option<(Dir, Cat, M)> {
         .map(|(_, d, cat, name)| (*d, *cat, *name))
 }
 
-/// States of a node, from its mirror metadata.
+/// The browse-mode view of a fused entry as the flat states the form logic reads. A disabled
+/// control still passes the keys through (the web path never had a disabled state), so
+/// availability is not part of it.
+pub(crate) fn states_of_entry(e: &gorca_model::SemEntry) -> StateSet {
+    use gorca_model::sem::{Check, Expand, Invalid, Press, Select, SemFlags};
+    let mut s = StateSet::empty();
+    let f = e.sem.flags;
+    for (flag, state) in [
+        (SemFlags::FOCUSABLE, StateSet::FOCUSABLE),
+        (SemFlags::EDITABLE, StateSet::EDITABLE),
+        (SemFlags::READ_ONLY, StateSet::READ_ONLY),
+        (SemFlags::MODAL, StateSet::MODAL),
+        (SemFlags::REQUIRED, StateSet::REQUIRED),
+        (SemFlags::BUSY, StateSet::BUSY),
+    ] {
+        if f.contains(flag) {
+            s |= state;
+        }
+    }
+    if e.sem.select != Select::NotSelectable {
+        s |= StateSet::SELECTABLE;
+    }
+    if e.sem.select == Select::On {
+        s |= StateSet::SELECTED;
+    }
+    match e.sem.check {
+        Check::On => s |= StateSet::CHECKED,
+        Check::Mixed => s |= StateSet::MIXED,
+        Check::Off | Check::NotCheckable => {}
+    }
+    if e.sem.press == Press::On {
+        s |= StateSet::PRESSED;
+    }
+    match e.sem.expand {
+        Expand::Expanded => s |= StateSet::EXPANDED,
+        Expand::Collapsed => s |= StateSet::COLLAPSED,
+        Expand::NotExpandable => {}
+    }
+    if e.sem.invalid != Invalid::No {
+        s |= StateSet::INVALID;
+    }
+    if e.sem.avail != gorca_model::sem::Avail::Disabled {
+        s |= StateSet::ENABLED;
+    }
+    s
+}
+
+/// States of a node, from its fused entry.
 fn states_of(d: &WebDoc, id: DocNodeId) -> StateSet {
     d.node(id)
-        .and_then(|v| v.meta)
-        .map_or(StateSet::empty(), |m| m.states)
+        .and_then(|v| v.sem_ref().map(states_of_entry))
+        .unwrap_or_else(StateSet::empty)
 }
 
 /// A group of controls: a `fieldset`, or an element the author gave `role=group` or
 /// `role=radiogroup`. Landmarks, forms and regions are not groups here.
 fn is_group(v: &gorca_doc::web::NodeView<'_>) -> bool {
-    use gorca_doc_source_api::web_attrs::{TAG, XML_ROLES};
-    if v.role != Role::Panel {
-        return false;
-    }
-    let Some(m) = v.meta else { return false };
-    let attr = |k| m.attrs.iter().find(|(a, _)| *a == k).map(|(_, t)| &**t);
-    attr(TAG) == Some("fieldset")
-        || attr(XML_ROLES).is_some_and(|r| {
-            r.split_whitespace()
-                .any(|t| matches!(t, "group" | "radiogroup"))
-        })
+    use gorca_model::sem::SemRole;
+    v.sem_ref()
+        .is_some_and(|e| matches!(e.sem.role, SemRole::Group | SemRole::RadioGroup))
 }
 
 fn role_states(d: &WebDoc, id: DocNodeId) -> (Role, StateSet) {
@@ -1426,35 +1465,43 @@ impl Reader {
                 return None;
             }
             let name = v.name.filter(|n| !n.is_empty())?;
-            let meta = v.meta?;
+            let entry = v.sem_ref()?;
             // An invalid control whose error text the mirror lacks (the source reads a bounded
             // number per fetch) takes the full focus fetch, which reads it (M8b).
-            if meta.states.contains(StateSet::INVALID)
+            if entry.sem.invalid != gorca_model::sem::Invalid::No
                 && gorca_doc_source_api::takes_error_text(v.role)
-                && !meta
-                    .attrs
-                    .iter()
-                    .any(|(k, _)| *k == gorca_doc_source_api::web_attrs::ERROR_TEXT)
+                && entry
+                    .sem
+                    .text
+                    .as_deref()
+                    .is_none_or(|t| t.error_text.is_none())
             {
                 return None;
             }
             let mut have = PropMask::NAME | PropMask::ROLE | PropMask::STATES;
             // A password's value is never spoken, not even from the mirror.
-            let value = meta.value.clone().filter(|_| v.role != Role::PasswordEntry);
+            let value = v
+                .field_value()
+                .cloned()
+                .filter(|_| v.role != Role::PasswordEntry);
             if value.is_some() {
                 have |= PropMask::VALUE;
             }
             Some(gorca_model::NodeSnapshot {
                 key: node,
                 role: v.role,
-                states: meta.states,
+                states: states_of_entry(entry),
                 name: Some(Arc::from(name)),
-                description: meta.description.clone(),
+                description: entry
+                    .sem
+                    .text
+                    .as_deref()
+                    .and_then(|t| t.description.clone()),
                 value,
                 parent: None,
                 children: ChildList::Unknown,
                 interfaces: Ifaces::empty(),
-                attrs: meta.attrs.clone(),
+                attrs: SmallVec::default(),
                 relations: Relations::default(),
                 bounds: None,
                 have,
@@ -1465,7 +1512,7 @@ impl Reader {
                 },
                 sem: gorca_model::NodeSem {
                     rec: None,
-                    entry: meta.sem.clone(),
+                    entry: v.sem(),
                 },
             })
         })
@@ -2621,7 +2668,7 @@ impl Reader {
         u.segments
             .extend(present::segments(items, self.verbalize_opts()));
         if !self.cmd.effective.browse.description_pause {
-            crate::aria::strip_pause(&mut u);
+            present::strip_pause(&mut u);
         }
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }

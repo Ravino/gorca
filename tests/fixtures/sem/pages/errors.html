@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SEM errors</title></head>
+<body><main id="main"><h1>Fields with error messages</h1>
+
+<p><label for="mail">Email</label>
+<input type="text" id="mail" value="not-an-address" aria-invalid="true" aria-errormessage="mail-err">
+<span id="mail-err">Enter an address like name@example.org</span></p>
+
+<p><label for="age">Age</label>
+<input type="text" id="age" value="abc" aria-invalid="true" aria-describedby="age-hint">
+<span id="age-hint">Whole years, digits only</span></p>
+
+<p><label for="zip">Postal code</label>
+<input type="text" id="zip" value="" required aria-invalid="false">
+</p>
+
+<p><label for="pw">Password</label>
+<input type="password" id="pw" aria-invalid="true" aria-errormessage="pw-err" aria-describedby="pw-hint">
+<span id="pw-hint">At least eight characters</span>
+<span id="pw-err">Too short</span></p>
+
+<div role="alert" id="summary">2 fields need attention</div>
+</main></body></html>

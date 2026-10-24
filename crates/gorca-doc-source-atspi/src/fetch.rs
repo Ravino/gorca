@@ -487,6 +487,11 @@ async fn complete(
             let rr = raw_roles[i];
             let role = roles::map_role(rr);
             let mut attrs: SmallVec<[(AttrKey, Arc<str>); 4]> = rn.attrs;
+            // The message of an invalid control is an attribute before the normaliser runs, so the
+            // fused entry carries it (the browse presenter reads it from there).
+            if let Some(t) = error_text.remove(&i) {
+                attrs.push((web_attrs::ERROR_TEXT, t));
+            }
             // The normaliser sees what the engine said: the raw name (before the engine rows of
             // `WebQuirks`, which the S-1 quirk rows replace) and the attributes as fetched.
             let rec = crate::norm::record_interned(
@@ -508,9 +513,6 @@ async fn complete(
                 .iter()
                 .any(|(k, v)| *k == web_attrs::EXPLICIT_NAME && &**v == "true");
             let name = opts.quirks.name(role, authored, rn.name);
-            if let Some(t) = error_text.remove(&i) {
-                attrs.push((web_attrs::ERROR_TEXT, t));
-            }
             keys.push(rn.path);
             out_nodes.push(SrcNode {
                 id: SrcNodeId(rn.path.0),

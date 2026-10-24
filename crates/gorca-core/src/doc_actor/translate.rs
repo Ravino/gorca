@@ -442,7 +442,9 @@ impl Translator {
         w: &mut DocWriter,
         batch: Vec<DocDelta>,
     ) -> Result<BatchOutcome, DocError> {
-        self.apply_fused(w, batch, &super::fuse::NoSem, &[])
+        // The nodes get the entries a source would have given them (see `legacy_sem`).
+        let sem = super::legacy_sem_tests::LegacySem::of(&batch);
+        super::agree::unchecked(|| self.apply_fused(w, batch, &sem, &[]))
     }
 
     /// [`Translator::apply`] with the fusion stage's answers: every node the batch builds or

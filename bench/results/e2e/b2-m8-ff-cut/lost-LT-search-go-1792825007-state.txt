@@ -1,0 +1,70 @@
+30846712041499 said "FL Real logins — Mozilla Firefox, FL Real logins, document"
+30846764670345 said "browse mode, main landmark, heading level 1, Real-world login shapes"
+30846995950961 said "Forgot password?, link"
+30847515976255 said "focus mode, Email or phone, edit"
+30847521898641 said "blank"
+30847819600565 said "FL Real logins — Mozilla Firefox, panel"
+30848770889195 said "focus mode, Enter your password, password edit"
+30848774525461 said "blank"
+30848916027864 said "browse mode, Show password, check box, not checked"
+30849060017444 said "Next, button"
+30849230851982 said "focus mode, GHUser name or email address, edit"
+30849235932786 said "blank"
+30849375024514 said "GHPass word, password edit"
+30849381233141 said "blank"
+30849526834741 said "browse mode, Sign in, button"
+30849664027272 said "Forgot password?, link"
+30849808366987 said "panel"
+30851322904825 said "NEXT, button"
+30851462820984 said "focus mode, TGA Your phone number, edit"
+30851464845622 said "all selected, 2 characters"
+30851598897427 said "TGA Password, password edit"
+30851606751374 said "blank"
+30851746615030 said "MUI Email, edit. We never share it"
+30851752506194 said "blank"
+30851892049124 said "BS Email address, edit"
+30851896698222 said "blank"
+30852031132304 said "BS Password, password edit"
+30852037988497 said "blank"
+30852184644948 said "Search the wiki, edit"
+30852191138505 said "blank"
+bus 3 /org/a11y/atspi/accessible/93 TextCaretMoved:
+bus 3 /org/a11y/atspi/accessible/93 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/95 Focus:
+bus 1 /org/a11y/atspi/accessible/95 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/95 TextCaretMoved:
+bus 3 /org/a11y/atspi/accessible/95 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/96 Focus:
+bus 1 /org/a11y/atspi/accessible/96 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/97 Focus:
+bus 1 /org/a11y/atspi/accessible/97 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/98 Focus:
+bus 1 /org/a11y/atspi/accessible/98 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/98 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/100 Focus:
+bus 1 /org/a11y/atspi/accessible/100 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/114 Focus:
+bus 1 /org/a11y/atspi/accessible/114 StateChanged:focused
+bus 5 /org/a11y/atspi/accessible/114 TextSelectionChanged:
+bus 3 /org/a11y/atspi/accessible/114 TextCaretMoved:
+bus 3 /org/a11y/atspi/accessible/114 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/116 Focus:
+bus 1 /org/a11y/atspi/accessible/116 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/116 TextCaretMoved:
+bus 3 /org/a11y/atspi/accessible/116 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/120 Focus:
+bus 1 /org/a11y/atspi/accessible/120 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/120 TextCaretMoved:
+bus 3 /org/a11y/atspi/accessible/120 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/122 Focus:
+bus 1 /org/a11y/atspi/accessible/122 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/122 TextCaretMoved:
+bus 3 /org/a11y/atspi/accessible/122 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/124 Focus:
+bus 1 /org/a11y/atspi/accessible/124 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/124 TextCaretMoved:
+bus 3 /org/a11y/atspi/accessible/124 TextCaretMoved:
+bus 1 /org/a11y/atspi/accessible/126 Focus:
+bus 1 /org/a11y/atspi/accessible/126 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/126 TextCaretMoved:
+bus 3 /org/a11y/atspi/accessible/126 TextCaretMoved:
