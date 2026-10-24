@@ -312,6 +312,10 @@ fn resolve_node_role(
         {
             engine = r;
         }
+        // A web `<option>` is an option whatever list role the engine gave it.
+        if engine == SemRole::ListItem && a.tag == Some("option") {
+            engine = SemRole::Option;
+        }
         // A selectable GTK list row is an option of its listbox (web list items are not).
         if engine == SemRole::ListItem && !a.is_web() && st.has(bit::SELECTABLE) {
             engine = SemRole::Option;

@@ -310,6 +310,8 @@ const fn select_role(r: SemRole) -> bool {
     matches!(
         r,
         SemRole::Option
+            // A `<select>` option is exported as a menu item; it is selectable when the engine says so.
+            | SemRole::MenuItem
             | SemRole::Tab
             | SemRole::TreeItem
             | SemRole::GridCell
@@ -321,42 +323,10 @@ const fn select_role(r: SemRole) -> bool {
     )
 }
 
-/// Roles on which a disabled state is meaningful (SM-5). Static and structural roles are
-/// `NotApplicable`, never "unavailable".
+/// Roles on which a disabled state is meaningful (SM-5): the one list shared with the fusion
+/// rules (`SemRole::is_disableable`).
 pub const fn is_disableable(r: SemRole) -> bool {
-    matches!(
-        r,
-        SemRole::Button
-            | SemRole::Checkbox
-            | SemRole::Radio
-            | SemRole::Switch
-            | SemRole::Combobox
-            | SemRole::TextBox
-            | SemRole::SearchBox
-            | SemRole::PasswordBox
-            | SemRole::SpinButton
-            | SemRole::Slider
-            | SemRole::Link
-            | SemRole::MenuItem
-            | SemRole::MenuItemCheckbox
-            | SemRole::MenuItemRadio
-            | SemRole::Option
-            | SemRole::Tab
-            | SemRole::TreeItem
-            | SemRole::GridCell
-            | SemRole::Listbox
-            | SemRole::Scrollbar
-            | SemRole::Separator
-            | SemRole::Group
-            | SemRole::Application
-            | SemRole::Tree
-            | SemRole::Grid
-            | SemRole::TreeGrid
-            | SemRole::Menu
-            | SemRole::Menubar
-            | SemRole::Toolbar
-            | SemRole::TabList
-    )
+    r.is_disableable()
 }
 
 /// Roles that are text fields (a missing EDITABLE state on them means read-only).
@@ -722,6 +692,47 @@ mod tests {
         assert_eq!(
             map_states(SemRole::StaticText, false, false, en).avail,
             Avail::NotApplicable
+        );
+    }
+
+    #[test]
+    fn the_roles_of_selectable_web_widgets_can_be_unavailable_and_selected() {
+        let en = bits(&[bit::ENABLED, bit::FOCUSABLE]);
+        let off = bits(&[bit::FOCUSABLE]);
+        // Tree, grid, scroll bar and group are disableable (the fusion rules read the same list).
+        for r in [
+            SemRole::Tree,
+            SemRole::Grid,
+            SemRole::TreeGrid,
+            SemRole::Scrollbar,
+            SemRole::Group,
+            SemRole::Option,
+        ] {
+            assert!(r.is_disableable(), "{r:?}");
+            assert_eq!(
+                map_states(r, false, false, en).avail,
+                Avail::Enabled,
+                "{r:?}"
+            );
+            assert_eq!(
+                map_states(r, false, false, off).avail,
+                Avail::Disabled,
+                "{r:?}"
+            );
+        }
+        // A `<select>` option is exported as a menu item: selectable when the engine says so.
+        let sel = bits(&[bit::SELECTABLE, bit::SELECTED]);
+        assert_eq!(
+            map_states(SemRole::MenuItem, false, false, sel).select,
+            Select::On
+        );
+        assert_eq!(
+            map_states(SemRole::MenuItem, false, false, bits(&[bit::SELECTABLE])).select,
+            Select::Off
+        );
+        assert_eq!(
+            map_states(SemRole::MenuItem, false, false, StateBits(0)).select,
+            Select::NotSelectable
         );
     }
 

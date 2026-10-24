@@ -5,22 +5,13 @@
 # Verified against the A2 corpus (tests/fixtures/sem/firefox vs chromium, tests/quirks.rs).
 
 # X1: the engine's name of a list, tree, option or menu item carries the CSS list marker
-# ("• Alpha"); Blink and the document mirror do not. The corpus shows bullets only.
+# ("• Alpha"); Blink and the document mirror do not. The corpus shows bullets only. The counter of an ordered list ("1. First") is kept: it is the item's number and nothing else speaks it.
 [[rule]]
 id = 1
 name = "gecko.list-marker"
 roles = ["listitem", "treeitem", "option", "menuitem", "menuitemcheckbox", "menuitemradio"]
 action = "strip-name-prefix"
 prefixes = ["• ", "◦ ", "▪ ", "■ ", "□ ", "– ", "● ", "○ ", "‣ ", "⁃ "]
-
-# The counter of an ordered list ("1. First"): the same CSS-drawn marker as above. The old code
-# (WebQuirks::strip_list_marker) stripped it from list and tree items; the corpus has it on every
-# numbered list of the M8 pages.
-[[rule]]
-id = 3
-name = "gecko.list-ordinal"
-roles = ["listitem", "treeitem"]
-action = "strip-name-ordinal"
 
 # Gecko numbers menu items per role (1 of 3 for the three plain items, 1 of 6 for the check items)
 # where ARIA counts the whole menu (A2 corpus: menuitem.plain 1/3 vs Blink 1/9). The value is wrong,

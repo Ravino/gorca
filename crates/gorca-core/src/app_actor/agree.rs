@@ -120,12 +120,6 @@ pub const DEVIATIONS: &[Deviation] = &[
         reason: "a table the engine guesses to be layout is `presentation` in the model",
     },
     Deviation {
-        id: "select-not-applicable",
-        group: Group::Select,
-        reason: "the engine sets SELECTED on a role that has no selection state in ARIA (menu \
-                 item focus); the model says `not selectable` and the legacy word never applied",
-    },
-    Deviation {
         id: "pressed-without-toggle",
         group: Group::Check,
         reason: "the engine sets PRESSED or CHECKED on a role that is no toggle (GTK page tabs); \
@@ -174,10 +168,6 @@ fn applies(id: &str, c: &Ctx<'_>) -> bool {
         "aria-role-over-engine" => c.rec.role_source == RoleSource::Token,
         "weak-role-refined" => weak(c.snap.role),
         "layout-table-presentation" => c.entry.sem.role == SemRole::Presentation,
-        "select-not-applicable" => {
-            c.snap.states.contains(StateSet::SELECTED)
-                && c.entry.sem.select == Select::NotSelectable
-        }
         "pressed-without-toggle" => {
             c.entry.sem.check == Check::NotCheckable && c.entry.sem.press == Press::NotToggle
         }

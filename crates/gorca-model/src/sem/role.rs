@@ -109,6 +109,45 @@ coded_enum! {
 }
 
 impl SemRole {
+    /// Roles on which a disabled state is meaningful (SM-5). Static and structural roles are
+    /// `NotApplicable`, never "unavailable". The one list: the AT-SPI state mapping and the fusion
+    /// applicability rules both read it.
+    pub const fn is_disableable(self) -> bool {
+        matches!(
+            self,
+            SemRole::Button
+                | SemRole::Checkbox
+                | SemRole::Radio
+                | SemRole::Switch
+                | SemRole::Combobox
+                | SemRole::TextBox
+                | SemRole::SearchBox
+                | SemRole::PasswordBox
+                | SemRole::SpinButton
+                | SemRole::Slider
+                | SemRole::Link
+                | SemRole::MenuItem
+                | SemRole::MenuItemCheckbox
+                | SemRole::MenuItemRadio
+                | SemRole::Option
+                | SemRole::Tab
+                | SemRole::TreeItem
+                | SemRole::GridCell
+                | SemRole::Listbox
+                | SemRole::Scrollbar
+                | SemRole::Separator
+                | SemRole::Group
+                | SemRole::Application
+                | SemRole::Tree
+                | SemRole::Grid
+                | SemRole::TreeGrid
+                | SemRole::Menu
+                | SemRole::Menubar
+                | SemRole::Toolbar
+                | SemRole::TabList
+        )
+    }
+
     /// The legacy role a model role stands for (what the legacy mapping gives for the engine role the
     /// model role comes from). `Unknown` for model roles the legacy set has no word for.
     pub fn legacy_family(self) -> Role {

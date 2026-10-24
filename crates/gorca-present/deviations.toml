@@ -55,14 +55,14 @@ until = "2026-11-07"
 id = "marker-stripped-name"
 surface = "focus"
 epoch = "m22b1"
-reason = "A quirk row strips the CSS list marker the engine put into the name; the model name is the intended one."
+reason = "A quirk row strips the CSS bullet the engine put into the name; the model name is the intended one. Ordinals (\"1. Home\") are information and stay in the name."
 until = "2026-11-07"
 
 [[deviation]]
 id = "marker-stripped-name"
 surface = "focus-web"
 epoch = "m22b1"
-reason = "A quirk row strips the CSS list marker the engine put into the name; the model name is the intended one."
+reason = "A quirk row strips the CSS bullet the engine put into the name; the model name is the intended one. Ordinals (\"1. Home\") are information and stay in the name."
 until = "2026-11-07"
 
 [[deviation]]
@@ -104,7 +104,7 @@ until = "2026-11-07"
 id = "unavailable-static"
 surface = "focus-web"
 epoch = "m22b1"
-reason = "The legacy presenter said unavailable for a generic panel or group; the model never disables static structure (SM-5)."
+reason = "The legacy presenter said unavailable for a generic panel; the model never disables static structure (SM-5). A disabled group (fieldset) is disableable and says unavailable."
 until = "2026-11-07"
 
 [[deviation]]
@@ -139,7 +139,7 @@ until = "2026-11-07"
 id = "select-not-applicable"
 surface = "change"
 epoch = "m22b1"
-reason = "The model says the node cannot be selected (a menu item, a button, a panel); the legacy presenter said selected for any flipped selection state."
+reason = "The model says the node cannot be selected (a button, a panel, a native menu item without the selectable state); the legacy presenter said selected for any flipped selection state."
 until = "2026-11-07"
 
 [[deviation]]
@@ -160,7 +160,7 @@ until = "2026-11-07"
 id = "select-not-applicable"
 surface = "change-web"
 epoch = "m22b1"
-reason = "The model says the node cannot be selected (a menu item, a button, a panel); the legacy presenter said selected for any flipped selection state."
+reason = "The model says the node cannot be selected (a button, a panel, a native menu item without the selectable state); the legacy presenter said selected for any flipped selection state."
 until = "2026-11-07"
 
 [[deviation]]

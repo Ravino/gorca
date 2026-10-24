@@ -100,6 +100,8 @@ pub fn stats() -> AgreementStats {
 /// * `name`: a legacy name outside list and tree items keeps the CSS list marker the S-1 row
 ///   strips ("• New" on a `role=menuitem` list item); the row covers option and menu items
 ///   too, which is what Blink exports.
+/// * `name`, ordinal: the model keeps the number of an ordered list or tree item ("1. Home"); the
+///   legacy path stripped it, which lost the position (cut-over judgement).
 /// * `name`, content over engine: a row, cell or list item whose engine name is a part of the
 ///   longer name S3 derives by reading through nameless containers (a message row named by its
 ///   one button, "React to message", against author, text, time and the button).
@@ -239,6 +241,16 @@ fn marker_only(legacy: &str, fused: &str) -> bool {
     })
 }
 
+/// `fused` is `legacy` with the item's ordinal in front ("1. ", "(3) "): the model keeps the
+/// number of an ordered item, the legacy path stripped it.
+fn ordinal_kept(legacy: &str, fused: &str) -> bool {
+    fused.strip_suffix(legacy).is_some_and(|prefix| {
+        let body = prefix.trim_end().trim_start_matches('(');
+        let rest = body.trim_start_matches(|c: char| c.is_ascii_digit());
+        rest.len() < body.len() && matches!(rest, "." | ")")
+    })
+}
+
 /// The aspects on which the legacy values of `n` and the fused entry `e` disagree. Pure.
 pub fn compare(n: &SrcNode, flags: NodeFlags, level: u8, e: &SemEntry) -> Vec<Aspect> {
     let mut out = Vec::new();
@@ -254,11 +266,13 @@ pub fn compare(n: &SrcNode, flags: NodeFlags, level: u8, e: &SemEntry) -> Vec<As
         let fused = e.name.as_deref();
         let marker_kept = !matches!(n.role, Role::ListItem | Role::TreeItem)
             && fused.is_some_and(|f| marker_only(legacy, f));
+        let ordinal = matches!(n.role, Role::ListItem | Role::TreeItem)
+            && fused.is_some_and(|f| ordinal_kept(legacy, f));
         // The engine's own content name of a container was shallower than the subtree: the
         // longer name S3 derived replaces it (deviation `content-over-engine`).
         let deeper = e.prov.get(Group::Name) == Some(gorca_model::sem::ProvCode::Derived)
             && fused.is_some_and(|f| gorca_fuse::name_extends(legacy, f));
-        if fused != Some(legacy) && !marker_kept && !deeper {
+        if fused != Some(legacy) && !marker_kept && !deeper && !ordinal {
             out.push(Aspect::Name);
         }
     }
@@ -493,6 +507,18 @@ mod tests {
         assert!(compare(&n, NodeFlags::NONE, 0, &e).is_empty());
         assert_eq!(compare(&n, NodeFlags::NONE, 6, &e), vec![Aspect::Level]);
         assert!(marker_only("1. First", "First") && !marker_only("Say First", "First"));
+        // The ordinal of an ordered item stays in the fused name.
+        let n = node(Role::ListItem, Some("First"), StateSet::default());
+        assert!(
+            compare(
+                &n,
+                NodeFlags::NONE,
+                0,
+                &entry(SemRole::ListItem, Some("1. First"))
+            )
+            .is_empty()
+        );
+        assert!(ordinal_kept("First", "(3) First") && !ordinal_kept("First", "Say First"));
     }
 
     #[test]
