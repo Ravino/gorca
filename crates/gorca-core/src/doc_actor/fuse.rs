@@ -30,8 +30,13 @@ use std::time::{Duration, Instant};
 
 use gorca_doc_source_api::FuseSetup;
 use gorca_doc_source_api::limits::{MAX_CHILDREN, MAX_DOC_NODES};
-use gorca_fuse::{Budget, Input, Ivm, NoPatches, NodeIdx, PrimarySlot, QuirkSet, Val, Write};
+use gorca_fuse::{
+    AnchorId, Budget, FactIn, Grant, Input, Ivm, NoPatches, NodeIdx, Payload, PrimarySlot,
+    QuirkSet, SourceInfo, SourceState, Val, Write,
+};
+use gorca_model::fact::{Basis, SourceId};
 use gorca_model::sem::{Group, SemEntry, SemRole, SrcRecord};
+use gorca_model::sem::{SourceClass, TrustTier};
 use gorca_model::{DocDelta, SrcNode, SrcNodeId};
 
 /// Work one run of the engine may do before the actor goes back to its queues.
@@ -81,10 +86,40 @@ pub struct FuseStage {
     root: Option<SrcNodeId>,
     batches: u64,
     stats: FuseStats,
+    /// Sequence of the inferred-label facts (newest wins per node).
+    label_seq: u64,
 }
 
+/// The fact source of layout-inferred labels (C3b, ADR-0024 S4): the lowest-trust stratum, so the
+/// label fills only a name nothing else gave, and its taint hedges it.
+pub const LABEL_SOURCE: SourceId = SourceId {
+    slot: 0x4C42,
+    generation: 0,
+};
+
+/// How long an inferred label stays valid (`Inferred` facts need a TTL); a change of the node's
+/// layout revision (`Basis::VisRev`) retires it earlier.
+const LABEL_TTL_MS: u64 = 300_000;
+
+/// Confidence of a layout-inferred label (per mille): above the grant floor, below any observed
+/// source.
+const LABEL_P_MILLI: u16 = 850;
+
 fn engine(setup: &FuseSetup) -> Ivm<QuirkSet, NoPatches> {
-    Ivm::new(setup.profile.clone(), setup.quirks.clone(), NoPatches)
+    let mut ivm = Ivm::new(setup.profile.clone(), setup.quirks.clone(), NoPatches);
+    let info = SourceInfo {
+        id: LABEL_SOURCE,
+        name: Arc::from("layout-label"),
+        class: SourceClass::Inferred,
+        tier: TrustTier::T3Untrusted,
+        kind_order: 9,
+        grant: Grant::standard(),
+    };
+    // A fresh engine has room for its own sources; a refusal only means no inferred labels.
+    if ivm.set_source(info).is_ok() {
+        ivm.set_source_state(LABEL_SOURCE, 1, SourceState::Active);
+    }
+    ivm
 }
 
 impl FuseStage {
@@ -98,6 +133,7 @@ impl FuseStage {
             root: None,
             batches: 0,
             stats: FuseStats::default(),
+            label_seq: 0,
         }
     }
 
@@ -328,6 +364,31 @@ impl FuseStage {
         }
         self.ivm.set_focus_chain(&chain);
         self.write(n, rec, 2 * issued_at + 1);
+        Some(self.run())
+    }
+
+    /// Admit the label inferred from the layout for the nameless node `src` as an S4 fact: it
+    /// fills the name only while nothing better exists, carries the T3 taint (so the entry is
+    /// hedged) and is valid for the layout revision the node has now. `None` when the node is
+    /// not in the engine.
+    pub fn infer_label(&mut self, src: SrcNodeId, text: &str) -> Option<Vec<SrcNodeId>> {
+        let n = *self.ids.get(&src)?;
+        let anchor = AnchorId::Node(n);
+        self.label_seq += 1;
+        let fact = FactIn {
+            source: LABEL_SOURCE,
+            group: Group::Name.group_code(),
+            seq: self.label_seq,
+            payload: Payload::Sem(Write::Val(Val::Name(Arc::from(text)))),
+            p_milli: LABEL_P_MILLI,
+            basis: Basis::VisRev(self.ivm.vis_rev(n)),
+            bind_gen: self.ivm.resolve_anchor(&anchor).generation,
+            admitted_at_ms: self.ivm.clock(),
+            ttl_ms: Some(LABEL_TTL_MS),
+            anchor,
+        };
+        let rep = self.ivm.apply([Input::Fact(Box::new(fact))]);
+        self.stats.errors += rep.errors.len() as u64;
         Some(self.run())
     }
 
@@ -707,6 +768,52 @@ mod tests {
         );
         assert!(changed.len() >= usize::try_from(N).unwrap());
         assert!(took < std::time::Duration::from_secs(20), "{took:?}");
+    }
+
+    /// C3b: the label inferred from the layout is an S4 fact: it fills a nameless control, is
+    /// hedged and tainted, never replaces a name a primary gave, and shows up in the entry.
+    #[test]
+    fn an_inferred_label_is_the_lowest_trust_name() {
+        use gorca_model::sem::{ConfClass, ProvCode, TrustTier};
+        let mut s = FuseStage::new(setup());
+        s.apply(&[
+            reset(1),
+            DocDelta::Upsert(vec![
+                node(1, SemRole::DocumentWeb, None),
+                node(2, SemRole::TextBox, None),
+                node(3, SemRole::TextBox, Some("Email")),
+            ]),
+            kids(1, &[2, 3]),
+        ]);
+        assert_eq!(name_of(&s, 2), None, "nothing named it");
+        let changed = s
+            .infer_label(SrcNodeId(2), "First name")
+            .expect("a node of the engine");
+        assert!(changed.contains(&SrcNodeId(2)));
+        assert_eq!(name_of(&s, 2).as_deref(), Some("First name"));
+        let e = s.sem(SrcNodeId(2)).expect("entry");
+        assert_eq!(e.prov.get(Group::Name), Some(ProvCode::Inferred));
+        assert_ne!(
+            ConfClass::from_code(e.hedge.get(Group::Name)),
+            Some(ConfClass::Asserted),
+            "hedged"
+        );
+        assert_eq!(
+            TrustTier::from_code(e.taint.get(Group::Name)),
+            Some(TrustTier::T3Untrusted)
+        );
+        // A primary name wins: the label is shadowed.
+        s.infer_label(SrcNodeId(3), "Other");
+        assert_eq!(name_of(&s, 3).as_deref(), Some("Email"));
+        // A node the engine does not know is refused, not invented.
+        assert!(s.infer_label(SrcNodeId(99), "x").is_none());
+        // The primary's name arriving later supersedes the guess.
+        s.apply(&[DocDelta::Upsert(vec![node(
+            2,
+            SemRole::TextBox,
+            Some("Given name"),
+        )])]);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("Given name"));
     }
 
     /// M-3 storm bench (C3 review, pre-M22b): a streaming leaf renamed in three tree shapes, the

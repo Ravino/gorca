@@ -31,3 +31,4 @@ battery-pending = waiting to charge
 battery-time = {dur} remaining
 battery-hm = {h} h {m} min
 battery-m = {m} min
+hedge-probably = probably {text}

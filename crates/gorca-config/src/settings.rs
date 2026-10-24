@@ -685,6 +685,7 @@ impl Default for TextSettings {
 
 /// Browse mode (docs/design/browse-mode.md, Q-W2).
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // one switch per documented setting
 pub struct BrowseSettings {
     /// Read a page from its top as soon as it has loaded (NVDA `autoSayAllOnPageLoad`, on by
     /// default).
@@ -692,6 +693,9 @@ pub struct BrowseSettings {
     /// Say the description of a control (`aria-describedby`, a tooltip title) after a short
     /// pause, as its own sentence, instead of straight after the other words (M8b).
     pub description_pause: bool,
+    /// Say a control name that was inferred from the page layout (no author label) with a
+    /// hedge, "probably First name" (ADR-0024 FS-12); off says it plainly, as Orca does.
+    pub hedge_inferred: bool,
     /// `false`: no virtual buffer for the application; the reader follows its focus (ADR-0016
     /// section 2.6, the product row for editors built from text widgets).
     pub enabled: bool,
@@ -704,6 +708,7 @@ impl Default for BrowseSettings {
         Self {
             say_all_on_load: true,
             description_pause: true,
+            hedge_inferred: false,
             enabled: true,
             mode_default: ModeDefault::Browse,
         }
@@ -1145,6 +1150,7 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     row("browse", "say_all_on_load", SettingType::Bool, "true"),
     row("browse", "description_pause", SettingType::Bool, "true"),
+    row("browse", "hedge_inferred", SettingType::Bool, "false"),
     row("browse", "enabled", SettingType::Bool, "true"),
     row(
         "browse",
@@ -1385,6 +1391,11 @@ static DOCS: &[(&str, &str, &str)] = &[
         "browse",
         "description_pause",
         "Say the description of a web control after a short pause.",
+    ),
+    (
+        "browse",
+        "hedge_inferred",
+        "Say a control name guessed from the page layout with a hedge (probably ...).",
     ),
     (
         "browse",

@@ -250,6 +250,7 @@ impl ShadowActor {
             may_refine: s.may_refine,
             web: s.web,
             skip_selected: false,
+            hedge_inferred: false,
         };
         let ir = match compose(&s.entry, s.node, Reason::Focus, ctx) {
             Ok(ir) => ir,
@@ -293,6 +294,7 @@ impl ShadowActor {
             may_refine: false,
             web: s.web,
             skip_selected: s.skip_selected,
+            hedge_inferred: false,
         };
         let ir = compose_change(&s.old, &s.new, s.node, ctx);
         let tokens = render(

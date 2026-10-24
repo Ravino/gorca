@@ -130,6 +130,9 @@ pub enum DocCtl {
         node: DocNodeId,
         role: gorca_model::Role,
     },
+    /// The label the layout inference chose for `node` (sent by the label task to its own
+    /// actor): admitted to fusion as the lowest-trust S4 fact.
+    LabelFact { node: DocNodeId, text: Arc<str> },
     /// An `atspi` fact about a node of this document (SM-8): the app actor fetched it (a focus
     /// fetch of a web node) and the document, the node's single writer, fuses it. `issued_at` is
     /// [`DocHandle::timeline`] read when the fetch was issued, so a fact never overwrites what a
@@ -353,6 +356,7 @@ pub fn prepare(
         orphans: Arc::clone(&handle.orphans),
         repair_flag: Arc::clone(&handle.repair_flag),
         timeline: Arc::clone(&handle.timeline),
+        ctl_weak: handle.ctl.downgrade(),
     };
     let fut = run(spec, writer, shared, ctl_rx, ev_rx);
     (handle, fut)
@@ -400,6 +404,8 @@ struct Actor {
     timeline: Arc<std::sync::atomic::AtomicU64>,
     /// Nodes whose fused entry changed and whose meta is not patched yet (a fact arrived).
     pending_changed: Vec<SrcNodeId>,
+    /// The actor's own control queue, for tasks it spawned (weak: they never keep it open).
+    ctl_weak: mpsc::WeakSender<DocCtl>,
 }
 
 type RepairRx = oneshot::Receiver<Result<RepairReport, SourceError>>;
@@ -545,6 +551,15 @@ impl Actor {
         self.fuse.as_ref().is_some_and(|f| f.pending() > 0)
     }
 
+    /// The source's id of a mirror node (the key fusion is addressed by).
+    fn src_of(&mut self, id: DocNodeId) -> Option<SrcNodeId> {
+        self.writer
+            .doc()
+            .node(id)
+            .and_then(|v| v.meta)
+            .and_then(|m| m.src)
+    }
+
     /// A fact about one of this document's nodes (a focus fetch the app actor forwarded).
     fn on_fact(&mut self, local: LocalId, rec: &SrcRecord, issued_at: u64) {
         if self.fuse.is_none() {
@@ -556,16 +571,28 @@ impl Actor {
         if doc != self.spec_doc {
             return;
         }
-        let Some(src) = self
-            .writer
-            .doc()
-            .node(id)
-            .and_then(|v| v.meta)
-            .and_then(|m| m.src)
-        else {
+        let Some(src) = self.src_of(id) else {
             return;
         };
         let fused = self.fuse.as_mut().and_then(|f| f.fact(src, rec, issued_at));
+        if let Some(changed) = fused {
+            self.pending_changed.extend(changed);
+            if !self.pending_changed.is_empty() {
+                self.flush();
+            }
+        }
+    }
+
+    /// The layout inference chose `text` for the nameless control `node`: admit it to fusion as
+    /// the lowest-trust S4 fact (C3b). The fused entry then carries the name, hedged and tainted.
+    fn on_label_fact(&mut self, node: DocNodeId, text: &str) {
+        if self.fuse.is_none() {
+            return;
+        }
+        let Some(src) = self.src_of(node) else {
+            return;
+        };
+        let fused = self.fuse.as_mut().and_then(|f| f.infer_label(src, text));
         if let Some(changed) = fused {
             self.pending_changed.extend(changed);
             if !self.pending_changed.is_empty() {
@@ -807,6 +834,7 @@ struct Shared {
     orphans: Arc<Orphans>,
     repair_flag: Arc<std::sync::atomic::AtomicU8>,
     timeline: Arc<std::sync::atomic::AtomicU64>,
+    ctl_weak: mpsc::WeakSender<DocCtl>,
 }
 
 async fn run(
@@ -821,6 +849,7 @@ async fn run(
         orphans,
         repair_flag,
         timeline,
+        ctl_weak,
     } = shared;
     let DocActorSpec {
         doc,
@@ -885,6 +914,7 @@ async fn run(
         fuse,
         timeline,
         pending_changed: Vec::new(),
+        ctl_weak,
     };
     let mut repair_rx: Option<RepairRx> = None;
 
@@ -958,6 +988,7 @@ async fn run(
                         label_task = spawn_label(&a, req, node, role);
                     }
                     DocCtl::Fact { local, rec, issued_at } => a.on_fact(local, &rec, issued_at),
+                    DocCtl::LabelFact { node, text } => a.on_label_fact(node, &text),
                     DocCtl::Select { req, node, act } => {
                         if actions.len() < MAX_ACTIONS {
                             // One selection at a time, in request order (ADR-0021 I-3): this
@@ -1129,6 +1160,7 @@ fn spawn_label(
     };
     let requests = a.requests.clone();
     let notices = a.notices.clone();
+    let ctl = a.ctl_weak.clone();
     let doc = a.spec_doc;
     Some(tokio::spawn(async move {
         let (reply, rx) = oneshot::channel();
@@ -1161,11 +1193,20 @@ fn spawn_label(
             rects = ?rects,
         );
         if let Some(text) = chosen {
+            let text: Arc<str> = Arc::from(text);
+            // The fact goes to the actor first: its entry then carries the label for the next
+            // presentation; the notice is the legacy refine path (deleted with the cut-over).
+            if let Some(ctl) = ctl.upgrade() {
+                let _ = ctl.try_send(DocCtl::LabelFact {
+                    node,
+                    text: Arc::clone(&text),
+                });
+            }
             let _ = notices.try_send(DocNotice::Label {
                 doc,
                 req,
                 node,
-                text: Arc::from(text),
+                text,
             });
         }
     }))

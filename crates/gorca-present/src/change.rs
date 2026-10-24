@@ -257,6 +257,7 @@ mod tests {
         may_refine: false,
         web: false,
         skip_selected: false,
+        hedge_inferred: false,
     };
 
     fn entry(role: SemRole) -> SemEntry {
