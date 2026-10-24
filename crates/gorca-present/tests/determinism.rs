@@ -438,9 +438,7 @@ fn p2_8_unknown_content_renders_nothing_and_is_otherwise_inert() {
             if r.chance(60) {
                 let junk = Field::new(
                     FieldKind(*r.pick(&[0x0123u16, 0x7FFF, 0x8123])),
-                    Content::Opaque {
-                        code: u16::try_from(3 + r.below(1000)).unwrap(),
-                    },
+                    Content::opaque(u16::try_from(3 + r.below(1000)).unwrap()).unwrap(),
                     Origin::default(),
                 );
                 noisy.fields.insert(i.min(noisy.fields.len()), junk);

@@ -74,7 +74,7 @@ fn text_of(c: &Content) -> Option<TokenText> {
         }
         Content::Ext(r) => ext::format(&r.ns, &r.key, gorca_i18n::language(), &pairs(&r.args))
             .map(|s| TokenText::Owned(s.into())),
-        Content::Opaque { .. } => None,
+        Content::Opaque { .. } | Content::UnknownMsg(_) => None,
     }
 }
 
@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn opaque_content_renders_nothing() {
         let r = render(
-            &ir(vec![f(FieldKind::NAME, Content::Opaque { code: 9 })]),
+            &ir(vec![f(FieldKind::NAME, Content::opaque(9).unwrap())]),
             RenderOpts::default(),
         );
         assert!(r.is_empty());

@@ -135,7 +135,7 @@ fn dec_args(r: &mut R<'_>) -> Option<Vec<Arg>> {
         let val = match r.u16()? {
             0 => ArgVal::Num(r.i64()?),
             1 => ArgVal::Text(Arc::from(r.str()?)),
-            code => ArgVal::Opaque { code },
+            code => ArgVal::opaque(code)?,
         };
         out.push(Arg {
             name: Arc::from(name),
@@ -186,6 +186,10 @@ fn encode(ir: &PresIr, tags: &LangTags) -> Vec<u8> {
                 w.str(&x.ns);
                 w.str(&x.key);
                 enc_args(&mut w, &x.args);
+            }
+            Content::UnknownMsg(u) => {
+                w.str(&u.key);
+                enc_args(&mut w, &u.args);
             }
             Content::Opaque { .. } => {}
         }
@@ -241,7 +245,7 @@ fn decode(bytes: &[u8], tags: &mut LangTags) -> Option<PresIr> {
                 let (ns, key) = (r.str()?, r.str()?);
                 Content::ext(&ns, &key, dec_args(&mut r)?)
             }
-            code => Content::Opaque { code },
+            code => Content::opaque(code)?,
         };
         let origin = Origin {
             row: RowId(r.u16()?),
@@ -293,13 +297,12 @@ fn gen_arg(r: &mut Rng, canonical: bool) -> Arg {
     let val = match r.below(4) {
         0 => ArgVal::Num(i64::try_from(r.next() >> 1).unwrap() * if r.chance(50) { -1 } else { 1 }),
         1 | 2 => ArgVal::Text(text(r)),
-        _ => ArgVal::Opaque {
-            code: if canonical {
-                2 + r.u16().max(1) / 2 + 1
-            } else {
-                r.u16() % 4
-            },
-        },
+        _ => ArgVal::opaque(if canonical {
+            2 + r.u16().max(1) / 2 + 1
+        } else {
+            r.u16() % 4
+        })
+        .unwrap_or(ArgVal::Num(0)),
     };
     Arg { name, val }
 }
@@ -320,14 +323,13 @@ fn gen_content(r: &mut Rng, canonical: bool) -> Content {
             ["unread", "k"][r.below(2)],
             gen_args(r, canonical),
         ),
-        _ => Content::Opaque {
-            code: if canonical {
-                // never 0, 1, 2 (kind codes); 0xFFFF is UNKNOWN_KEY and also canonical
-                3 + r.u16() % 0xFFF0
-            } else {
-                r.u16() % 6
-            },
-        },
+        _ => Content::opaque(if canonical {
+            // never 0, 1, 2 (kind codes)
+            3 + r.u16() % 0xFFF0
+        } else {
+            r.u16() % 6
+        })
+        .unwrap_or_else(|| Content::Text(text(r))),
     }
 }
 
@@ -346,7 +348,7 @@ fn gen_reason(r: &mut Rng, canonical: bool) -> Reason {
         },
         7 => Reason::ListEntry,
         8 => Reason::WhereAmI,
-        _ => Reason::Unknown(if canonical {
+        _ => Reason::unknown(if canonical {
             9 + r.u16() % 0xFFF0
         } else {
             r.u16() % 12
@@ -455,7 +457,7 @@ fn p4_3_unknown_reason_content_arg_and_field_kinds_pass_through_byte_for_byte() 
     let mut fields: SmallVec<[Field; 6]> = SmallVec::new();
     fields.push(Field::new(
         FieldKind(0x0123), // unregistered core code
-        Content::Opaque { code: 40 },
+        Content::opaque(40).unwrap(),
         Origin::default(),
     ));
     fields.push(
@@ -472,13 +474,13 @@ fn p4_3_unknown_reason_content_arg_and_field_kinds_pass_through_byte_for_byte() 
             MsgId::ALL[0],
             vec![Arg {
                 name: Arc::from("a"),
-                val: ArgVal::Opaque { code: 9 },
+                val: ArgVal::opaque(9).unwrap(),
             }],
         ),
         Origin::default(),
     ));
     let mut ir = PresIr::new(
-        Reason::Unknown(999),
+        Reason::unknown(999),
         NodeKey {
             app: AppId {
                 connector: ConnectorId(1),
@@ -494,9 +496,9 @@ fn p4_3_unknown_reason_content_arg_and_field_kinds_pass_through_byte_for_byte() 
     let bytes = encode(&ir, &tags);
     let mut t2 = lang_table();
     let back = decode(&bytes, &mut t2).expect("an IR of a newer host decodes");
-    assert_eq!(back.reason, Reason::Unknown(999));
+    assert_eq!(back.reason, Reason::unknown(999));
     assert!(!back.reason.editable());
-    assert_eq!(back.fields[0].content, Content::Opaque { code: 40 });
+    assert_eq!(back.fields[0].content, Content::opaque(40).unwrap());
     assert_eq!(back.fields[0].kind, FieldKind(0x0123));
     assert_eq!(back.fields[1].flags, FieldFlags(0xFFFE));
     assert_eq!(back.flags, IrFlags(0xFFFE));
@@ -513,7 +515,7 @@ fn p4_3_unknown_reason_content_arg_and_field_kinds_pass_through_byte_for_byte() 
 fn p4_4_every_unregistered_reason_code_is_kept() {
     for code in 9..=u16::MAX {
         let r = Reason::from_code(code, true, 0xFFFF_FFFF);
-        assert_eq!(r, Reason::Unknown(code));
+        assert_eq!(r, Reason::unknown(code));
         assert_eq!(r.code(), code);
     }
     // And the registered range is closed under code()/from_code() with its payloads.
@@ -573,64 +575,55 @@ fn p4_5_lang_id_is_a_table_order_artifact_the_tag_is_the_identity() {
 
 // ---- known gaps (counterexamples; see the report) ------------------------------------------------
 
-/// KNOWN GAP G-P4-a: `Reason::Unknown(c)` is a public constructor, so `Unknown(3)` is
-/// representable but its code is `QuickNav`'s. The round trip is not exact for non-canonical
-/// values. Fix proposal: make the variant's constructor validating (`Reason::unknown(c)` returns
-/// `from_code(c, ..)`), or make the field private.
+/// G-P4-a (fixed): `Reason::Unknown` cannot be built outside the crate, and `Reason::unknown(c)`
+/// maps a registered code to its own variant, so every constructible value round-trips.
 #[test]
-fn known_gap_non_canonical_unknown_reason_does_not_round_trip() {
-    let bad = Reason::Unknown(3);
-    assert_eq!(bad.code(), 3);
-    assert_eq!(Reason::from_code(bad.code(), false, 0), Reason::QuickNav);
-    assert_ne!(Reason::from_code(bad.code(), false, 0), bad);
+fn unknown_reason_never_collides_with_a_registered_code() {
+    for code in 0..9u16 {
+        let r = Reason::unknown(code);
+        assert!(!matches!(r, Reason::Unknown { .. }), "code {code}");
+        assert_eq!(r.code(), code);
+        assert_eq!(Reason::from_code(r.code(), false, 0), r);
+    }
+    for code in 9..=u16::MAX {
+        let r = Reason::unknown(code);
+        assert!(matches!(r, Reason::Unknown { .. }));
+        assert_eq!(Reason::from_code(r.code(), false, 0), r);
+    }
 }
 
-/// KNOWN GAP G-P4-b: `Content::Opaque { code }` and `ArgVal::Opaque { code }` have public
-/// fields; `Opaque { code: 0 }` claims the text kind. A strict codec cannot encode it (the
-/// payload is missing), a lenient one turns it into a different value.
+/// G-P4-b (fixed): opaque content and argument kinds reject the registered kind codes on
+/// construction, so they always encode and decode.
 #[test]
-fn known_gap_non_canonical_opaque_collides_with_a_kind_code() {
-    assert_eq!(
-        Content::Opaque { code: 0 }.code(),
-        Content::Text(Arc::from("")).code()
+fn opaque_kinds_reject_registered_kind_codes() {
+    for code in 0..3u16 {
+        assert_eq!(Content::opaque(code), None, "content {code}");
+    }
+    for code in 0..2u16 {
+        assert_eq!(ArgVal::opaque(code), None, "arg {code}");
+    }
+    assert_eq!(Content::opaque(3).map(|c| c.code()), Some(3));
+    assert_eq!(ArgVal::opaque(2).map(|a| a.code()), Some(2));
+    assert_eq!(Content::opaque(u16::MAX).map(|c| c.code()), Some(u16::MAX));
+}
+
+/// G-P4-c (fixed): an unknown message key keeps its key and arguments, and re-encoding gives the
+/// bytes that were received (the wire form is a plain message).
+#[test]
+fn unknown_message_key_is_forwarded_whole() {
+    let c = Content::from_wire_msg(
+        "a-key-of-a-newer-host",
+        vec![Arg::num("n", 1), Arg::text("t", "x")],
     );
-    assert_eq!(
-        Content::Opaque { code: 1 }.code(),
-        Content::word(MsgId::ALL[0]).code()
-    );
-    assert_eq!(ArgVal::Opaque { code: 0 }.code(), ArgVal::Num(0).code());
-    // Through the reference codec: the decoder reads a text payload that is not there.
+    assert_eq!(c.msg_key(), Some("a-key-of-a-newer-host"));
     let tags = lang_table();
-    let mut ir = gen_ir(5, true);
+    let mut ir = gen_ir(7, true);
     ir.fields.clear();
-    ir.fields.push(Field::new(
-        FieldKind::NAME,
-        Content::Opaque { code: 0 },
-        Origin::default(),
-    ));
+    ir.fields
+        .push(Field::new(FieldKind::NAME, c.clone(), Origin::default()));
     let bytes = encode(&ir, &tags);
     let mut t = lang_table();
-    assert_eq!(
-        decode(&bytes, &mut t),
-        None,
-        "not decodable: wire corrupted by a public constructor"
-    );
-}
-
-/// KNOWN GAP G-P4-c: a message key this host does not know becomes `Opaque { UNKNOWN_KEY }` and
-/// the key and arguments are dropped, so forwarding such an IR (decode, then encode) is lossy:
-/// "unknown passes through unchanged" holds for unknown *codes* (P4.3) but not for unknown
-/// *keys*. Fix proposal: `Content::UnknownMsg { key: Arc<str>, args }` (append-only wire code 3
-/// stays reserved for it) so the original key survives, rendered as nothing.
-#[test]
-fn known_gap_unknown_message_key_is_not_preserved() {
-    let c = Content::from_wire_msg("a-key-of-a-newer-host", vec![Arg::num("n", 1)]);
-    assert_eq!(
-        c,
-        Content::Opaque {
-            code: Content::UNKNOWN_KEY
-        }
-    );
-    // The re-encoded form cannot name the key it received.
-    assert_eq!(c.msg_key(), None);
+    let back = decode(&bytes, &mut t).unwrap();
+    assert_eq!(back.fields[0].content, c);
+    assert_eq!(encode(&back, &t), bytes);
 }

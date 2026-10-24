@@ -63,7 +63,10 @@ pub enum Reason {
     },
     ListEntry,
     WhereAmI,
-    /// A reason of a newer host: edits must leave the IR unedited.
+    /// A reason of a newer host: edits must leave the IR unedited. The code is never a registered
+    /// one (`0..=8`): the variant cannot be built outside this crate, use [`Reason::unknown`] or
+    /// [`Reason::from_code`], which map a registered code to its own variant.
+    #[non_exhaustive]
     Unknown(u16),
 }
 
@@ -101,6 +104,13 @@ impl Reason {
             8 => Reason::WhereAmI,
             c => Reason::Unknown(c),
         }
+    }
+
+    /// The reason of a wire code with no payload: a registered code gives its own variant, any
+    /// other code is [`Reason::Unknown`]. Never builds an `Unknown` that collides with a registered
+    /// code.
+    pub const fn unknown(code: u16) -> Reason {
+        Reason::from_code(code, false, 0)
     }
 
     /// Whether a hook may edit an IR of this reason (an unknown reason is passed through).
@@ -389,13 +399,27 @@ pub enum ArgVal {
     Num(i64),
     Text(Arc<str>),
     /// An argument kind of a newer host (a float, a date, a nested message): kept as is, the
-    /// argument is left out when formatting. Codes: 0 num, 1 text; anything else is opaque.
+    /// argument is left out when formatting. Codes: 0 num, 1 text; anything else is opaque. The
+    /// variant cannot be built outside this crate: use [`ArgVal::opaque`], which rejects 0 and 1.
+    #[non_exhaustive]
     Opaque {
         code: u16,
     },
 }
 
 impl ArgVal {
+    /// The first code available to an opaque argument kind.
+    pub const FIRST_OPAQUE_CODE: u16 = 2;
+
+    /// An argument of a newer host's kind; `None` when `code` is a registered kind code (0, 1).
+    pub const fn opaque(code: u16) -> Option<ArgVal> {
+        if code < Self::FIRST_OPAQUE_CODE {
+            None
+        } else {
+            Some(ArgVal::Opaque { code })
+        }
+    }
+
     /// The wire kind code.
     pub const fn code(&self) -> u16 {
         match self {
@@ -430,6 +454,14 @@ pub struct ExtRef {
     pub args: Box<[Arg]>,
 }
 
+/// A core-shaped message whose key this host does not know (a newer host's): the key and the
+/// arguments are kept whole, the field renders as nothing, and the wire form is a `Msg`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UnknownMsg {
+    pub key: Arc<str>,
+    pub args: Box<[Arg]>,
+}
+
 /// The content of a field. Wire kinds: 0 text, 1 msg, 2 ext; any other code is [`Content::Opaque`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Content {
@@ -439,13 +471,27 @@ pub enum Content {
     Msg { id: MsgId, args: Box<[Arg]> },
     /// An add-on catalog message.
     Ext(Box<ExtRef>),
-    /// Content of a newer host: kept as is, renders as nothing.
+    /// A message with a key this host does not know: key and arguments kept whole (wire kind 1),
+    /// renders as nothing.
+    UnknownMsg(Box<UnknownMsg>),
+    /// Content of a newer host: kept as is, renders as nothing. Never a kind code (0, 1, 2): the
+    /// variant cannot be built outside this crate, use [`Content::opaque`].
+    #[non_exhaustive]
     Opaque { code: u16 },
 }
 
 impl Content {
-    /// The opaque code of a message whose key this host does not know (never a kind code).
-    pub const UNKNOWN_KEY: u16 = 0xFFFF;
+    /// The first code available to an opaque content kind.
+    pub const FIRST_OPAQUE_CODE: u16 = 3;
+
+    /// Content of a newer host's kind; `None` when `code` is a registered kind code (0, 1, 2).
+    pub const fn opaque(code: u16) -> Option<Content> {
+        if code < Self::FIRST_OPAQUE_CODE {
+            None
+        } else {
+            Some(Content::Opaque { code })
+        }
+    }
 
     /// A core word without arguments.
     pub fn word(id: MsgId) -> Content {
@@ -476,27 +522,31 @@ impl Content {
     pub const fn code(&self) -> u16 {
         match self {
             Content::Text(_) => 0,
-            Content::Msg { .. } => 1,
+            Content::Msg { .. } | Content::UnknownMsg(_) => 1,
             Content::Ext(_) => 2,
             Content::Opaque { code } => *code,
         }
     }
 
-    /// The catalog key of a core message: the wire form of a word.
-    pub fn msg_key(&self) -> Option<&'static str> {
+    /// The catalog key of a message: the wire form of a word (a core key, or the key of an
+    /// [`Content::UnknownMsg`]).
+    pub fn msg_key(&self) -> Option<&str> {
         match self {
             Content::Msg { id, .. } => Some(id.key()),
+            Content::UnknownMsg(u) => Some(&u.key),
             Content::Text(_) | Content::Ext(_) | Content::Opaque { .. } => None,
         }
     }
 
-    /// A core message from its wire key. An unknown key (a newer host's) is opaque, not an error.
+    /// A core message from its wire key. An unknown key (a newer host's) is kept whole as
+    /// [`Content::UnknownMsg`], not an error.
     pub fn from_wire_msg(key: &str, args: Vec<Arg>) -> Content {
         match MsgId::from_key(key) {
             Some(id) => Content::msg(id, args),
-            None => Content::Opaque {
-                code: Content::UNKNOWN_KEY,
-            },
+            None => Content::UnknownMsg(Box::new(UnknownMsg {
+                key: Arc::from(key),
+                args: args.into_boxed_slice(),
+            })),
         }
     }
 }
@@ -705,12 +755,10 @@ mod tests {
         let key = c.msg_key().expect("a core message has a key");
         assert_eq!(key, "state-checked");
         assert_eq!(Content::from_wire_msg(key, vec![]), c);
-        assert_eq!(
-            Content::from_wire_msg("no-such-key-from-a-newer-host", vec![]),
-            Content::Opaque {
-                code: Content::UNKNOWN_KEY
-            }
-        );
+        let kept = Content::from_wire_msg("no-such-key-from-a-newer-host", vec![Arg::num("n", 1)]);
+        assert_eq!(kept.msg_key(), Some("no-such-key-from-a-newer-host"));
+        assert_eq!(kept.code(), 1);
+        assert!(matches!(&kept, Content::UnknownMsg(u) if u.args.len() == 1));
         assert_eq!(c.code(), 1);
         assert_eq!(Content::Text("x".into()).code(), 0);
         assert_eq!(Content::ext("a", "b", vec![]).code(), 2);
@@ -920,7 +968,10 @@ mod tests {
         let _: u16 = k;
         let ExtRef { ns, key, args } = *match Content::ext("a", "b", vec![]) {
             Content::Ext(r) => r,
-            Content::Text(_) | Content::Msg { .. } | Content::Opaque { .. } => {
+            Content::Text(_)
+            | Content::Msg { .. }
+            | Content::UnknownMsg(_)
+            | Content::Opaque { .. } => {
                 unreachable!("built as Ext above")
             }
         };

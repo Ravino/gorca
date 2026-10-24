@@ -89,7 +89,7 @@ pub fn compose(
         | Reason::Change { .. }
         | Reason::ListEntry
         | Reason::WhereAmI
-        | Reason::Unknown(_) => Err(ComposeError::Unsupported(reason.code())),
+        | Reason::Unknown { .. } => Err(ComposeError::Unsupported(reason.code())),
     }
 }
 
@@ -377,7 +377,7 @@ mod tests {
     fn an_unknown_reason_has_no_row() {
         let e = entry(SemRole::Button, "OK");
         assert_eq!(
-            compose(&e, key(), Reason::Unknown(999), CTX),
+            compose(&e, key(), Reason::unknown(999), CTX),
             Err(ComposeError::Unsupported(999))
         );
     }
