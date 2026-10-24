@@ -32,6 +32,7 @@ pub use epoch::{Epochs, silences};
 pub use explain::{Conflict, Explain, NoTrace, ObsCand, PatchTrail, Trace, Tracer, TrailEntry};
 pub use ivm::{
     ApplyReport, Budget, Input, Ivm, IvmError, IvmStats, Published, RELATION_FANOUT_CAP, RunReport,
+    SYNC_WALL_VALVE,
 };
 pub use profile::{Limits, PiRow, Profile, RoleSet, Rules};
 pub use quirk::{

@@ -28,8 +28,9 @@ mod web;
 pub use change::{changed_groups, compose_change};
 pub use compose::{ComposeCtx, ComposeError, ReportFlags, compose};
 pub use deviations::{Deviations, DeviationsError};
-pub use diff::{DiffCtx, DiffOutcome, LegacyToken, diff};
+pub use diff::{DiffCtx, DiffOutcome, LegacyToken, diff, diff_report};
 pub use edit::{IrEdit, apply as apply_edits, fields_from_tokens, kind_of_token};
+pub use gorca_i18n::Lang;
 pub use ir::{
     Arg, ArgVal, Content, ExtKindError, ExtKinds, ExtNs, ExtRef, Field, FieldFlags, FieldKind,
     FlatSpan, IrFlags, LangId, LangTags, Origin, PRES_IR_VERSION, PresIr, Reason, Redacted, RowId,

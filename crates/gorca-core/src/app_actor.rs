@@ -72,6 +72,8 @@ const FUSED_FIELDS: PropMask = PropMask::NAME
 const NAME_ANCESTOR_LEVELS: usize = 8;
 /// Pause before a fusion step that ran out of budget continues.
 const FUSE_RESUME: Duration = Duration::from_millis(1);
+// The engine's aging bound (8 budget-cut runs) assumes `run` is re-armed within 4 ms.
+const _: () = assert!(FUSE_RESUME.as_millis() <= 4);
 /// On-read TTL of the Shell; every other app uses [`gorca_mirror::DEFAULT_TTL`] (B-1 2.2).
 const SHELL_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 

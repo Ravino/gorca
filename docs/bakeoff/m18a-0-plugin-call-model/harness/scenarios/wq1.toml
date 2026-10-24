@@ -1,0 +1,4 @@
+name = "wq1"
+kind = "wq1"
+desc = "64-node derive call cost"
+samples = 5000

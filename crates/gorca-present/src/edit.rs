@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn an_unknown_reason_is_not_edited() {
         let mut i = ir(&[(FieldKind::NAME, "x")]);
-        i.reason = Reason::Unknown(77);
+        i.reason = Reason::from_code(77, false, 0);
         assert!(apply(&mut i, &[IrEdit::Silence]));
         assert_eq!(i.fields.len(), 1);
     }

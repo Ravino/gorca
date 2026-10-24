@@ -4,6 +4,7 @@
 //! sends nothing but fire-and-forget effects afterwards (BI-1, BI-2).
 
 use gorca_i18n::{MsgId as M, t};
+use smallvec::SmallVec;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -84,6 +85,8 @@ const ENTRY_WAIT: Duration = Duration::from_secs(2);
 const SEL_DEBOUNCE: Duration = Duration::from_millis(40);
 /// Held cursor keys scroll the page once per this interval (LP-6).
 pub(super) const SCROLL_DEBOUNCE: Duration = Duration::from_millis(150);
+/// An edge hit this soon after a scroll request is spoken as "loading" (older items are coming).
+const LOADING_CUE_WINDOW: Duration = Duration::from_millis(1200);
 /// Focus in a document the mirror does not know yet waits this long (browse design 7.3).
 const LOADING_GRACE: Duration = Duration::from_secs(1);
 /// The shortest time between two focus resolutions restarted by key presses.
@@ -631,6 +634,108 @@ fn is_ancestor_or_self(d: &WebDoc, anc: DocNodeId, node: DocNodeId) -> bool {
         }
     }
     false
+}
+
+/// The nearest ancestors of a node, nearest first (at most the inline capacity), each with the
+/// sibling that follows the child on the path to `node`: where the browse cursor re-anchors when
+/// the page removes the node together with its whole subtree.
+fn ancestor_chain(d: &WebDoc, node: DocNodeId) -> SmallVec<[(DocNodeId, Option<DocNodeId>); 8]> {
+    let mut chain = SmallVec::new();
+    let mut below = node;
+    while let Some(p) = d.parent(below) {
+        if chain.len() == chain.inline_size() {
+            break;
+        }
+        chain.push((p, d.next_sibling(below)));
+        below = p;
+    }
+    chain
+}
+
+/// Where the cursor lands once its node is gone: the first line of what follows the removed
+/// node in document order under the nearest surviving ancestor, else of what follows that
+/// ancestor, else the last line of the ancestor.
+fn reanchor(d: &WebDoc, chain: &[(DocNodeId, Option<DocNodeId>)]) -> Option<(WebCursor, u32)> {
+    let k = chain.iter().position(|(a, _)| d.is_attached(*a))?;
+    let following = chain[k..]
+        .iter()
+        .filter_map(|(_, after)| *after)
+        .find(|n| d.is_attached(*n));
+    let off = match following {
+        Some(n) => cursor::content_start(d, n)?,
+        None => d.subtree_text_range(chain[k].0)?.1.saturating_sub(1),
+    };
+    cursor::cursor_at(d, off).map(|c| (c, off))
+}
+
+/// How a scroll request for the cursor is addressed. A text run is not an object of its own:
+/// its owner scrolls to the cursor's character (an owner taller than the viewport must not
+/// jump to an edge). An addressable node scrolls as a whole.
+fn scroll_target(d: &WebDoc, node: DocNodeId, local: u32) -> Option<(DocNodeId, DocAction)> {
+    let addressable = |n: DocNodeId| {
+        d.node(n)
+            .and_then(|v| v.meta)
+            .is_some_and(|m| m.local.is_some())
+    };
+    if addressable(node) {
+        return None;
+    }
+    let owner = d.parent(node)?;
+    let mut off = 0u32;
+    for c in d.children(owner) {
+        if c == node {
+            break;
+        }
+        // A run adds its text; an embedded object is one placeholder in the owner's text.
+        off = off.saturating_add(if addressable(c) {
+            1
+        } else {
+            d.own_len(c).unwrap_or(0)
+        });
+    }
+    Some((owner, DocAction::ScrollToOffset(off.saturating_add(local))))
+}
+
+/// The page item (message, row) the cursor is in: the nearest ancestor-or-self with a DOM id,
+/// and the cursor's distance from the item's start. The item is what the user reads; the row
+/// object a virtual list reuses for it is not.
+fn item_of(d: &WebDoc, node: DocNodeId, off: u32) -> Option<(Arc<str>, u32)> {
+    let mut at = Some(node);
+    for _ in 0..12 {
+        let n = at?;
+        let id = d.node(n).and_then(|v| v.meta).and_then(|m| {
+            m.attrs
+                .iter()
+                .find(|(k, _)| *k == gorca_doc_source_api::web_attrs::DOM_ID)
+                .map(|(_, v)| Arc::clone(v))
+        });
+        if let Some(id) = id.filter(|i| !i.is_empty()) {
+            let start = d.offset_of(n)?;
+            return Some((id, off.saturating_sub(start)));
+        }
+        at = d.parent(n);
+    }
+    None
+}
+
+/// The cursor on the item with this DOM id, wherever the page re-rendered it.
+fn find_item(d: &WebDoc, id: &str, delta: u32) -> Option<(WebCursor, u32)> {
+    let n = d.preorder().find(|n| {
+        d.node(*n).and_then(|v| v.meta).is_some_and(|m| {
+            m.attrs
+                .iter()
+                .any(|(k, v)| *k == gorca_doc_source_api::web_attrs::DOM_ID && &**v == id)
+        })
+    })?;
+    if !d.is_attached(n) {
+        return None;
+    }
+    let (s, e) = d.subtree_text_range(n)?;
+    let off = cursor::content_start(d, n)?
+        .max(s)
+        .saturating_add(delta)
+        .min(e.saturating_sub(1));
+    cursor::cursor_at(d, off).map(|c| (c, off))
 }
 
 /// The visible text of a node's subtree as a one-line label, or `None` when it holds none: the
@@ -2332,6 +2437,7 @@ impl Reader {
         self.web_rejoin_after_grace(doc, fx);
         self.web_late_entry(doc, fx);
         let Some(b) = self.web.as_mut() else { return };
+        let mut resync_tabs = false;
         match b.mode {
             WebMode::Loading { .. } => self.web_retry_loading(false, fx),
             WebMode::Browse { doc: d, cur, .. } if d == doc => {
@@ -2393,27 +2499,83 @@ impl Reader {
                 let window = b
                     .restore_until
                     .is_some_and(|(t, off)| now < t && off == last);
-                let fixed = h.read.with(|d| {
-                    if d.is_attached(cur.node) && !window {
-                        None
-                    } else {
-                        cursor::cursor_at(d, last).filter(|c| c.node != cur.node)
-                    }
-                });
                 let lost = h.read.with(|d| !d.is_attached(cur.node));
+                if !lost {
+                    // Remember where the node sits, for the day the page removes all of it.
+                    b.cursor_chain = h.read.with(|d| ancestor_chain(d, cur.node));
+                    b.cursor_item = h.read.with(|d| item_of(d, cur.node, last));
+                }
+                // The page removed the cursor's whole subtree (a pane closed) and the flat offset
+                // now lies past the end of what is left: re-anchor to the nearest surviving
+                // ancestor instead of the end of the document, where no Tab target and nothing
+                // to click remain.
+                // The item the user was reading comes back under another row object (a virtual
+                // list re-rendered): follow the item by its DOM id before the structural guess.
+                let anchored = h.read.with(|d| {
+                    if !lost {
+                        return None;
+                    }
+                    b.cursor_item
+                        .as_ref()
+                        .and_then(|(id, delta)| find_item(d, id, *delta))
+                        .or_else(|| reanchor(d, &b.cursor_chain))
+                });
+                let fixed = match anchored {
+                    Some(a) => Some(a),
+                    None => h.read.with(|d| {
+                        if d.is_attached(cur.node) && !window {
+                            None
+                        } else {
+                            cursor::cursor_at(d, last)
+                                .filter(|c| c.node != cur.node)
+                                .map(|c| (c, last))
+                        }
+                    }),
+                };
                 if lost {
                     b.restore_until = Some((now + RESTORE_WINDOW, last));
                 }
-                if let Some(c) = fixed
+                if let Some((c, off)) = fixed
                     && let WebMode::Browse { cur, .. } = &mut b.mode
                 {
                     *cur = c;
+                    b.last_off = off;
                     // The page took the node the user was on and the cursor settled on
                     // another: the next Enter says where it is before it clicks.
                     b.displaced = Some(c.node);
                 }
+                // The cursor moved without a key: Tab availability follows it (D-2); a grab that
+                // was right for the old place would keep eating Tab for good.
+                if lost {
+                    b.tab_fallback = true;
+                }
+                resync_tabs = lost;
             }
             WebMode::Focus { .. } | WebMode::Browse { .. } | WebMode::Inactive => {}
+        }
+        if resync_tabs {
+            self.web_sync_tab_grabs(fx);
+        }
+        self.web_loading_cue(doc, fx);
+    }
+
+    /// The text grew after an edge hit that followed our scroll request: the list is loading
+    /// more. Said once per edge visit; a page that did not grow stays with "top"/"bottom".
+    fn web_loading_cue(&mut self, doc: DocId, fx: &mut ReaderEffects) {
+        let now = self.now;
+        let Some(b) = self.web.as_mut() else { return };
+        let Some((at, len)) = b.edge_wait else { return };
+        if now.saturating_duration_since(at) >= LOADING_CUE_WINDOW {
+            b.edge_wait = None;
+            return;
+        }
+        let grown = b
+            .docs
+            .get(doc)
+            .is_some_and(|h| h.read.with(|d| d.text_len() > len));
+        if grown {
+            b.edge_wait = None;
+            self.say(t(M::WebLoading), fx);
         }
     }
 
@@ -2598,14 +2760,16 @@ impl Reader {
                 fx.push(ReaderEffect::ArmTimer(due));
             }
         }
-        if let Some((due, doc, node, _)) = b.scroll_due {
+        if let Some((due, doc, node, local)) = b.scroll_due {
             if due <= now {
                 b.scroll_due = None;
-                fx.push(ReaderEffect::Web(WebEffect::Act {
-                    doc,
-                    node,
-                    act: DocAction::ScrollIntoView,
-                }));
+                b.last_scroll = Some(now);
+                let (node, act) = b
+                    .docs
+                    .get(doc)
+                    .and_then(|h| h.read.with(|d| scroll_target(d, node, local)))
+                    .unwrap_or((node, DocAction::ScrollIntoView));
+                fx.push(ReaderEffect::Web(WebEffect::Act { doc, node, act }));
                 // D-2: Tab availability follows the cursor (a grabbed Tab cannot be passed on).
                 // Reading never moves focus or the page caret (BM-2).
                 sync_tabs = true;
@@ -3040,12 +3204,25 @@ impl Reader {
         }
         b.last_off = off;
         b.sel = None;
+        b.tab_fallback = false;
+        b.edge_wait = None;
+        if let Some(h) = b.docs.get(doc) {
+            b.cursor_chain = h.read.with(|d| ancestor_chain(d, cur.node));
+            b.cursor_item = h.read.with(|d| item_of(d, cur.node, off));
+        }
         if b.native_sel_node.is_some() && b.model == SelectionModel::Native {
             b.sel_due = Some(now + SEL_DEBOUNCE);
         }
         b.cursor_from = CursorFrom::Own;
         b.counters.moves += 1;
-        b.scroll_due = Some((now + SCROLL_DEBOUNCE, doc, cur.node, cur.local));
+        // A throttle, not a debounce: the deadline of a pending scroll is kept and only its
+        // target moves to the newest position. Under key auto-repeat (30 ms) a debounce never
+        // fires until the keys stop, so a virtual list never saw the cursor near its edge.
+        let due = match b.scroll_due {
+            Some((due, d, ..)) if d == doc && due > now => due,
+            Some(_) | None => now + SCROLL_DEBOUNCE,
+        };
+        b.scroll_due = Some((due, doc, cur.node, cur.local));
     }
 
     fn web_cursor_cmd(
@@ -3178,6 +3355,18 @@ impl Reader {
                     Edge::Top => t(M::WebTop),
                     Edge::Bottom => t(M::WebBottom),
                 };
+                // After our own scroll request a virtual list may be fetching more: remember the
+                // length, a change that grows it within the window is announced once.
+                if let Some(b) = self.web.as_mut()
+                    && b.edge_wait.is_none()
+                    && b.last_scroll
+                        .is_some_and(|t| now.saturating_duration_since(t) < LOADING_CUE_WINDOW)
+                    && let WebMode::Browse { doc, .. } = b.mode
+                    && let Some(h) = b.docs.get(doc)
+                {
+                    let len = h.read.with(gorca_doc::web::WebDoc::text_len);
+                    b.edge_wait = Some((now, len));
+                }
                 self.say(w, fx);
             }
             Outcome::Nothing => {}
@@ -3419,9 +3608,10 @@ impl Reader {
         {
             return (false, false);
         }
+        let fallback = b.tab_fallback;
         h.read.with(|d| {
             (
-                Self::tab_target(d, cur, Dir::Next).is_some(),
+                fallback || Self::tab_target(d, cur, Dir::Next).is_some(),
                 Self::tab_target(d, cur, Dir::Prev).is_some(),
             )
         })
@@ -3450,13 +3640,25 @@ impl Reader {
         };
         let Some(b) = self.web.as_ref() else { return };
         let Some(h) = b.docs.get(doc) else { return };
-        let target = h.read.with(|d| Self::tab_target(d, cur, dir));
+        // The first focusable after the cursor; after a removed pane with none left, the
+        // document itself (the page keeps the key, the browser chrome does not get it).
+        let fallback = dir == Dir::Next && b.tab_fallback;
+        let target = h.read.with(|d| {
+            Self::tab_target(d, cur, dir).or_else(|| if fallback { d.root() } else { None })
+        });
+        if let Some(b) = self.web.as_mut() {
+            b.tab_fallback = false;
+        }
         if let Some(node) = target {
             fx.push(ReaderEffect::Web(WebEffect::Act {
                 doc,
                 node,
                 act: DocAction::Focus,
             }));
+            if fallback {
+                // The fallback was spent: release the grab so the next Tab walks the page natively.
+                self.web_sync_tab_grabs(fx);
+            }
         } else {
             let w = match dir {
                 Dir::Next => t(M::WebNoNextFocusable),

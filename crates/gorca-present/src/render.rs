@@ -9,7 +9,8 @@
 
 use std::sync::Arc;
 
-use gorca_i18n::{Arg as I18nArg, ext};
+use gorca_i18n::ext::ExtCatalogs;
+use gorca_i18n::{Arg as I18nArg, Lang, ext};
 use gorca_model::SegmentKind;
 use smallvec::SmallVec;
 
@@ -40,11 +41,28 @@ pub struct Token {
     pub text: TokenText,
 }
 
-/// Render settings.
-#[derive(Copy, Clone, Debug, Default)]
-pub struct RenderOpts {
+/// Render settings. Everything `render` reads is here: the output is a pure function of the IR
+/// and these options (no process-wide language, no global extension registry).
+#[derive(Copy, Clone, Debug)]
+pub struct RenderOpts<'a> {
     /// `browse.description_pause`: descriptions are a separate sentence.
     pub description_pause: bool,
+    /// The UI language the words and messages are formatted in.
+    pub lang: Lang,
+    /// The extension catalogs `Content::Ext` resolves through (an immutable snapshot).
+    pub ext: &'a ExtCatalogs,
+}
+
+impl Default for RenderOpts<'_> {
+    /// English, no extension catalogs.
+    fn default() -> Self {
+        static EMPTY: std::sync::OnceLock<ExtCatalogs> = std::sync::OnceLock::new();
+        RenderOpts {
+            description_pause: false,
+            lang: Lang::En,
+            ext: EMPTY.get_or_init(ExtCatalogs::empty),
+        }
+    }
 }
 
 fn pairs(args: &[Arg]) -> SmallVec<[(&str, I18nArg<'_>); 4]> {
@@ -62,27 +80,31 @@ fn pairs(args: &[Arg]) -> SmallVec<[(&str, I18nArg<'_>); 4]> {
         .collect()
 }
 
-fn text_of(c: &Content) -> Option<TokenText> {
+fn text_of(c: &Content, opts: &RenderOpts<'_>) -> Option<TokenText> {
     match c {
         Content::Text(s) => Some(match ext::sanitize(s) {
             std::borrow::Cow::Borrowed(_) => TokenText::Shared(Arc::clone(s)),
             std::borrow::Cow::Owned(o) => TokenText::Owned(o.into()),
         }),
-        Content::Msg { id, args } if args.is_empty() => Some(TokenText::Static(gorca_i18n::t(*id))),
-        Content::Msg { id, args } => {
-            Some(TokenText::Owned(gorca_i18n::tf(*id, &pairs(args)).into()))
+        Content::Msg { id, args } if args.is_empty() => {
+            Some(TokenText::Static(gorca_i18n::t_in(opts.lang, *id)))
         }
-        Content::Ext(r) => ext::format(&r.ns, &r.key, gorca_i18n::language(), &pairs(&r.args))
+        Content::Msg { id, args } => Some(TokenText::Owned(
+            gorca_i18n::tf_in(opts.lang, *id, &pairs(args)).into(),
+        )),
+        Content::Ext(r) => opts
+            .ext
+            .format(&r.ns, &r.key, opts.lang, &pairs(&r.args))
             .map(|s| TokenText::Owned(s.into())),
-        Content::Opaque { .. } => None,
+        Content::Opaque { .. } | Content::UnknownMsg(_) => None,
     }
 }
 
 /// Render `ir`; empty content renders nothing.
-pub fn render(ir: &PresIr, opts: RenderOpts) -> SmallVec<[Token; 6]> {
+pub fn render(ir: &PresIr, opts: RenderOpts<'_>) -> SmallVec<[Token; 6]> {
     let mut out = SmallVec::new();
     for f in &ir.fields {
-        let Some(text) = text_of(&f.content) else {
+        let Some(text) = text_of(&f.content, &opts) else {
             continue;
         };
         if text.as_str().is_empty() {
@@ -185,7 +207,10 @@ mod tests {
                     Content::ext("no-such-ns", "unread", vec![]),
                 ),
             ]),
-            RenderOpts::default(),
+            RenderOpts {
+                ext: &ext::snapshot(),
+                ..RenderOpts::default()
+            },
         );
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].text.as_str(), "4 unread");
@@ -195,7 +220,7 @@ mod tests {
     #[test]
     fn opaque_content_renders_nothing() {
         let r = render(
-            &ir(vec![f(FieldKind::NAME, Content::Opaque { code: 9 })]),
+            &ir(vec![f(FieldKind::NAME, Content::opaque(9).unwrap())]),
             RenderOpts::default(),
         );
         assert!(r.is_empty());
@@ -212,7 +237,8 @@ mod tests {
             render(
                 &i,
                 RenderOpts {
-                    description_pause: true
+                    description_pause: true,
+                    ..RenderOpts::default()
                 }
             )[0]
             .kind,

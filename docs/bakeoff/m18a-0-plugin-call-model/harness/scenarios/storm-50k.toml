@@ -1,0 +1,5 @@
+name = "storm-50k"
+kind = "storm"
+desc = "M6 (reported): 50,000 events/s for 60 s"
+rate = 50000.0
+duration_s = 60.0

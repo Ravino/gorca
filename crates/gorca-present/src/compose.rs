@@ -6,6 +6,7 @@
 //! not web content). Field order is the legacy presenter's, so the shadow diff is meaningful:
 //! name, role, states, value, help text.
 
+use gorca_i18n::Lang;
 use gorca_i18n::MsgId as M;
 use gorca_model::NodeKey;
 use gorca_model::sem::ProvCode;
@@ -42,6 +43,8 @@ pub struct ComposeCtx {
     pub skip_selected: bool,
     /// `browse.hedge_inferred`: a name inferred from the layout is said as "probably ...".
     pub hedge_inferred: bool,
+    /// The UI language the words that are baked into arguments (a negation) are taken in.
+    pub lang: Lang,
 }
 
 /// Why a composition did not happen.
@@ -119,7 +122,7 @@ pub fn compose(
         | Reason::Change { .. }
         | Reason::ListEntry
         | Reason::WhereAmI
-        | Reason::Unknown(_) => Err(ComposeError::Unsupported(reason.code())),
+        | Reason::Unknown { .. } => Err(ComposeError::Unsupported(reason.code())),
     }
 }
 
@@ -253,6 +256,7 @@ mod tests {
         web: false,
         skip_selected: false,
         hedge_inferred: false,
+        lang: gorca_i18n::Lang::En,
     };
 
     fn entry(role: SemRole, name: &str) -> SemEntry {
@@ -440,7 +444,7 @@ mod tests {
     fn an_unknown_reason_has_no_row() {
         let e = entry(SemRole::Button, "OK");
         assert_eq!(
-            compose(&e, key(), Reason::Unknown(999), CTX),
+            compose(&e, key(), Reason::unknown(999), CTX),
             Err(ComposeError::Unsupported(999))
         );
     }

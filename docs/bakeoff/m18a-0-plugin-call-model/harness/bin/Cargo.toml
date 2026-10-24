@@ -1,0 +1,18 @@
+[package]
+name = "m18a0-run"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+m18a0-common = { workspace = true }
+m18a0-arm-a = { path = "../arms/arm-a" }
+m18a0-arm-bprime = { path = "../arms/arm-bprime" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+anyhow = { workspace = true }
+libc = { workspace = true }
+sha2 = { workspace = true }
+zstd = { workspace = true }

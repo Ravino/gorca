@@ -1,0 +1,3 @@
+name = "mq2-replay"
+kind = "mq2"
+runs = 12000

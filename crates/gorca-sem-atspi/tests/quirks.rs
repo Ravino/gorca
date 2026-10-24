@@ -88,8 +88,8 @@ fn every_shipped_table_loads_and_builds_a_profile() {
             .unwrap_or_else(|e| panic!("{}: {e}", b.name));
         assert_eq!(
             q.is_empty(),
-            b.name != "gecko",
-            "only Gecko ships rewrite rows today"
+            !matches!(b.name, "gecko" | "blink"),
+            "only the web engines ship rewrite rows (Gecko's markers, the contenteditable host)"
         );
     }
     // The selector only names shipped profiles.

@@ -181,10 +181,71 @@ pub fn unregister_extension(ns: &str) {
     }
 }
 
+/// An immutable snapshot of the extension catalogs: the explicit form of the process-wide
+/// registry. A function that takes one is a pure function of its arguments (the same snapshot
+/// always formats the same text); the registry is read once, by [`snapshot`], at the point where
+/// the caller decides which catalogs apply.
+#[derive(Clone, Default)]
+pub struct ExtCatalogs {
+    map: HashMap<String, [Option<Arc<ExtCatalog>>; Lang::ALL.len()]>,
+}
+
+impl std::fmt::Debug for ExtCatalogs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExtCatalogs")
+            .field("namespaces", &self.map.len())
+            .finish()
+    }
+}
+
+impl ExtCatalogs {
+    /// No catalogs: every extension message renders nothing.
+    pub fn empty() -> ExtCatalogs {
+        ExtCatalogs::default()
+    }
+
+    /// The number of namespaces in the snapshot.
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    /// Format `key` of extension `ns` in `lang` (see [`format`]); `None` when the snapshot has no
+    /// such message.
+    pub fn format(
+        &self,
+        ns: &str,
+        key: &str,
+        lang: Lang,
+        args: &[(&str, Arg<'_>)],
+    ) -> Option<String> {
+        format_cats(self.map.get(ns)?, key, lang, args)
+    }
+}
+
+/// Copy the current registry into an immutable snapshot (catalogs are shared, not copied).
+pub fn snapshot() -> ExtCatalogs {
+    let g = registry().read().unwrap_or_else(PoisonError::into_inner);
+    ExtCatalogs {
+        map: g.iter().map(|(k, e)| (k.clone(), e.cats.clone())).collect(),
+    }
+}
+
 /// Format `key` of extension `ns` in `lang`, falling back to the extension's English text.
 pub fn format(ns: &str, key: &str, lang: Lang, args: &[(&str, Arg<'_>)]) -> Option<String> {
     let g = registry().read().unwrap_or_else(PoisonError::into_inner);
-    let entry = &g.get(ns)?.cats;
+    format_cats(&g.get(ns)?.cats, key, lang, args)
+}
+
+fn format_cats(
+    entry: &[Option<Arc<ExtCatalog>>; Lang::ALL.len()],
+    key: &str,
+    lang: Lang,
+    args: &[(&str, Arg<'_>)],
+) -> Option<String> {
     let (cat, l) = match entry[lang.index()]
         .as_ref()
         .filter(|c| c.msgs.contains_key(key))

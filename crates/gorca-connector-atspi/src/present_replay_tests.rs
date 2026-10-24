@@ -87,6 +87,7 @@ pub(crate) fn replay(
             web: is_web,
             skip_selected: false,
             hedge_inferred: false,
+            lang: gorca_present::Lang::En,
         };
         let Ok(ir) = compose(entry, s.key, Reason::Focus, ctx) else {
             continue;
@@ -95,9 +96,14 @@ pub(crate) fn replay(
             &ir,
             RenderOpts {
                 description_pause: web_run,
+                ..RenderOpts::default()
             },
         );
-        let ctx = DiffCtx::for_entry(if web_run { "focus-web" } else { "focus" }, entry);
+        let ctx = DiffCtx::for_entry(
+            if web_run { "focus-web" } else { "focus" },
+            entry,
+            gorca_present::Lang::En,
+        );
         match diff(&legacy, &tokens, dev, ctx) {
             DiffOutcome::Equal => out.equal += 1,
             DiffOutcome::OrderOnly => out.order_only += 1,

@@ -119,6 +119,10 @@ fn engine(setup: &FuseSetup) -> Ivm<QuirkSet, NoPatches> {
     if ivm.set_source(info).is_ok() {
         ivm.set_source_state(LABEL_SOURCE, 1, SourceState::Active);
     }
+    // Production only: tests and replays keep the drain purely work-based.
+    if !cfg!(test) {
+        ivm.set_sync_valve(Some(gorca_fuse::SYNC_WALL_VALVE));
+    }
     ivm
 }
 

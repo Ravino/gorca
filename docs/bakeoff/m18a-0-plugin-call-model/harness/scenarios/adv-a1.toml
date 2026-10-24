@@ -1,0 +1,4 @@
+name = "adv-a1"
+kind = "focus"
+desc = "benign fixture + adversary a1"
+adv = ["a1"]
