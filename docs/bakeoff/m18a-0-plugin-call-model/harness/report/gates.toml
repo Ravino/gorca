@@ -1,0 +1,281 @@
+# Gate thresholds: one file, mirrors SPEC section 4 (and the ADR-0026 r4 confirmation rule, section 5).
+# `decision_rule = true` marks a gate of the ADR confirmation rule; the others are spec-only gates.
+# A gate must hold in EVERY quiet run of a (scenario, arm) group; a failed run fails the group;
+# a missing metric is NOT MEASURED (a missing gate is a failed gate for the confirmation rule).
+# Arms listed in `arms` are judged; other arms are reported with the same numbers, never judged.
+
+# ---- M1 / M2: writer stall (measured from the start of the writer turn) --------------------------------
+[[gate]]
+id = "M1"
+title = "Writer stall, max (quiet host)"
+metric = "stall_max_ns"
+op = "<="
+value = 350000
+unit = "ns"
+scenarios = ["benign", "adv-*", "flap-focus", "smoke"]
+arms = ["bprime"]
+decision_rule = true
+requires = ["writer_timerslack_1ns", "pool_timerslack_1ns"]
+
+[[gate]]
+id = "M2"
+title = "Writer stall, p99"
+metric = "stall_p99_ns"
+op = "<="
+value = 310000
+unit = "ns"
+scenarios = ["benign", "adv-*", "flap-focus", "smoke"]
+arms = ["bprime"]
+decision_rule = true
+requires = ["writer_timerslack_1ns", "pool_timerslack_1ns"]
+
+# ---- M3: facts at first utterance ------------------------------------------------------------------------
+[[gate]]
+id = "M3a"
+title = "Facts at first utterance, benign fixture, overall"
+metric = "m3_overall"
+op = ">="
+value = 0.99
+scenarios = ["benign"]
+arms = ["a", "bprime"]
+decision_rule = true
+
+[[gate]]
+id = "M3b"
+title = "Facts at first utterance, benign fixture, every plugin"
+metric = "m3_min_benign_plugin"
+op = ">="
+value = 0.97
+scenarios = ["benign"]
+arms = ["a", "bprime"]
+decision_rule = true
+
+[[gate]]
+id = "M3c"
+title = "Facts at first utterance, adversarial mix, benign plugins overall"
+metric = "m3_benign_overall"
+op = ">="
+value = 0.97
+scenarios = ["adv-*"]
+arms = ["bprime"]
+decision_rule = true
+
+[[gate]]
+id = "M3d"
+title = "Facts at first utterance, adversarial mix, every benign plugin"
+metric = "m3_min_benign_plugin"
+op = ">="
+value = 0.90
+scenarios = ["adv-*"]
+arms = ["bprime"]
+decision_rule = true
+
+# ---- M4: keypress -> speech, gorca side ---------------------------------------------------------------------
+[[gate]]
+id = "M4a"
+title = "Keypress to speech delta p99, plugins on vs off (spec gate)"
+metric = "m4_delta_p99_ns"
+op = "<="
+value = 100000
+unit = "ns"
+scenarios = ["keypress-onoff"]
+arms = ["a", "bprime"]
+
+[[gate]]
+id = "M4b"
+title = "Keypress to speech delta p99, plugins on vs off (ADR decision rule)"
+metric = "m4_delta_p99_ns"
+op = "<="
+value = 300000
+unit = "ns"
+scenarios = ["keypress-onoff"]
+arms = ["a", "bprime"]
+decision_rule = true
+
+# ---- M5: one wait per keypress path -----------------------------------------------------------------------------
+[[gate]]
+id = "M5a"
+title = "At most one bounded wait per keypress path (K1+K2)"
+metric = "m5_waits_max_per_path"
+op = "<="
+value = 1
+scenarios = ["k1k2-path"]
+arms = ["bprime"]
+decision_rule = true
+
+[[gate]]
+id = "M5b"
+title = "K1+K2 combined plugin stall p99 <= 0.3 ms + one fuse"
+metric = "m5_combined_p99_ns"
+op = "<="
+value = 310000
+unit = "ns"
+scenarios = ["k1k2-path"]
+arms = ["bprime"]
+requires = ["writer_timerslack_1ns"]
+
+[[gate]]
+id = "M5c"
+title = "Flapping focus: at most 1 interactive wait per N ms window"
+metric = "m5_flap_max_waits_per_window"
+op = "<="
+value = 1
+scenarios = ["flap-focus"]
+arms = ["bprime"]
+decision_rule = true
+
+# ---- M6: throughput, no backlog (PX-7) ------------------------------------------------------------------------------
+[[gate]]
+id = "M6a"
+title = "Ingress lag p99 with plugins on within 5 % (or 10 us) of plugins off"
+metric = "check:m6_ingress_lag_unchanged"
+op = "=="
+scenarios = ["storm-10k"]
+arms = ["a", "bprime"]
+decision_rule = true
+
+[[gate]]
+id = "M6b"
+title = "Backlog depth: no monotone growth over the last 60 s"
+metric = "check:m6_no_monotone_growth"
+op = "=="
+scenarios = ["storm-10k"]
+arms = ["a", "bprime"]
+decision_rule = true
+
+[[gate]]
+id = "M6c"
+title = "Queue drained within 10 ms of the generator stopping"
+metric = "check:m6_drained_within_10ms"
+op = "=="
+scenarios = ["storm-10k"]
+arms = ["a", "bprime"]
+
+[[gate]]
+id = "M6d"
+title = "Writer never blocked on the background path"
+metric = "check:m6_writer_never_blocked"
+op = "=="
+scenarios = ["storm-10k", "storm-50k"]
+arms = ["a", "bprime"]
+
+[[gate]]
+id = "M6e"
+title = "50,000 events/s: ingress lag unchanged (reported)"
+metric = "check:m6_ingress_lag_unchanged"
+op = "=="
+scenarios = ["storm-50k"]
+report_only = true
+
+# ---- M7: memory (reported; ADR PX-3 reference) ------------------------------------------------------------------------
+[[gate]]
+id = "M7a"
+title = "50 plugins x 2 lanes <= 120 MB RSS (PX-3 reference, reported)"
+metric = "m7_50_plugins_rss_mb"
+op = "<="
+value = 60
+unit = "MB (one lane)"
+scenarios = ["memory-1-10-50"]
+report_only = true
+
+# ---- M8: fault containment (automated, fixed outcome) -----------------------------------------------------------------
+[[gate]]
+id = "M8.1"
+title = "Grant sum of a focus change within B + n x c_max"
+metric = "check:grant_sum_within_budget"
+op = "=="
+scenarios = ["benign", "adv-*"]
+arms = ["a", "bprime"]
+
+[[gate]]
+id = "M8.2a"
+title = "Every adversary contained (struck, over budget, overrun or demoted)"
+metric = "check:adversaries_contained"
+op = "=="
+scenarios = ["adv-*"]
+arms = ["a", "bprime"]
+
+[[gate]]
+id = "M8.2b"
+title = "Demoted to background-only after the first wall overrun"
+metric = "check:demoted_after_first_overrun"
+op = "=="
+scenarios = ["adv-*"]
+arms = ["a", "bprime"]
+
+[[gate]]
+id = "M8.2c"
+title = "No impossible slot-table cell reached"
+metric = "check:no_impossible_slot_cells"
+op = "=="
+scenarios = ["benign", "adv-*"]
+arms = ["a", "bprime"]
+
+[[gate]]
+id = "M8.3"
+title = "Isolation: benign plugins' coverage within 1 percentage point of benign"
+metric = "m8_isolation_pp"
+op = "<="
+value = 1.0
+unit = "pp"
+scenarios = ["adv-*"]
+arms = ["bprime"]
+
+[[gate]]
+id = "M8.4"
+title = "Oversize arguments rejected before any copy (allocation counter)"
+metric = "check:no_guest_sized_host_alloc"
+op = "=="
+scenarios = ["adv-a3", "adv-a4", "adv-all"]
+arms = ["a", "bprime"]
+
+[[gate]]
+id = "M8.5"
+title = "A5: no major fault and no load/deserialize on a writer turn"
+metric = "check:a5_no_major_fault_on_writer_turn"
+op = "=="
+scenarios = ["adv-a5"]
+arms = ["a", "bprime"]
+
+[[gate]]
+id = "M8.5b"
+title = "No file read or deserialize on any writer turn"
+metric = "check:no_load_on_writer_turn"
+op = "=="
+scenarios = ["benign", "adv-*"]
+arms = ["a", "bprime"]
+
+[[gate]]
+id = "M8.7"
+title = "No panic or abort of the process"
+metric = "check:process_survived"
+op = "=="
+scenarios = ["benign", "adv-*", "flap-focus", "k1k2-path", "keypress-onoff", "storm-10k"]
+arms = ["a", "bprime"]
+
+# ---- M10: correctness under delay ---------------------------------------------------------------------------------------
+[[gate]]
+id = "M10a"
+title = "MQ-2 replay: 0 false accepts"
+metric = "mq2_false_accepts"
+op = "=="
+value = 0
+scenarios = ["mq2-replay"]
+decision_rule = true
+
+[[gate]]
+id = "M10b"
+title = "PF-6: arrival order does not change the fused entry"
+metric = "pf6_order_dependent"
+op = "=="
+value = 0
+scenarios = ["pf6-order"]
+decision_rule = false
+
+[[gate]]
+id = "M10c"
+title = "PF-1: A and B' give bit-equal facts on the same views"
+metric = "pf1_differences"
+op = "=="
+value = 0
+scenarios = ["pf1-differential"]

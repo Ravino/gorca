@@ -1,0 +1,20 @@
+[package]
+name = "m18a0-common"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+wasmtime = { workspace = true }
+libc = { workspace = true }
+hdrhistogram = { workspace = true }
+zstd = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+sha2 = { workspace = true }
+anyhow = { workspace = true }
+gorca-present-ir = { workspace = true }
+gorca-model = { workspace = true }
+smallvec = "1"

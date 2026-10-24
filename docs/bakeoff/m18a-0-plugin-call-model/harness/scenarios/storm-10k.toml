@@ -1,0 +1,5 @@
+name = "storm-10k"
+kind = "storm"
+desc = "M6: 10,000 events/s for 120 s, 3 plugins on 50 % of nodes"
+rate = 10000.0
+duration_s = 120.0

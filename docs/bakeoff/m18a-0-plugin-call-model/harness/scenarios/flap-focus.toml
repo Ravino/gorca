@@ -1,0 +1,5 @@
+name = "flap-focus"
+kind = "flap"
+desc = "M5: 3.3k focus changes/s, N = 20 ms"
+interval_us = 300
+flap_ms = 20

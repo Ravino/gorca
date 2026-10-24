@@ -1,0 +1,24 @@
+name = "adv-each-added"
+kind = "focus"
+desc = "adversaries added cumulatively; each stage is its own result directory"
+[[stage]]
+name = "a1"
+adv = ["a1"]
+[[stage]]
+name = "a1-a2"
+adv = ["a1","a2"]
+[[stage]]
+name = "a1-a3"
+adv = ["a1","a2","a3"]
+[[stage]]
+name = "a1-a4"
+adv = ["a1","a2","a3","a4"]
+[[stage]]
+name = "a1-a5"
+adv = ["a1","a2","a3","a4","a5"]
+[[stage]]
+name = "a1-a6"
+adv = ["a1","a2","a3","a4","a5","a6"]
+[[stage]]
+name = "a1-a13"
+adv = ["a1","a2","a3","a4","a5","a6","a13"]

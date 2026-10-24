@@ -1,0 +1,6 @@
+name = "keypress-onoff"
+kind = "keypress"
+desc = "M4: ABABAB, 60 s legs, 5 pairs"
+leg_s = 60.0
+pairs = 5
+interval_us = 2000
