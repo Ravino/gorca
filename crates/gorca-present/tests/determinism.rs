@@ -1074,11 +1074,7 @@ fn marker_stripped_name_rejects_a_dropped_word() {
         ),
         "a dropped word must not be classified as a stripped marker"
     );
-    for (old, new) in [
-        ("\u{2022} Alpha", "Alpha"),
-        ("3. Beta", "Beta"),
-        ("- x", "x"),
-    ] {
+    for (old, new) in [("\u{2022} Alpha", "Alpha"), ("- x", "x")] {
         c.legacy = vec![(SegmentKind::Text, old.into())];
         c.new = vec![(SegmentKind::Text, new.into())];
         assert_eq!(
@@ -1091,6 +1087,9 @@ fn marker_stripped_name_rejects_a_dropped_word() {
         ("Alpha", "Alpha"),
         (" Alpha", "Alpha"),
         ("2 apples", "apples"),
+        // An ordinal is information the name keeps.
+        ("3. Beta", "Beta"),
+        ("(3) Beta", "Beta"),
     ] {
         c.legacy = vec![(SegmentKind::Text, old.into())];
         c.new = vec![(SegmentKind::Text, new.into())];

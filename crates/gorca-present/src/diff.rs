@@ -346,9 +346,9 @@ fn is_bullet_char(c: char) -> bool {
     )
 }
 
-/// `legacy` is `new` with a list marker in front: the removed prefix, trimmed, is bullets only
-/// ("\u{2022} Alpha") or a number closed by a dot or parenthesis ("3. Beta", "(3) Beta"). A dropped
-/// word ("Delete all" to "all") or a bare number ("2 apples") is not a marker.
+/// `legacy` is `new` with a bullet in front: the removed prefix, trimmed, is bullet characters
+/// only ("\u{2022} Alpha"). A number ("3. Beta") is information the name must keep, a dropped
+/// word ("Delete all" to "all") is not a marker: both stay real differences.
 fn is_marker_stripped(legacy: &str, new: &str) -> bool {
     if new.is_empty() {
         return false;
@@ -357,15 +357,7 @@ fn is_marker_stripped(legacy: &str, new: &str) -> bool {
         return false;
     };
     let marker = prefix.trim();
-    if marker.is_empty() {
-        return false;
-    }
-    if marker.chars().all(is_bullet_char) {
-        return true;
-    }
-    let body = marker.trim_start_matches('(');
-    let rest = body.trim_start_matches(|c: char| c.is_ascii_digit());
-    rest.len() < body.len() && matches!(rest, "." | ")")
+    !marker.is_empty() && marker.chars().all(is_bullet_char)
 }
 
 /// Try to explain part of the difference with `c`; true when it removed something.
@@ -498,7 +490,7 @@ fn explain<'a>(
             } else {
                 matches!(
                     ctx.role,
-                    SemRole::Generic | SemRole::Group | SemRole::Presentation | SemRole::Article
+                    SemRole::Generic | SemRole::Presentation | SemRole::Article
                 )
             };
             applies && take(only_legacy, |k| k.0 == state && (k.1 == un || k.1 == av))

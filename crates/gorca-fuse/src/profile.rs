@@ -21,6 +21,14 @@ impl RoleSet {
         roles.iter().fold(RoleSet::EMPTY, |s, r| s.with(*r))
     }
 
+    /// The set of every role `pred` holds for.
+    pub fn of_pred(pred: fn(SemRole) -> bool) -> RoleSet {
+        SemRole::ALL
+            .iter()
+            .filter(|r| pred(**r))
+            .fold(RoleSet::EMPTY, |s, r| s.with(*r))
+    }
+
     #[must_use]
     pub const fn with(mut self, r: SemRole) -> RoleSet {
         let c = r.code();
@@ -82,27 +90,7 @@ impl Rules {
                 R::ProgressBar,
                 R::Meter,
             ]),
-            disableable: RoleSet::of(&[
-                R::Button,
-                R::Checkbox,
-                R::Combobox,
-                R::Link,
-                R::Listbox,
-                R::MenuItem,
-                R::MenuItemCheckbox,
-                R::MenuItemRadio,
-                R::Option,
-                R::PasswordBox,
-                R::Radio,
-                R::SearchBox,
-                R::Slider,
-                R::SpinButton,
-                R::Switch,
-                R::Tab,
-                R::TextBox,
-                R::TreeItem,
-                R::GridCell,
-            ]),
+            disableable: RoleSet::of_pred(SemRole::is_disableable),
             expandable: RoleSet::of(&[
                 R::Application,
                 R::Button,
