@@ -25,7 +25,7 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use gorca_model::fact::{BindGen, SourceId};
 use gorca_model::sem::{BindQuality, Group, GroupMask, SemEntry};
@@ -209,13 +209,19 @@ pub struct ApplyReport {
 /// first, aging).
 const REST_CLASS: u8 = 3;
 
-/// Runs a node must wait in the dirty set before aging may pick it ahead of depth order.
-const AGE_RUNS: u64 = 3;
+/// Fusions (the work clock: the scheduler never reads wall time) a node must wait in the dirty set
+/// before aging may pick it ahead of depth order.
+const AGE_FUSIONS: u64 = 1024;
 
-/// The synchronous priority drain stops after this long (it always takes at least one fusion);
-/// what is left stays dirty in front for the next `run`. The read-time silence mask already hides
-/// silenced values on nodes the drain did not reach, so this bounds latency only.
-const SYNC_DRAIN_TIME: Duration = Duration::from_micros(400);
+/// While the dirty set is busy, the background queue gets `FEED_SHARE` units every `FEED_EVERY`
+/// fusions (a quarter of the work), counted over all runs.
+const FEED_EVERY: u64 = 16;
+const FEED_SHARE: usize = 4;
+
+/// Aging takes the fusion whose index is `AGE_SLOT` modulo `AGE_PERIOD`: a quarter of all
+/// fusions, and never the first of a period, so a priority node is not starved by one slot.
+const AGE_PERIOD: u64 = 4;
+const AGE_SLOT: u64 = 3;
 
 /// Debug builds only: a node fused more often than this inside one drain is a scheduling loop
 /// (a dependency cycle between propagation and fusion); fail fast instead of hanging.
@@ -340,12 +346,13 @@ pub struct Ivm<Q: Quirks, P: PatchSource> {
     touched_anchors: Vec<AnchorId>,
     dom_anchors: HashMap<Arc<str>, BTreeSet<AnchorId>>,
     exact_by_node: HashMap<NodeIdx, Vec<(u16, u128)>>,
-    /// Scheduler: run counter, first-dirty tick of each dirty node (aging), a global sweep cursor
-    /// and lazily expanded per-source sweeps (epochs without an O(n) sync part).
-    tick: u64,
+    /// Scheduler, all on the work clock (fusion counts, never wall time): the fusion count at the
+    /// first-dirty stamp of each dirty node (aging), the fusion
+    /// count of the next background feed, a global sweep cursor and lazily expanded per-source
+    /// sweeps (epochs without an O(n) sync part).
     fused_total: u64,
     aged_total: u64,
-    sync_drain_time: Duration,
+    next_feed: u64,
     #[cfg(debug_assertions)]
     refusions: HashMap<NodeIdx, u32>,
     s0_computes: u64,
@@ -557,10 +564,9 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             touched_anchors: Vec::new(),
             dom_anchors: HashMap::new(),
             exact_by_node: HashMap::new(),
-            tick: 0,
             fused_total: 0,
             aged_total: 0,
-            sync_drain_time: SYNC_DRAIN_TIME,
+            next_feed: 0,
             #[cfg(debug_assertions)]
             refusions: HashMap::new(),
             s0_computes: 0,
@@ -1141,7 +1147,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     fn mark_dirty(&mut self, n: NodeIdx) {
         let Some(key) = self.key_of(n) else { return };
-        self.dirty.mark(n, key, self.tick);
+        self.dirty.mark(n, key, self.fused_total);
     }
 
     fn take_dirty(&mut self, key: DirtyKey) {
@@ -1612,13 +1618,16 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     /// silence mask already hides their silenced values).
     fn touch_priority_nodes(&mut self) {
         let cap = self.profile.limits.max_sync_drain.max(1);
-        let nodes: Vec<NodeIdx> = self
+        // `prio` is a hash map: sort by (class, order, node) before the cap split, so the same
+        // nodes are fused synchronously on every engine and in every process.
+        let mut nodes: Vec<(u8, u32, NodeIdx)> = self
             .prio
-            .keys()
-            .copied()
-            .filter(|n| self.anchor_nodes.get(n).is_some_and(|s| !s.is_empty()))
+            .iter()
+            .filter(|(n, _)| self.anchor_nodes.get(n).is_some_and(|s| !s.is_empty()))
+            .map(|(n, (class, order))| (*class, *order, *n))
             .collect();
-        for (i, n) in nodes.into_iter().enumerate() {
+        nodes.sort_unstable();
+        for (i, (_, _, n)) in nodes.into_iter().enumerate() {
             if i < cap {
                 self.mark_dirty(n);
             } else if !self.dirty.contains(n) && self.in_background.insert(n) {
@@ -1633,17 +1642,12 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     pub fn bump_global(&mut self) -> Vec<Published> {
         self.epochs.bump_global();
         self.sweep = Some(0);
-        let nodes: Vec<NodeIdx> = self.prio.keys().copied().collect();
+        let mut nodes: Vec<NodeIdx> = self.prio.keys().copied().collect();
+        nodes.sort_unstable();
         for n in nodes {
             self.mark_dirty(n);
         }
         self.drain_priority().published
-    }
-
-    /// Override the time bound of the synchronous drain (tests).
-    #[doc(hidden)]
-    pub fn set_sync_drain_time(&mut self, t: Duration) {
-        self.sync_drain_time = t;
     }
 
     pub fn global_epoch(&self) -> u64 {
@@ -1659,20 +1663,19 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     /// Re-fuse the priority classes synchronously (focus chain first, then the visible window), at
     /// most `Limits::max_sync_drain` fusions; what does not fit stays dirty in front for the next
-    /// `run`. Publications go to `sink` the moment they happen.
+    /// `run`. Publications go to `sink` the moment they happen. The bound is a count of fusions,
+    /// not time: the published prefix is the same on a slow and a fast machine (the read-time
+    /// silence mask already hides silenced values on nodes the drain did not reach, and the cap
+    /// bounds the latency).
     fn drain_priority_with(&mut self, sink: &mut dyn FnMut(Published)) -> RunReport {
         let cap = self.profile.limits.max_sync_drain.max(1);
-        let (t0, limit) = (Instant::now(), self.sync_drain_time);
         let mut rep = RunReport::default();
         #[cfg(debug_assertions)]
         self.refusions.clear();
         loop {
             let before = rep.fuse_calls;
             while let Some(key) = self.dirty.peek() {
-                if key.0 >= REST_CLASS
-                    || rep.fuse_calls >= cap
-                    || (rep.fuse_calls > 0 && t0.elapsed() >= limit)
-                {
+                if key.0 >= REST_CLASS || rep.fuse_calls >= cap {
                     break;
                 }
                 self.take_dirty(key);
@@ -1680,7 +1683,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             }
             // Fusing changes which nodes feed the priority nodes: refresh the set and go on while
             // a priority node is still dirty (keys are scheduling hints, never results).
-            if rep.fuse_calls == before || rep.fuse_calls >= cap || t0.elapsed() >= limit {
+            if rep.fuse_calls == before || rep.fuse_calls >= cap {
                 break;
             }
             self.apply_prio();
@@ -1701,7 +1704,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
 
     /// Re-fuse dirty nodes until the budget is spent: the focus chain, then the visible window,
     /// then deepest first, with two anti-starvation guarantees. **Aging:** a node dirty for
-    /// `AGE_RUNS` runs may be taken ahead of depth order, for a quarter of all fusions over time.
+    /// `AGE_FUSIONS` runs may be taken ahead of depth order, for a quarter of all fusions over time.
     /// **Background share:** queued dependents, sweeps and epoch re-fuses get a share of every run
     /// even while the dirty set is busy. Carry-over changes latency only, never the result.
     pub fn run(&mut self, budget: Budget) -> RunReport {
@@ -1718,24 +1721,19 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         let mut rep = RunReport::default();
         #[cfg(debug_assertions)]
         self.refusions.clear();
-        self.tick += 1;
-        let share = if budget.max_calls == usize::MAX {
-            BACKGROUND_CHUNK
-        } else {
-            (budget.max_calls / 4).max(1)
-        };
-        self.feed_background(share);
         loop {
             if budget.exhausted(rep.fuse_calls) {
                 break;
             }
-            // Aging takes a quarter of all fusions, but never the only slot of a run while
-            // priority work is waiting.
-            let priority_waiting = self.dirty.peek().is_some_and(|k| k.0 < REST_CLASS);
-            let aged = if self.aged_total < self.fused_total / 4
-                && !(priority_waiting && rep.fuse_calls == 0)
-            {
-                self.dirty.oldest(self.tick, AGE_RUNS)
+            // The work clock: ticks, background feeds and aging slots are functions of the number
+            // of fusions so far, so where a run is cut (a call count, or a wall deadline) changes
+            // only how the same fusion sequence is batched into runs.
+            if self.fused_total >= self.next_feed {
+                self.next_feed = self.fused_total + FEED_EVERY;
+                self.feed_background(FEED_SHARE);
+            }
+            let aged = if self.fused_total % AGE_PERIOD == AGE_SLOT {
+                self.dirty.oldest(self.fused_total, AGE_FUSIONS)
             } else {
                 None
             };
