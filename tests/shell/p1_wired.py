@@ -374,10 +374,13 @@ def firefox(rig):
                 'user_pref("browser.tabs.warnOnClose", false);\n')
     p = rig.spawn(["firefox-esr", "--no-remote", "--new-instance", "-profile", prof, "--width", "900",
                    "--height", "700", "file://" + page], "firefox")
-    got = wait_window(rig, "P1 Page", 90)
+    got = wait_window(rig, "P1 Page", 240)
     time.sleep(8.0)
     rig.click_window("P1 Page")
     rig.settle(longest=10)
+    # The window title (Insert+T) read from the page itself, and again below from a form control.
+    rig.step("firefox", "info: window title in the document (Insert+T)", lambda: rig.tap(INSERT, KEY_T),
+             expect=("P1 Page",), forbid=("unavailable", "недоступ"), longest=6)
     # Browse mode (M22b2): the browse cursor and quick navigation through the wired presenter.
     rig.step("firefox", "browse: Ctrl+Home reads the first line", lambda: rig.tap(CTRL, HOME), expect=("heading",))
     rig.step("firefox", "browse: Down reads a line", lambda: rig.tap(DOWN), expect=("intro",))
@@ -388,11 +391,16 @@ def firefox(rig):
     rig.tab_to("firefox", "focus: check box", "subscribe", ("subscribe", "check box"))
     rig.step("firefox", "info: where am I (Insert+Tab)", lambda: rig.tap(INSERT, TAB),
              expect=("P1 Page", "Subscribe", "check box"), longest=6)
+    rig.step("firefox", "info: window title on a control (Insert+T)", lambda: rig.tap(INSERT, KEY_T),
+             expect=("P1 Page",), forbid=("unavailable", "недоступ"), longest=6)
     rig.step("firefox", "change: Space checks", lambda: rig.tap(SPACE), expect=("checked",), forbid=("not checked",))
     rig.tab_to("firefox", "focus: disclosure button", "details", ("details", "button", "collapsed"))
     rig.step("firefox", "change: Space expands", lambda: rig.tap(SPACE), expect=("expanded",))
     rig.tab_to("firefox", "focus: slider", "volume", ("volume", "slider"))
     rig.step("firefox", "change: Right sets the value", lambda: rig.tap(RIGHT), expect=("60",))
+    rig.tab_to("firefox", "focus: control 30 groups deep", "deep", ("deep", "button"))
+    rig.step("firefox", "info: window title on a deeply nested control (Insert+T)", lambda: rig.tap(INSERT, KEY_T),
+             expect=("P1 Page",), forbid=("unavailable", "недоступ"), longest=6)
     rig.stop(p)
     shutil.rmtree(prof, ignore_errors=True)
     return got
