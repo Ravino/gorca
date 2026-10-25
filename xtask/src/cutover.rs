@@ -108,9 +108,9 @@ pub const SURFACES: &[Surface] = &[
     Surface {
         name: "review",
         slice: "M22b3",
-        ready: false,
-        package: "",
-        test: "",
+        ready: true,
+        package: "gorca-connector-atspi",
+        test: "review_gate_tests::review_emit",
         families: &[],
     },
     Surface {

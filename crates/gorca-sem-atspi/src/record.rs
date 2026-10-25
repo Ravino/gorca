@@ -263,6 +263,12 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
         // flags group is written with it. Without the states it holds nothing else.
         known.set(Group::Flags, true);
     }
+    // The engine's `label` role is the one static text the model keeps apart from the engine's
+    // static text, for object review. A role the author's token replaced is not a label.
+    if have_role && rec.raw_role == raw_role::LABEL && sem.role == SemRole::StaticText {
+        sem.flags |= SemFlags::TEXT_LABEL;
+        known.set(Group::Flags, true);
+    }
     rec.sem = sem;
     rec.known = known;
     rec.notes = notes;
@@ -422,6 +428,31 @@ mod tests {
         let r = normalise(&node(fetched, 38, StateBits(0), &[]));
         assert!(!r.known.has(Group::Flags));
         assert!(!r.sem.flags.contains(SemFlags::ROLE_AUTHORED));
+    }
+
+    #[test]
+    fn the_engines_label_role_is_a_text_label_and_its_static_text_is_not() {
+        let fetched = PropMask::ROLE | PropMask::NAME;
+        // ATSPI_ROLE_LABEL (29) and ATSPI_ROLE_STATIC (116) are one model role.
+        let label = normalise(&node(fetched, raw_role::LABEL, StateBits(0), &[]));
+        let run = normalise(&node(fetched, 116, StateBits(0), &[]));
+        assert_eq!(label.sem.role, SemRole::StaticText);
+        assert_eq!(run.sem.role, SemRole::StaticText);
+        assert!(label.sem.flags.contains(SemFlags::TEXT_LABEL));
+        assert!(
+            label.known.has(Group::Flags),
+            "the bit travels with the role"
+        );
+        assert!(!run.sem.flags.contains(SemFlags::TEXT_LABEL));
+        assert!(!run.known.has(Group::Flags));
+        // The role was not fetched: nothing is claimed.
+        let blind = normalise(&node(PropMask::NAME, raw_role::LABEL, StateBits(0), &[]));
+        assert!(!blind.sem.flags.contains(SemFlags::TEXT_LABEL));
+        // The author's token replaced the role: it is a button now, not a label.
+        let attrs = [("xml-roles", "button")];
+        let fetched = PropMask::ROLE | PropMask::ATTRS | PropMask::NAME;
+        let tok = normalise(&node(fetched, raw_role::LABEL, StateBits(0), &attrs));
+        assert!(!tok.sem.flags.contains(SemFlags::TEXT_LABEL));
     }
 
     #[test]

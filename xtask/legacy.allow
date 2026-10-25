@@ -14,7 +14,7 @@
 
 
 
-role-spoken | crates/gorca-core/src/review/cluster.rs | 1 | 2026-11-28 | M22b3
+role-spoken | crates/gorca-core/src/review/gate.rs | 1 | 2026-11-28 | M22b3
 role-spoken | crates/gorca-core/src/present/utterance.rs | 1 | 2026-11-28 | M22b3
 role-spoken | crates/gorca-core/src/review/commands.rs | 1 | 2026-11-28 | M22b3
 

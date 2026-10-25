@@ -165,7 +165,7 @@ mod tests {
     #[test]
     fn expiry_compares_iso_dates() {
         let d = Deviations::parse(BUILTIN).expect("parses");
-        assert_eq!(d.expired("2026-12-13").len(), d.len());
+        assert_eq!(d.expired("2099-01-01").len(), d.len());
         assert!(d.expired("2026-11-07").is_empty());
         assert_eq!(today_utc().len(), 10);
     }
