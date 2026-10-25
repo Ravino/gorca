@@ -9,10 +9,12 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 
 use gorca_config::Verbosity;
-use gorca_model::{ChildList, Freshness, NodeKey, NodeSnapshot, Role};
+use gorca_model::sem::SemRole;
+use gorca_model::{ChildList, Freshness, NodeKey, NodeSnapshot};
 
 use super::state::LocalTime;
 use crate::directory::MirrorDirectory;
+use crate::nodekind::{is_app_node, is_window_role, role_of};
 
 const MAX_DEPTH: usize = 24;
 
@@ -43,9 +45,9 @@ pub(crate) struct Words {
     /// The name, `None` when the node has none worth saying.
     pub name: Option<String>,
     /// The role word(s), joined by a space.
-    pub role: String,
+    pub role_text: String,
     /// The state words.
-    pub states: Vec<String>,
+    pub state_text: Vec<String>,
     /// The value (and the contents of a field).
     pub values: Vec<String>,
     /// The description, from the entry.
@@ -64,32 +66,63 @@ fn position(parent: &NodeSnapshot, child: NodeKey) -> Option<(usize, usize)> {
 }
 
 /// Roles whose children are "items" worth a position.
-fn is_collection(role: Role) -> bool {
+fn is_collection(role: SemRole) -> bool {
     matches!(
         role,
-        Role::List
-            | Role::TabList
-            | Role::Menu
-            | Role::MenuBar
-            | Role::Tree
-            | Role::Toolbar
-            | Role::Table
-            | Role::Row
+        SemRole::List
+            | SemRole::Listbox
+            | SemRole::TabList
+            | SemRole::Menu
+            | SemRole::Menubar
+            | SemRole::Tree
+            | SemRole::Toolbar
+            | SemRole::Table
+            | SemRole::Grid
+            | SemRole::TreeGrid
+            | SemRole::Row
     )
 }
 
 /// Roles that are worth naming in the container chain.
-fn is_container(role: Role) -> bool {
+fn is_container(role: SemRole) -> bool {
     is_collection(role)
         || matches!(
             role,
-            Role::Panel
-                | Role::Document
-                | Role::DocumentWeb
-                | Role::Landmark
-                | Role::Popover
-                | Role::StatusBar
+            SemRole::Generic
+                | SemRole::Group
+                | SemRole::Document
+                | SemRole::DocumentWeb
+                | SemRole::Region
+                | SemRole::Banner
+                | SemRole::Complementary
+                | SemRole::ContentInfo
+                | SemRole::Main
+                | SemRole::Navigation
+                | SemRole::Search
+                | SemRole::Form
+                | SemRole::RadioGroup
+                | SemRole::Figure
+                | SemRole::Presentation
+                | SemRole::Log
+                | SemRole::Timer
+                | SemRole::RowGroup
+                | SemRole::Feed
+                | SemRole::Comment
+                | SemRole::Popover
+                | SemRole::Status
         )
+}
+
+/// Which parts of the answer a node plays in "where am I" (the recorded-corpus goldens read it):
+/// a collection, a named container, a window, the application.
+pub(crate) fn shape_of(n: &NodeSnapshot) -> (bool, bool, bool, bool) {
+    let role = role_of(n);
+    (
+        is_collection(role),
+        is_container(role),
+        is_window_role(role),
+        is_app_node(n),
+    )
 }
 
 /// Spell a text out: `Save` becomes "S a v e" (the speech service reads single letters).
@@ -120,17 +153,13 @@ pub(crate) fn where_am_i_parts(
     if repeat >= 3 {
         return match lw.name.as_deref() {
             Some(n) => vec![spell(n)],
-            None => vec![msg!(InfoNoName, role = lw.role.as_str())],
+            None => vec![msg!(InfoNoName, role = lw.role_text.as_str())],
         };
     }
     let detailed = repeat == 2 || level == Verbosity::Verbose;
     let mut parts: Vec<String> = Vec::new();
     // Application and window.
-    let app = chain
-        .iter()
-        .zip(words)
-        .rev()
-        .find(|(n, _)| n.role == Role::Application);
+    let app = chain.iter().zip(words).rev().find(|(n, _)| is_app_node(n));
     if let Some(a) = app.and_then(|(_, w)| w.name.as_deref())
         && level != Verbosity::Brief
     {
@@ -139,20 +168,20 @@ pub(crate) fn where_am_i_parts(
     let window = chain
         .iter()
         .zip(words)
-        .find(|(n, _)| matches!(n.role, Role::Window | Role::Dialog));
+        .find(|(n, _)| is_window_role(role_of(n)));
     if let Some((_, w)) = window {
         parts.push(match w.name.as_deref() {
-            Some(n) => msg!(InfoWindow, name = n, role = w.role.as_str()),
-            None => w.role.clone(),
+            Some(n) => msg!(InfoWindow, name = n, role = w.role_text.as_str()),
+            None => w.role_text.clone(),
         });
     }
     // Container chain between the window and the object, outermost first.
     let mut containers = Vec::new();
     for (i, n) in chain.iter().enumerate().skip(1) {
-        if matches!(n.role, Role::Window | Role::Dialog | Role::Application) {
+        if is_window_role(role_of(n)) || is_app_node(n) {
             break;
         }
-        if is_container(n.role) && (detailed || i == 1 || is_collection(n.role)) {
+        if is_container(role_of(n)) && (detailed || i == 1 || is_collection(role_of(n))) {
             containers.push((i, n));
         }
     }
@@ -163,7 +192,7 @@ pub(crate) fn where_am_i_parts(
             s.push_str(name);
             s.push(' ');
         }
-        s.push_str(&w.role);
+        s.push_str(&w.role_text);
         // Position of the item inside this container: the previous node in the chain.
         if let Some(child) = chain.get(i - 1)
             && let Some((at, of)) = position(n, child.key)
@@ -182,13 +211,13 @@ pub(crate) fn where_am_i_parts(
         obj.push_str(n);
         obj.push(' ');
     }
-    obj.push_str(&lw.role);
+    obj.push_str(&lw.role_text);
     let obj = obj.trim().to_owned();
     if !obj.is_empty() {
         parts.push(obj);
     }
-    if !lw.states.is_empty() {
-        parts.push(lw.states.join(" "));
+    if !lw.state_text.is_empty() {
+        parts.push(lw.state_text.join(" "));
     }
     parts.extend(lw.values.iter().cloned());
     if detailed {
@@ -216,8 +245,8 @@ pub(crate) fn window_title(chain: &[Arc<NodeSnapshot>], words: &[Words]) -> Opti
     let (_, w) = chain
         .iter()
         .zip(words)
-        .find(|(n, _)| matches!(n.role, Role::Window | Role::Dialog))?;
-    Some(w.name.clone().unwrap_or_else(|| w.role.clone()))
+        .find(|(n, _)| is_window_role(role_of(n)))?;
+    Some(w.name.clone().unwrap_or_else(|| w.role_text.clone()))
 }
 
 pub(crate) fn node_info(chain: &[Arc<NodeSnapshot>], words: &[Words]) -> String {
@@ -233,17 +262,17 @@ pub(crate) fn node_info(chain: &[Arc<NodeSnapshot>], words: &[Words]) -> String 
         "node {} of application {}, role {}, {}, {} ancestors known, {} states, name {}",
         n.key.local.0,
         n.key.app.serial,
-        if w.role.is_empty() {
+        if w.role_text.is_empty() {
             "unknown"
         } else {
-            w.role.as_str()
+            w.role_text.as_str()
         },
         fresh,
         chain.len() - 1,
-        if w.states.is_empty() {
+        if w.state_text.is_empty() {
             "no listed".to_owned()
         } else {
-            w.states.join(" ")
+            w.state_text.join(" ")
         },
         w.name.as_deref().unwrap_or("none"),
     )
@@ -303,8 +332,8 @@ pub(crate) fn date_text(t: LocalTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gorca_model::StateSet;
     use gorca_model::{AppId, AttrMap, ConnectorId, Ifaces, LocalId, Relations};
+    use gorca_model::{Role, StateSet};
     use std::time::Instant;
 
     fn at(hour: u8, minute: u8) -> LocalTime {
@@ -378,6 +407,7 @@ mod tests {
             fresh: Freshness::Fresh { at: Instant::now() },
             sem: gorca_model::NodeSem::NONE,
         }
+        .with_test_record()
     }
 
     /// The words of each node of `chain` from the entry its source record gives (as the Reader

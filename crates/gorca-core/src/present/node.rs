@@ -461,12 +461,12 @@ pub(crate) fn words_of(
                     w.name = Some(text);
                 }
                 FieldKind::ROLE => {
-                    if !w.role.is_empty() {
-                        w.role.push(' ');
+                    if !w.role_text.is_empty() {
+                        w.role_text.push(' ');
                     }
-                    w.role.push_str(&text);
+                    w.role_text.push_str(&text);
                 }
-                FieldKind::STATE => w.states.push(text),
+                FieldKind::STATE => w.state_text.push(text),
                 FieldKind::VALUE if !secret => w.values.push(text),
                 _ => {}
             }

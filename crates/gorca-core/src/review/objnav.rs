@@ -15,6 +15,7 @@ use gorca_model::{
     ChildList, Lookup, NodeKey, NodeSnapshot, NodeView, PropMask, StructFlags, StructState,
 };
 
+pub use crate::nodekind::is_app_root;
 use crate::present::entry_of;
 
 use super::model::ReviewLimits;
@@ -79,19 +80,6 @@ pub fn class_entry(entry: &SemEntry, st: StructState, web: bool) -> PresClass {
         RoleClass::LayoutIfNameless if nameless => PresClass::Layout,
         RoleClass::LayoutIfNameless | RoleClass::Content => PresClass::Content,
     }
-}
-
-/// The application root of the accessibility tree, as opposed to an ARIA `application` widget
-/// (which carries an author's role token, [`SemFlags::ROLE_AUTHORED`]) or an embedded object (an
-/// HTML `<object>` is exported with the same model role): the root is the one application node
-/// that has no parent in its own application, which only a snapshot that carries its parent can
-/// say. A snapshot that does not is not taken for the root; the walk fetches its ancestry.
-pub fn is_app_root(snap: &NodeSnapshot) -> bool {
-    let e = entry_of(snap);
-    e.sem.role == SemRole::Application
-        && !e.sem.flags.contains(SemFlags::ROLE_AUTHORED)
-        && snap.have.contains(PropMask::PARENT)
-        && snap.parent.is_none()
 }
 
 /// [`class_entry`] of a snapshot (the entry the snapshot carries, or its provisional one).

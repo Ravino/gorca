@@ -126,6 +126,7 @@ const fn ban(
 const PORTED: &[&str] = &[
     "crates/gorca-core/src/review/",
     "crates/gorca-core/src/text/",
+    "crates/gorca-core/src/commands/",
 ];
 const LEGACY_ROLE: &str =
     "SemRole from the fused entry (`review::zone::entry_of`, `Ivm::entry_view`)";

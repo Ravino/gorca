@@ -714,3 +714,20 @@ recorded node) guards `trackable`.
   which the text layer always follows. 7 recorded nodes. The caret machine now sees their text
   object; nothing else changes.
 
+#### M22c part 2: commands (2026-10-25)
+
+`crates/gorca-core/src/commands/` asks the fused role. New shared module `nodekind` (`role_of`,
+`is_app_root`, `is_app_node`, `is_window_role`). The `Words` fields of the where-am-i answer are
+`role_text` and `state_text` (they were `role` and `states`, names the ratchet reserves for the
+legacy fields). Golden case `info-shape` (collection, container, window, application per node).
+
+* 2026-10-25: the container chain of "where am I" now also names a form, a radio group, a figure,
+  a presentational node, a log, a timer, a row group, a feed and a comment; the chain stops at an
+  `alertdialog` as at a dialog. Roles the old mapping had no word for (`Unknown`: form, comment,
+  log, timer; one generic filler) are named as containers: 7 recorded nodes. A menu item that the
+  engine exports with a menu role (2 nodes) is no longer a collection with a position; a layout
+  table (1 node) is a container but no collection; an ARIA option exported as a filler (1-2 nodes)
+  is no container.
+* 2026-10-25: the application of the chain is an application node without an author token whose
+  parent is absent or was never fetched; an embedded object inside the tree is not one.
+

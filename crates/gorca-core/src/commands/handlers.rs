@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use gorca_config::Confirmations;
 use gorca_input_api::{CmdId, KeyIntent, PressKind, is_modifier_keysym, spoken_key_name};
 use gorca_mirror::fill::{DemandOutcome, DemandWhy};
-use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, Prio, PropMask, Role};
+use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, Prio, PropMask};
 use gorca_rt::BudgetClass;
 
 use super::info;
@@ -683,7 +683,7 @@ impl Reader {
             let chain = info::ancestry(&self.dir, snap);
             if let Some(w) = chain
                 .iter()
-                .find(|n| matches!(n.role, Role::Window | Role::Dialog))
+                .find(|n| crate::nodekind::is_window_role(crate::nodekind::role_of(n)))
             {
                 let epoch = self.epoch.current();
                 let node = w.key;

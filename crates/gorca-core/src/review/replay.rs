@@ -27,6 +27,12 @@ pub fn text_tracked(snap: &NodeSnapshot) -> Option<(bool, bool, bool)> {
     crate::text::tracked_bits(snap)
 }
 
+/// The parts a node plays in the "where am I" answer: (collection, container, window,
+/// application). The recorded-corpus goldens of the info commands read it.
+pub fn info_shape(snap: &NodeSnapshot) -> (bool, bool, bool, bool) {
+    crate::commands::info::shape_of(snap)
+}
+
 /// A page of snapshots as a [`NavSource`], every node fresh.
 #[derive(Debug)]
 pub struct PageSource(pub HashMap<NodeKey, Arc<NodeSnapshot>>);
