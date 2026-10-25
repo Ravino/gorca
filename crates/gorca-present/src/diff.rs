@@ -1394,7 +1394,8 @@ mod tests {
         c
     }
 
-    /// The classifiers the review surface has rows for (the rows of `deviations.toml`).
+    /// The classifiers the review surface had rows for while the gate ran (M22b3; the rows left
+    /// `deviations.toml` with the cut-over, the classifiers keep their tests).
     const REVIEW_IDS: &[&str] = &[
         "content-derived-name",
         "marker-stripped-name",
@@ -1425,21 +1426,6 @@ mod tests {
             );
         }
         Deviations::parse(&src).expect("rows parse")
-    }
-
-    #[test]
-    fn the_review_ids_are_the_rows_of_the_checked_in_list() {
-        let builtin = Deviations::builtin();
-        let mut have = builtin.ids_for("review");
-        have.retain(|id| id != "walk-follows-class");
-        have.sort();
-        let mut want: Vec<String> = REVIEW_IDS.iter().map(|s| (*s).to_owned()).collect();
-        want.sort();
-        assert_eq!(have, want, "update REVIEW_IDS with deviations.toml");
-        let mut web = builtin.ids_for("review-web");
-        web.retain(|id| id != "walk-follows-class");
-        web.sort();
-        assert_eq!(web, want, "review and review-web carry the same rows");
     }
 
     #[test]

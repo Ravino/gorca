@@ -40,8 +40,6 @@ mod golden_tests;
 #[cfg(test)]
 mod legacy_agreement_tests;
 mod proc;
-#[cfg(test)]
-mod review_gate_tests;
 mod role_map;
 mod sem_profile;
 mod text;

@@ -1,0 +1,2 @@
+2026-10-25T03:00:18.071203Z  WARN gorca_agree: legacy and fused values disagree aspect="level" legacy_role=Heading fused_role="heading" names=legacy name 0 bytes #58303773, fused name 7 bytes #5218b085
+2026-10-25T03:00:18.071372Z  WARN gorca_agree: legacy and fused values disagree aspect="level" legacy_role=Heading fused_role="heading" names=legacy name 0 bytes #58303773, fused name 7 bytes #2ecbd1ef

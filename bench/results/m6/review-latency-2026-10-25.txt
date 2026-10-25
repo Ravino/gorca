@@ -1,0 +1,22 @@
+governor: performance load: 12.59 13.54 15.54
+round 1 done
+round 2 done
+round 3 done
+round 4 done
+round 5 done
+series                                         legacy p99      new p99      delta
+10001 FL1 line-model build                      3364140ns    4805321ns  1441181ns ok
+10001 OB1 object first child                        280ns        324ns       44ns ok
+10001 OB1 object next                              1753ns       1668ns      -85ns ok
+10001 OB1 object next in flow                      1553ns       1672ns      119ns ok
+10001 OB1 object parent                             202ns        285ns       83ns ok
+10001 OB1 object previous                          1831ns       1933ns      102ns ok
+10001 VD1 validity hash per node                     42ns         49ns        7ns ok
+1001 FL1 line-model build                       1033639ns    1179494ns   145855ns ok
+1001 OB1 object first child                         280ns        322ns       42ns ok
+1001 OB1 object next                                721ns        847ns      126ns ok
+1001 OB1 object next in flow                        817ns        920ns      103ns ok
+1001 OB1 object parent                              177ns        240ns       63ns ok
+1001 OB1 object previous                            790ns        907ns      117ns ok
+1001 VD1 validity hash per node                      26ns         44ns       18ns ok
+review latency: PASS

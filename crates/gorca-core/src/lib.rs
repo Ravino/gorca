@@ -113,7 +113,7 @@ pub use reader::{
     ReaderCounters, ReaderEffect, ReaderInbox, ReaderMsg, ReaderSenders, reader_channels,
 };
 #[doc(hidden)]
-pub use review::gate as review_gate;
+pub use review::replay as review_replay;
 pub use review::{
     BuildError, BuildRequest, Completeness, FlatPos, LineModel, ModelId, NavFetchError, NavOp,
     ProbeItem, ReviewCounters, ReviewCursor, ReviewFrom, ReviewIo, ReviewKind, ReviewLimits,

@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Golden tests of `compose` (M22b1 cut-over): the replay half of the cut-over gate, kept after the
-//! legacy presenters were deleted. Every recorded corpus family is fused the way the app actor
+//! Golden tests of `compose` (M22b1 cut-over, and M22b3 for review): the replay half of the cut-over
+//! gate, kept after the legacy presenters were deleted. Every recorded corpus family is fused the way the app actor
 //! fuses it and run through `gorca-present`, in English and in Russian: the focus utterance of
 //! every node, the utterance of every synthetic state flip and of every recorded real change
 //! (nodes paired by path or fixture id, value changes included) must equal the checked-in
@@ -813,6 +813,163 @@ fn real_change_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Review and object navigation (M22b3)
+// ---------------------------------------------------------------------------------------------
+
+use gorca_core::review_replay as rr;
+
+/// The six object moves of simple review from a node, as one token per move.
+fn walk_text(src: &rr::PageSource, k: gorca_model::NodeKey) -> String {
+    const MOVES: [(&str, rr::NavMove); 6] = [
+        ("parent", rr::NavMove::Parent),
+        ("child", rr::NavMove::FirstChild),
+        ("next", rr::NavMove::Next),
+        ("prev", rr::NavMove::Prev),
+        ("flow-next", rr::NavMove::NextInFlow),
+        ("flow-prev", rr::NavMove::PrevInFlow),
+    ];
+    MOVES
+        .iter()
+        .map(|(name, mv)| {
+            let to = match rr::step(src, k, *mv, true, rr::ReviewLimits::default()) {
+                rr::StepResult::Found(n) => n.local.0.to_string(),
+                rr::StepResult::Empty => "-".to_owned(),
+                rr::StepResult::Stop(_) => "stop".to_owned(),
+            };
+            format!("Text:{name}={to}")
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
+fn class_text(c: rr::PresClass) -> String {
+    match c {
+        rr::PresClass::Unavailable => "Text:Unavailable",
+        rr::PresClass::Layout => "Text:Layout",
+        rr::PresClass::Content => "Text:Content",
+    }
+    .to_owned()
+}
+
+fn tokens_text(t: &[gorca_present::Token]) -> String {
+    join(t.iter().map(|t| (t.kind, t.text.as_str())))
+}
+
+/// The page as a navigation source: every node carries its child list (page order).
+fn page_source(fused: &[Arc<NodeSnapshot>]) -> rr::PageSource {
+    let mut kids: std::collections::HashMap<gorca_model::NodeKey, Vec<gorca_model::NodeKey>> =
+        std::collections::HashMap::new();
+    for s in fused {
+        if let Some(p) = s.parent {
+            kids.entry(p).or_default().push(s.key);
+        }
+    }
+    let mut map = std::collections::HashMap::new();
+    for s in fused {
+        let mut c = (**s).clone();
+        c.children = gorca_model::ChildList::Known(
+            kids.remove(&s.key)
+                .unwrap_or_default()
+                .into_iter()
+                .collect(),
+        );
+        c.have |= gorca_model::PropMask::CHILDREN | gorca_model::PropMask::PARENT;
+        map.insert(s.key, Arc::new(c));
+    }
+    rr::PageSource(map)
+}
+
+/// Flat review and object review: what every node says as a whole object (`flat`, `zone`,
+/// `noname`), its navigation class (`class`, and `class-web` for the surface walk of web
+/// content) and where the six object moves go (`walk`).
+fn review_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
+    let web_run = family.web != WebEngine::None;
+    let surface = if web_run { "review-web" } else { "review" };
+    let tables = crate::sem_profile::tables_for(family.toolkit, "app", family.web);
+    for name in pages_of(family.dir) {
+        let label = format!("{}/{name}", family.dir);
+        let (Some(snaps), Some((metas, unreadable))) =
+            (page(family.dir, &name), page_meta(family.dir, &name))
+        else {
+            out.push(dropped(
+                &label,
+                "flat",
+                surface,
+                "page-unparsable",
+                1,
+                String::new(),
+            ));
+            continue;
+        };
+        if snaps.len() != metas.len() {
+            out.push(dropped(
+                &label,
+                "flat",
+                surface,
+                "page-unparsable",
+                1,
+                "decoded and raw node lists differ".to_owned(),
+            ));
+            continue;
+        }
+        let mut drops = Drops::default();
+        drops.add_n("unreadable-node", unreadable.len() as u64, || {
+            format!("node {}", unreadable[0])
+        });
+        let fused = fuse(tables, &label, &snaps, run.seed);
+        let webs = web_flags(&fused);
+        let src = page_source(&fused);
+        let mut compared = 0u64;
+        let mut push = |s: &NodeSnapshot, case: &str, new: String| {
+            out.push(Record {
+                corpus: label.clone(),
+                node: s.key.local.0,
+                case: case.to_owned(),
+                surface,
+                dropped: None,
+                new,
+            });
+        };
+        for (s, web) in fused.iter().zip(&webs) {
+            if *web != web_run {
+                drops.add(kind_mismatch_reason(web_run), || describe(s));
+                continue;
+            }
+            if s.sem.entry.is_none() {
+                drops.add(no_entry_reason(s), || describe(s));
+                continue;
+            }
+            compared += 1;
+            push(s, "flat", tokens_text(&rr::object_tokens(s, None)));
+            push(
+                s,
+                "zone",
+                tokens_text(&rr::zone_tokens(s, web_run, None, rr::actionable(s))),
+            );
+            if s.name.as_deref().is_none_or(|n| n.trim().is_empty()) {
+                push(s, "noname", format!("Role:{}", rr::role_word(s, web_run)));
+            }
+            push(s, "class", class_text(rr::class_of_snapshot(s, false)));
+            if web_run {
+                push(s, "class-web", class_text(rr::class_of_snapshot(s, true)));
+            }
+            push(s, "walk", walk_text(&src, s.key));
+        }
+        drops.flush(&label, "flat", surface, out);
+        if compared == 0 {
+            out.push(dropped(
+                &label,
+                "flat",
+                surface,
+                "empty-corpus",
+                1,
+                "no node of the page was compared".to_owned(),
+            ));
+        }
+    }
+}
+
 /// A dropped (corpus, case, reason, count).
 type Drop = (String, String, &'static str, u64);
 
@@ -831,6 +988,8 @@ fn emit(surface: &str, seed: u64, lang: gorca_present::Lang) -> (String, usize, 
         }
         if surface == "focus" {
             focus_records(family, &run, &mut recs);
+        } else if surface == "review" {
+            review_records(family, &run, &mut recs);
         } else {
             change_records(family, &run, &mut recs);
             real_change_records(family, &run, &mut recs);
@@ -901,6 +1060,12 @@ fn the_focus_utterance_of_every_recorded_node_is_golden() {
 }
 
 #[test]
+fn the_review_words_classes_and_object_moves_of_every_recorded_node_are_golden() {
+    check("review", "en", gorca_present::Lang::En);
+    check("review", "ru", gorca_present::Lang::Ru);
+}
+
+#[test]
 fn the_change_utterance_of_every_recorded_state_flip_is_golden() {
     check("change", "en", gorca_present::Lang::En);
     check("change", "ru", gorca_present::Lang::Ru);
@@ -912,6 +1077,9 @@ fn the_change_utterance_of_every_recorded_state_flip_is_golden() {
 /// file that holds fewer has lost coverage.
 const GATE_FOCUS_RECORDS: usize = 6969;
 const GATE_CHANGE_RECORDS: usize = 4154;
+/// The review gate (`cargo xtask cutover review`, 8 of 8 families, en and ru) compared 35270
+/// records (flat, zone, noname, class, class-web and walk of 6969 nodes).
+const GATE_REVIEW_RECORDS: usize = 35270;
 
 #[test]
 fn the_goldens_hold_every_record_the_gate_compared() {
@@ -922,6 +1090,7 @@ fn the_goldens_hold_every_record_the_gate_compared() {
         for (surface, want) in [
             ("focus", GATE_FOCUS_RECORDS),
             ("change", GATE_CHANGE_RECORDS),
+            ("review", GATE_REVIEW_RECORDS),
         ] {
             let (_, n, _) = emit(surface, 0, lang);
             assert_eq!(
@@ -943,7 +1112,7 @@ fn the_goldens_hold_every_record_the_gate_compared() {
 #[test]
 fn the_replay_is_repeatable_and_order_free_on_the_checked_in_corpus() {
     for lang in [gorca_present::Lang::En, gorca_present::Lang::Ru] {
-        for surface in ["focus", "change"] {
+        for surface in ["focus", "change", "review"] {
             let a = emit(surface, 0, lang).0;
             assert!(!a.is_empty(), "{surface}: empty replay");
             assert_eq!(a, emit(surface, 0, lang).0, "{surface}: two runs differ");
@@ -988,6 +1157,31 @@ fn every_family_has_recorded_pages_and_every_page_compares_something() {
                 .any(|l| l.starts_with(&format!("{}/", family.dir))),
             "family {} compared no node",
             family.dir
+        );
+    }
+    assert!(
+        !drops
+            .iter()
+            .any(|(_, _, why, _)| *why == "empty-corpus" || *why == "page-unparsable"),
+        "a recorded page is empty or unparsable: {drops:?}"
+    );
+}
+
+#[test]
+fn every_family_has_recorded_review_records_and_every_case_is_there() {
+    let (text, _, drops) = emit("review", 0, gorca_present::Lang::En);
+    for family in FAMILIES {
+        assert!(
+            text.lines()
+                .any(|l| l.starts_with(&format!("{}/", family.dir))),
+            "family {} compared no node",
+            family.dir
+        );
+    }
+    for case in ["flat", "zone", "noname", "class", "class-web", "walk"] {
+        assert!(
+            text.lines().any(|l| l.split('\t').nth(2) == Some(case)),
+            "no review record of case {case}"
         );
     }
     assert!(

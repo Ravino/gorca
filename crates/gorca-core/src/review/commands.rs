@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gorca_connector_api::ActionReq;
-use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, PropMask, Role, StateSet};
+use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, PropMask, Role, StructFlags};
 use gorca_speech::How;
 use smallvec::SmallVec;
 
@@ -27,11 +27,12 @@ use super::objnav::{NavMove, NavOp, StepResult, step, step_degraded};
 use super::segment::{Dir, SimpleUnits, TextUnits, Unit, slice};
 use super::terminal::held_model;
 use super::validity::{Validity, validity};
+use super::zone;
 use super::{BuildRequest, OpState, ReviewMsg, RrCheck};
 use crate::SpeechIntent;
 use crate::commands::CoreCmd;
 use crate::mode::{Mode, ModeMsg};
-use crate::present::{PresentContext, flat_zone_text};
+use crate::present::PresentContext;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 
 /// Safety margin on top of a task's own deadline before the Reader gives up waiting.
@@ -176,7 +177,7 @@ fn is_surface_role(snap: &NodeSnapshot, parent_is_menubar: bool) -> bool {
     match snap.role {
         Role::Window | Role::Dialog | Role::Alert | Role::Popover => true,
         // SF-2: a showing menu is its own surface, unless it is a menu bar's pull-down title.
-        Role::Menu => snap.states.contains(StateSet::SHOWING) && !parent_is_menubar,
+        Role::Menu => snap.struct_state().contains(StructFlags::SHOWING) && !parent_is_menubar,
         Role::Application
         | Role::Document
         | Role::DocumentWeb
@@ -693,9 +694,11 @@ impl Reader {
             Lookup::Hit(v) => {
                 let epoch = self.epoch.current();
                 if rep >= 2 {
-                    let name = v.snap.name.as_deref().unwrap_or("");
+                    let entry = crate::present::entry_of(&v.snap);
+                    let name = entry.name.as_deref().unwrap_or("");
                     if name.is_empty() {
-                        self.say(&msg!(InfoNoName, role = v.snap.role.spoken()), fx);
+                        let web = self.snap_is_web(&v.snap);
+                        self.say(&msg!(InfoNoName, role = zone::role_word(&v.snap, web)), fx);
                     } else {
                         let spelled = self.review_spell(name);
                         self.say(&spelled, fx);
@@ -1534,7 +1537,7 @@ impl Reader {
                 return Step::Done;
             }
         };
-        let text = flat_zone_text(&snap);
+        let text = zone::flat_text(&snap);
         let units = SimpleUnits;
         let (new_offset, said, boundary) = match mv {
             FlatMove::CurLine => (offset, text.clone(), false),
@@ -1791,7 +1794,9 @@ impl Reader {
             let Lookup::Hit(v) = self.dir.view(k) else {
                 continue;
             };
-            if v.snap.role == Role::StatusBar && v.snap.states.contains(StateSet::SHOWING) {
+            if v.snap.role == Role::StatusBar
+                && v.snap.struct_state().contains(StructFlags::SHOWING)
+            {
                 return Some(k);
             }
             if let gorca_model::ChildList::Known(kids) = &v.snap.children {
@@ -1804,7 +1809,11 @@ impl Reader {
     fn speak_status_bar(&mut self, bar: NodeKey, rep: u8, fx: &mut ReaderEffects) {
         let mut parts: Vec<String> = Vec::new();
         if let Lookup::Hit(v) = self.dir.view(bar) {
-            if let Some(n) = v.snap.name.as_deref().filter(|n| !n.is_empty()) {
+            if let Some(n) = crate::present::entry_of(&v.snap)
+                .name
+                .as_deref()
+                .filter(|n| !n.is_empty())
+            {
                 parts.push(n.to_owned());
             }
             let mut stack: Vec<NodeKey> = match &v.snap.children {
@@ -1820,10 +1829,10 @@ impl Reader {
                 let Lookup::Hit(c) = self.dir.view(k) else {
                     continue;
                 };
-                if !c.snap.states.contains(StateSet::SHOWING) {
+                if !c.snap.struct_state().contains(StructFlags::SHOWING) {
                     continue;
                 }
-                let t = flat_zone_text(&c.snap);
+                let t = zone::flat_text(&c.snap);
                 let leaf =
                     !matches!(&c.snap.children, gorca_model::ChildList::Known(k) if !k.is_empty());
                 if leaf && !t.is_empty() {
