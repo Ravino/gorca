@@ -202,9 +202,9 @@ chromium/aria-props	50	brief	whereami	ориентир | текст
 chromium/aria-props	50	r1	whereami	ориентир | текст
 chromium/aria-props	50	r2	whereami	SEM aria-props документ | ориентир | текст
 chromium/aria-props	50	r3	whereami	текст, без названия
-chromium/aria-props	51	brief	whereami	log (implicit polite) текст
-chromium/aria-props	51	r1	whereami	log (implicit polite) текст
-chromium/aria-props	51	r2	whereami	SEM aria-props документ | ориентир | log (implicit polite) текст
+chromium/aria-props	51	brief	whereami	текст | log (implicit polite) текст
+chromium/aria-props	51	r1	whereami	текст | log (implicit polite) текст
+chromium/aria-props	51	r2	whereami	SEM aria-props документ | ориентир | текст | log (implicit polite) текст
 chromium/aria-props	51	r3	whereami	l o g пробел ( i m p l i c i t пробел p o l i t e )
 chromium/aria-props	52	brief	whereami	ориентир | уведомление
 chromium/aria-props	52	r1	whereami	ориентир | уведомление
@@ -350,25 +350,25 @@ chromium/aria-props	87	brief	whereami	ориентир | selected option эле�
 chromium/aria-props	87	r1	whereami	ориентир | selected option элемент списка
 chromium/aria-props	87	r2	whereami	SEM aria-props документ | ориентир | selected option элемент списка
 chromium/aria-props	87	r3	whereami	s e l e c t e d пробел o p t i o n
-chromium/aria-props	88	brief	whereami	selected option элемент списка | selected option текст
-chromium/aria-props	88	r1	whereami	selected option элемент списка | selected option текст
-chromium/aria-props	88	r2	whereami	SEM aria-props документ | ориентир | selected option элемент списка | selected option текст
+chromium/aria-props	88	brief	whereami	selected option текст
+chromium/aria-props	88	r1	whereami	selected option текст
+chromium/aria-props	88	r2	whereami	SEM aria-props документ | ориентир | selected option текст
 chromium/aria-props	88	r3	whereami	s e l e c t e d пробел o p t i o n
 chromium/aria-props	89	brief	whereami	ориентир | unselected option элемент списка
 chromium/aria-props	89	r1	whereami	ориентир | unselected option элемент списка
 chromium/aria-props	89	r2	whereami	SEM aria-props документ | ориентир | unselected option элемент списка
 chromium/aria-props	89	r3	whereami	u n s e l e c t e d пробел o p t i o n
-chromium/aria-props	90	brief	whereami	unselected option элемент списка | unselected option текст
-chromium/aria-props	90	r1	whereami	unselected option элемент списка | unselected option текст
-chromium/aria-props	90	r2	whereami	SEM aria-props документ | ориентир | unselected option элемент списка | unselected option текст
+chromium/aria-props	90	brief	whereami	unselected option текст
+chromium/aria-props	90	r1	whereami	unselected option текст
+chromium/aria-props	90	r2	whereami	SEM aria-props документ | ориентир | unselected option текст
 chromium/aria-props	90	r3	whereami	u n s e l e c t e d пробел o p t i o n
 chromium/aria-props	91	brief	whereami	ориентир | option no selected attr элемент списка
 chromium/aria-props	91	r1	whereami	ориентир | option no selected attr элемент списка
 chromium/aria-props	91	r2	whereami	SEM aria-props документ | ориентир | option no selected attr элемент списка
 chromium/aria-props	91	r3	whereami	o p t i o n пробел n o пробел s e l e c t e d пробел a t t r
-chromium/aria-props	92	brief	whereami	option no selected attr элемент списка | option no selected attr текст
-chromium/aria-props	92	r1	whereami	option no selected attr элемент списка | option no selected attr текст
-chromium/aria-props	92	r2	whereami	SEM aria-props документ | ориентир | option no selected attr элемент списка | option no selected attr текст
+chromium/aria-props	92	brief	whereami	option no selected attr текст
+chromium/aria-props	92	r1	whereami	option no selected attr текст
+chromium/aria-props	92	r2	whereami	SEM aria-props документ | ориентир | option no selected attr текст
 chromium/aria-props	92	r3	whereami	o p t i o n пробел n o пробел s e l e c t e d пробел a t t r
 chromium/aria-props	93	brief	whereami	ориентир | expanded кнопка | развёрнуто
 chromium/aria-props	93	r1	whereami	ориентир | expanded кнопка | развёрнуто
@@ -914,21 +914,21 @@ chromium/composite	81	brief	whereami	диалог Add Delivery Address | OK кн
 chromium/composite	81	r1	whereami	диалог Add Delivery Address | OK кнопка
 chromium/composite	81	r2	whereami	диалог Add Delivery Address | OK кнопка
 chromium/composite	81	r3	whereami	O K
-chromium/composite	82	brief	whereami	ориентир | Confirm delete диалог
-chromium/composite	82	r1	whereami	ориентир | Confirm delete диалог
-chromium/composite	82	r2	whereami	SEM composite документ | ориентир | Confirm delete диалог | Really delete?
+chromium/composite	82	brief	whereami	диалог Confirm delete | ориентир | Confirm delete диалог
+chromium/composite	82	r1	whereami	диалог Confirm delete | ориентир | Confirm delete диалог
+chromium/composite	82	r2	whereami	диалог Confirm delete | SEM composite документ | ориентир | Confirm delete диалог | Really delete?
 chromium/composite	82	r3	whereami	C o n f i r m пробел d e l e t e
-chromium/composite	83	brief	whereami	абзац
-chromium/composite	83	r1	whereami	абзац
-chromium/composite	83	r2	whereami	SEM composite документ | ориентир | абзац
+chromium/composite	83	brief	whereami	диалог Confirm delete | абзац
+chromium/composite	83	r1	whereami	диалог Confirm delete | абзац
+chromium/composite	83	r2	whereami	диалог Confirm delete | абзац
 chromium/composite	83	r3	whereami	абзац, без названия
-chromium/composite	84	brief	whereami	Really delete? текст
-chromium/composite	84	r1	whereami	Really delete? текст
-chromium/composite	84	r2	whereami	SEM composite документ | ориентир | Really delete? текст
+chromium/composite	84	brief	whereami	диалог Confirm delete | Really delete? текст
+chromium/composite	84	r1	whereami	диалог Confirm delete | Really delete? текст
+chromium/composite	84	r2	whereami	диалог Confirm delete | Really delete? текст
 chromium/composite	84	r3	whereami	R e a l l y пробел d e l e t e ?
-chromium/composite	85	brief	whereami	Yes кнопка
-chromium/composite	85	r1	whereami	Yes кнопка
-chromium/composite	85	r2	whereami	SEM composite документ | ориентир | Yes кнопка
+chromium/composite	85	brief	whereami	диалог Confirm delete | Yes кнопка
+chromium/composite	85	r1	whereami	диалог Confirm delete | Yes кнопка
+chromium/composite	85	r2	whereami	диалог Confirm delete | Yes кнопка
 chromium/composite	85	r3	whereami	Y e s
 chromium/composite	86	brief	whereami	диалог Native dialog | ориентир | Native dialog диалог
 chromium/composite	86	r1	whereami	диалог Native dialog | ориентир | Native dialog диалог
@@ -990,13 +990,13 @@ chromium/composite	100	brief	whereami	ориентир | Chat log
 chromium/composite	100	r1	whereami	ориентир | Chat log
 chromium/composite	100	r2	whereami	SEM composite документ | ориентир | Chat log
 chromium/composite	100	r3	whereami	C h a t пробел l o g
-chromium/composite	101	brief	whereami	абзац
-chromium/composite	101	r1	whereami	абзац
-chromium/composite	101	r2	whereami	SEM composite документ | ориентир | абзац
+chromium/composite	101	brief	whereami	Chat log | абзац
+chromium/composite	101	r1	whereami	Chat log | абзац
+chromium/composite	101	r2	whereami	SEM composite документ | ориентир | Chat log | абзац
 chromium/composite	101	r3	whereami	абзац, без названия
 chromium/composite	102	brief	whereami	Hello текст
 chromium/composite	102	r1	whereami	Hello текст
-chromium/composite	102	r2	whereami	SEM composite документ | ориентир | Hello текст
+chromium/composite	102	r2	whereami	SEM composite документ | ориентир | Chat log | Hello текст
 chromium/composite	102	r3	whereami	H e l l o
 chromium/composite	103	brief	whereami	ориентир | Ticker
 chromium/composite	103	r1	whereami	ориентир | Ticker
@@ -1010,9 +1010,9 @@ chromium/composite	105	brief	whereami	ориентир | Countdown
 chromium/composite	105	r1	whereami	ориентир | Countdown
 chromium/composite	105	r2	whereami	SEM composite документ | ориентир | Countdown
 chromium/composite	105	r3	whereami	C o u n t d o w n
-chromium/composite	106	brief	whereami	10:00 текст
-chromium/composite	106	r1	whereami	10:00 текст
-chromium/composite	106	r2	whereami	SEM composite документ | ориентир | 10:00 текст
+chromium/composite	106	brief	whereami	Countdown | 10:00 текст
+chromium/composite	106	r1	whereami	Countdown | 10:00 текст
+chromium/composite	106	r2	whereami	SEM composite документ | ориентир | Countdown | 10:00 текст
 chromium/composite	106	r3	whereami	1 0 : 0 0
 chromium/composite	107	brief	whereami	ориентир | Game board приложение
 chromium/composite	107	r1	whereami	ориентир | Game board приложение
@@ -2218,9 +2218,9 @@ chromium/forms	86	brief	whereami	ориентир | текст
 chromium/forms	86	r1	whereami	ориентир | текст
 chromium/forms	86	r2	whereami	SEM forms документ | ориентир | текст
 chromium/forms	86	r3	whereami	текст, без названия
-chromium/forms	87	brief	whereami	In unnamed form поле ввода
-chromium/forms	87	r1	whereami	In unnamed form поле ввода
-chromium/forms	87	r2	whereami	SEM forms документ | ориентир | In unnamed form поле ввода
+chromium/forms	87	brief	whereami	текст | In unnamed form поле ввода
+chromium/forms	87	r1	whereami	текст | In unnamed form поле ввода
+chromium/forms	87	r2	whereami	SEM forms документ | ориентир | текст | In unnamed form поле ввода
 chromium/forms	87	r3	whereami	I n пробел u n n a m e d пробел f o r m
 chromium/forms	88	brief	whereami	ориентир | Site search ориентир
 chromium/forms	88	r1	whereami	ориентир | Site search ориентир
@@ -3566,17 +3566,17 @@ chromium/m8-landmarks	58	brief	whereami	ориентир | текст
 chromium/m8-landmarks	58	r1	whereami	ориентир | текст
 chromium/m8-landmarks	58	r2	whereami	M8 Landmarks документ | ориентир | текст
 chromium/m8-landmarks	58	r3	whereami	текст, без названия
-chromium/m8-landmarks	59	brief	whereami	текст
-chromium/m8-landmarks	59	r1	whereami	текст
-chromium/m8-landmarks	59	r2	whereami	M8 Landmarks документ | ориентир | текст
+chromium/m8-landmarks	59	brief	whereami	текст | текст
+chromium/m8-landmarks	59	r1	whereami	текст | текст
+chromium/m8-landmarks	59	r2	whereami	M8 Landmarks документ | ориентир | текст | текст
 chromium/m8-landmarks	59	r3	whereami	текст, без названия
 chromium/m8-landmarks	60	brief	whereami	Unnamed form field текст
 chromium/m8-landmarks	60	r1	whereami	Unnamed form field текст
-chromium/m8-landmarks	60	r2	whereami	M8 Landmarks документ | ориентир | Unnamed form field текст
+chromium/m8-landmarks	60	r2	whereami	M8 Landmarks документ | ориентир | текст | Unnamed form field текст
 chromium/m8-landmarks	60	r3	whereami	U n n a m e d пробел f o r m пробел f i e l d
 chromium/m8-landmarks	61	brief	whereami	Unnamed form field поле ввода
 chromium/m8-landmarks	61	r1	whereami	Unnamed form field поле ввода
-chromium/m8-landmarks	61	r2	whereami	M8 Landmarks документ | ориентир | Unnamed form field поле ввода
+chromium/m8-landmarks	61	r2	whereami	M8 Landmarks документ | ориентир | текст | Unnamed form field поле ввода
 chromium/m8-landmarks	61	r3	whereami	U n n a m e d пробел f o r m пробел f i e l d
 chromium/m8-landmarks	62	brief	whereami	M8 Landmarks документ | Related links ориентир
 chromium/m8-landmarks	62	r1	whereami	M8 Landmarks документ | Related links ориентир
@@ -3794,9 +3794,9 @@ chromium/m8-live	39	brief	whereami	M8 Live regions документ | текст
 chromium/m8-live	39	r1	whereami	M8 Live regions документ | текст
 chromium/m8-live	39	r2	whereami	M8 Live regions документ | текст
 chromium/m8-live	39	r3	whereami	текст, без названия
-chromium/m8-live	40	brief	whereami	00:00 текст
-chromium/m8-live	40	r1	whereami	00:00 текст
-chromium/m8-live	40	r2	whereami	M8 Live regions документ | 00:00 текст
+chromium/m8-live	40	brief	whereami	текст | 00:00 текст
+chromium/m8-live	40	r1	whereami	текст | 00:00 текст
+chromium/m8-live	40	r2	whereami	M8 Live regions документ | текст | 00:00 текст
 chromium/m8-live	40	r3	whereami	0 0 : 0 0
 chromium/m8-quicknav	0	brief	whereami	M8 Quick navigation документ
 chromium/m8-quicknav	0	r1	whereami	M8 Quick navigation документ
@@ -12862,9 +12862,9 @@ firefox/forms	75	brief	whereami	ориентир | текст
 firefox/forms	75	r1	whereami	ориентир | текст
 firefox/forms	75	r2	whereami	SEM forms документ | ориентир | текст
 firefox/forms	75	r3	whereami	текст, без названия
-firefox/forms	76	brief	whereami	In unnamed form поле ввода
-firefox/forms	76	r1	whereami	In unnamed form поле ввода
-firefox/forms	76	r2	whereami	SEM forms документ | ориентир | In unnamed form поле ввода
+firefox/forms	76	brief	whereami	текст | In unnamed form поле ввода
+firefox/forms	76	r1	whereami	текст | In unnamed form поле ввода
+firefox/forms	76	r2	whereami	SEM forms документ | ориентир | текст | In unnamed form поле ввода
 firefox/forms	76	r3	whereami	I n пробел u n n a m e d пробел f o r m
 firefox/forms	77	brief	whereami	ориентир | Site search ориентир
 firefox/forms	77	r1	whereami	ориентир | Site search ориентир
@@ -13570,17 +13570,17 @@ firefox/m8-iframes	28	brief	whereami	Form frame документ | текст
 firefox/m8-iframes	28	r1	whereami	Form frame документ | текст
 firefox/m8-iframes	28	r2	whereami	M8 Iframes документ | Form frame документ | текст
 firefox/m8-iframes	28	r3	whereami	текст, без названия
-firefox/m8-iframes	29	brief	whereami	Frame field текст
-firefox/m8-iframes	29	r1	whereami	Frame field текст
-firefox/m8-iframes	29	r2	whereami	M8 Iframes документ | Form frame документ | Frame field текст
+firefox/m8-iframes	29	brief	whereami	текст | Frame field текст
+firefox/m8-iframes	29	r1	whereami	текст | Frame field текст
+firefox/m8-iframes	29	r2	whereami	M8 Iframes документ | Form frame документ | текст | Frame field текст
 firefox/m8-iframes	29	r3	whereami	F r a m e пробел f i e l d
-firefox/m8-iframes	30	brief	whereami	Frame field поле ввода
-firefox/m8-iframes	30	r1	whereami	Frame field поле ввода
-firefox/m8-iframes	30	r2	whereami	M8 Iframes документ | Form frame документ | Frame field поле ввода
+firefox/m8-iframes	30	brief	whereami	текст | Frame field поле ввода
+firefox/m8-iframes	30	r1	whereami	текст | Frame field поле ввода
+firefox/m8-iframes	30	r2	whereami	M8 Iframes документ | Form frame документ | текст | Frame field поле ввода
 firefox/m8-iframes	30	r3	whereami	F r a m e пробел f i e l d
-firefox/m8-iframes	31	brief	whereami	Frame submit кнопка
-firefox/m8-iframes	31	r1	whereami	Frame submit кнопка
-firefox/m8-iframes	31	r2	whereami	M8 Iframes документ | Form frame документ | Frame submit кнопка
+firefox/m8-iframes	31	brief	whereami	текст | Frame submit кнопка
+firefox/m8-iframes	31	r1	whereami	текст | Frame submit кнопка
+firefox/m8-iframes	31	r2	whereami	M8 Iframes документ | Form frame документ | текст | Frame submit кнопка
 firefox/m8-iframes	31	r3	whereami	F r a m e пробел s u b m i t
 firefox/m8-iframes	32	brief	whereami	M8 Iframes документ | Srcdoc frame
 firefox/m8-iframes	32	r1	whereami	M8 Iframes документ | Srcdoc frame
@@ -13834,13 +13834,13 @@ firefox/m8-landmarks	35	brief	whereami	ориентир | текст
 firefox/m8-landmarks	35	r1	whereami	ориентир | текст
 firefox/m8-landmarks	35	r2	whereami	M8 Landmarks документ | ориентир | текст
 firefox/m8-landmarks	35	r3	whereami	текст, без названия
-firefox/m8-landmarks	36	brief	whereami	Unnamed form field текст
-firefox/m8-landmarks	36	r1	whereami	Unnamed form field текст
-firefox/m8-landmarks	36	r2	whereami	M8 Landmarks документ | ориентир | Unnamed form field текст
+firefox/m8-landmarks	36	brief	whereami	текст | Unnamed form field текст
+firefox/m8-landmarks	36	r1	whereami	текст | Unnamed form field текст
+firefox/m8-landmarks	36	r2	whereami	M8 Landmarks документ | ориентир | текст | Unnamed form field текст
 firefox/m8-landmarks	36	r3	whereami	U n n a m e d пробел f o r m пробел f i e l d
 firefox/m8-landmarks	37	brief	whereami	Unnamed form field поле ввода
 firefox/m8-landmarks	37	r1	whereami	Unnamed form field поле ввода
-firefox/m8-landmarks	37	r2	whereami	M8 Landmarks документ | ориентир | Unnamed form field поле ввода
+firefox/m8-landmarks	37	r2	whereami	M8 Landmarks документ | ориентир | текст | Unnamed form field поле ввода
 firefox/m8-landmarks	37	r3	whereami	U n n a m e d пробел f o r m пробел f i e l d
 firefox/m8-landmarks	38	brief	whereami	M8 Landmarks документ | Related links ориентир
 firefox/m8-landmarks	38	r1	whereami	M8 Landmarks документ | Related links ориентир
@@ -15746,8 +15746,8 @@ firefox/names	29	brief	whereami	Aria table name панель | x строка
 firefox/names	29	r1	whereami	Aria table name панель | x строка
 firefox/names	29	r2	whereami	SEM names документ | ориентир | Aria table name панель | x строка
 firefox/names	29	r3	whereami	x
-firefox/names	30	brief	whereami	Aria table name панель | x строка | x ячейка
-firefox/names	30	r1	whereami	Aria table name панель | x строка | x ячейка
+firefox/names	30	brief	whereami	x строка | x ячейка
+firefox/names	30	r1	whereami	x строка | x ячейка
 firefox/names	30	r2	whereami	SEM names документ | ориентир | Aria table name панель | x строка | x ячейка
 firefox/names	30	r3	whereami	x
 firefox/names	31	brief	whereami	ориентир | Region heading ориентир
@@ -24006,9 +24006,9 @@ gtk4/accprops	57	brief	whereami	окно SEM gtk4 accprops | панель | Labe
 gtk4/accprops	57	r1	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-search
 gtk4/accprops	57	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-search | fx:role-search
 gtk4/accprops	57	r3	whereami	L a b e l пробел r o l e - s e a r c h
-gtk4/accprops	58	brief	whereami	окно SEM gtk4 accprops | text in role-search метка
-gtk4/accprops	58	r1	whereami	sem-gallery | окно SEM gtk4 accprops | text in role-search метка
-gtk4/accprops	58	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | text in role-search метка
+gtk4/accprops	58	brief	whereami	окно SEM gtk4 accprops | Label role-search | text in role-search метка
+gtk4/accprops	58	r1	whereami	sem-gallery | окно SEM gtk4 accprops | Label role-search | text in role-search метка
+gtk4/accprops	58	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-search | text in role-search метка
 gtk4/accprops	58	r3	whereami	t e x t пробел i n пробел r o l e - s e a r c h
 gtk4/accprops	59	brief	whereami	окно SEM gtk4 accprops | панель | строка состояния
 gtk4/accprops	59	r1	whereami	sem-gallery | окно SEM gtk4 accprops | панель | строка состояния
@@ -24030,17 +24030,17 @@ gtk4/accprops	63	brief	whereami	окно SEM gtk4 accprops | панель | Labe
 gtk4/accprops	63	r1	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-log
 gtk4/accprops	63	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-log | fx:role-log
 gtk4/accprops	63	r3	whereami	L a b e l пробел r o l e - l o g
-gtk4/accprops	64	brief	whereami	окно SEM gtk4 accprops | text in role-log метка
-gtk4/accprops	64	r1	whereami	sem-gallery | окно SEM gtk4 accprops | text in role-log метка
-gtk4/accprops	64	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | text in role-log метка
+gtk4/accprops	64	brief	whereami	окно SEM gtk4 accprops | Label role-log | text in role-log метка
+gtk4/accprops	64	r1	whereami	sem-gallery | окно SEM gtk4 accprops | Label role-log | text in role-log метка
+gtk4/accprops	64	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-log | text in role-log метка
 gtk4/accprops	64	r3	whereami	t e x t пробел i n пробел r o l e - l o g
 gtk4/accprops	65	brief	whereami	окно SEM gtk4 accprops | панель | Label role-timer
 gtk4/accprops	65	r1	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-timer
 gtk4/accprops	65	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-timer | fx:role-timer
 gtk4/accprops	65	r3	whereami	L a b e l пробел r o l e - t i m e r
-gtk4/accprops	66	brief	whereami	окно SEM gtk4 accprops | text in role-timer метка
-gtk4/accprops	66	r1	whereami	sem-gallery | окно SEM gtk4 accprops | text in role-timer метка
-gtk4/accprops	66	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | text in role-timer метка
+gtk4/accprops	66	brief	whereami	окно SEM gtk4 accprops | Label role-timer | text in role-timer метка
+gtk4/accprops	66	r1	whereami	sem-gallery | окно SEM gtk4 accprops | Label role-timer | text in role-timer метка
+gtk4/accprops	66	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-timer | text in role-timer метка
 gtk4/accprops	66	r3	whereami	t e x t пробел i n пробел r o l e - t i m e r
 gtk4/accprops	67	brief	whereami	окно SEM gtk4 accprops | панель | Label role-marquee
 gtk4/accprops	67	r1	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-marquee
@@ -24166,9 +24166,9 @@ gtk4/accprops	97	brief	whereami	окно SEM gtk4 accprops | панель | Labe
 gtk4/accprops	97	r1	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-comment
 gtk4/accprops	97	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-comment | fx:role-comment
 gtk4/accprops	97	r3	whereami	L a b e l пробел r o l e - c o m m e n t
-gtk4/accprops	98	brief	whereami	окно SEM gtk4 accprops | text in role-comment метка
-gtk4/accprops	98	r1	whereami	sem-gallery | окно SEM gtk4 accprops | text in role-comment метка
-gtk4/accprops	98	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | text in role-comment метка
+gtk4/accprops	98	brief	whereami	окно SEM gtk4 accprops | Label role-comment | text in role-comment метка
+gtk4/accprops	98	r1	whereami	sem-gallery | окно SEM gtk4 accprops | Label role-comment | text in role-comment метка
+gtk4/accprops	98	r2	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-comment | text in role-comment метка
 gtk4/accprops	98	r3	whereami	t e x t пробел i n пробел r o l e - c o m m e n t
 gtk4/accprops	99	brief	whereami	окно SEM gtk4 accprops | панель | Label role-math
 gtk4/accprops	99	r1	whereami	sem-gallery | окно SEM gtk4 accprops | панель | Label role-math
@@ -24626,13 +24626,13 @@ gtk4/containers	85	brief	whereami	окно SEM gtk4 containers | панель | 
 gtk4/containers	85	r1	whereami	sem-gallery | окно SEM gtk4 containers | панель | панель
 gtk4/containers	85	r2	whereami	sem-gallery | окно SEM gtk4 containers | панель | панель
 gtk4/containers	85	r3	whereami	панель, без названия
-gtk4/containers	86	brief	whereami	окно SEM gtk4 containers | панель
-gtk4/containers	86	r1	whereami	sem-gallery | окно SEM gtk4 containers | панель
-gtk4/containers	86	r2	whereami	sem-gallery | окно SEM gtk4 containers | панель | панель
+gtk4/containers	86	brief	whereami	окно SEM gtk4 containers | панель | панель
+gtk4/containers	86	r1	whereami	sem-gallery | окно SEM gtk4 containers | панель | панель
+gtk4/containers	86	r2	whereami	sem-gallery | окно SEM gtk4 containers | панель | панель | панель
 gtk4/containers	86	r3	whereami	панель, без названия
 gtk4/containers	87	brief	whereami	окно SEM gtk4 containers | панель | scrolled метка
 gtk4/containers	87	r1	whereami	sem-gallery | окно SEM gtk4 containers | панель | scrolled метка
-gtk4/containers	87	r2	whereami	sem-gallery | окно SEM gtk4 containers | панель | панель | scrolled метка
+gtk4/containers	87	r2	whereami	sem-gallery | окно SEM gtk4 containers | панель | панель | панель | scrolled метка
 gtk4/containers	87	r3	whereami	s c r o l l e d
 gtk4/containers	88	brief	whereami	окно SEM gtk4 containers | панель | таблица
 gtk4/containers	88	r1	whereami	sem-gallery | окно SEM gtk4 containers | панель | таблица

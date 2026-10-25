@@ -721,13 +721,36 @@ recorded node) guards `trackable`.
 `role_text` and `state_text` (they were `role` and `states`, names the ratchet reserves for the
 legacy fields). Golden case `info-shape` (collection, container, window, application per node).
 
-* 2026-10-25: the container chain of "where am I" now also names a form, a radio group, a figure,
-  a presentational node, a log, a timer, a row group, a feed and a comment; the chain stops at an
-  `alertdialog` as at a dialog. Roles the old mapping had no word for (`Unknown`: form, comment,
-  log, timer; one generic filler) are named as containers: 7 recorded nodes. A menu item that the
-  engine exports with a menu role (2 nodes) is no longer a collection with a position; a layout
-  table (1 node) is a container but no collection; an ARIA option exported as a filler (1-2 nodes)
-  is no container.
+* 2026-10-25: the container chain of "where am I" names a form, a radio group, a figure, a
+  presentational node, a log, a timer, a row group, a feed and a comment as containers (the old
+  mapping gave most of them a landmark or filler role, some `Unknown`), and an `alertdialog` is a
+  window as a dialog is. The `whereami` goldens change in 38 of their records per language (76
+  lines of 28296 in `whereami.en.tsv`, same in `.ru`): a control in a Chromium alert dialog now
+  starts with the dialog (as in Firefox, where the dialog already was one), a named log or timer
+  (`Chat log`, `Countdown`) is spoken, an ARIA option exported as a filler no longer says
+  `list item`, a layout table no longer says `panel`; 9 records gain an unnamed container whose
+  role word is `text` (a form, timer or comment the old chain skipped). A rule that kept the old
+  behaviour for those could not be written: the fused role does not say which raw role it came
+  from.
 * 2026-10-25: the application of the chain is an application node without an author token whose
   parent is absent or was never fetched; an embedded object inside the tree is not one.
+
+#### M22c part 2: present (2026-10-25)
+
+`crates/gorca-core/src/present/`, `focus.rs` and `nodekind.rs` read the fused entry,
+`struct_state()` (now with `ACTIVE`) and `NodeCaps` (now with `has_value`). The presentation log
+and the mirror probes keep the connector's names for roles and states as a diagnostic
+(`NodeSnapshot::role_log_name`, `state_names`, `with_selected_for_log`; no decision reads them).
+The label inference of the document actor and the gorca-doc label planner take the control's
+`SemRole`; the document tree's own node roles stay for the doc port. Golden case `present-shape`
+(needs-name, description request, flap, label, label inference, dialog-read part, reads-content).
+
+* 2026-10-25: a check or radio *menu item* no longer gets a label inferred (it was a check box or
+  radio button to the old mapping; Orca infers for check boxes and radio buttons only): 7 nodes.
+* 2026-10-25: date and time editors (old role `Unknown`, now `TextBox`) are asked for a
+  description, may get an inferred label and are skipped by a dialog read (2 nodes); `<ins>`,
+  `<del>`, `<sub>`, `<sup>`, `<mark>` and definitions (old `Unknown`) are read as text by a
+  dialog read (6 nodes); one image (old `Unknown`) is skipped; a layout table (`Presentation`) is
+  looked into, not skipped (1 node); an item the engine exports with a menu role and an ARIA option
+  exported as a filler need a name like menu items (2 nodes).
 

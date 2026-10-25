@@ -19,6 +19,7 @@
 //!
 //! The text is the page's own, so it is untrusted: it is only ever spoken, never interpreted.
 
+use gorca_model::sem::SemRole;
 use gorca_model::{DocNodeId, Rect, Role};
 
 use super::cats::{Cat, NodeFlags};
@@ -64,7 +65,7 @@ pub struct Cand {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Plan {
     pub ctl: DocNodeId,
-    pub role: Role,
+    pub role: SemRole,
     pub cands: Vec<Cand>,
 }
 
@@ -80,28 +81,33 @@ impl Plan {
 /// Roles Orca infers a label for (`_should_infer_label_for`): check box, combo box, entry,
 /// list box, password entry, radio button. A text control reached through a nameless
 /// `contenteditable` is a text entry by then (the presenter turns it into one).
-pub fn infers_for(role: Role) -> bool {
+pub fn infers_for(role: SemRole) -> bool {
     matches!(
         role,
-        Role::CheckBox
-            | Role::ComboBox
-            | Role::TextEntry
-            | Role::PasswordEntry
-            | Role::RadioButton
-            | Role::List
+        SemRole::Checkbox
+            | SemRole::Combobox
+            | SemRole::TextBox
+            | SemRole::SearchBox
+            | SemRole::PasswordBox
+            | SemRole::Radio
+            | SemRole::List
+            | SemRole::Listbox
     )
 }
 
-fn prefers_right(role: Role) -> bool {
-    matches!(role, Role::CheckBox | Role::RadioButton)
+fn prefers_right(role: SemRole) -> bool {
+    matches!(role, SemRole::Checkbox | SemRole::Radio)
 }
 
-fn prevents_right(role: Role) -> bool {
-    matches!(role, Role::ComboBox | Role::List)
+fn prevents_right(role: SemRole) -> bool {
+    matches!(role, SemRole::Combobox | SemRole::List | SemRole::Listbox)
 }
 
-fn allows_below(role: Role) -> bool {
-    matches!(role, Role::TextEntry | Role::PasswordEntry)
+fn allows_below(role: SemRole) -> bool {
+    matches!(
+        role,
+        SemRole::TextBox | SemRole::SearchBox | SemRole::PasswordBox
+    )
 }
 
 /// A widget, or something that is never a label (Orca `_cannot_label`): a control, a heading, a
@@ -206,7 +212,7 @@ fn clean(s: &str) -> Option<String> {
 
 /// What the mirror knows about the text around the control `ctl` (its role is `role`). `None`
 /// when the control is not in the document or has no position in the text.
-pub fn plan(d: &WebDoc, ctl: DocNodeId, role: Role) -> Option<Plan> {
+pub fn plan(d: &WebDoc, ctl: DocNodeId, role: SemRole) -> Option<Plan> {
     let (s, e) = d.subtree_text_range(ctl)?;
     // The control's own contribution starts after the line breaks its flags add.
     let lead = d

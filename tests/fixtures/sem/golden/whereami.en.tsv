@@ -202,9 +202,9 @@ chromium/aria-props	50	brief	whereami	landmark | text
 chromium/aria-props	50	r1	whereami	landmark | text
 chromium/aria-props	50	r2	whereami	SEM aria-props document | landmark | text
 chromium/aria-props	50	r3	whereami	text, no name
-chromium/aria-props	51	brief	whereami	log (implicit polite) text
-chromium/aria-props	51	r1	whereami	log (implicit polite) text
-chromium/aria-props	51	r2	whereami	SEM aria-props document | landmark | log (implicit polite) text
+chromium/aria-props	51	brief	whereami	text | log (implicit polite) text
+chromium/aria-props	51	r1	whereami	text | log (implicit polite) text
+chromium/aria-props	51	r2	whereami	SEM aria-props document | landmark | text | log (implicit polite) text
 chromium/aria-props	51	r3	whereami	l o g space ( i m p l i c i t space p o l i t e )
 chromium/aria-props	52	brief	whereami	landmark | alert
 chromium/aria-props	52	r1	whereami	landmark | alert
@@ -350,25 +350,25 @@ chromium/aria-props	87	brief	whereami	landmark | selected option list item
 chromium/aria-props	87	r1	whereami	landmark | selected option list item
 chromium/aria-props	87	r2	whereami	SEM aria-props document | landmark | selected option list item
 chromium/aria-props	87	r3	whereami	s e l e c t e d space o p t i o n
-chromium/aria-props	88	brief	whereami	selected option list item | selected option text
-chromium/aria-props	88	r1	whereami	selected option list item | selected option text
-chromium/aria-props	88	r2	whereami	SEM aria-props document | landmark | selected option list item | selected option text
+chromium/aria-props	88	brief	whereami	selected option text
+chromium/aria-props	88	r1	whereami	selected option text
+chromium/aria-props	88	r2	whereami	SEM aria-props document | landmark | selected option text
 chromium/aria-props	88	r3	whereami	s e l e c t e d space o p t i o n
 chromium/aria-props	89	brief	whereami	landmark | unselected option list item
 chromium/aria-props	89	r1	whereami	landmark | unselected option list item
 chromium/aria-props	89	r2	whereami	SEM aria-props document | landmark | unselected option list item
 chromium/aria-props	89	r3	whereami	u n s e l e c t e d space o p t i o n
-chromium/aria-props	90	brief	whereami	unselected option list item | unselected option text
-chromium/aria-props	90	r1	whereami	unselected option list item | unselected option text
-chromium/aria-props	90	r2	whereami	SEM aria-props document | landmark | unselected option list item | unselected option text
+chromium/aria-props	90	brief	whereami	unselected option text
+chromium/aria-props	90	r1	whereami	unselected option text
+chromium/aria-props	90	r2	whereami	SEM aria-props document | landmark | unselected option text
 chromium/aria-props	90	r3	whereami	u n s e l e c t e d space o p t i o n
 chromium/aria-props	91	brief	whereami	landmark | option no selected attr list item
 chromium/aria-props	91	r1	whereami	landmark | option no selected attr list item
 chromium/aria-props	91	r2	whereami	SEM aria-props document | landmark | option no selected attr list item
 chromium/aria-props	91	r3	whereami	o p t i o n space n o space s e l e c t e d space a t t r
-chromium/aria-props	92	brief	whereami	option no selected attr list item | option no selected attr text
-chromium/aria-props	92	r1	whereami	option no selected attr list item | option no selected attr text
-chromium/aria-props	92	r2	whereami	SEM aria-props document | landmark | option no selected attr list item | option no selected attr text
+chromium/aria-props	92	brief	whereami	option no selected attr text
+chromium/aria-props	92	r1	whereami	option no selected attr text
+chromium/aria-props	92	r2	whereami	SEM aria-props document | landmark | option no selected attr text
 chromium/aria-props	92	r3	whereami	o p t i o n space n o space s e l e c t e d space a t t r
 chromium/aria-props	93	brief	whereami	landmark | expanded button | expanded
 chromium/aria-props	93	r1	whereami	landmark | expanded button | expanded
@@ -914,21 +914,21 @@ chromium/composite	81	brief	whereami	Add Delivery Address dialog | OK button
 chromium/composite	81	r1	whereami	Add Delivery Address dialog | OK button
 chromium/composite	81	r2	whereami	Add Delivery Address dialog | OK button
 chromium/composite	81	r3	whereami	O K
-chromium/composite	82	brief	whereami	landmark | Confirm delete dialog
-chromium/composite	82	r1	whereami	landmark | Confirm delete dialog
-chromium/composite	82	r2	whereami	SEM composite document | landmark | Confirm delete dialog | Really delete?
+chromium/composite	82	brief	whereami	Confirm delete dialog | landmark | Confirm delete dialog
+chromium/composite	82	r1	whereami	Confirm delete dialog | landmark | Confirm delete dialog
+chromium/composite	82	r2	whereami	Confirm delete dialog | SEM composite document | landmark | Confirm delete dialog | Really delete?
 chromium/composite	82	r3	whereami	C o n f i r m space d e l e t e
-chromium/composite	83	brief	whereami	paragraph
-chromium/composite	83	r1	whereami	paragraph
-chromium/composite	83	r2	whereami	SEM composite document | landmark | paragraph
+chromium/composite	83	brief	whereami	Confirm delete dialog | paragraph
+chromium/composite	83	r1	whereami	Confirm delete dialog | paragraph
+chromium/composite	83	r2	whereami	Confirm delete dialog | paragraph
 chromium/composite	83	r3	whereami	paragraph, no name
-chromium/composite	84	brief	whereami	Really delete? text
-chromium/composite	84	r1	whereami	Really delete? text
-chromium/composite	84	r2	whereami	SEM composite document | landmark | Really delete? text
+chromium/composite	84	brief	whereami	Confirm delete dialog | Really delete? text
+chromium/composite	84	r1	whereami	Confirm delete dialog | Really delete? text
+chromium/composite	84	r2	whereami	Confirm delete dialog | Really delete? text
 chromium/composite	84	r3	whereami	R e a l l y space d e l e t e ?
-chromium/composite	85	brief	whereami	Yes button
-chromium/composite	85	r1	whereami	Yes button
-chromium/composite	85	r2	whereami	SEM composite document | landmark | Yes button
+chromium/composite	85	brief	whereami	Confirm delete dialog | Yes button
+chromium/composite	85	r1	whereami	Confirm delete dialog | Yes button
+chromium/composite	85	r2	whereami	Confirm delete dialog | Yes button
 chromium/composite	85	r3	whereami	Y e s
 chromium/composite	86	brief	whereami	Native dialog dialog | landmark | Native dialog dialog
 chromium/composite	86	r1	whereami	Native dialog dialog | landmark | Native dialog dialog
@@ -990,13 +990,13 @@ chromium/composite	100	brief	whereami	landmark | Chat log
 chromium/composite	100	r1	whereami	landmark | Chat log
 chromium/composite	100	r2	whereami	SEM composite document | landmark | Chat log
 chromium/composite	100	r3	whereami	C h a t space l o g
-chromium/composite	101	brief	whereami	paragraph
-chromium/composite	101	r1	whereami	paragraph
-chromium/composite	101	r2	whereami	SEM composite document | landmark | paragraph
+chromium/composite	101	brief	whereami	Chat log | paragraph
+chromium/composite	101	r1	whereami	Chat log | paragraph
+chromium/composite	101	r2	whereami	SEM composite document | landmark | Chat log | paragraph
 chromium/composite	101	r3	whereami	paragraph, no name
 chromium/composite	102	brief	whereami	Hello text
 chromium/composite	102	r1	whereami	Hello text
-chromium/composite	102	r2	whereami	SEM composite document | landmark | Hello text
+chromium/composite	102	r2	whereami	SEM composite document | landmark | Chat log | Hello text
 chromium/composite	102	r3	whereami	H e l l o
 chromium/composite	103	brief	whereami	landmark | Ticker
 chromium/composite	103	r1	whereami	landmark | Ticker
@@ -1010,9 +1010,9 @@ chromium/composite	105	brief	whereami	landmark | Countdown
 chromium/composite	105	r1	whereami	landmark | Countdown
 chromium/composite	105	r2	whereami	SEM composite document | landmark | Countdown
 chromium/composite	105	r3	whereami	C o u n t d o w n
-chromium/composite	106	brief	whereami	10:00 text
-chromium/composite	106	r1	whereami	10:00 text
-chromium/composite	106	r2	whereami	SEM composite document | landmark | 10:00 text
+chromium/composite	106	brief	whereami	Countdown | 10:00 text
+chromium/composite	106	r1	whereami	Countdown | 10:00 text
+chromium/composite	106	r2	whereami	SEM composite document | landmark | Countdown | 10:00 text
 chromium/composite	106	r3	whereami	1 0 : 0 0
 chromium/composite	107	brief	whereami	landmark | Game board application
 chromium/composite	107	r1	whereami	landmark | Game board application
@@ -2218,9 +2218,9 @@ chromium/forms	86	brief	whereami	landmark | text
 chromium/forms	86	r1	whereami	landmark | text
 chromium/forms	86	r2	whereami	SEM forms document | landmark | text
 chromium/forms	86	r3	whereami	text, no name
-chromium/forms	87	brief	whereami	In unnamed form edit
-chromium/forms	87	r1	whereami	In unnamed form edit
-chromium/forms	87	r2	whereami	SEM forms document | landmark | In unnamed form edit
+chromium/forms	87	brief	whereami	text | In unnamed form edit
+chromium/forms	87	r1	whereami	text | In unnamed form edit
+chromium/forms	87	r2	whereami	SEM forms document | landmark | text | In unnamed form edit
 chromium/forms	87	r3	whereami	I n space u n n a m e d space f o r m
 chromium/forms	88	brief	whereami	landmark | Site search landmark
 chromium/forms	88	r1	whereami	landmark | Site search landmark
@@ -3566,17 +3566,17 @@ chromium/m8-landmarks	58	brief	whereami	landmark | text
 chromium/m8-landmarks	58	r1	whereami	landmark | text
 chromium/m8-landmarks	58	r2	whereami	M8 Landmarks document | landmark | text
 chromium/m8-landmarks	58	r3	whereami	text, no name
-chromium/m8-landmarks	59	brief	whereami	text
-chromium/m8-landmarks	59	r1	whereami	text
-chromium/m8-landmarks	59	r2	whereami	M8 Landmarks document | landmark | text
+chromium/m8-landmarks	59	brief	whereami	text | text
+chromium/m8-landmarks	59	r1	whereami	text | text
+chromium/m8-landmarks	59	r2	whereami	M8 Landmarks document | landmark | text | text
 chromium/m8-landmarks	59	r3	whereami	text, no name
 chromium/m8-landmarks	60	brief	whereami	Unnamed form field text
 chromium/m8-landmarks	60	r1	whereami	Unnamed form field text
-chromium/m8-landmarks	60	r2	whereami	M8 Landmarks document | landmark | Unnamed form field text
+chromium/m8-landmarks	60	r2	whereami	M8 Landmarks document | landmark | text | Unnamed form field text
 chromium/m8-landmarks	60	r3	whereami	U n n a m e d space f o r m space f i e l d
 chromium/m8-landmarks	61	brief	whereami	Unnamed form field edit
 chromium/m8-landmarks	61	r1	whereami	Unnamed form field edit
-chromium/m8-landmarks	61	r2	whereami	M8 Landmarks document | landmark | Unnamed form field edit
+chromium/m8-landmarks	61	r2	whereami	M8 Landmarks document | landmark | text | Unnamed form field edit
 chromium/m8-landmarks	61	r3	whereami	U n n a m e d space f o r m space f i e l d
 chromium/m8-landmarks	62	brief	whereami	M8 Landmarks document | Related links landmark
 chromium/m8-landmarks	62	r1	whereami	M8 Landmarks document | Related links landmark
@@ -3794,9 +3794,9 @@ chromium/m8-live	39	brief	whereami	M8 Live regions document | text
 chromium/m8-live	39	r1	whereami	M8 Live regions document | text
 chromium/m8-live	39	r2	whereami	M8 Live regions document | text
 chromium/m8-live	39	r3	whereami	text, no name
-chromium/m8-live	40	brief	whereami	00:00 text
-chromium/m8-live	40	r1	whereami	00:00 text
-chromium/m8-live	40	r2	whereami	M8 Live regions document | 00:00 text
+chromium/m8-live	40	brief	whereami	text | 00:00 text
+chromium/m8-live	40	r1	whereami	text | 00:00 text
+chromium/m8-live	40	r2	whereami	M8 Live regions document | text | 00:00 text
 chromium/m8-live	40	r3	whereami	0 0 : 0 0
 chromium/m8-quicknav	0	brief	whereami	M8 Quick navigation document
 chromium/m8-quicknav	0	r1	whereami	M8 Quick navigation document
@@ -12862,9 +12862,9 @@ firefox/forms	75	brief	whereami	landmark | text
 firefox/forms	75	r1	whereami	landmark | text
 firefox/forms	75	r2	whereami	SEM forms document | landmark | text
 firefox/forms	75	r3	whereami	text, no name
-firefox/forms	76	brief	whereami	In unnamed form edit
-firefox/forms	76	r1	whereami	In unnamed form edit
-firefox/forms	76	r2	whereami	SEM forms document | landmark | In unnamed form edit
+firefox/forms	76	brief	whereami	text | In unnamed form edit
+firefox/forms	76	r1	whereami	text | In unnamed form edit
+firefox/forms	76	r2	whereami	SEM forms document | landmark | text | In unnamed form edit
 firefox/forms	76	r3	whereami	I n space u n n a m e d space f o r m
 firefox/forms	77	brief	whereami	landmark | Site search landmark
 firefox/forms	77	r1	whereami	landmark | Site search landmark
@@ -13570,17 +13570,17 @@ firefox/m8-iframes	28	brief	whereami	Form frame document | text
 firefox/m8-iframes	28	r1	whereami	Form frame document | text
 firefox/m8-iframes	28	r2	whereami	M8 Iframes document | Form frame document | text
 firefox/m8-iframes	28	r3	whereami	text, no name
-firefox/m8-iframes	29	brief	whereami	Frame field text
-firefox/m8-iframes	29	r1	whereami	Frame field text
-firefox/m8-iframes	29	r2	whereami	M8 Iframes document | Form frame document | Frame field text
+firefox/m8-iframes	29	brief	whereami	text | Frame field text
+firefox/m8-iframes	29	r1	whereami	text | Frame field text
+firefox/m8-iframes	29	r2	whereami	M8 Iframes document | Form frame document | text | Frame field text
 firefox/m8-iframes	29	r3	whereami	F r a m e space f i e l d
-firefox/m8-iframes	30	brief	whereami	Frame field edit
-firefox/m8-iframes	30	r1	whereami	Frame field edit
-firefox/m8-iframes	30	r2	whereami	M8 Iframes document | Form frame document | Frame field edit
+firefox/m8-iframes	30	brief	whereami	text | Frame field edit
+firefox/m8-iframes	30	r1	whereami	text | Frame field edit
+firefox/m8-iframes	30	r2	whereami	M8 Iframes document | Form frame document | text | Frame field edit
 firefox/m8-iframes	30	r3	whereami	F r a m e space f i e l d
-firefox/m8-iframes	31	brief	whereami	Frame submit button
-firefox/m8-iframes	31	r1	whereami	Frame submit button
-firefox/m8-iframes	31	r2	whereami	M8 Iframes document | Form frame document | Frame submit button
+firefox/m8-iframes	31	brief	whereami	text | Frame submit button
+firefox/m8-iframes	31	r1	whereami	text | Frame submit button
+firefox/m8-iframes	31	r2	whereami	M8 Iframes document | Form frame document | text | Frame submit button
 firefox/m8-iframes	31	r3	whereami	F r a m e space s u b m i t
 firefox/m8-iframes	32	brief	whereami	M8 Iframes document | Srcdoc frame
 firefox/m8-iframes	32	r1	whereami	M8 Iframes document | Srcdoc frame
@@ -13834,13 +13834,13 @@ firefox/m8-landmarks	35	brief	whereami	landmark | text
 firefox/m8-landmarks	35	r1	whereami	landmark | text
 firefox/m8-landmarks	35	r2	whereami	M8 Landmarks document | landmark | text
 firefox/m8-landmarks	35	r3	whereami	text, no name
-firefox/m8-landmarks	36	brief	whereami	Unnamed form field text
-firefox/m8-landmarks	36	r1	whereami	Unnamed form field text
-firefox/m8-landmarks	36	r2	whereami	M8 Landmarks document | landmark | Unnamed form field text
+firefox/m8-landmarks	36	brief	whereami	text | Unnamed form field text
+firefox/m8-landmarks	36	r1	whereami	text | Unnamed form field text
+firefox/m8-landmarks	36	r2	whereami	M8 Landmarks document | landmark | text | Unnamed form field text
 firefox/m8-landmarks	36	r3	whereami	U n n a m e d space f o r m space f i e l d
 firefox/m8-landmarks	37	brief	whereami	Unnamed form field edit
 firefox/m8-landmarks	37	r1	whereami	Unnamed form field edit
-firefox/m8-landmarks	37	r2	whereami	M8 Landmarks document | landmark | Unnamed form field edit
+firefox/m8-landmarks	37	r2	whereami	M8 Landmarks document | landmark | text | Unnamed form field edit
 firefox/m8-landmarks	37	r3	whereami	U n n a m e d space f o r m space f i e l d
 firefox/m8-landmarks	38	brief	whereami	M8 Landmarks document | Related links landmark
 firefox/m8-landmarks	38	r1	whereami	M8 Landmarks document | Related links landmark
@@ -15746,8 +15746,8 @@ firefox/names	29	brief	whereami	Aria table name panel | x row
 firefox/names	29	r1	whereami	Aria table name panel | x row
 firefox/names	29	r2	whereami	SEM names document | landmark | Aria table name panel | x row
 firefox/names	29	r3	whereami	x
-firefox/names	30	brief	whereami	Aria table name panel | x row | x cell
-firefox/names	30	r1	whereami	Aria table name panel | x row | x cell
+firefox/names	30	brief	whereami	x row | x cell
+firefox/names	30	r1	whereami	x row | x cell
 firefox/names	30	r2	whereami	SEM names document | landmark | Aria table name panel | x row | x cell
 firefox/names	30	r3	whereami	x
 firefox/names	31	brief	whereami	landmark | Region heading landmark
@@ -24006,9 +24006,9 @@ gtk4/accprops	57	brief	whereami	SEM gtk4 accprops window | panel | Label role-se
 gtk4/accprops	57	r1	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-search
 gtk4/accprops	57	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-search | fx:role-search
 gtk4/accprops	57	r3	whereami	L a b e l space r o l e - s e a r c h
-gtk4/accprops	58	brief	whereami	SEM gtk4 accprops window | text in role-search label
-gtk4/accprops	58	r1	whereami	sem-gallery | SEM gtk4 accprops window | text in role-search label
-gtk4/accprops	58	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | text in role-search label
+gtk4/accprops	58	brief	whereami	SEM gtk4 accprops window | Label role-search | text in role-search label
+gtk4/accprops	58	r1	whereami	sem-gallery | SEM gtk4 accprops window | Label role-search | text in role-search label
+gtk4/accprops	58	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-search | text in role-search label
 gtk4/accprops	58	r3	whereami	t e x t space i n space r o l e - s e a r c h
 gtk4/accprops	59	brief	whereami	SEM gtk4 accprops window | panel | status bar
 gtk4/accprops	59	r1	whereami	sem-gallery | SEM gtk4 accprops window | panel | status bar
@@ -24030,17 +24030,17 @@ gtk4/accprops	63	brief	whereami	SEM gtk4 accprops window | panel | Label role-lo
 gtk4/accprops	63	r1	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-log
 gtk4/accprops	63	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-log | fx:role-log
 gtk4/accprops	63	r3	whereami	L a b e l space r o l e - l o g
-gtk4/accprops	64	brief	whereami	SEM gtk4 accprops window | text in role-log label
-gtk4/accprops	64	r1	whereami	sem-gallery | SEM gtk4 accprops window | text in role-log label
-gtk4/accprops	64	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | text in role-log label
+gtk4/accprops	64	brief	whereami	SEM gtk4 accprops window | Label role-log | text in role-log label
+gtk4/accprops	64	r1	whereami	sem-gallery | SEM gtk4 accprops window | Label role-log | text in role-log label
+gtk4/accprops	64	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-log | text in role-log label
 gtk4/accprops	64	r3	whereami	t e x t space i n space r o l e - l o g
 gtk4/accprops	65	brief	whereami	SEM gtk4 accprops window | panel | Label role-timer
 gtk4/accprops	65	r1	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-timer
 gtk4/accprops	65	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-timer | fx:role-timer
 gtk4/accprops	65	r3	whereami	L a b e l space r o l e - t i m e r
-gtk4/accprops	66	brief	whereami	SEM gtk4 accprops window | text in role-timer label
-gtk4/accprops	66	r1	whereami	sem-gallery | SEM gtk4 accprops window | text in role-timer label
-gtk4/accprops	66	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | text in role-timer label
+gtk4/accprops	66	brief	whereami	SEM gtk4 accprops window | Label role-timer | text in role-timer label
+gtk4/accprops	66	r1	whereami	sem-gallery | SEM gtk4 accprops window | Label role-timer | text in role-timer label
+gtk4/accprops	66	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-timer | text in role-timer label
 gtk4/accprops	66	r3	whereami	t e x t space i n space r o l e - t i m e r
 gtk4/accprops	67	brief	whereami	SEM gtk4 accprops window | panel | Label role-marquee
 gtk4/accprops	67	r1	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-marquee
@@ -24166,9 +24166,9 @@ gtk4/accprops	97	brief	whereami	SEM gtk4 accprops window | panel | Label role-co
 gtk4/accprops	97	r1	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-comment
 gtk4/accprops	97	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-comment | fx:role-comment
 gtk4/accprops	97	r3	whereami	L a b e l space r o l e - c o m m e n t
-gtk4/accprops	98	brief	whereami	SEM gtk4 accprops window | text in role-comment label
-gtk4/accprops	98	r1	whereami	sem-gallery | SEM gtk4 accprops window | text in role-comment label
-gtk4/accprops	98	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | text in role-comment label
+gtk4/accprops	98	brief	whereami	SEM gtk4 accprops window | Label role-comment | text in role-comment label
+gtk4/accprops	98	r1	whereami	sem-gallery | SEM gtk4 accprops window | Label role-comment | text in role-comment label
+gtk4/accprops	98	r2	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-comment | text in role-comment label
 gtk4/accprops	98	r3	whereami	t e x t space i n space r o l e - c o m m e n t
 gtk4/accprops	99	brief	whereami	SEM gtk4 accprops window | panel | Label role-math
 gtk4/accprops	99	r1	whereami	sem-gallery | SEM gtk4 accprops window | panel | Label role-math
@@ -24626,13 +24626,13 @@ gtk4/containers	85	brief	whereami	SEM gtk4 containers window | panel | panel
 gtk4/containers	85	r1	whereami	sem-gallery | SEM gtk4 containers window | panel | panel
 gtk4/containers	85	r2	whereami	sem-gallery | SEM gtk4 containers window | panel | panel
 gtk4/containers	85	r3	whereami	panel, no name
-gtk4/containers	86	brief	whereami	SEM gtk4 containers window | panel
-gtk4/containers	86	r1	whereami	sem-gallery | SEM gtk4 containers window | panel
-gtk4/containers	86	r2	whereami	sem-gallery | SEM gtk4 containers window | panel | panel
+gtk4/containers	86	brief	whereami	SEM gtk4 containers window | panel | panel
+gtk4/containers	86	r1	whereami	sem-gallery | SEM gtk4 containers window | panel | panel
+gtk4/containers	86	r2	whereami	sem-gallery | SEM gtk4 containers window | panel | panel | panel
 gtk4/containers	86	r3	whereami	panel, no name
 gtk4/containers	87	brief	whereami	SEM gtk4 containers window | panel | scrolled label
 gtk4/containers	87	r1	whereami	sem-gallery | SEM gtk4 containers window | panel | scrolled label
-gtk4/containers	87	r2	whereami	sem-gallery | SEM gtk4 containers window | panel | panel | scrolled label
+gtk4/containers	87	r2	whereami	sem-gallery | SEM gtk4 containers window | panel | panel | panel | scrolled label
 gtk4/containers	87	r3	whereami	s c r o l l e d
 gtk4/containers	88	brief	whereami	SEM gtk4 containers window | panel | table
 gtk4/containers	88	r1	whereami	sem-gallery | SEM gtk4 containers window | panel | table

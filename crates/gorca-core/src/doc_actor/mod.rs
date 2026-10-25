@@ -132,7 +132,7 @@ pub enum DocCtl {
     Label {
         req: u32,
         node: DocNodeId,
-        role: gorca_model::Role,
+        role: gorca_model::sem::SemRole,
     },
     /// The label the layout inference chose for `node` (sent by the label task to its own
     /// actor): admitted to fusion as the lowest-trust S4 fact.
@@ -1152,7 +1152,7 @@ fn spawn_label(
     a: &Actor,
     req: u32,
     node: DocNodeId,
-    role: gorca_model::Role,
+    role: gorca_model::sem::SemRole,
 ) -> Option<tokio::task::JoinHandle<()>> {
     use gorca_doc::web::label;
     if !label::infers_for(role) {

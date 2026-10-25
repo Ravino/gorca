@@ -4,7 +4,7 @@
 use super::tests::{Fx, app, fixture, key, node, prios, said, snap};
 use super::*;
 use crate::reader::{BackgroundMsg, FocusLaneMsg, ReaderMsg};
-use gorca_model::LocalId;
+use gorca_model::{LocalId, Role};
 
 fn k(a: u32, n: u64) -> NodeKey {
     NodeKey {

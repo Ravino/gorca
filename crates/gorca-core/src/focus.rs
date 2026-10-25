@@ -3,15 +3,17 @@
 
 use std::time::{Duration, Instant};
 
-use gorca_model::{AppId, Epoch, NodeKey, Role};
+use gorca_model::sem::SemRole;
+use gorca_model::{AppId, Epoch, NodeKey};
 
 /// δ for roles known to flap (menu, menu item, popover). Extensions can tune it (M-6).
 pub const FOCUS_FLAP_DELAY: Duration = Duration::from_millis(30);
 
 /// δ is 0 ms by default and 30 ms for roles known to flap.
-pub fn settle_delay(role: Option<Role>) -> Duration {
+pub fn settle_delay(role: Option<SemRole>) -> Duration {
     match role {
-        Some(r) if r.flaps_on_focus() => FOCUS_FLAP_DELAY,
+        // Menus, their items and popovers flap (ADR-0001 section 7.1).
+        Some(SemRole::Menu | SemRole::MenuItem | SemRole::Popover) => FOCUS_FLAP_DELAY,
         Some(_) | None => Duration::ZERO,
     }
 }
@@ -436,7 +438,7 @@ mod tests {
     #[test]
     fn settle_delay_is_zero_except_for_flapping_roles() {
         assert_eq!(settle_delay(None), Duration::ZERO);
-        assert_eq!(settle_delay(Some(Role::Button)), Duration::ZERO);
-        assert_eq!(settle_delay(Some(Role::MenuItem)), FOCUS_FLAP_DELAY);
+        assert_eq!(settle_delay(Some(SemRole::Button)), Duration::ZERO);
+        assert_eq!(settle_delay(Some(SemRole::MenuItem)), FOCUS_FLAP_DELAY);
     }
 }

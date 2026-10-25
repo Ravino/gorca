@@ -20,15 +20,17 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use gorca_model::sem::SemRole;
 use gorca_model::{
-    AppId, ChildList, Epoch, Lookup, NodeKey, NodeSnapshot, Prio, PropMask, Role, Segment,
-    SegmentKind, StateSet, Utterance,
+    AppId, ChildList, Epoch, Lookup, NodeKey, NodeSnapshot, Prio, PropMask, Segment, SegmentKind,
+    StructFlags, Utterance,
 };
 use gorca_rt::BudgetClass;
 use smallvec::SmallVec;
 
 use super::fair::Kind;
 use crate::SpeechIntent;
+use crate::nodekind::{is_label, role_of};
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 use crate::review::NavSource;
 use crate::review::objnav::{PresClass, class_of_snapshot};
@@ -150,8 +152,11 @@ impl WindowState {
 }
 
 /// Windows whose static text is read on open: dialogs and alerts (ARIA `alertdialog`).
-pub fn reads_content(role: Role) -> bool {
-    matches!(role, Role::Dialog | Role::Alert)
+pub fn reads_content(role: SemRole) -> bool {
+    matches!(
+        role,
+        SemRole::Dialog | SemRole::AlertDialog | SemRole::Alert
+    )
 }
 
 /// How a node takes part in a dialog read.
@@ -165,50 +170,113 @@ enum Part {
     Skip,
 }
 
-fn part(role: Role) -> Part {
+fn part(role: SemRole) -> Part {
     match role {
-        Role::Label | Role::StaticText | Role::Paragraph | Role::Heading => Part::Text,
-        Role::Unknown
-        | Role::Window
-        | Role::Dialog
-        | Role::Alert
-        | Role::Panel
-        | Role::Landmark
-        | Role::List
-        | Role::ListItem
-        | Role::Row
-        | Role::Cell
-        | Role::Popover
-        | Role::Application => Part::Container,
-        Role::Document
-        | Role::DocumentWeb
-        | Role::Link
-        | Role::Image
-        | Role::Table
-        | Role::ColumnHeader
-        | Role::RowHeader
-        | Role::Button
-        | Role::ToggleButton
-        | Role::Switch
-        | Role::CheckBox
-        | Role::RadioButton
-        | Role::ComboBox
-        | Role::TextEntry
-        | Role::PasswordEntry
-        | Role::SpinButton
-        | Role::Slider
-        | Role::ProgressBar
-        | Role::Menu
-        | Role::MenuBar
-        | Role::MenuItem
-        | Role::Tab
-        | Role::TabList
-        | Role::Tree
-        | Role::TreeItem
-        | Role::Toolbar
-        | Role::StatusBar
-        | Role::Separator
-        | Role::Terminal => Part::Skip,
+        SemRole::Caption
+        | SemRole::Paragraph
+        | SemRole::Definition
+        | SemRole::Heading
+        | SemRole::StaticText
+        | SemRole::Emphasis
+        | SemRole::Strong
+        | SemRole::Mark
+        | SemRole::Code
+        | SemRole::Time
+        | SemRole::Insertion
+        | SemRole::Deletion
+        | SemRole::Subscript
+        | SemRole::Superscript => Part::Text,
+        SemRole::Document
+        | SemRole::DocumentWeb
+        | SemRole::Link
+        | SemRole::Img
+        | SemRole::Table
+        | SemRole::Grid
+        | SemRole::TreeGrid
+        | SemRole::ColumnHeader
+        | SemRole::RowHeader
+        | SemRole::Button
+        | SemRole::Switch
+        | SemRole::Checkbox
+        | SemRole::Radio
+        | SemRole::Combobox
+        | SemRole::TextBox
+        | SemRole::SearchBox
+        | SemRole::PasswordBox
+        | SemRole::SpinButton
+        | SemRole::Slider
+        | SemRole::ProgressBar
+        | SemRole::Meter
+        | SemRole::Menu
+        | SemRole::Menubar
+        | SemRole::MenuItem
+        | SemRole::MenuItemCheckbox
+        | SemRole::MenuItemRadio
+        | SemRole::Tab
+        | SemRole::TabList
+        | SemRole::Tree
+        | SemRole::TreeItem
+        | SemRole::Toolbar
+        | SemRole::Status
+        | SemRole::Separator
+        | SemRole::Terminal => Part::Skip,
+        // The rest may hold text: a window, a filler, a landmark, a list or a row, and a role the
+        // engine has no word for.
+        SemRole::Unknown
+        | SemRole::Generic
+        | SemRole::Alert
+        | SemRole::AlertDialog
+        | SemRole::Application
+        | SemRole::Article
+        | SemRole::Banner
+        | SemRole::Blockquote
+        | SemRole::Cell
+        | SemRole::Complementary
+        | SemRole::ContentInfo
+        | SemRole::Dialog
+        | SemRole::Feed
+        | SemRole::Figure
+        | SemRole::Form
+        | SemRole::GridCell
+        | SemRole::Group
+        | SemRole::List
+        | SemRole::Listbox
+        | SemRole::ListItem
+        | SemRole::Log
+        | SemRole::Main
+        | SemRole::Marquee
+        | SemRole::Math
+        | SemRole::Navigation
+        | SemRole::Note
+        | SemRole::Option
+        | SemRole::RadioGroup
+        | SemRole::Region
+        | SemRole::Row
+        | SemRole::RowGroup
+        | SemRole::Scrollbar
+        | SemRole::Search
+        | SemRole::TabPanel
+        | SemRole::Term
+        | SemRole::Timer
+        | SemRole::Tooltip
+        | SemRole::Window
+        | SemRole::Popover
+        | SemRole::Comment
+        | SemRole::Suggestion
+        | SemRole::Details
+        | SemRole::Summary
+        | SemRole::DescriptionList
+        | SemRole::Iframe
+        | SemRole::Presentation => Part::Container,
+    }
+}
+
+/// How a node takes part in a dialog read, by name (the recorded-corpus goldens read it).
+pub(crate) fn part_name(snap: &NodeSnapshot) -> &'static str {
+    match part(role_of(snap)) {
+        Part::Text => "text",
+        Part::Container => "container",
+        Part::Skip => "skip",
     }
 }
 
@@ -277,7 +345,7 @@ impl<S: NavSource> Walk<'_, S> {
         if class_of_snapshot(snap, false) == PresClass::Unavailable {
             return;
         }
-        match part(snap.role) {
+        match part(role_of(snap)) {
             Part::Skip => {}
             Part::Text => {
                 if snap.have.contains(PropMask::NAME) {
@@ -409,7 +477,7 @@ pub async fn fetch_window(io: &crate::review::ReviewIo, window: NodeKey) -> Wind
                 texts: Vec::new(),
             };
         };
-        if !reads_content(snap.role) {
+        if !reads_content(role_of(&snap)) {
             return WindowInfo {
                 window,
                 snap: Some(snap),
@@ -491,7 +559,7 @@ pub async fn fetch_level(io: &crate::review::ReviewIo, node: NodeKey) -> WindowI
             {
                 let label = kids.iter().find_map(|k| {
                     let v = src.view(*k).hit()?;
-                    (v.snap.role == Role::Label)
+                    is_label(&v.snap)
                         .then(|| v.snap.name.clone())
                         .flatten()
                         .filter(|n| !n.trim().is_empty())
@@ -635,7 +703,7 @@ impl Reader {
             .dir
             .lookup(window)
             .hit()
-            .is_some_and(|s| s.states.contains(StateSet::ACTIVE));
+            .is_some_and(|s| s.struct_state().contains(StructFlags::ACTIVE));
         if by_input || active {
             self.win.user_app = Some((window.app, now));
         }
@@ -644,7 +712,8 @@ impl Reader {
         // Ask the application for what the mirror lacks now, so the answer is in by the time the
         // focus event arrives a few milliseconds later.
         let complete = self.dir.lookup(window).hit().is_some_and(|snap| {
-            !reads_content(snap.role) || dialog_content(&*self.dir, window, None).misses.is_empty()
+            !reads_content(role_of(&snap))
+                || dialog_content(&*self.dir, window, None).misses.is_empty()
         });
         self.win.inflight.retain(|(w, _)| *w != window);
         if !complete && reads {
@@ -876,7 +945,7 @@ impl Reader {
             return;
         }
         let lead = self.window_lead(&snap);
-        let texts = if reads_content(snap.role) {
+        let texts = if reads_content(role_of(&snap)) {
             self.window_texts(window, None)
         } else {
             Vec::new()
@@ -905,7 +974,8 @@ impl Reader {
         let wanted = match self.window_snap(window) {
             None => true,
             Some(s) => {
-                reads_content(s.role) && !dialog_content(&*self.dir, window, None).misses.is_empty()
+                reads_content(role_of(&s))
+                    && !dialog_content(&*self.dir, window, None).misses.is_empty()
             }
         };
         wanted.then_some(due)
@@ -970,7 +1040,7 @@ impl Reader {
         }
         let mut lead: SmallVec<[Segment; 6]> = self.window_lead(&win).into_iter().collect();
         let mut texts = Vec::new();
-        if reads_content(win.role) {
+        if reads_content(role_of(&win)) {
             texts = self.window_texts(window, Some(focus));
             // The focused control's own name is not read twice.
             texts.retain(|t| focus_name.is_none_or(|n| n.trim() != t.trim()));
@@ -1122,7 +1192,7 @@ pub(crate) mod tests {
     use crate::mode::ModeKeys;
     use crate::reader::{BackgroundMsg, FocusLaneMsg, ReaderMsg};
     use gorca_mirror::{ApplyOrigin, MirrorWriter, mirror};
-    use gorca_model::{ConnectorId, Freshness, Ifaces, LocalId, SnapshotBatch, StateSet};
+    use gorca_model::{ConnectorId, Freshness, Ifaces, LocalId, Role, SnapshotBatch, StateSet};
     use gorca_rt::EpochCell;
     use std::collections::HashMap;
 
@@ -2020,7 +2090,7 @@ pub(crate) mod tests {
 }
 
 #[cfg(test)]
-mod m4b_rereview_probes;
+mod m4b_rereview_probes_tests;
 
 #[cfg(test)]
-mod m4b_review_probes;
+mod m4b_review_probes_tests;

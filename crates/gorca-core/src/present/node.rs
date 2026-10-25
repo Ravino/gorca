@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use gorca_model::sem::SemEntry;
-use gorca_model::{Epoch, Freshness, NodeKey, NodeSnapshot, Prio, Segment, StateSet, UttId};
+use gorca_model::{Epoch, Freshness, NodeKey, NodeSnapshot, Prio, Segment, UttId};
 use gorca_present::{
     ComposeCtx, IrEdit, PresIr, Reason, RenderOpts, ReportFlags, apply_edits, compose,
     compose_change, fields_from_tokens, render,
@@ -240,7 +240,7 @@ impl Reader {
     pub(crate) fn menu_lead_segments(
         &self,
         key: NodeKey,
-        role: gorca_model::Role,
+        is_menubar: bool,
         name: Arc<str>,
         id: UttId,
         epoch: Epoch,
@@ -250,7 +250,7 @@ impl Reader {
             name: Some(name),
             ..SemEntry::default()
         };
-        e.sem.role = if role == gorca_model::Role::MenuBar {
+        e.sem.role = if is_menubar {
             SemRole::Menubar
         } else {
             SemRole::Menu
@@ -414,7 +414,7 @@ impl Reader {
         epoch: Epoch,
         refines: Option<UttId>,
     ) -> Option<gorca_model::Utterance> {
-        let skip = super::flow::skip_states(ctx).contains(StateSet::SELECTED);
+        let skip = super::flow::skip_selected(ctx);
         let cctx = self.compose_ctx(new.key, false, skip);
         let ir = compose_change(
             &self.fused_entry(old),

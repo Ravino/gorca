@@ -778,7 +778,7 @@ async fn a_burst_of_label_requests_never_blocks_or_drops_an_action() {
             .send(DocCtl::Label {
                 req,
                 node: link,
-                role: gorca_model::Role::TextEntry,
+                role: gorca_model::sem::SemRole::TextBox,
             })
             .await
             .unwrap();

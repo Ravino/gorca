@@ -313,29 +313,32 @@ impl Sim {
             w: 200,
             h: 24,
         });
-        Arc::new(NodeSnapshot {
-            key: key(n),
-            role: role_of(n),
-            states,
-            name: Some(Arc::from(name_of(n))),
-            description: None,
-            value: None,
-            parent: parent_of(n).map(key),
-            children: ChildList::Known(
-                kids_of(n, self.w.alive.contains(&DLG))
-                    .iter()
-                    .map(|k| key(*k))
-                    .collect(),
-            ),
-            interfaces: Ifaces::empty(),
-            attrs: smallvec::SmallVec::default(),
-            relations: Relations::default(),
-            bounds: rect,
-            have,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        })
+        Arc::new(
+            NodeSnapshot {
+                key: key(n),
+                role: role_of(n),
+                states,
+                name: Some(Arc::from(name_of(n))),
+                description: None,
+                value: None,
+                parent: parent_of(n).map(key),
+                children: ChildList::Known(
+                    kids_of(n, self.w.alive.contains(&DLG))
+                        .iter()
+                        .map(|k| key(*k))
+                        .collect(),
+                ),
+                interfaces: Ifaces::empty(),
+                attrs: smallvec::SmallVec::default(),
+                relations: Relations::default(),
+                bounds: rect,
+                have,
+                confirmed_seq: 0,
+                fresh: Freshness::Fresh { at: Instant::now() },
+                sem: gorca_model::NodeSem::NONE,
+            }
+            .with_test_record(),
+        )
     }
 
     pub fn sync_mirror(&mut self, ns: &[u64]) {

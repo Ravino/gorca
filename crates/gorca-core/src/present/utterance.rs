@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use gorca_model::{NodeSnapshot, Segment, SegmentKind, StateSet, Value};
+use gorca_model::{NodeSnapshot, Segment, SegmentKind, Value};
 use smallvec::SmallVec;
 
 pub(super) fn seg(text: &str, kind: SegmentKind) -> Segment {
@@ -21,41 +21,16 @@ pub fn value_text(v: Option<&Value>) -> Option<String> {
     }
 }
 
-/// Every state name of a snapshot, for the presentation log: the AT-SPI names of the states the
-/// connector decoded, plus `sensitive` (the core records its absence as `DISABLED`).
+/// Every state name of a snapshot, for the presentation log and the mirror probes (a diagnostic of
+/// what the connector decoded; no decision reads it).
 pub fn log_states(n: &NodeSnapshot) -> SmallVec<[&'static str; 8]> {
-    const NAMES: &[(StateSet, &str)] = &[
-        (StateSet::ACTIVE, "active"),
-        (StateSet::CHECKED, "checked"),
-        (StateSet::COLLAPSED, "collapsed"),
-        (StateSet::DEFUNCT, "defunct"),
-        (StateSet::ENABLED, "enabled"),
-        (StateSet::EXPANDED, "expanded"),
-        (StateSet::FOCUSABLE, "focusable"),
-        (StateSet::FOCUSED, "focused"),
-        (StateSet::PRESSED, "pressed"),
-        (StateSet::SELECTABLE, "selectable"),
-        (StateSet::SELECTED, "selected"),
-        (StateSet::SHOWING, "showing"),
-        (StateSet::TRANSIENT, "transient"),
-        (StateSet::VISIBLE, "visible"),
-        (StateSet::MANAGES_DESCENDANTS, "manages-descendants"),
-    ];
-    let mut out: SmallVec<[&'static str; 8]> = NAMES
-        .iter()
-        .filter(|(f, _)| n.states.contains(*f))
-        .map(|(_, name)| *name)
-        .collect();
-    if !n.states.is_empty() && !n.states.contains(StateSet::DISABLED) {
-        out.push("sensitive");
-    }
-    out.sort_unstable();
-    out
+    n.state_names()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gorca_model::StateSet;
     use gorca_model::{
         AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, PropMask,
         Relations, Role,

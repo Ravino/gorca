@@ -92,6 +92,11 @@ pub struct ExtNode {
 }
 
 impl ExtNode {
+    /// The fused role.
+    pub fn sem_role(&self) -> SemRole {
+        self.role
+    }
+
     /// The node `snap` with its fused `entry`.
     #[must_use]
     pub fn new(snap: &NodeSnapshot, entry: Arc<SemEntry>) -> Self {

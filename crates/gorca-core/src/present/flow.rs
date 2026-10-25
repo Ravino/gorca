@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use gorca_mirror::fill::{DemandOutcome, DemandWhy};
 use gorca_model::{
-    Epoch, Ifaces, NodeKey, NodeSnapshot, NodeView, PropMask, Role, StateSet, UttId, Utterance,
+    Epoch, NodeKey, NodeSnapshot, NodeView, PropMask, StructFlags, UttId, Utterance,
 };
 use gorca_rt::BudgetClass;
 
@@ -27,10 +27,12 @@ use super::node::spoken_name;
 use super::{PresentContext, message};
 use crate::SpeechIntent;
 use crate::focus::{FocusEffect, FocusMsg, FocusState, settle_delay};
+use crate::nodekind::role_of;
 use crate::reader::{
     DUPLICATE_FOCUS_WINDOW, FetchKind, FocusLaneMsg, QueryReply, RECONFIRM_KEY_INTERVAL, Reader,
     ReaderEffect, ReaderEffects, Reconfirm,
 };
+use gorca_model::sem::SemRole;
 
 /// How long a focus whose fetch was refused as `Busy` waits before it is asked again, per
 /// attempt. The immediate retry (N2) meets the same full queue of a flooded application (the
@@ -79,18 +81,21 @@ pub struct NameRetry {
 
 /// Roles that are only meaningful with a name: speaking one bare ("button") is the symptom of a
 /// late label.
-pub(crate) fn needs_name(role: Role) -> bool {
+pub(crate) fn needs_name(role: SemRole) -> bool {
     matches!(
         role,
-        Role::Button
-            | Role::ToggleButton
-            | Role::CheckBox
-            | Role::RadioButton
-            | Role::MenuItem
-            | Role::Link
-            | Role::Tab
-            | Role::ListItem
-            | Role::ComboBox
+        SemRole::Button
+            | SemRole::Switch
+            | SemRole::Checkbox
+            | SemRole::Radio
+            | SemRole::MenuItem
+            | SemRole::MenuItemCheckbox
+            | SemRole::MenuItemRadio
+            | SemRole::Link
+            | SemRole::Tab
+            | SemRole::ListItem
+            | SemRole::Option
+            | SemRole::Combobox
     )
 }
 
@@ -139,7 +144,8 @@ pub const fn focus_fields_for(lazy: bool) -> PropMask {
 /// name (a label may name it).
 pub fn focus_need(n: &NodeSnapshot, lazy_attrs: bool) -> PropMask {
     let mut need = focus_fields_for(lazy_attrs);
-    if !n.interfaces.is_empty() && !n.interfaces.intersects(Ifaces::VALUE | Ifaces::TEXT) {
+    let caps = n.caps();
+    if caps.is_known() && !(caps.has_value() || caps.has_text()) {
         need.remove(PropMask::VALUE);
     }
     if n.name.as_deref().is_none_or(str::is_empty) {
@@ -148,8 +154,12 @@ pub fn focus_need(n: &NodeSnapshot, lazy_attrs: bool) -> PropMask {
     // A field's help or error text is spoken after its value: asked for only once the role is
     // known to be a field (the cold path stays as measured, B-1).
     if matches!(
-        n.role,
-        Role::TextEntry | Role::PasswordEntry | Role::ComboBox | Role::SpinButton
+        role_of(n),
+        SemRole::TextBox
+            | SemRole::SearchBox
+            | SemRole::PasswordBox
+            | SemRole::Combobox
+            | SemRole::SpinButton
     ) {
         need |= PropMask::DESCRIPTION;
     }
@@ -226,7 +236,7 @@ impl Reader {
     /// focused again and carries the menu's words as its lead (`menu_lead`). True when `snap` was
     /// folded this way and must not be spoken as a focus of its own.
     fn menu_start_redirect(&mut self, snap: &Arc<NodeSnapshot>, fx: &mut ReaderEffects) -> bool {
-        if !matches!(snap.role, Role::Menu | Role::MenuBar)
+        if !matches!(role_of(snap), SemRole::Menu | SemRole::Menubar)
             || self.selection_node.is_some()
             || !self.snap_is_web(snap)
         {
@@ -263,22 +273,22 @@ impl Reader {
             .take()
             .filter(|(item, _)| *item == snap.key)
             .map(|(_, m)| m);
-        if snap.role != Role::MenuItem {
+        if role_of(snap) != SemRole::MenuItem {
             return None;
         }
-        let (role, name) = if let Some(m) = folded {
-            (m.role, m.name.clone()?)
+        let (is_bar, name) = if let Some(m) = folded {
+            (role_of(&m) == SemRole::Menubar, m.name.clone()?)
         } else {
             let from = self.presented.as_ref().map(|p| p.node);
             self.web_menu_entered(snap.key, from)?
         };
-        Some(self.menu_lead_segments(snap.key, role, name, id, epoch))
+        Some(self.menu_lead_segments(snap.key, is_bar, name, id, epoch))
     }
 
     /// A web menu item the document mirror does not know yet (a menu the page has just inserted)
     /// cannot tell which menu it opens: its presentation waits one flap delay for the mirror, once.
     fn menu_wait_for_mirror(&mut self, snap: &NodeSnapshot, fx: &mut ReaderEffects) -> bool {
-        if snap.role != Role::MenuItem
+        if role_of(snap) != SemRole::MenuItem
             || self.selection_node.is_some()
             || self.menu_waited == Some(snap.key)
             || self.menu_lead_snap.is_some()
@@ -325,7 +335,7 @@ impl Reader {
         // The epoch advances first, so stale speech cancels now, not after δ (E-2).
         let epoch = self.epoch.advance();
         let cached = self.dir.lookup(node).hit();
-        let role = cached.as_ref().map(|n| n.role);
+        let role = cached.as_ref().map(|n| role_of(n));
         let rapid = previous.is_some_and(|(_, at)| now.saturating_duration_since(at) < RAPID_FOCUS);
         // Hits do not bypass the coalescer: in a storm they wait like a flapping role does.
         let hold = if cached.is_some() && rapid {
@@ -416,7 +426,7 @@ impl Reader {
                 let focused = r
                     .result
                     .as_ref()
-                    .is_ok_and(|n| n.states.contains(StateSet::FOCUSED));
+                    .is_ok_and(|n| n.struct_state().contains(StructFlags::FOCUSED));
                 self.reconfirm = if focused {
                     Reconfirm::Asked(r.node)
                 } else {
@@ -610,7 +620,10 @@ impl Reader {
                 .is_some_and(|f| !f.protects(v.snap.key.app));
         if revalidate && (!confirmed_after_trigger || unearned) {
             self.counters.revalidations += 1;
-            if matches!(v.snap.role, Role::ListItem | Role::Row | Role::TreeItem) {
+            if matches!(
+                role_of(&v.snap),
+                SemRole::ListItem | SemRole::Option | SemRole::Row | SemRole::TreeItem
+            ) {
                 self.counters.revalidations_list_row += 1;
             }
             fx.push(Self::fetch_effect(
@@ -650,7 +663,7 @@ impl Reader {
         if self.menu_start_redirect(snap, fx) || self.menu_wait_for_mirror(snap, fx) {
             return;
         }
-        tracing::debug!(node = ?snap.key, states = ?snap.states, ?source, from_cache, "focus presented");
+        tracing::debug!(node = ?snap.key, states = ?snap.state_names(), ?source, from_cache, "focus presented");
         let (next, effect) = self.focus.step(FocusMsg::Presented { node: snap.key });
         self.focus = next;
         match effect {
@@ -688,14 +701,12 @@ impl Reader {
                 self.web_extra = (word.is_some() || !tail.is_empty()).then_some((id, word, tail));
                 // The context asserts `selected`, which the spoken text omits, so the log must
                 // not carry a cached snapshot from before the event.
-                let logged = if ctx == PresentContext::SelectedItem
-                    && !snap.states.contains(StateSet::SELECTED)
+                let logged = match snap
+                    .with_selected_for_log()
+                    .filter(|_| ctx == PresentContext::SelectedItem)
                 {
-                    let mut c = (**snap).clone();
-                    c.states |= StateSet::SELECTED;
-                    Arc::new(c)
-                } else {
-                    Arc::clone(snap)
+                    Some(c) => Arc::new(c),
+                    None => Arc::clone(snap),
                 };
                 self.log_presentation(&u, &logged, source, None);
                 self.presented = Some(Presented {
@@ -727,9 +738,8 @@ impl Reader {
                     // A selected item in a switcher: not real focus, so the protection of the
                     // application that does hold focus stays as it is.
                 } else if let Some(f) = &self.focused_app {
-                    if snap.states.contains(StateSet::FOCUSED)
-                        && !snap.states.contains(StateSet::DEFUNCT)
-                    {
+                    let st = snap.struct_state();
+                    if st.contains(StructFlags::FOCUSED) && !st.is_defunct() {
                         f.publish(snap.key.app);
                     } else if from_cache && f.protects(snap.key.app) {
                         // Served from the cache inside the application that already owns the
@@ -811,7 +821,7 @@ impl Reader {
     fn on_focus_reply(&mut self, r: QueryReply, fx: &mut ReaderEffects) {
         match r.result {
             // A reply that says `defunct` is a removal: nothing is spoken from a dead key.
-            Ok(snap) if snap.states.contains(StateSet::DEFUNCT) => {
+            Ok(snap) if snap.struct_state().is_defunct() => {
                 self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
             }
             Ok(snap) => self.present(&snap, fx),
@@ -879,7 +889,7 @@ impl Reader {
     /// that need a name and only if the speech was not silenced by policy).
     fn name_retry_arm(&mut self, snap: &Arc<NodeSnapshot>, epoch: Epoch, fx: &mut ReaderEffects) {
         let nameless = name_is_blank(spoken_name(snap));
-        if !nameless || !needs_name(snap.role) || self.name_retried == Some(snap.key) {
+        if !nameless || !needs_name(role_of(snap)) || self.name_retried == Some(snap.key) {
             return;
         }
         self.name_retried = Some(snap.key);
@@ -923,7 +933,7 @@ impl Reader {
             return;
         }
         let Ok(new) = &r.result else { return };
-        if new.states.contains(StateSet::DEFUNCT) {
+        if new.struct_state().is_defunct() {
             return;
         }
         let Some(name) = new.name.as_deref().filter(|n| !name_is_blank(Some(n))) else {
@@ -958,7 +968,7 @@ impl Reader {
     /// for one (C3b): the text next to it, picked by layout, with a deadline. The answer
     /// ([`Self::web_label_done`]) refines or follows the utterance; no answer leaves it as it was.
     fn web_label_arm(&mut self, snap: &Arc<NodeSnapshot>, fx: &mut ReaderEffects) {
-        if !name_is_blank(spoken_name(snap)) || !gorca_doc::web::label::infers_for(snap.role) {
+        if !name_is_blank(spoken_name(snap)) || !gorca_doc::web::label::infers_for(role_of(snap)) {
             return;
         }
         let Some(b) = self.web.as_mut() else { return };
@@ -971,7 +981,7 @@ impl Reader {
         fx.push(ReaderEffect::Web(crate::WebEffect::Label {
             doc,
             node,
-            role: snap.role,
+            role: role_of(snap),
             req,
         }));
     }
@@ -1095,7 +1105,8 @@ impl Reader {
             && let Ok(new) = &r.result
             && let Some(f) = &self.focused_app
         {
-            if new.states.contains(StateSet::FOCUSED) && !new.states.contains(StateSet::DEFUNCT) {
+            let st = new.struct_state();
+            if st.contains(StructFlags::FOCUSED) && !st.is_defunct() {
                 f.publish(r.node.app);
             } else if f.protects(r.node.app) {
                 // The re-read answered: the node is not focused. What a cache-served
@@ -1106,9 +1117,9 @@ impl Reader {
         // A web document's speech belongs to browse mode: the cursor line follows the focus
         // utterance and keys move it at once, so only a changed title is worth correcting (the
         // cache served the previous page). Other differences are counted, not spoken (M5).
-        if p.snap.role == Role::DocumentWeb
+        if role_of(&p.snap) == SemRole::DocumentWeb
             && let Ok(new) = &r.result
-            && !new.states.contains(StateSet::DEFUNCT)
+            && !new.struct_state().is_defunct()
             && p.snap.name == new.name
         {
             let after = self.with_entry_after(&p.snap, new);
@@ -1123,7 +1134,7 @@ impl Reader {
             return;
         }
         match &r.result {
-            Ok(new) if new.states.contains(StateSet::DEFUNCT) => {
+            Ok(new) if new.struct_state().is_defunct() => {
                 self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
             }
             Ok(new) => {
@@ -1234,7 +1245,7 @@ impl Reader {
     }
 
     fn on_state_reply(&mut self, r: &QueryReply, fx: &mut ReaderEffects) {
-        tracing::debug!(node = ?r.node, states = ?r.result.as_ref().map(|n| n.states), presented = ?self.presented.as_ref().map(|p| p.node), "state reply");
+        tracing::debug!(node = ?r.node, states = ?r.result.as_ref().map(|n| n.state_names()), presented = ?self.presented.as_ref().map(|p| p.node), "state reply");
         let Some(p) = self.presented.clone() else {
             return;
         };
@@ -1242,7 +1253,7 @@ impl Reader {
             return;
         }
         let new = match &r.result {
-            Ok(n) if n.states.contains(StateSet::DEFUNCT) => {
+            Ok(n) if n.struct_state().is_defunct() => {
                 self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
                 return;
             }
@@ -1260,14 +1271,16 @@ impl Reader {
         // A re-read that shows the node FOCUSED is the proof a failed RV-1 never delivered
         // (review RR-2): earn the protection now.
         if self.selection_node != Some(r.node)
-            && new.states.contains(StateSet::FOCUSED)
+            && new.struct_state().contains(StructFlags::FOCUSED)
             && let Some(f) = &self.focused_app
         {
             f.publish(r.node.app);
         }
         // A terminal that is not (yet) focused says nothing of its own title-like name changing
         // (`on_state_changed` keeps that silent too): the watch reads it only for `FOCUSED`.
-        if p.snap.role == Role::Terminal && !new.states.contains(StateSet::FOCUSED) {
+        if role_of(&p.snap) == SemRole::Terminal
+            && !new.struct_state().contains(StructFlags::FOCUSED)
+        {
             return;
         }
         let new = &self.with_entry_after(&p.snap, new);
@@ -1299,10 +1312,10 @@ const STATE_READ: PropMask = PropMask::ROLE
     .union(PropMask::VALUE)
     .union(PropMask::NAME);
 
-/// States a context does not speak, so their change is not a correction.
-pub(super) fn skip_states(ctx: PresentContext) -> StateSet {
+/// Whether a context does not speak `selected`, so its change is not a correction.
+pub(super) fn skip_selected(ctx: PresentContext) -> bool {
     match ctx {
-        PresentContext::Focus => StateSet::empty(),
-        PresentContext::SelectedItem => StateSet::SELECTED,
+        PresentContext::Focus => false,
+        PresentContext::SelectedItem => true,
     }
 }

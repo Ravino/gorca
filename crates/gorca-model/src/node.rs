@@ -134,6 +134,9 @@ bitflags! {
         const FOCUSED   = 1 << 4;
         /// A multi-line text object (a geometry fact of the text layer, not a spoken state).
         const MULTILINE = 1 << 5;
+        /// The window the user works in (AT-SPI `active`): structure of the window manager's
+        /// view, not a spoken state.
+        const ACTIVE    = 1 << 6;
     }
 }
 
@@ -203,6 +206,11 @@ impl NodeCaps {
     /// The node claims an action interface (it can be activated).
     pub const fn has_action(self) -> bool {
         self.ifaces.contains(Ifaces::ACTION)
+    }
+
+    /// The node claims a value interface.
+    pub const fn has_value(self) -> bool {
+        self.ifaces.contains(Ifaces::VALUE)
     }
 }
 
@@ -290,6 +298,56 @@ pub struct NodeSnapshot {
 }
 
 impl NodeSnapshot {
+    /// The role as the diagnostic logs name it (`check_box`): the connector's role, for the
+    /// presentation log and the probes only, never for a decision.
+    pub fn role_log_name(&self) -> &'static str {
+        self.role.log_name()
+    }
+
+    /// The AT-SPI names of the states the connector decoded, plus `sensitive` (the core records
+    /// its absence as `DISABLED`): for the presentation log and the mirror probes only, never for
+    /// a decision.
+    pub fn state_names(&self) -> SmallVec<[&'static str; 8]> {
+        const NAMES: &[(StateSet, &str)] = &[
+            (StateSet::ACTIVE, "active"),
+            (StateSet::CHECKED, "checked"),
+            (StateSet::COLLAPSED, "collapsed"),
+            (StateSet::DEFUNCT, "defunct"),
+            (StateSet::ENABLED, "enabled"),
+            (StateSet::EXPANDED, "expanded"),
+            (StateSet::FOCUSABLE, "focusable"),
+            (StateSet::FOCUSED, "focused"),
+            (StateSet::PRESSED, "pressed"),
+            (StateSet::SELECTABLE, "selectable"),
+            (StateSet::SELECTED, "selected"),
+            (StateSet::SHOWING, "showing"),
+            (StateSet::TRANSIENT, "transient"),
+            (StateSet::VISIBLE, "visible"),
+            (StateSet::MANAGES_DESCENDANTS, "manages-descendants"),
+        ];
+        let mut out: SmallVec<[&'static str; 8]> = NAMES
+            .iter()
+            .filter(|(f, _)| self.states.contains(*f))
+            .map(|(_, name)| *name)
+            .collect();
+        if !self.states.is_empty() && !self.states.contains(StateSet::DISABLED) {
+            out.push("sensitive");
+        }
+        out.sort_unstable();
+        out
+    }
+
+    /// A copy of this snapshot with the `selected` state set, for the presentation log of a
+    /// context that asserts it; `None` when it already is (diagnostics only).
+    pub fn with_selected_for_log(&self) -> Option<NodeSnapshot> {
+        if self.states.contains(StateSet::SELECTED) {
+            return None;
+        }
+        let mut c = self.clone();
+        c.states |= StateSet::SELECTED;
+        Some(c)
+    }
+
     /// The capabilities the source claimed for the node (see [`NodeCaps`]).
     pub fn caps(&self) -> NodeCaps {
         NodeCaps::new(self.interfaces)
@@ -309,6 +367,7 @@ impl NodeSnapshot {
             (StateSet::FOCUSABLE, StructFlags::FOCUSABLE),
             (StateSet::FOCUSED, StructFlags::FOCUSED),
             (StateSet::MULTILINE, StructFlags::MULTILINE),
+            (StateSet::ACTIVE, StructFlags::ACTIVE),
         ] {
             if self.states.contains(state) {
                 f |= flag;

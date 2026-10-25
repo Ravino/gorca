@@ -50,7 +50,7 @@ pub enum WebEffect {
     Label {
         doc: DocId,
         node: DocNodeId,
-        role: Role,
+        role: gorca_model::sem::SemRole,
         req: u32,
     },
     /// A page-selection action; its result returns as `DocNotice::SelectionDone { req }`.
@@ -1423,7 +1423,7 @@ impl Reader {
         &self,
         item: NodeKey,
         from: Option<NodeKey>,
-    ) -> Option<(Role, Arc<str>)> {
+    ) -> Option<(bool, Arc<str>)> {
         let b = self.web.as_ref()?;
         let (doc, id) = b.join.get(item)?;
         let h = b.docs.get(doc)?;
@@ -1443,7 +1443,7 @@ impl Reader {
                 return None;
             }
             let name = v.name.filter(|n| !n.is_empty())?;
-            Some((v.role, Arc::from(name)))
+            Some((v.role == Role::MenuBar, Arc::from(name)))
         })
     }
 

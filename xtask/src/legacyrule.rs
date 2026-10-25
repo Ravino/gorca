@@ -127,6 +127,9 @@ const PORTED: &[&str] = &[
     "crates/gorca-core/src/review/",
     "crates/gorca-core/src/text/",
     "crates/gorca-core/src/commands/",
+    "crates/gorca-core/src/present/",
+    "crates/gorca-core/src/focus.rs",
+    "crates/gorca-core/src/nodekind.rs",
 ];
 const LEGACY_ROLE: &str =
     "SemRole from the fused entry (`review::zone::entry_of`, `Ivm::entry_view`)";

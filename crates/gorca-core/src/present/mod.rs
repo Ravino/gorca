@@ -18,11 +18,11 @@ mod utterance;
 mod window;
 
 pub use echo::{key_echo, key_echo_is_action, key_echo_spoken, key_echo_text, message};
-pub(crate) use flow::name_is_blank;
 pub use flow::{
     FOCUS_FIELDS, FOCUS_FIELDS_LAZY, FocusBackoff, NameRetry, Presented, RAPID_FOCUS,
     REFINE_WINDOW, STORM_HOLD, focus_fields_for, focus_need,
 };
+pub(crate) use flow::{name_is_blank, needs_name};
 pub use job::{PresentJob, PresentKind, SpeechIntent};
 pub use log::{NoLabels, NodeLabel, PresentLog, PresentRecord, PresentSource};
 pub(crate) use notification::NoticeCtx;
@@ -30,11 +30,11 @@ pub use notification::{
     announcement_utterance, clean_announcement, is_notice_node, is_notice_role,
 };
 pub use utterance::{log_states, value_text};
-pub(crate) use window::WindowCtx;
 pub use window::{
     Content, DesktopEffect, WindowEffect, WindowInfo, WindowMsg, WindowState, dialog_content,
     fetch_level, fetch_window, reads_content,
 };
+pub(crate) use window::{WindowCtx, part_name};
 
 use gorca_model::Epoch;
 

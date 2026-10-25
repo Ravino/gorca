@@ -52,24 +52,27 @@ fn rig(cfg: IngressConfig) -> Rig {
 }
 
 fn snap(n: u64) -> Arc<NodeSnapshot> {
-    Arc::new(NodeSnapshot {
-        key: key(n),
-        role: Role::Button,
-        states: StateSet::empty(),
-        name: None,
-        description: None,
-        value: None,
-        parent: None,
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
-        attrs: gorca_model::AttrMap::default(),
-        relations: gorca_model::Relations::default(),
-        bounds: None,
-        have: gorca_model::PropMask::PRESENT,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    })
+    Arc::new(
+        NodeSnapshot {
+            key: key(n),
+            role: Role::Button,
+            states: StateSet::empty(),
+            name: None,
+            description: None,
+            value: None,
+            parent: None,
+            children: ChildList::Unknown,
+            interfaces: Ifaces::empty(),
+            attrs: gorca_model::AttrMap::default(),
+            relations: gorca_model::Relations::default(),
+            bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
+            fresh: Freshness::Fresh { at: Instant::now() },
+            sem: gorca_model::NodeSem::NONE,
+        }
+        .with_test_record(),
+    )
 }
 
 #[test]
@@ -944,7 +947,7 @@ fn showing(n: u64) -> NodeEvent {
 fn alert_snap(n: u64) -> Arc<NodeSnapshot> {
     let mut s = (*snap(n)).clone();
     s.role = Role::Alert;
-    Arc::new(s)
+    Arc::new(s.with_test_record())
 }
 
 #[test]

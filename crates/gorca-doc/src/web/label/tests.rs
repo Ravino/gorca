@@ -54,7 +54,7 @@ fn a_label_on_the_same_line_is_found_on_the_left() {
         text(" ", NodeFlags::NONE),
         ctl(Role::TextEntry, NodeFlags::NONE),
     ]);
-    let p = plan(&d, ids[3], Role::TextEntry).unwrap();
+    let p = plan(&d, ids[3], gorca_model::sem::SemRole::TextBox).unwrap();
     assert_eq!(p.cands[0].side, Side::Left);
     assert_eq!(p.cands[0].text, "Phone");
     assert_eq!(p.probes()[1], ids[1]);
@@ -75,7 +75,7 @@ fn the_text_on_the_line_above_labels_a_control_that_starts_its_line() {
         text("Romeo unassociated sibling", BR),
         ctl(Role::TextEntry, BR),
     ]);
-    let p = plan(&d, ids[2], Role::TextEntry).unwrap();
+    let p = plan(&d, ids[2], gorca_model::sem::SemRole::TextBox).unwrap();
     let above = p.cands.iter().find(|c| c.side == Side::Above).unwrap();
     assert_eq!(above.text, "Romeo unassociated sibling");
     // 4 px below the text, not to the right of the control.
@@ -103,7 +103,7 @@ fn a_widget_on_the_line_ends_the_left_text() {
         text("Email", NodeFlags::NONE),
         ctl(Role::TextEntry, NodeFlags::NONE),
     ]);
-    let p = plan(&d, ids[4], Role::TextEntry).unwrap();
+    let p = plan(&d, ids[4], gorca_model::sem::SemRole::TextBox).unwrap();
     assert_eq!(p.cands[0].text, "Email");
 }
 
@@ -114,14 +114,14 @@ fn a_check_box_prefers_the_text_on_its_right() {
         ctl(Role::CheckBox, NodeFlags::NONE),
         text("Subscribe to updates", NodeFlags::NONE),
     ]);
-    let p = plan(&d, ids[2], Role::CheckBox).unwrap();
+    let p = plan(&d, ids[2], gorca_model::sem::SemRole::Checkbox).unwrap();
     let sides: Vec<Side> = p.cands.iter().map(|c| c.side).collect();
     assert_eq!(sides, [Side::Left, Side::Right]);
     // Left is 6 px away, right 8 px: the right text wins for a check box.
     let rects = [r(100, 10, 16, 16), r(30, 10, 64, 16), r(124, 10, 150, 16)];
     assert_eq!(choose(&p, &rects).as_deref(), Some("Subscribe to updates"));
     // A text entry keeps the left one.
-    let q = plan(&d, ids[2], Role::TextEntry).unwrap();
+    let q = plan(&d, ids[2], gorca_model::sem::SemRole::TextBox).unwrap();
     assert_eq!(choose(&q, &rects).as_deref(), Some("Newsletter"));
 }
 
@@ -131,7 +131,7 @@ fn a_combo_box_does_not_take_a_label_from_its_right() {
         ctl(Role::ComboBox, BR),
         text("Country", NodeFlags::NONE),
     ]);
-    let p = plan(&d, ids[1], Role::ComboBox);
+    let p = plan(&d, ids[1], gorca_model::sem::SemRole::Combobox);
     assert!(p.is_none_or(|p| p.cands.iter().all(|c| c.side != Side::Right)));
 }
 
@@ -141,18 +141,18 @@ fn headings_and_list_items_are_never_labels() {
         SubtreeSpec::with_children(NodeSpec::new(Role::Heading), vec![text("Sign in", BR)]),
         ctl(Role::TextEntry, BR),
     ]);
-    let p = plan(&d, ids[3], Role::TextEntry);
+    let p = plan(&d, ids[3], gorca_model::sem::SemRole::TextBox);
     assert!(p.is_none(), "{p:?}");
 }
 
 #[test]
 fn only_a_text_entry_takes_a_label_from_below() {
     let (d, ids) = doc(vec![ctl(Role::TextEntry, BR), text("Email address", BR)]);
-    let p = plan(&d, ids[1], Role::TextEntry).unwrap();
+    let p = plan(&d, ids[1], gorca_model::sem::SemRole::TextBox).unwrap();
     assert!(p.cands.iter().any(|c| c.side == Side::Below));
     let rects = [r(10, 10, 200, 24), r(10, 40, 100, 18)];
     assert_eq!(choose(&p, &rects).as_deref(), Some("Email address"));
-    let q = plan(&d, ids[1], Role::ComboBox);
+    let q = plan(&d, ids[1], gorca_model::sem::SemRole::Combobox);
     assert!(q.is_none_or(|q| q.cands.iter().all(|c| c.side != Side::Below)));
 }
 
@@ -162,7 +162,7 @@ fn a_control_without_a_rectangle_gets_nothing() {
         text("Phone", BR),
         ctl(Role::TextEntry, NodeFlags::NONE),
     ]);
-    let p = plan(&d, ids[2], Role::TextEntry).unwrap();
+    let p = plan(&d, ids[2], gorca_model::sem::SemRole::TextBox).unwrap();
     assert_eq!(choose(&p, &[None, r(0, 0, 40, 18)]), None);
     assert_eq!(choose(&p, &[r(50, 0, 100, 20), None]), None);
     // A zero-size box (display:none, collapsed) is no box.
@@ -184,21 +184,22 @@ fn label_text_is_cleaned_and_capped() {
 
 #[test]
 fn the_role_gate_is_orcas() {
+    use gorca_model::sem::SemRole;
     for r in [
-        Role::CheckBox,
-        Role::ComboBox,
-        Role::TextEntry,
-        Role::PasswordEntry,
-        Role::RadioButton,
+        SemRole::Checkbox,
+        SemRole::Combobox,
+        SemRole::TextBox,
+        SemRole::PasswordBox,
+        SemRole::Radio,
     ] {
         assert!(infers_for(r), "{r:?}");
     }
     for r in [
-        Role::Button,
-        Role::Link,
-        Role::Slider,
-        Role::Panel,
-        Role::SpinButton,
+        SemRole::Button,
+        SemRole::Link,
+        SemRole::Slider,
+        SemRole::Generic,
+        SemRole::SpinButton,
     ] {
         assert!(!infers_for(r), "{r:?}");
     }

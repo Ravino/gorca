@@ -2307,7 +2307,7 @@ mod tests {
             let mut n = (*with_name(1, "Row", StateSet::empty())).clone();
             n.role = role;
             f.writer.apply(
-                SnapshotBatch::new(vec![Arc::new(n)]),
+                SnapshotBatch::new(vec![Arc::new(n.with_test_record())]),
                 gorca_mirror::ApplyOrigin::Push,
             );
             focus_on(&mut f, 1, Instant::now());
@@ -2403,6 +2403,7 @@ mod tests {
         let mut f = fixture();
         let mut menu = (*with_name(1, "Open", StateSet::empty())).clone();
         menu.role = Role::MenuItem;
+        let menu = menu.with_test_record();
         let now = Instant::now();
         f.writer.apply(
             SnapshotBatch::new(vec![Arc::new(menu.clone())]),

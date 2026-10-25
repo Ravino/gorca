@@ -36,6 +36,14 @@ pub(crate) fn is_app_node(snap: &NodeSnapshot) -> bool {
         && (snap.parent.is_none() || !snap.have.contains(PropMask::PARENT))
 }
 
+/// The label of a control, as the engines export it: a `label` (static text the model marks
+/// [`SemFlags::TEXT_LABEL`]) or a caption.
+pub(crate) fn is_label(snap: &NodeSnapshot) -> bool {
+    let e = entry_of(snap);
+    e.sem.role == SemRole::Caption
+        || (e.sem.role == SemRole::StaticText && e.sem.flags.contains(SemFlags::TEXT_LABEL))
+}
+
 /// A top-level window or a dialog: what "the window" of a node is.
 pub(crate) fn is_window_role(role: SemRole) -> bool {
     matches!(
@@ -47,6 +55,20 @@ pub(crate) fn is_window_role(role: SemRole) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn labels_and_application_nodes_are_told_by_the_entry() {
+        use crate::review::collect::testsrc::snap;
+        use gorca_model::Role;
+        assert!(is_label(&snap(1, Role::Label, "L", None, &[])));
+        assert!(!is_label(&snap(2, Role::StaticText, "S", None, &[])));
+        let app = snap(3, Role::Application, "A", None, &[]);
+        assert!(is_app_node(&app) && is_app_root(&app));
+        // An application node inside the tree is an embedded object, not the root.
+        let inner = snap(4, Role::Application, "O", Some(3), &[]);
+        assert!(!is_app_node(&inner) && !is_app_root(&inner));
+        assert_eq!(role_of(&app), SemRole::Application);
+    }
 
     #[test]
     fn window_roles_are_windows_and_dialogs() {

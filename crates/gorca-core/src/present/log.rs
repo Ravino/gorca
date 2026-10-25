@@ -275,7 +275,7 @@ fn format_record(out: &mut String, r: &PresentRecord, labels: &dyn NodeLabel, ke
         n.key.app.serial,
         n.key.local.0,
         r.source.as_str(),
-        n.role.log_name()
+        n.role_log_name()
     );
     for (i, s) in log_states(n).iter().enumerate() {
         if i > 0 {

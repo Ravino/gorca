@@ -108,12 +108,7 @@ pub fn is_notice_role(role: gorca_model::sem::SemRole) -> bool {
 /// Is the node an alert or a notification, by its fused role (the attached entry, else the source
 /// record's role, else the native role of a snapshot no fusion described)?
 pub fn is_notice_node(snap: &gorca_model::NodeSnapshot) -> bool {
-    snap.sem
-        .entry
-        .as_ref()
-        .map(|e| e.sem.role)
-        .or_else(|| snap.sem.rec.as_ref().map(|r| r.sem.role))
-        .map_or(snap.role == gorca_model::Role::Alert, is_notice_role)
+    is_notice_role(crate::nodekind::role_of(snap))
 }
 
 /// What the Reader remembers about notices: the per-owner budgets (`fair`) and counters.
@@ -172,7 +167,7 @@ impl Reader {
     fn reads_as_notice(&self, app: AppId, snap: &gorca_model::NodeSnapshot) -> bool {
         use crate::builtin_ext::{PolicyMoment, PolicyVerdict, PolicyView};
         let mut node = crate::ext::ExtNode::new(snap, self.fused_entry(snap));
-        if is_notice_role(node.role) {
+        if is_notice_role(node.sem_role()) {
             return true;
         }
         if !self.policy_active(app) {
