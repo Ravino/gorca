@@ -397,8 +397,7 @@ fn mixed_page() -> Page {
     Page { views, order }
 }
 
-/// The flat-review line texts of the mixed page, one per line of the file named by
-/// `GORCA_LINES_OUT` (or stderr): the same test runs in the legacy tree and in this one, and the
+/// The flat-review line texts of the mixed page, printed between LINES-BEGIN and LINES-END: the same test runs in the legacy tree and in this one, and the
 /// two files are diffed (`bench/m6/review-lines.sh`).
 #[test]
 #[ignore = "dumps the line model for the A/B diff of the cut-over; see bench/m6/review-lines.sh"]
@@ -427,8 +426,5 @@ fn dump_line_texts_of_the_mixed_page() {
         let _ = writeln!(text, "zone {:?} {}", z.kind, z.text);
     }
     assert!(!m.lines.is_empty());
-    match std::env::var("GORCA_LINES_OUT") {
-        Ok(path) => std::fs::write(path, text).expect("write"),
-        Err(_) => eprintln!("{text}"),
-    }
+    eprintln!("LINES-BEGIN\n{text}LINES-END");
 }
