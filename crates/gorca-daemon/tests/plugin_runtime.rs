@@ -804,6 +804,7 @@ fn the_open_chat_gets_a_message_list_headings_and_described_own_messages() {
     let arc = |s: &str| (!s.is_empty()).then(|| Arc::<str>::from(s));
     let mut class_of: HashMap<u32, String> = HashMap::new();
     let mut list_node = 0;
+    let mut area_node = 0;
     for x in v.as_array().unwrap() {
         let i = x["i"].as_u64().unwrap() as u32;
         let p = x["p"].as_i64().unwrap();
@@ -813,6 +814,7 @@ fn the_open_chat_gets_a_message_list_headings_and_described_own_messages() {
         let class = x["class"].as_str().unwrap();
         if class.split_whitespace().any(|t| t == "MessageList") {
             list_node = i;
+            area_node = p as u32;
         }
         class_of.insert(i, class.to_owned());
         b.upsert(
@@ -902,6 +904,19 @@ fn the_open_chat_gets_a_message_list_headings_and_described_own_messages() {
     for d in with_class("sticky-date") {
         assert_eq!(patches(d, role), vec!["Heading"], "date separator {d}");
         assert_eq!(patches(d, level), vec!["2"]);
+    }
+    // Landmarks, by structure: the chat list, the message area (the list's parent) and the
+    // composer, each with a catalog name.
+    for (what, n, r) in [
+        ("chat list", with_class("chat-list")[0], "Navigation"),
+        ("message area", area_node, "Region"),
+        ("composer", with_class("Composer")[0], "Region"),
+    ] {
+        assert_eq!(patches(n, role), vec![r], "{what}");
+        assert!(
+            patches(n, name).iter().any(|s| !s.is_empty()),
+            "{what} is named: {ops:?}"
+        );
     }
     assert_eq!(patches(divider, role), vec!["Heading"]);
     assert_eq!(patches(divider, level), vec!["2"]);

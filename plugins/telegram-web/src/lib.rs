@@ -27,6 +27,8 @@ mod guest {
     const ROLE_HEADING: u16 = 28;
     const ROLE_LIST: u16 = 32;
     const ROLE_LISTITEM: u16 = 34;
+    const ROLE_NAVIGATION: u16 = 46;
+    const ROLE_REGION: u16 = 53;
 
     const WATCH_CHAT_A: u16 = 1;
     const WATCH_CHAT_K: u16 = 2;
@@ -36,6 +38,8 @@ mod guest {
     const WATCH_DATE_A: u16 = 6;
     const WATCH_DIVIDER_A: u16 = 7;
     const WATCH_DIVIDER_A2: u16 = 8;
+    const WATCH_CHATS_A: u16 = 9;
+    const WATCH_COMPOSER_A: u16 = 10;
 
     struct Plugin;
 
@@ -110,7 +114,21 @@ mod guest {
         }
     }
 
-    /// The container of the messages is a list, named from the catalog.
+    /// A landmark: `role` with a name from the catalog.
+    fn landmark(n: u64, role: u16, name: &str) {
+        assert_node(n, GROUP_ROLE, types::PropValue::Code(role));
+        assert_node(
+            n,
+            GROUP_NAME,
+            types::PropValue::Message(types::MsgRef {
+                id: name.to_owned(),
+                args: Vec::new(),
+            }),
+        );
+    }
+
+    /// The message list is a list; its parent (the message area: the list and, below it, the
+    /// composer's footer) is the "Messages" region.
     fn message_list(n: u64) {
         assert_node(n, GROUP_ROLE, types::PropValue::Code(ROLE_LIST));
         assert_node(
@@ -121,6 +139,9 @@ mod guest {
                 args: Vec::new(),
             }),
         );
+        if let Some(area) = model::parent(n) {
+            landmark(area, ROLE_REGION, "messages");
+        }
     }
 
     /// The chat's title in the header (an `h3.fullName` that is a direct child of the chat view,
@@ -145,6 +166,8 @@ mod guest {
                     WATCH_CHAT_A | WATCH_CHAT_K => chat_row(d.node),
                     WATCH_MESSAGE_A => message_row(d.node),
                     WATCH_MESSAGES_A => message_list(d.node),
+                    WATCH_CHATS_A => landmark(d.node, ROLE_NAVIGATION, "chats"),
+                    WATCH_COMPOSER_A => landmark(d.node, ROLE_REGION, "composer"),
                     WATCH_HEADER_A => chat_header(d.node),
                     WATCH_DATE_A | WATCH_DIVIDER_A | WATCH_DIVIDER_A2 => heading(d.node, 2),
                     _ => {}

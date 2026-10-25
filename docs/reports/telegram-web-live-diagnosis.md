@@ -205,3 +205,26 @@ Open chat: `div.Message` has NO action (a message itself has no mouse-only handl
 `click` seen is on `div.EmbeddedMessage` (the quoted reply inside a message: jumps to the replied
 message), its text and sender spans being `clickAncestor`. Menus (`message-action-buttons`,
 context menu) were not dumped.
+
+### Landmarks (owner request, same slice)
+
+Matched by the structure of the live open chat (read-only dump, ids/classes as Gecko exposes them):
+
+| Region | Node (watch) | Role / catalog name | Covers |
+|---|---|---|---|
+| Chats | `div.chat-list` | navigation, "Chats" / "Чаты" | the chat rows (not the left header with menu and search, not the folder tabs) |
+| Messages | the parent of `MessageList` (an unclassed `div.Transition`, reached with `model.parent`) | region, "Messages" / "Сообщения" | the message list and, below it, the composer's footer |
+| Message list | `div.MessageList` | list, "Message list" / "Список сообщений" | the messages and date headings; keeps the N-of-M count |
+| Composer | `div.Composer` | region, "Message input" / "Поле ввода" | text field, attach, emoji, send/record buttons |
+
+* **Header**: Gecko flattens it: the avatar, title, status and the search/call/menu buttons are direct
+  children of `div.messages-layout`; there is no node that covers them, so a banner/region cannot be
+  patched onto it without marking something that also covers the messages. It stays reachable as the
+  level-1 heading (`H`) which is the title; the buttons follow it in reading order.
+* The roles are ordinary fused-model roles: `flags_from_sem` turns navigation/region into the landmark
+  category the browse quick-nav (`D`) and the "where am I" ancestry read, and the verbosity rules apply to them
+  like to authored landmarks. That wiring is by design and covered by existing tests, not exercised
+  end to end with this plugin (no private-session run). Note: a region without `ROLE_AUTHORED` still
+  counts as a landmark (`Cat::LANDMARK`), which `D` takes.
+* Test: `the_open_chat_gets_a_message_list_headings_and_described_own_messages` now also checks the
+  three landmarks on the real open-chat fixture (the dump includes the composer footer and the chat-list node).

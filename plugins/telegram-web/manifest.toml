@@ -59,3 +59,13 @@ class = "unread-divider"
 [[watch]]
 id = 8
 class = "local-action-message"
+
+# A: the list of chats in the left column: a navigation landmark.
+[[watch]]
+id = 9
+class = "chat-list"
+
+# A: the message composer (the text field, attach, emoji and send buttons): a region.
+[[watch]]
+id = 10
+class = "Composer"

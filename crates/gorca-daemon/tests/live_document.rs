@@ -451,6 +451,20 @@ async fn live_firefox_document_through_the_real_source_and_plugin() {
         for k in kids.get(&list).into_iter().flatten().take(14) {
             subtree(*k, 30, &mut order);
         }
+        // The rest of the message area (the composer's footer) and the chat list itself.
+        if let Some(area) = parent.get(&list) {
+            for k in kids.get(area).into_iter().flatten().filter(|k| **k != list) {
+                subtree(*k, 24, &mut order);
+            }
+        }
+        if let Some(cl) = all_rows
+            .iter()
+            .filter(|(_, r)| has(r, "chat-list"))
+            .map(|(i, _)| *i)
+            .min()
+        {
+            order.push(cl);
+        }
         let pos: HashMap<u32, usize> = order.iter().enumerate().map(|(k, i)| (*i, k + 1)).collect();
         let mut json = vec![serde_json::json!({
             "i": 0, "p": -1, "role": SemRole::Generic.code(), "tag": "div", "class": "", "name": "", "text": ""
