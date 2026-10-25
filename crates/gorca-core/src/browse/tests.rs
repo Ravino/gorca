@@ -4246,7 +4246,7 @@ fn toolkit_password_doc() -> gorca_doc::web::WebDoc {
             .name("Password")
             .data(Arc::new(data)),
         vec![SubtreeSpec::leaf(
-            NodeSpec::new(SemRole::StaticText).text("hunter2"),
+            NodeSpec::new(SemRole::StaticText).text("\u{2022}\u{2022}\u{2022}"),
         )],
     );
     let para = SubtreeSpec::with_children(
@@ -4281,7 +4281,8 @@ fn a_toolkit_password_entry_with_a_fused_text_box_role_is_secret_in_every_browse
     let v = d.node(field).expect("node");
     assert_eq!(v.role, gorca_model::sem::SemRole::TextBox);
     assert!(super::selmirror::node_is_secret(&v));
-    // Quick navigation and the browse description never carry the value or the text.
+    // Quick navigation and the browse description never carry the value (the mirror's text of a
+    // secret field is the source's bullets).
     let said = format!("{:?}", super::present::describe_node(&d, field));
     assert!(!said.contains("hunter2"), "{said}");
     // The selection mirror stops before the field and never copies it.

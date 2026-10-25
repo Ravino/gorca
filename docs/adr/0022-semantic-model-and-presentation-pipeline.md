@@ -790,8 +790,8 @@ snapshot) is set by the normaliser for the engine's password role and travels in
 `gorca_present::is_secret_entry` and `gorca_model::is_secret_node` ask the role *or* the mark, and
 `NodeSnapshot::from_fused` turns a secret entry into a password-entry snapshot, so
 `is_sensitive()` holds. Every browse sink asks `selmirror::node_is_secret` (selection mirror,
-focus snapshot, description); the description of a secret node also drops any text or value the
-mirror holds under it. Test: `a_toolkit_password_entry_with_a_fused_text_box_role_is_secret_in_every_browse_sink`.
+focus snapshot); the mirror's text of a secret field is the source's bullets, which browse speaks
+as before ("7 bullet"), and the value never enters a snapshot. Test: `a_toolkit_password_entry_with_a_fused_text_box_role_is_secret_in_every_browse_sink`.
 
 The mark is sticky and only a source can set it (second security finding): each source's register
 set (`SrcRegs`) keeps a monotone `secret` bit set by any write whose flags carry `SECRET`, never

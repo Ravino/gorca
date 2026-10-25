@@ -315,7 +315,7 @@ fn node(n: u64, role: Role, parent: Option<u64>) -> Arc<NodeSnapshot> {
     s.role = role;
     s.name = Some(Arc::from(format!("n{n}")));
     s.parent = parent.map(key);
-    Arc::new(s)
+    Arc::new(s.with_test_record())
 }
 
 fn fill_node(r: &mut Rig, nodes: Vec<Arc<NodeSnapshot>>) {
