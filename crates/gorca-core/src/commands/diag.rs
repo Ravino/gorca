@@ -2,7 +2,11 @@
 //! `explain` diagnostics (M22a-C4, ADR-0022 section 2.5, ADR-0024 FS-9): where the words of the
 //! last utterance came from.
 //!
-//! The report is a pure function of the utterance, the fused entry of the node it was about and
+//! The words come from a `PresIr` (ADR-0022 section 2.5): every field of the IR names its kind,
+//! the rule row that composed it, the fused group that supplied it and the patch, hook or quirk
+//! (`via`) that edited it. The report lists those origins from the redacted IR, so the text of a
+//! secret field cannot reach it by type. It is a pure function of the utterance, the IR of the
+//! node, the fused entry of the node it was about and
 //! (when an engine trace is at hand) the trail of the engine: per segment its kind and, with the
 //! `seg-origin` feature, the catalogue message and the producer; per semantic group the stratum
 //! that won (`ProvCode`), the hedge class, the taint tier, the fallback/stale bits and the
@@ -23,6 +27,7 @@ use gorca_fuse::{Explain, TrailEntry};
 use gorca_model::fact::SourceId;
 use gorca_model::sem::{ConfClass, Group, ProvCode, SemEntry, SourceClass, TrustTier};
 use gorca_model::{SegmentKind, Utterance};
+use gorca_present::{Origin, Redacted};
 
 /// Whether the explain log may carry the text of segments. Off by default.
 static EXPLAIN_TEXT: AtomicBool = AtomicBool::new(false);
@@ -125,6 +130,26 @@ pub struct SegLine {
     pub text: Option<String>,
 }
 
+/// One field of the `PresIr` the words were composed from: where it came from.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FieldLine {
+    /// The registry name of the field kind (`name`, `role`, `state`, ...; `ext-<code>` for an
+    /// add-on kind).
+    pub kind: String,
+    /// The rule row that composed it (`compose` row ids).
+    pub row: u16,
+    /// The fused group that supplied the content, `None` for a producer outside the entry.
+    pub group: Option<Group>,
+    /// The patch, hook or quirk that edited it; `0` = none.
+    pub via: u32,
+    /// Characters of the content (a message counts as its argument-free key length 0).
+    pub chars: usize,
+    /// The field was a secret: its content is withheld, only the origin is listed.
+    pub secret: bool,
+    /// The (cut) text, only with the opt-in and never for a secret.
+    pub text: Option<String>,
+}
+
 /// One known semantic group of the fused entry.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GroupLine {
@@ -145,6 +170,8 @@ pub struct GroupLine {
 pub struct ExplainReport {
     pub utterance: u64,
     pub segments: Vec<SegLine>,
+    /// The fields of the IR the words come from, in speaking order (empty without an IR).
+    pub fields: Vec<FieldLine>,
     /// `None` when the node carried no fused entry (nothing is spoken from it before C3).
     pub groups: Option<Vec<GroupLine>>,
     /// The sources that contributed, by name.
@@ -152,6 +179,45 @@ pub struct ExplainReport {
 }
 
 impl ExplainReport {
+    /// The report with the origins of `ir`: the redacted IR of the node, so a secret field's
+    /// content is not in it. `with_text` adds the cut text of the others.
+    #[must_use]
+    pub fn with_ir(mut self, ir: &Redacted, with_text: bool, node_secret: bool) -> Self {
+        self.fields = ir
+            .ir()
+            .fields
+            .iter()
+            .map(|f| {
+                let Origin { row, group, via } = f.origin;
+                let text = match &f.content {
+                    gorca_present::Content::Text(t) => Some(t),
+                    gorca_present::Content::Msg { .. }
+                    | gorca_present::Content::Ext(_)
+                    | gorca_present::Content::UnknownMsg(_)
+                    | gorca_present::Content::Opaque { .. } => None,
+                };
+                FieldLine {
+                    kind: f
+                        .kind
+                        .name()
+                        .map_or_else(|| format!("ext-{}", f.kind.0), str::to_owned),
+                    row: row.0,
+                    group: Group::from_code(group),
+                    via,
+                    // A secret node's lengths are withheld too, whichever signal says so.
+                    chars: text
+                        .filter(|_| !node_secret)
+                        .map_or(0, |t| t.chars().count()),
+                    secret: f.is_secret(),
+                    text: (with_text && !f.is_secret())
+                        .then(|| text.map(|t| t.chars().take(TEXT_CUT).collect()))
+                        .flatten(),
+                }
+            })
+            .collect();
+        self
+    }
+
     /// Segments that are catalogue messages.
     pub fn catalogue(&self) -> usize {
         self.segments.iter().filter(|s| s.msg.is_some()).count()
@@ -208,6 +274,29 @@ impl ExplainReport {
                 let _ = write!(l, " text={t:?}");
             }
             out.push(l);
+        }
+        for (i, f) in self.fields.iter().enumerate() {
+            let mut l = format!(
+                "  field {i} kind={} row={} group={} via={} chars={}",
+                f.kind,
+                f.row,
+                f.group.map_or("none", Group::name),
+                f.via,
+                f.chars
+            );
+            if f.secret {
+                l.push_str(" secret");
+            }
+            if let Some(t) = &f.text {
+                let _ = write!(l, " text={t:?}");
+            }
+            out.push(l);
+        }
+        if self.fields.is_empty() {
+            out.push(
+                "  no PresIr kept for this utterance (only a focus presentation keeps one)"
+                    .to_owned(),
+            );
         }
         match &self.groups {
             None => out.push("  no fused entry on the node".to_owned()),
@@ -286,6 +375,7 @@ pub fn explain_utterance(
     ExplainReport {
         utterance: u.id.0,
         segments,
+        fields: Vec::new(),
         groups,
         sources: names,
     }
@@ -340,10 +430,14 @@ pub fn log_report(
     sources: &SourceDirectory,
     u: &Utterance,
     entry: Option<&SemEntry>,
+    ir: Option<&Redacted>,
     secret: bool,
 ) -> ExplainReport {
     let with_text = EXPLAIN_TEXT.load(Ordering::Relaxed) && !secret;
-    let report = explain_utterance(u, entry, None, sources, with_text);
+    let mut report = explain_utterance(u, entry, None, sources, with_text);
+    if let Some(ir) = ir {
+        report = report.with_ir(ir, with_text, secret);
+    }
     for line in report.render() {
         tracing::info!(target: "gorca::explain", "{line}");
     }
@@ -473,10 +567,83 @@ mod tests {
         let r = explain_utterance(&u, Some(&e), None, &SourceDirectory::new(), true);
         assert!(r.segments.iter().all(|s| s.text.is_none()), "{r:?}");
         // The caller knows better than the entry (native role says password): same result.
-        let r = log_report(&SourceDirectory::new(), &u, Some(&entry()), true);
+        let r = log_report(&SourceDirectory::new(), &u, Some(&entry()), None, true);
         assert!(r.segments.iter().all(|s| s.text.is_none()), "{r:?}");
         // An ordinary node with the opt-in still shows its (cut) text.
         let r = explain_utterance(&u, Some(&entry()), None, &SourceDirectory::new(), true);
         assert!(r.segments.iter().all(|s| s.text.is_some()));
+    }
+
+    fn ir_of(role: gorca_model::sem::SemRole, name: &str, value: &str) -> Redacted {
+        let mut e = entry();
+        e.sem.role = role;
+        e.name = Some(name.into());
+        e.sem.text = Some(std::sync::Arc::new(gorca_model::sem::SemText {
+            value_text: Some(value.into()),
+            ..gorca_model::sem::SemText::default()
+        }));
+        let key = gorca_model::NodeKey {
+            app: gorca_model::AppId {
+                connector: gorca_model::ConnectorId(1),
+                serial: 1,
+            },
+            local: gorca_model::LocalId(1),
+        };
+        let ctx = gorca_present::ComposeCtx {
+            flags: gorca_present::ReportFlags::default(),
+            may_refine: false,
+            web: false,
+            skip_selected: false,
+            hedge_inferred: false,
+            lang: gorca_i18n::Lang::En,
+        };
+        gorca_present::compose(&e, key, gorca_present::Reason::Focus, ctx)
+            .unwrap()
+            .redacted()
+    }
+
+    #[test]
+    fn explain_lists_the_rule_row_and_group_of_every_field_of_the_ir() {
+        let ir = ir_of(gorca_model::sem::SemRole::Slider, "Volume", "50");
+        let r = explain_utterance(&utt(&["x"]), None, None, &SourceDirectory::new(), false)
+            .with_ir(&ir, false, false);
+        let kinds: Vec<&str> = r.fields.iter().map(|f| f.kind.as_str()).collect();
+        assert_eq!(kinds, ["name", "role", "value"], "{:?}", r.fields);
+        assert_eq!(r.fields[0].group, Some(Group::Name));
+        assert_eq!(r.fields[1].group, Some(Group::Role));
+        assert_eq!(r.fields[2].group, Some(Group::ValueText));
+        assert!(r.fields.iter().all(|f| f.row == 1 && f.text.is_none()));
+        let lines = r.render().join("\n");
+        assert!(
+            lines.contains("field 0 kind=name row=1 group=name via=0"),
+            "{lines}"
+        );
+    }
+
+    #[test]
+    fn explain_never_lists_the_content_of_a_secret_field() {
+        let ir = ir_of(
+            gorca_model::sem::SemRole::PasswordBox,
+            "Pass",
+            "hunter2-correct-horse",
+        );
+        let r = explain_utterance(&utt(&["x"]), None, None, &SourceDirectory::new(), true)
+            .with_ir(&ir, true, true);
+        let value = r
+            .fields
+            .iter()
+            .find(|f| f.kind == "value")
+            .expect("the value field");
+        assert!(
+            value.secret && value.text.is_none() && value.chars == 0,
+            "{value:?}"
+        );
+        let lines = r.render().join("\n");
+        assert!(!lines.contains("hunter2"), "{lines}");
+        // An ordinary field still shows its cut text with the opt-in.
+        let plain = ir_of(gorca_model::sem::SemRole::Slider, "Volume", "50");
+        let r = explain_utterance(&utt(&["x"]), None, None, &SourceDirectory::new(), true)
+            .with_ir(&plain, true, false);
+        assert!(r.fields.iter().any(|f| f.text.as_deref() == Some("Volume")));
     }
 }

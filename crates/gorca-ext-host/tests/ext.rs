@@ -38,9 +38,23 @@ fn present_replaces_only_for_the_node_the_extension_wants() {
         let ae = attach(&h, 1, "anything");
         let yes = snap(app(1), 1, Role::Button, Some("gorca-ext-present"));
         let no = snap(app(1), 2, Role::Button, Some("OK"));
-        let got = ae.present(&yes, PresentContext::Focus, 1).expect("{b:?}");
+        let got = ae
+            .present(
+                &gorca_core::ExtNode::from_snapshot(&yes),
+                PresentContext::Focus,
+                1,
+            )
+            .expect("{b:?}");
         assert_eq!(segments_text(&got), "ext presented", "{b:?}");
-        assert!(ae.present(&no, PresentContext::Focus, 1).is_none(), "{b:?}");
+        assert!(
+            ae.present(
+                &gorca_core::ExtNode::from_snapshot(&no),
+                PresentContext::Focus,
+                1
+            )
+            .is_none(),
+            "{b:?}"
+        );
     }
 }
 
@@ -204,7 +218,12 @@ fn three_resets_in_a_minute_disable_with_one_announcement() {
         );
         let yes = snap(app(1), 1, Role::Button, Some("gorca-ext-present"));
         assert!(
-            ae.present(&yes, PresentContext::Focus, 1).is_none(),
+            ae.present(
+                &gorca_core::ExtNode::from_snapshot(&yes),
+                PresentContext::Focus,
+                1
+            )
+            .is_none(),
             "{b:?}"
         );
         assert_eq!(h.stats().faults, 3, "{b:?}");
@@ -248,7 +267,11 @@ fn the_core_still_presents_when_the_extension_faults() {
                 let reg = PresenterRegistry::builtin().with_ext(h.clone());
                 let n = snap(app(1), 1, Role::Button, Some(name));
                 let t = Instant::now();
-                let u = reg.ext_segments(PresentContext::Focus, &n, Epoch(1));
+                let u = reg.ext_segments(
+                    PresentContext::Focus,
+                    &gorca_core::ExtNode::from_snapshot(&n),
+                    Epoch(1),
+                );
                 let took = t.elapsed();
                 settle(&h);
                 assert!(
@@ -265,7 +288,11 @@ fn the_core_still_presents_when_the_extension_faults() {
         let reg = PresenterRegistry::builtin().with_ext(h.clone());
         let ok = snap(app(1), 2, Role::Button, Some("gorca-ext-present"));
         let u = reg
-            .ext_segments(PresentContext::Focus, &ok, Epoch(1))
+            .ext_segments(
+                PresentContext::Focus,
+                &gorca_core::ExtNode::from_snapshot(&ok),
+                Epoch(1),
+            )
             .expect("the extension presented");
         assert_eq!(u.len(), 1);
         assert_eq!(&*u[0].text, "ext presented");
@@ -274,12 +301,11 @@ fn the_core_still_presents_when_the_extension_faults() {
 
 #[test]
 fn a_faulting_policy_hook_is_no_opinion_and_the_instance_is_reset() {
-    use gorca_core::{PolicyFacts, PolicyMoment, PolicyVerdict};
-    use gorca_model::StateSet;
-    let facts = |name| PolicyFacts {
+    use gorca_core::{PolicyMoment, PolicyVerdict, PolicyView};
+    let facts = |name| PolicyView {
         moment: PolicyMoment::Focus,
-        role: Role::Button,
-        states: StateSet::empty(),
+        role: gorca_model::sem::SemRole::Button,
+        flags: 0,
         name: Some(name),
         description: None,
         range: None,
@@ -721,4 +747,65 @@ fn an_extension_catalog_is_registered_only_after_validation_and_never_replaces_a
     assert_eq!(catalog_text("ext-test", "probe"), "probe");
     assert_eq!(catalog_text("ext-vte", "probe"), "core text");
     let _ = std::fs::remove_dir_all(root);
+}
+
+/// `host.read-group` reads the fused entry of a node of the extension's own application from the
+/// mirror, in both runtimes: the role and name of an ordinary node, nothing of the name of a
+/// password (whatever the native role says), nothing for a group the build does not know or the
+/// entry does not hold, and nothing for another application.
+#[test]
+fn read_group_reads_the_fused_entry_and_withholds_a_secrets_text() {
+    use gorca_mirror::{ApplyOrigin, mirror};
+    use gorca_model::{NodeSnapshot, SnapshotBatch};
+    for b in BACKENDS {
+        let (h, _sink, dir) = host(b);
+        let (mut writer, handle) = mirror();
+        dir.insert(app(1), &handle);
+        let plain = snap(app(1), 100, Role::Button, Some("Visible name")).with_test_record();
+        let secret = snap(app(1), 101, Role::PasswordEntry, Some("Hidden name")).with_test_record();
+        writer.apply(
+            SnapshotBatch {
+                nodes: vec![Arc::new(plain.clone()), Arc::new(secret.clone())],
+                ..Default::default()
+            },
+            ApplyOrigin::Push,
+        );
+        let ae = attach(&h, 1, "anything");
+        let said = |n: &NodeSnapshot| {
+            segments_text(
+                &ae.present(
+                    &gorca_core::ExtNode::from_snapshot(n),
+                    PresentContext::Focus,
+                    1,
+                )
+                .expect("the accessor extension answers"),
+            )
+        };
+        let p = said(&plain);
+        assert!(
+            p.contains("name=Some(Text(\"Visible name\"))") && p.contains("unknown=None"),
+            "{b:?}: {p}"
+        );
+        assert!(
+            p.contains(&format!(
+                "role=Some(Code({}))",
+                gorca_model::sem::SemRole::Button.code()
+            )),
+            "{b:?}: {p}"
+        );
+        let s = said(&secret);
+        assert!(!s.contains("Hidden name"), "{b:?}: {s}");
+        assert!(
+            s.contains("name=None") && s.contains("description=None"),
+            "{b:?}: {s}"
+        );
+        // The role is still readable: the extension can tell it is a password.
+        assert!(
+            s.contains(&format!(
+                "role=Some(Code({}))",
+                gorca_model::sem::SemRole::PasswordBox.code()
+            )),
+            "{b:?}: {s}"
+        );
+    }
 }

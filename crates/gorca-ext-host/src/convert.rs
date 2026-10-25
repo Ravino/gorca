@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Core types to extension types and back. The extension API is deliberately a narrow subset of
-//! the core model (ADR-0001 section 10): ids are packed integers, roles are the WIT enum, text is
+//! the core model (ADR-0001 section 10): ids are packed integers, roles are registry codes, text is
 //! copied. Everything an extension returns is clamped here, so a hostile or buggy extension cannot
 //! make the core allocate or speak without bound.
 
 use gorca_ext_api as api;
 use gorca_model::{
-    AppId, ConnectorId, LocalId, NodeEvent, NodeKey, NodeSnapshot, Role, Segment, SegmentKind,
-    WindowKind,
+    AppId, ConnectorId, LocalId, NodeEvent, NodeKey, Segment, SegmentKind, WindowKind,
 };
 
 /// Most segments one verdict, presentation or command answer may carry.
@@ -55,85 +54,34 @@ pub fn app_text(s: &str, max: usize) -> String {
     clip(&gorca_i18n::ext::sanitize(s), max)
 }
 
-pub fn role_to_ext(r: Role) -> api::Role {
-    use api::Role as A;
-    match r {
-        Role::Unknown => A::Unknown,
-        Role::Application => A::Application,
-        Role::Window => A::Window,
-        Role::Dialog => A::Dialog,
-        Role::Panel => A::Panel,
-        Role::Document => A::Document,
-        Role::DocumentWeb => A::DocumentWeb,
-        Role::Heading => A::Heading,
-        Role::Paragraph => A::Paragraph,
-        Role::Link => A::Link,
-        Role::Image => A::Image,
-        Role::List => A::List,
-        Role::ListItem => A::ListItem,
-        Role::Table => A::Table,
-        Role::Row => A::Row,
-        Role::Cell => A::Cell,
-        Role::ColumnHeader => A::ColumnHeader,
-        Role::RowHeader => A::RowHeader,
-        Role::Button => A::Button,
-        // The extension ABI has no switch role (WIT is frozen): a switch is a toggle button there.
-        Role::ToggleButton | Role::Switch => A::ToggleButton,
-        Role::CheckBox => A::CheckBox,
-        Role::RadioButton => A::RadioButton,
-        Role::ComboBox => A::ComboBox,
-        Role::TextEntry => A::TextEntry,
-        Role::PasswordEntry => A::PasswordEntry,
-        Role::SpinButton => A::SpinButton,
-        Role::Slider => A::Slider,
-        Role::ProgressBar => A::ProgressBar,
-        Role::Menu => A::Menu,
-        Role::MenuBar => A::MenuBar,
-        Role::MenuItem => A::MenuItem,
-        Role::Popover => A::Popover,
-        Role::Tab => A::Tab,
-        Role::TabList => A::TabList,
-        Role::Tree => A::Tree,
-        Role::TreeItem => A::TreeItem,
-        Role::Toolbar => A::Toolbar,
-        Role::StatusBar => A::StatusBar,
-        Role::Separator => A::Separator,
-        Role::Label => A::Label,
-        Role::StaticText => A::StaticText,
-        Role::Terminal => A::Terminal,
-        Role::Landmark => A::Landmark,
-        Role::Alert => A::Alert,
+/// The node as an extension sees it: the facts of its fused entry, clipped. The core withheld a
+/// secret field's text and range already (`ExtNode::new`), so there is no second secrecy
+/// decision here.
+pub fn node_to_ext(n: &gorca_core::ExtNode) -> api::Node {
+    api::Node {
+        key: key_to_ext(n.key),
+        role: n.role.code(),
+        flags: n.flags,
+        name: n.name.as_deref().map(|s| app_text(s, MAX_NODE_TEXT_CHARS)),
+        description: n
+            .description
+            .as_deref()
+            .map(|s| app_text(s, MAX_NODE_TEXT_CHARS)),
+        range: n
+            .range
+            .map(|(current, min, max)| api::Range { current, min, max }),
     }
 }
 
-/// The snapshot as an extension sees it. A password field's name and description are withheld:
-/// nothing marks the text as secret once it is in a sandbox, and no extension needs it.
-pub fn node_to_ext(n: &NodeSnapshot) -> api::Node {
-    let secret = n.is_sensitive();
-    api::Node {
-        range: match &n.value {
-            Some(gorca_model::Value::Range { current, min, max }) => Some(api::Range {
-                current: *current,
-                min: *min,
-                max: *max,
-            }),
-            _ => None,
-        },
-        key: key_to_ext(n.key),
-        role: role_to_ext(n.role),
-        states: n.states.bits(),
-        name: if secret {
-            None
-        } else {
-            n.name.as_deref().map(|s| app_text(s, MAX_NODE_TEXT_CHARS))
-        },
-        description: if secret {
-            None
-        } else {
-            n.description
-                .as_deref()
-                .map(|s| app_text(s, MAX_NODE_TEXT_CHARS))
-        },
+/// One fused group as an extension reads it.
+pub fn group_to_ext(g: gorca_core::ExtGroup) -> api::GroupValue {
+    match g {
+        gorca_core::ExtGroup::Code(c) => api::GroupValue::Code(c),
+        gorca_core::ExtGroup::Bits(b) => api::GroupValue::Bits(b),
+        gorca_core::ExtGroup::Number(n) => api::GroupValue::Number(n),
+        gorca_core::ExtGroup::Text(t) => {
+            api::GroupValue::Text(clip(&gorca_i18n::ext::sanitize(&t), MAX_NODE_TEXT_CHARS))
+        }
     }
 }
 

@@ -155,7 +155,11 @@ fn fuzz_once(b: Backend) -> bool {
                     let name = r.text(6000);
                     let role = ROLES[usize::try_from(r.below(ROLES.len() as u64)).unwrap_or(0)];
                     let n = snap(app(1), r.next(), role, Some(&name));
-                    let _ = ae.present(&n, PresentContext::Focus, r.next());
+                    let _ = ae.present(
+                        &gorca_core::ExtNode::from_snapshot(&n),
+                        PresentContext::Focus,
+                        r.next(),
+                    );
                 }
                 _ => {
                     let ext = if r.below(2) == 0 {
@@ -222,8 +226,8 @@ fn extreme_values_straight_into_a_component_are_contained() {
         }
         let n = api::Node {
             key: (r.next(), r.next()),
-            role: api::Role::from_index(u8::try_from(r.below(44)).unwrap_or(0)).unwrap(),
-            states: r.next(),
+            role: u16::try_from(r.below(100)).unwrap_or(0),
+            flags: r.next(),
             name: Some(r.text(5000)),
             description: None,
             range: None,
@@ -312,7 +316,14 @@ fn garbage_answers_are_clamped() {
         v => panic!("{v:?}"),
     }
     let n = snap(app(1), 1, Role::Button, Some("n"));
-    let segs = uninterrupted(&h, || ae.present(&n, PresentContext::Focus, 1)).expect("some");
+    let segs = uninterrupted(&h, || {
+        ae.present(
+            &gorca_core::ExtNode::from_snapshot(&n),
+            PresentContext::Focus,
+            1,
+        )
+    })
+    .expect("some");
     assert!(segs.len() <= MAX_SEGMENTS);
     assert!(segs.iter().all(|x| !x.text.is_empty()));
     ae.command("garbage", 1);

@@ -55,81 +55,39 @@ impl Segment {
     }
 }
 
-/// Calls `$cb!(A, B, ...)` with every role variant, in WIT order. Keeps the Rust enum, the WIT
-/// enum and the conversions in step (the generated enums on both sides use the same names).
-#[macro_export]
-macro_rules! for_each_role {
-    ($cb:ident) => {
-        $cb!(
-            Unknown,
-            Application,
-            Window,
-            Dialog,
-            Panel,
-            Document,
-            DocumentWeb,
-            Heading,
-            Paragraph,
-            Link,
-            Image,
-            List,
-            ListItem,
-            Table,
-            Row,
-            Cell,
-            ColumnHeader,
-            RowHeader,
-            Button,
-            ToggleButton,
-            CheckBox,
-            RadioButton,
-            ComboBox,
-            TextEntry,
-            PasswordEntry,
-            SpinButton,
-            Slider,
-            ProgressBar,
-            Menu,
-            MenuBar,
-            MenuItem,
-            Popover,
-            Tab,
-            TabList,
-            Tree,
-            TreeItem,
-            Toolbar,
-            StatusBar,
-            Separator,
-            Label,
-            StaticText,
-            Terminal,
-            Landmark,
-            Alert
-        );
-    };
+/// A semantic role: a code of the append-only role registry ([`crate::codes::ROLES`], the
+/// `gorca-model` `SemRole` codes). An unknown code means "unknown", never a trap.
+pub type RoleCode = u16;
+
+/// A fused group: a code of the group registry ([`crate::codes::GROUPS`]).
+pub type GroupCode = u16;
+
+/// Role codes an extension can name without looking the registry up (kept equal to
+/// [`crate::codes::ROLES`] by a test).
+pub mod role {
+    use super::RoleCode;
+    pub const UNKNOWN: RoleCode = 0;
+    pub const ALERT: RoleCode = 2;
+    pub const ALERT_DIALOG: RoleCode = 3;
+    pub const DIALOG: RoleCode = 19;
+    pub const METER: RoleCode = 45;
+    pub const PROGRESS_BAR: RoleCode = 50;
+    pub const SLIDER: RoleCode = 61;
+    pub const WINDOW: RoleCode = 79;
 }
 
-macro_rules! define_role {
-    ($($v:ident),* $(,)?) => {
-        /// Role names as in the WIT `role` enum.
-        #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-        #[repr(u8)]
-        pub enum Role {
-            $($v),*
-        }
-
-        impl Role {
-            /// Every role, in WIT order.
-            pub const ALL: &'static [Role] = &[$(Role::$v),*];
-
-            /// The role with WIT index `i`.
-            pub fn from_index(i: u8) -> Option<Role> {
-                Self::ALL.get(usize::from(i)).copied()
-            }
-        }
-    };
+/// The value of one fused group in the shape its registry row names (WIT `group-value`).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum GroupValue {
+    /// Enumerated groups: role, check, press, expand, select, current, invalid, popup, ...
+    Code(u16),
+    /// Bit-set groups: flags, avail.
+    Bits(u64),
+    /// Integer groups: level.
+    Number(u32),
+    /// Text groups: name, description.
+    Text(String),
 }
-for_each_role!(define_role);
 
 /// A numeric value as the application reports it (WIT `range`).
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -142,8 +100,9 @@ pub struct Range {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     pub key: NodeKey,
-    pub role: Role,
-    pub states: u64,
+    pub role: RoleCode,
+    /// The `flags` group bits of the fused entry.
+    pub flags: u64,
     pub name: Option<String>,
     pub description: Option<String>,
     pub range: Option<Range>,
@@ -234,12 +193,12 @@ pub enum PolicyMoment {
     Showing,
 }
 
-/// What a policy sees of a node (WIT `policy-facts`).
+/// What a policy sees of a node (WIT `policy-view`).
 #[derive(Clone, Debug, PartialEq)]
-pub struct PolicyFacts {
+pub struct PolicyView {
     pub moment: PolicyMoment,
-    pub role: Role,
-    pub states: u64,
+    pub role: RoleCode,
+    pub flags: u64,
     pub name: Option<String>,
     pub description: Option<String>,
     pub range: Option<Range>,
@@ -265,6 +224,8 @@ pub enum PolicyVerdict {
 pub trait Host {
     /// Mirror only, never blocks.
     fn get_node(&self, key: NodeKey) -> Option<Node>;
+    /// One fused group of a node of this application. Mirror only, never blocks.
+    fn read_group(&self, key: NodeKey, group: GroupCode) -> Option<GroupValue>;
     /// Host-enforced deadline.
     fn fetch(&self, key: NodeKey, mask: u32, b: Budget) -> Result<Node, QueryError>;
     fn text(&self, key: NodeKey, start: u32, end: u32, b: Budget) -> Result<String, QueryError>;
@@ -285,7 +246,7 @@ pub trait Hooks {
         None
     }
     /// The application policy: facts in, verdict out (ADR-0008 W3). Defers by default.
-    fn policy(&mut self, _f: &PolicyFacts) -> PolicyVerdict {
+    fn policy(&mut self, _f: &PolicyView) -> PolicyVerdict {
         PolicyVerdict::Defer
     }
     fn nav_units(&self) -> Vec<NavUnit> {
@@ -322,15 +283,5 @@ mod tests {
             EventVerdict::Pass.then(EventVerdict::Pass),
             EventVerdict::Pass
         );
-    }
-
-    #[test]
-    fn roles_index_round_trips() {
-        for (i, r) in Role::ALL.iter().enumerate() {
-            assert_eq!(*r as usize, i);
-            assert_eq!(Role::from_index(u8::try_from(i).unwrap()), Some(*r));
-        }
-        assert_eq!(Role::from_index(200), None);
-        assert_eq!(Role::ALL.len(), 44);
     }
 }

@@ -602,7 +602,18 @@ impl Reader {
             .and_then(|k| self.dir.lookup(k).hit());
         let entry = node.as_ref().and_then(|n| n.sem.entry.clone());
         let secret = self.explain_withholds_text(node.as_ref());
-        let r = super::diag::log_report(&self.sources, &u, entry.as_deref(), secret);
+        // The IR the words actually spoken were made from, kept when they were built (rows,
+        // groups, the extension's and the policy's edits). Only a focus presentation keeps one;
+        // for any other utterance the report says so. Redacted, so a secret's content cannot be
+        // listed.
+        let ir = self
+            .last_ir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+            .filter(|(id, _)| *id == u.id)
+            .map(|(_, ir)| ir);
+        let r = super::diag::log_report(&self.sources, &u, entry.as_deref(), ir.as_ref(), secret);
         let text = msg!(
             ExplainSummary,
             segments = r.segments.len(),

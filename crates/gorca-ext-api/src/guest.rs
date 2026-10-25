@@ -6,8 +6,8 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 
 use crate::api::{
-    Budget, CommandResult, Event, EventVerdict, Hooks, NavUnit, Node, PolicyFacts, PolicyMoment,
-    PolicyVerdict, PresentCtx, PresentReason, Prio, QueryError, Role, Segment, SegmentKind,
+    Budget, CommandResult, Event, EventVerdict, GroupValue, Hooks, NavUnit, Node, PolicyMoment,
+    PolicyVerdict, PolicyView, PresentCtx, PresentReason, Prio, QueryError, Segment, SegmentKind,
 };
 
 #[allow(clippy::all, clippy::pedantic, missing_docs, unused_unsafe)]
@@ -23,23 +23,20 @@ pub mod wit {
 use wit::exports::gorca::ext::hooks as wh;
 use wit::gorca::ext::types as wt;
 
-macro_rules! role_to_wit {
-    ($($v:ident),*) => {
-        fn role_to_wit(r: Role) -> wt::Role {
-            match r { $(Role::$v => wt::Role::$v),* }
-        }
-        fn role_from_wit(r: wt::Role) -> Role {
-            match r { $(wt::Role::$v => Role::$v),* }
-        }
-    };
+pub fn group_value_from_wit(v: wt::GroupValue) -> GroupValue {
+    match v {
+        wt::GroupValue::Code(c) => GroupValue::Code(c),
+        wt::GroupValue::Bits(b) => GroupValue::Bits(b),
+        wt::GroupValue::Number(n) => GroupValue::Number(n),
+        wt::GroupValue::Text(t) => GroupValue::Text(t),
+    }
 }
-crate::for_each_role!(role_to_wit);
 
 pub fn node_to_wit(n: Node) -> wt::Node {
     wt::Node {
         key: n.key,
-        role: role_to_wit(n.role),
-        states: n.states,
+        role: n.role,
+        flags: n.flags,
         name: n.name,
         description: n.description,
         range: n.range.map(|r| wt::Range {
@@ -53,8 +50,8 @@ pub fn node_to_wit(n: Node) -> wt::Node {
 pub fn node_from_wit(n: wt::Node) -> Node {
     Node {
         key: n.key,
-        role: role_from_wit(n.role),
-        states: n.states,
+        role: n.role,
+        flags: n.flags,
         name: n.name,
         description: n.description,
         range: n.range.map(|r| crate::Range {
@@ -141,16 +138,16 @@ fn ctx_from_wit(c: wt::PresentCtx) -> PresentCtx {
     }
 }
 
-fn policy_facts_from_wit(f: wt::PolicyFacts) -> PolicyFacts {
-    PolicyFacts {
+fn policy_view_from_wit(f: wt::PolicyView) -> PolicyView {
+    PolicyView {
         moment: match f.moment {
             wt::PolicyMoment::Focus => PolicyMoment::Focus,
             wt::PolicyMoment::Value => PolicyMoment::Value,
             wt::PolicyMoment::Activate => PolicyMoment::Activate,
             wt::PolicyMoment::Showing => PolicyMoment::Showing,
         },
-        role: role_from_wit(f.role),
-        states: f.states,
+        role: f.role,
+        flags: f.flags,
         name: f.name,
         description: f.description,
         range: f.range.map(|r| crate::Range {
@@ -210,8 +207,8 @@ impl<T: Hooks + Default + 'static> wh::Guest for Adapter<T> {
             .map(|v| v.into_iter().map(segment_to_wit).collect())
     }
 
-    fn policy(f: wt::PolicyFacts) -> wt::PolicyVerdict {
-        policy_verdict_to_wit(with::<T, _>(|e| e.policy(&policy_facts_from_wit(f))))
+    fn policy(f: wt::PolicyView) -> wt::PolicyVerdict {
+        policy_verdict_to_wit(with::<T, _>(|e| e.policy(&policy_view_from_wit(f))))
     }
 
     fn nav_units() -> Vec<wt::NavUnit> {

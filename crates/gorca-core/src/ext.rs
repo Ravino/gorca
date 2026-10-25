@@ -2,7 +2,7 @@
 //! Extension hook points (ADR-0001 section 10, ADR-0008 section 3.3).
 //!
 //! The core owns the *shape* of the hooks and nothing else: these traits use core types only
-//! (`NodeSnapshot`, `NodeEvent`, `Segment`), so the core never links `gorca-ext-host`, wasmtime
+//! (`ExtNode`, `NodeEvent`, `Segment`), so the core never links `gorca-ext-host`, wasmtime
 //! or any extension. `gorca-daemon` wires an implementation (`gorca_ext_host::ExtHost`) through
 //! [`crate::Core::with_ext`].
 //!
@@ -27,7 +27,8 @@ use std::sync::{Arc, OnceLock};
 use gorca_config::{ChordSpec, ContextName};
 use gorca_ext_api::terminal::{Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot};
 use gorca_input_api::CmdId;
-use gorca_model::{AppId, AppInfo, NodeEvent, NodeSnapshot, Segment};
+use gorca_model::sem::{Group, SemEntry, SemRole};
+use gorca_model::{AppId, AppInfo, NodeEvent, NodeKey, NodeSnapshot, Segment};
 
 use crate::commands::ContextMask;
 use crate::present::PresentContext;
@@ -59,6 +60,127 @@ impl ExtVerdict {
     }
 }
 
+/// The value of one fused group as an extension reads it (`host.read-group`): the shape the
+/// registry row names.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ExtGroup {
+    Code(u16),
+    Bits(u64),
+    Number(u32),
+    Text(String),
+}
+
+/// What an extension sees of a node: the facts of its fused entry, nothing of the connector's
+/// snapshot (ADR-0022 section 8.6). Built by the core, so the extension crates never name the
+/// legacy carriers. A secret field's text is withheld here, once, for every boundary
+/// (`NodeSnapshot::is_sensitive` and the entry's role, the one secrecy question): no name, no
+/// description, no range, and every text group reads `None`.
+#[derive(Clone, Debug)]
+pub struct ExtNode {
+    pub key: NodeKey,
+    /// The fused role (registry code on the wire).
+    pub role: SemRole,
+    /// The `flags` group bits of the fused entry.
+    pub flags: u64,
+    pub name: Option<Arc<str>>,
+    pub description: Option<Arc<str>>,
+    /// `(current, min, max)` of a range value (a slider, a level bar).
+    pub range: Option<(f64, f64, f64)>,
+    secret: bool,
+    entry: Arc<SemEntry>,
+}
+
+impl ExtNode {
+    /// The node `snap` with its fused `entry`.
+    #[must_use]
+    pub fn new(snap: &NodeSnapshot, entry: Arc<SemEntry>) -> Self {
+        let secret = gorca_present::is_secret_entry(&entry) || snap.is_sensitive();
+        Self {
+            key: snap.key,
+            role: entry.sem.role,
+            flags: u64::from(entry.sem.flags.bits()),
+            name: if secret { None } else { entry.name.clone() },
+            description: if secret {
+                None
+            } else {
+                entry
+                    .sem
+                    .text
+                    .as_deref()
+                    .and_then(|t| t.description.clone())
+            },
+            range: match &snap.value {
+                Some(gorca_model::Value::Range { current, min, max }) if !secret => {
+                    Some((*current, *min, *max))
+                }
+                Some(gorca_model::Value::Range { .. } | gorca_model::Value::Text(_)) | None => None,
+            },
+            secret,
+            entry,
+        }
+    }
+
+    /// The node of a snapshot the way the application's own mirror holds it: the attached entry,
+    /// else the provisional entry of the source record (PV-1), else an entry with only the name.
+    /// The Reader uses [`ExtNode::new`] with the document's entry for a web node.
+    #[must_use]
+    pub fn from_snapshot(snap: &NodeSnapshot) -> Self {
+        let entry = match (&snap.sem.entry, &snap.sem.rec) {
+            (Some(e), _) => Arc::clone(e),
+            (None, Some(r)) => Arc::new(r.provisional_entry()),
+            (None, None) => Arc::new(SemEntry {
+                name: snap.name.clone(),
+                ..SemEntry::default()
+            }),
+        };
+        Self::new(snap, entry)
+    }
+
+    /// Is this a secret field?
+    #[must_use]
+    pub fn is_secret(&self) -> bool {
+        self.secret
+    }
+
+    /// One fused group (WIT `read-group`). `None` for a group the entry does not know, a code
+    /// this build does not know, a group that has no shape here, and every text group of a secret.
+    #[must_use]
+    pub fn group(&self, code: u16) -> Option<ExtGroup> {
+        let g = Group::from_code(u8::try_from(code).ok()?)?;
+        let e = &self.entry;
+        if !e.known.has(g) && g != Group::Role {
+            return None;
+        }
+        let s = &e.sem;
+        Some(match g {
+            Group::Role => ExtGroup::Code(s.role.code()),
+            Group::Name => ExtGroup::Text(self.name.as_deref()?.to_owned()),
+            Group::Description => ExtGroup::Text(self.description.as_deref()?.to_owned()),
+            Group::Check => ExtGroup::Code(u16::from(s.check.code())),
+            Group::Press => ExtGroup::Code(u16::from(s.press.code())),
+            Group::Expand => ExtGroup::Code(u16::from(s.expand.code())),
+            Group::Select => ExtGroup::Code(u16::from(s.select.code())),
+            Group::Current => ExtGroup::Code(u16::from(s.current.code())),
+            Group::Invalid => ExtGroup::Code(u16::from(s.invalid.code())),
+            Group::Popup => ExtGroup::Code(u16::from(s.popup.code())),
+            Group::Avail => ExtGroup::Bits(u64::from(s.avail.code())),
+            Group::Flags => ExtGroup::Bits(self.flags),
+            Group::Level => ExtGroup::Number(u32::from(s.level)),
+            Group::Orientation => ExtGroup::Code(u16::from(s.orientation.code())),
+            Group::Sort => ExtGroup::Code(u16::from(s.sort.code())),
+            Group::SetPos
+            | Group::Grid
+            | Group::Live
+            | Group::RoleDescription
+            | Group::Placeholder
+            | Group::KeyShortcuts
+            | Group::ValueText
+            | Group::NameFrom
+            | Group::ErrorText => return None,
+        })
+    }
+}
+
 /// The extensions that matched one application, as the hook points see them.
 pub trait AppExt: Send + Sync + fmt::Debug {
     /// `on-event` for every extension that matched, in manifest order. Called by the app actor
@@ -66,14 +188,13 @@ pub trait AppExt: Send + Sync + fmt::Debug {
     fn on_event(&self, ev: &NodeEvent) -> ExtVerdict;
     /// `present`: the first extension that answers `Some` wins. `None` also when an extension is
     /// busy, faulted or disabled: the core's own presentation runs.
-    fn present(&self, snap: &NodeSnapshot, ctx: PresentContext, epoch: u64)
-    -> Option<Vec<Segment>>;
+    fn present(&self, node: &ExtNode, ctx: PresentContext, epoch: u64) -> Option<Vec<Segment>>;
     /// `policy`: the first extension that does not defer wins (ADR-0008 W3). `None` when no
     /// extension has an opinion, is busy, faulted or disabled: the core's own policy (if any)
     /// runs. The default answers `None`.
     fn policy(
         &self,
-        _facts: &crate::builtin_ext::PolicyFacts<'_>,
+        _view: &crate::builtin_ext::PolicyView<'_>,
     ) -> Option<crate::builtin_ext::PolicyVerdict> {
         None
     }
@@ -461,5 +582,91 @@ mod tests {
             ExtVerdict::ReEvaluate.then(ExtVerdict::Suppress),
             ExtVerdict::ReEvaluate
         );
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod ext_node_tests {
+    use gorca_model::sem::{SemRole, SemText};
+    use gorca_model::{
+        AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSnapshot, Role,
+        StateSet, Value,
+    };
+
+    use super::*;
+
+    fn snap(role: Role) -> NodeSnapshot {
+        NodeSnapshot {
+            key: NodeKey {
+                app: AppId {
+                    connector: ConnectorId(1),
+                    serial: 1,
+                },
+                local: LocalId(3),
+            },
+            role,
+            states: StateSet::empty(),
+            name: Some(Arc::from("Volume")),
+            description: Some(Arc::from("The level")),
+            value: Some(Value::Range {
+                current: 0.5,
+                min: 0.0,
+                max: 1.0,
+            }),
+            parent: None,
+            children: ChildList::Unknown,
+            interfaces: Ifaces::empty(),
+            attrs: gorca_model::AttrMap::default(),
+            relations: gorca_model::Relations::default(),
+            bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
+            fresh: Freshness::Defunct,
+            sem: gorca_model::NodeSem::NONE,
+        }
+        .with_test_record()
+    }
+
+    fn entry(role: SemRole) -> Arc<SemEntry> {
+        let mut e = SemEntry::default();
+        e.sem.role = role;
+        e.name = Some(Arc::from("Volume"));
+        e.sem.text = Some(Arc::new(SemText {
+            description: Some(Arc::from("The level")),
+            ..SemText::default()
+        }));
+        e.known = e.known.with(Group::Name).with(Group::Description);
+        Arc::new(e)
+    }
+
+    #[test]
+    fn an_ordinary_node_carries_its_facts_and_answers_group_reads() {
+        let n = ExtNode::new(&snap(Role::Slider), entry(SemRole::Slider));
+        assert_eq!(n.role, SemRole::Slider);
+        assert_eq!(n.name.as_deref(), Some("Volume"));
+        assert_eq!(n.range, Some((0.5, 0.0, 1.0)));
+        assert!(!n.is_secret());
+        assert_eq!(n.group(0), Some(ExtGroup::Code(SemRole::Slider.code())));
+        assert_eq!(n.group(1), Some(ExtGroup::Text("Volume".to_owned())));
+        // An unregistered code and a group with no shape here read nothing.
+        assert_eq!(n.group(4000), None);
+        assert_eq!(n.group(Group::Grid.code().into()), None);
+    }
+
+    #[test]
+    fn a_secret_by_any_signal_has_no_text_and_no_range() {
+        // The fused role, the native role of the snapshot.
+        for (native, fused) in [
+            (Role::TextEntry, SemRole::PasswordBox),
+            (Role::PasswordEntry, SemRole::TextBox),
+        ] {
+            let n = ExtNode::new(&snap(native), entry(fused));
+            assert!(n.is_secret(), "{native:?} {fused:?}");
+            assert!(n.name.is_none() && n.description.is_none() && n.range.is_none());
+            assert_eq!(n.group(1), None, "name");
+            assert_eq!(n.group(2), None, "description");
+            assert!(n.group(0).is_some(), "the role stays readable");
+        }
     }
 }

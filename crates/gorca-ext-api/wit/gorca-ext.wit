@@ -4,18 +4,35 @@
 // and `present` (with `nav-units` / `nav-match` when a presenter asks) inline on the Reader lane,
 // which is why it has the tightest wall-clock backstop. No hook ever blocks: the host calls them
 // with a fuel budget, an epoch deadline and a per-call host-work budget (see gorca-ext-host).
-package gorca:ext@0.3.0;
+// 0.4.0 (M22b4): the extension boundary reads the fused semantic model, not the legacy role enum
+// and state set. `node.role` and `policy-view.role` are registry codes of the semantic roles
+// (`gorca_ext_api::codes::ROLES`), `flags` are the `flags` group bits of the fused entry, and the
+// rest of a node's facts are read through `host.read-group` (an accessor, so the records stay
+// frozen). `policy-facts` is `policy-view`. The text of a secret field is never carried.
+package gorca:ext@0.4.0;
 
 interface types {
   /// (app id, local id) of a core NodeKey.
   type node-key = tuple<u64, u64>;
 
-  enum role {
-    unknown, application, window, dialog, panel, document, document-web, heading, paragraph, link, image,
-    %list, list-item, table, row, cell, column-header, row-header, button, toggle-button,
-    check-box, radio-button, combo-box, text-entry, password-entry, spin-button, slider,
-    progress-bar, menu, menu-bar, menu-item, popover, tab, tab-list, tree, tree-item, toolbar,
-    status-bar, separator, label, static-text, terminal, landmark, alert,
+  /// A semantic role: a code of the append-only role registry (`gorca_ext_api::codes::ROLES`).
+  /// An unknown code means "unknown", never a trap.
+  type role-code = u16;
+
+  /// A fused group: a code of the group registry (`gorca_ext_api::codes::GROUPS`).
+  type group-code = u16;
+
+  /// The value of one fused group in the shape its registry row names (read through
+  /// `host.read-group`). Text is at most 1 KiB and is never a secret's.
+  variant group-value {
+    /// Enumerated groups: role, check, press, expand, select, current, invalid, popup, ...
+    code(u16),
+    /// Bit-set groups: flags, avail.
+    bits(u64),
+    /// Integer groups: level.
+    number(u32),
+    /// Text groups: name, description.
+    text(string),
   }
 
   /// A numeric value as the application reports it (sliders, level bars).
@@ -23,9 +40,9 @@ interface types {
 
   record node {
     key: node-key,
-    role: role,
-    /// StateSet bits.
-    states: u64,
+    role: role-code,
+    /// The `flags` group bits of the fused entry (`gorca_ext_api::flag`).
+    %flags: u64,
     name: option<string>,
     description: option<string>,
     /// The range value of a slider or level bar, if it has one.
@@ -91,11 +108,12 @@ interface types {
     showing,
   }
 
-  /// What a policy sees of a node: plain data (the `showing` moment carries only the role).
-  record policy-facts {
+  /// What a policy sees of a node: plain data (the `showing` moment carries only the role). More
+  /// facts of the node are read through `host.read-group`.
+  record policy-view {
     moment: policy-moment,
-    role: role,
-    states: u64,
+    role: role-code,
+    %flags: u64,
     name: option<string>,
     description: option<string>,
     range: option<range>,
@@ -121,10 +139,14 @@ interface types {
 }
 
 interface host {
-  use types.{node, node-key, budget, query-error, segment, prio};
+  use types.{node, node-key, budget, query-error, segment, prio, group-code, group-value};
 
   /// Mirror only, never blocks.
   get-node: func(key: node-key) -> option<node>;
+  /// One fused group of a node of this application, from the mirror (never blocks). `none` for a
+  /// node that is gone or of another application, a group the entry does not know, a code this
+  /// host does not know, and, for a secret field, every text group.
+  read-group: func(key: node-key, group: group-code) -> option<group-value>;
   /// Host-enforced deadline.
   fetch: func(key: node-key, mask: u32, b: budget) -> result<node, query-error>;
   text: func(key: node-key, start: u32, end: u32, b: budget) -> result<string, query-error>;
@@ -138,7 +160,7 @@ interface host {
 }
 
 interface hooks {
-  use types.{node, event, event-verdict, present-ctx, segment, nav-unit, command-result, policy-facts, policy-verdict};
+  use types.{node, event, event-verdict, present-ctx, segment, nav-unit, command-result, policy-view, policy-verdict};
 
   /// Limit: 2 ms CPU. Focus and removal events are routed whatever the verdict (the core keeps
   /// its focus bookkeeping); a `rewrite` there still speaks.
@@ -147,7 +169,7 @@ interface hooks {
   present: func(n: node, ctx: present-ctx) -> option<list<segment>>;
   /// Limit: 2 ms CPU. The application policy (ADR-0008 W3): facts in, verdict out; runs inline on
   /// the Reader like `present`. The first extension that does not `defer` wins.
-  policy: func(f: policy-facts) -> policy-verdict;
+  policy: func(f: policy-view) -> policy-verdict;
   nav-units: func() -> list<nav-unit>;
   nav-match: func(unit: u32, n: node) -> bool;
   /// Limit: 20 ms CPU.

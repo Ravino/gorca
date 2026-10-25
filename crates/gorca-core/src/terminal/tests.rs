@@ -572,7 +572,7 @@ fn a_terminal_whose_policy_was_disabled_is_still_watched_for_secret_prompts() {
         }
         fn present(
             &self,
-            _: &NodeSnapshot,
+            _: &crate::ExtNode,
             _: crate::present::PresentContext,
             _: u64,
         ) -> Option<Vec<gorca_model::Segment>> {

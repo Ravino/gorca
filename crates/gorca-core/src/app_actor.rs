@@ -1092,7 +1092,7 @@ impl AppActor {
         let known = self.read.view(node).hit();
         let alert = known
             .as_ref()
-            .is_some_and(|v| crate::present::is_notice_role(v.snap.role));
+            .is_some_and(|v| crate::present::is_notice_node(&v.snap));
         if !(alert || (known.is_none() && self.profile.watch_showing)) {
             return;
         }

@@ -93,8 +93,8 @@ pub const WIT_SOURCE: &str = include_str!("../wit/gorca-ext.wit");
 ///
 /// Pre-1.0 versions carry no ABI promise (ADR-0019 V-1): a component built against an older
 /// package does not instantiate against a newer host and is rebuilt. 0.3.0 added `term-config.word-level`,
-/// `term-config.boundary` and `term-action.cue`.
-pub const WIT_PACKAGE: &str = "gorca:ext@0.3.0";
+/// `term-config.boundary` and `term-action.cue`. 0.4.0 moved the node and policy records to semantic role codes and `flags` bits, renamed `policy-facts` to `policy-view` and added the `host.read-group` accessor.
+pub const WIT_PACKAGE: &str = "gorca:ext@0.4.0";
 
 /// CPU limit for `on-event` and `present` (milliseconds).
 pub const LIMIT_HOOK_MS: u32 = 2;
@@ -121,7 +121,7 @@ mod tests {
         assert_eq!(format!("{}:{}", name.namespace, name.name), "gorca:ext");
         assert_eq!(
             name.version.as_ref().map(ToString::to_string).as_deref(),
-            Some("0.3.0")
+            Some("0.4.0")
         );
         assert!(WIT_SOURCE.contains(WIT_PACKAGE));
         let world = resolve
@@ -141,24 +141,45 @@ mod tests {
     }
 
     #[test]
-    fn wit_role_enum_matches_the_rust_roles() {
+    fn the_role_codes_named_here_are_the_registry_codes() {
+        let code = |name: &str| {
+            codes::ROLES
+                .iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, c)| u16::try_from(*c).unwrap())
+                .unwrap()
+        };
+        assert_eq!(role::UNKNOWN, code("unknown"));
+        assert_eq!(role::ALERT, code("alert"));
+        assert_eq!(role::ALERT_DIALOG, code("alertdialog"));
+        assert_eq!(role::DIALOG, code("dialog"));
+        assert_eq!(role::METER, code("meter"));
+        assert_eq!(role::PROGRESS_BAR, code("progressbar"));
+        assert_eq!(role::SLIDER, code("slider"));
+        assert_eq!(role::WINDOW, code("window"));
+    }
+
+    #[test]
+    fn the_wit_declares_role_codes_the_read_group_accessor_and_policy_view() {
         let mut resolve = Resolve::new();
         resolve.push_str("gorca-ext.wit", WIT_SOURCE).unwrap();
-        let role = resolve
-            .types
-            .iter()
-            .find(|(_, t)| t.name.as_deref() == Some("role"))
-            .map(|(_, t)| t)
-            .unwrap();
-        let wit_parser::TypeDefKind::Enum(e) = &role.kind else {
-            panic!("role is not an enum");
+        let named = |n: &str| {
+            resolve
+                .types
+                .iter()
+                .any(|(_, t)| t.name.as_deref() == Some(n))
         };
-        let wit_names: Vec<String> = e.cases.iter().map(|c| c.name.replace('-', "")).collect();
-        let rust_names: Vec<String> = Role::ALL
+        assert!(named("role-code") && named("group-value") && named("policy-view"));
+        assert!(
+            !named("role") && !named("policy-facts"),
+            "the legacy names are gone"
+        );
+        let (_, host) = resolve
+            .interfaces
             .iter()
-            .map(|r| format!("{r:?}").to_ascii_lowercase())
-            .collect();
-        assert_eq!(wit_names, rust_names);
+            .find(|(_, i)| i.name.as_deref() == Some("host"))
+            .unwrap();
+        assert!(host.functions.contains_key("read-group"));
     }
 
     #[test]

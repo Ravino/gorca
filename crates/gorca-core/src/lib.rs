@@ -61,7 +61,7 @@ pub use browse::{
     BrowseCounters, BrowseSettings, FocusCause, ModeWord, Scope, WebEv, WebFx, WebMode,
 };
 pub use builtin_ext::AppProfile;
-pub use builtin_ext::{AppPolicy, PolicyFacts, PolicyMoment, PolicyVerdict};
+pub use builtin_ext::{AppPolicy, PolicyMoment, PolicyVerdict, PolicyView};
 pub use commands::{
     ATSPI_SOURCE, AtAct, Availability, CapitalLevels, CmdSpec, CommandTable, Compiled,
     ConfigRequest, ContextMask, ControlMsg, CoreCmd, ExplainReport, GateOut, InputNotice,
@@ -84,8 +84,8 @@ pub use doc_actor::{
 };
 pub use doc_registry::{BUILD_HOLD, HubCfg, HubMsg, HubTx, WarmState, hub_channel, run_hub};
 pub use ext::{
-    AppExt, EXT_CMD_BASE, ExtCmdError, ExtCmdSpec, ExtCommands, ExtSink, ExtSource, ExtVerdict,
-    TermProvider, TermSession, segments_text,
+    AppExt, EXT_CMD_BASE, ExtCmdError, ExtCmdSpec, ExtCommands, ExtGroup, ExtNode, ExtSink,
+    ExtSource, ExtVerdict, TermProvider, TermSession, segments_text,
 };
 pub use focus::{FOCUS_FLAP_DELAY, FocusEffect, FocusMsg, FocusState, settle_delay};
 pub use health::{

@@ -123,7 +123,12 @@ impl Reader {
         Arc::new(c)
     }
 
-    fn compose_ctx(&self, key: NodeKey, may_refine: bool, skip_selected: bool) -> ComposeCtx {
+    pub(crate) fn compose_ctx(
+        &self,
+        key: NodeKey,
+        may_refine: bool,
+        skip_selected: bool,
+    ) -> ComposeCtx {
         ComposeCtx {
             flags: ReportFlags::default(),
             may_refine,
@@ -144,27 +149,17 @@ impl Reader {
 
     /// What the application policy (ADR-0008 W3) says to a focus utterance of `snap`, as edits.
     fn policy_edits(&self, snap: &NodeSnapshot) -> PolicyEdits {
-        use crate::builtin_ext::{PolicyFacts, PolicyMoment, PolicyVerdict};
+        use crate::builtin_ext::{PolicyMoment, PolicyVerdict, PolicyView};
         if !self.policy_active(snap.key.app) {
             return PolicyEdits::Default;
         }
-        let range = match &snap.value {
-            Some(gorca_model::Value::Range { current, min, max }) => Some((*current, *min, *max)),
-            Some(gorca_model::Value::Text(_)) | None => None,
-        };
-        let facts = PolicyFacts {
-            moment: PolicyMoment::Focus,
-            role: snap.role,
-            states: snap.states,
-            name: snap.name.as_deref(),
-            description: snap.description.as_deref(),
-            range,
-        };
-        match self.decide_policy(snap.key.app, &facts) {
+        let node = crate::ext::ExtNode::new(snap, self.fused_entry(snap));
+        let view = PolicyView::of(PolicyMoment::Focus, &node);
+        match self.decide_policy(snap.key.app, &view) {
             PolicyVerdict::Default | PolicyVerdict::Notice => PolicyEdits::Default,
             PolicyVerdict::Silence => PolicyEdits::Silence,
             PolicyVerdict::Value(text) => {
-                PolicyEdits::Edits(vec![IrEdit::SetValue(Arc::from(text))])
+                PolicyEdits::Edits(vec![IrEdit::SetValueVia(Arc::from(text), VIA_POLICY)])
             }
             PolicyVerdict::Say(segs) => PolicyEdits::Edits(vec![IrEdit::ReplaceAll(
                 fields_from_tokens(segs.iter().map(|s| (s.kind, &*s.text)), VIA_POLICY),
@@ -185,7 +180,11 @@ impl Reader {
         policy: bool,
     ) -> Built {
         let may_refine = !matches!(snap.fresh, Freshness::Fresh { .. });
-        let mut ir: PresIr = if let Some(segs) = self.presenters.ext_segments(ctx, snap, epoch) {
+        let mut ir: PresIr = if let Some(segs) = self.presenters.ext_segments(
+            ctx,
+            &crate::ext::ExtNode::new(snap, self.fused_entry(snap)),
+            epoch,
+        ) {
             PresIr::new(
                 Reason::Focus,
                 snap.key,
@@ -224,6 +223,11 @@ impl Reader {
         }
         apply_edits(&mut ir, &edits);
         ir.may_refine = may_refine;
+        // `explain` lists the origins of what is spoken: the IR after the extension and policy.
+        *self
+            .last_ir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((id, ir.redacted()));
         Built {
             utterance: self.utterance_of(&ir, id, epoch, Prio::Interrupt, None),
             silent,

@@ -218,6 +218,18 @@ pub const BANS: &[Ban] = &[
         "NodeSnapshot::struct_state() (StructState: showing, visible, defunct, focusable); every spoken state is a group of the fused entry",
     ),
     ban(
+        "ext-speech",
+        "BackgroundMsg::ExtSpeech",
+        CORE,
+        "extension speech (host.speak, command speak) as PresIr content through render (ADR-0022 section 2.9)",
+    ),
+    ban(
+        "ext-rewrite",
+        "ExtVerdict::Rewrite",
+        &["crates/gorca-core/", "crates/gorca-ext-host/"],
+        "an on-event rewrite as a PresIr replacement with an origin tag (ADR-0022 section 2.9)",
+    ),
+    ban(
         "ext-snapshot",
         "NodeSnapshot",
         &[

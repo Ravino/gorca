@@ -462,6 +462,10 @@ pub struct Reader {
     /// Window activation, dialog text and notifications (M4b).
     pub(crate) win: crate::present::WindowCtx,
     pub(crate) notice: crate::present::NoticeCtx,
+    /// The redacted `PresIr` of the last focus presentation, after the extension's words and the
+    /// application policy's edits, with the utterance it became: what `debug.explain_last` lists
+    /// (the origins of the words actually spoken). Written by `&self` builders, hence the lock.
+    pub(crate) last_ir: std::sync::Mutex<Option<(gorca_model::UttId, gorca_present::Redacted)>>,
     /// The installed application policy (ADR-0008 W3), if any.
     pub(crate) app_policy: Option<Arc<dyn crate::builtin_ext::AppPolicy>>,
     /// The native terminal policy, used when no extension of the application is one.
@@ -541,6 +545,7 @@ impl Reader {
             ext: None,
             win: crate::present::WindowCtx::new(),
             notice: crate::present::NoticeCtx::new(),
+            last_ir: std::sync::Mutex::new(None),
             app_policy: None,
             term_provider: None,
         }
@@ -581,18 +586,18 @@ impl Reader {
     pub(crate) fn decide_policy(
         &self,
         app: AppId,
-        facts: &crate::builtin_ext::PolicyFacts<'_>,
+        view: &crate::builtin_ext::PolicyView<'_>,
     ) -> crate::builtin_ext::PolicyVerdict {
         if let Some(v) = self
             .ext
             .as_ref()
             .and_then(|src| src.for_app(app))
-            .and_then(|a| a.policy(facts))
+            .and_then(|a| a.policy(view))
         {
             return v;
         }
         match &self.app_policy {
-            Some(p) => p.decide(facts),
+            Some(p) => p.decide(view),
             None => crate::builtin_ext::PolicyVerdict::Default,
         }
     }

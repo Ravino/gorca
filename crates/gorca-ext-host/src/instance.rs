@@ -13,7 +13,7 @@ use gorca_ext_api as api;
 use gorca_ext_api::{LIMIT_COMMAND_MS, LIMIT_HOOK_MS, LIMIT_TERMINAL_MS};
 use gorca_model::{AppId, Lookup};
 
-use crate::convert::{key_from_ext, node_to_ext};
+use crate::convert::{group_to_ext, key_from_ext, node_to_ext};
 use crate::kv::SettingsKv;
 use crate::manifest::Capabilities;
 
@@ -81,7 +81,7 @@ pub trait HookInstance: Send {
         n: &api::Node,
         ctx: api::PresentCtx,
     ) -> Result<Option<Vec<api::Segment>>, Fault>;
-    fn policy(&mut self, f: &api::PolicyFacts) -> Result<api::PolicyVerdict, Fault>;
+    fn policy(&mut self, f: &api::PolicyView) -> Result<api::PolicyVerdict, Fault>;
     fn nav_units(&mut self) -> Result<Vec<api::NavUnit>, Fault>;
     fn nav_match(&mut self, unit: u32, n: &api::Node) -> Result<bool, Fault>;
     fn command(&mut self, id: u32) -> Result<api::CommandResult, Fault>;
@@ -259,7 +259,25 @@ impl InstShared {
             return None;
         }
         match self.nodes.lookup(k) {
-            Lookup::Hit(s) => Some(node_to_ext(&s)),
+            Lookup::Hit(s) => Some(node_to_ext(&gorca_core::ExtNode::from_snapshot(&s))),
+            Lookup::Miss | Lookup::Gone => None,
+        }
+    }
+
+    /// One fused group of a node of this application. Mirror only, never blocks; the same read
+    /// budget and the same visibility as [`InstShared::get_node`].
+    pub fn read_group(&self, key: api::NodeKey, group: api::GroupCode) -> Option<api::GroupValue> {
+        if self.reads.fetch_add(1, Ordering::Relaxed) >= MAX_NODE_READS_PER_CALL {
+            return None;
+        }
+        let k = key_from_ext(key)?;
+        if k.app != self.app {
+            return None;
+        }
+        match self.nodes.lookup(k) {
+            Lookup::Hit(s) => gorca_core::ExtNode::from_snapshot(&s)
+                .group(group)
+                .map(group_to_ext),
             Lookup::Miss | Lookup::Gone => None,
         }
     }
@@ -333,6 +351,9 @@ pub struct NativeHost(pub Arc<InstShared>);
 impl api::Host for NativeHost {
     fn get_node(&self, key: api::NodeKey) -> Option<api::Node> {
         self.0.get_node(key)
+    }
+    fn read_group(&self, key: api::NodeKey, group: api::GroupCode) -> Option<api::GroupValue> {
+        self.0.read_group(key, group)
     }
     fn fetch(
         &self,

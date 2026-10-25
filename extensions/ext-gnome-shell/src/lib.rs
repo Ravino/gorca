@@ -8,7 +8,7 @@
 //! over [`Facts`] and one of a closed set of outcomes ([`Then`]). There is no code per rule
 //! beyond the evaluation loop, so the same table is the WASM component unchanged.
 //!
-//! The interface is narrow on purpose: facts in (role, states, name, description, a value range,
+//! The interface is narrow on purpose: facts in (role code, flags, name, description, a value range,
 //! which moment), [`Verdict`] out. It depends only on `gorca-ext-api`. It is built twice from this
 //! one source (ADR-0008 amendment 1): as a `wasm32-wasip2` component, which the extension host
 //! loads by default (the `policy` hook, [`ShellExtension`]), and natively, as the fallback the
@@ -18,7 +18,7 @@
 //! (levels run 0..1), `refs/gnome-shell/js/ui/osdWindow.js` (the OSD is a level bar).
 
 use gorca_ext_api::i18n;
-use gorca_ext_api::{Hooks, PolicyFacts, PolicyMoment, PolicyVerdict, export_extension};
+use gorca_ext_api::{Hooks, PolicyMoment, PolicyVerdict, PolicyView, export_extension};
 pub use gorca_ext_api::{Range, Segment, SegmentKind};
 
 /// The extension name: the namespace of its message catalog.
@@ -38,14 +38,21 @@ fn percent_msg(r: Range) -> String {
     i18n::msg(NAME, "percent", &[("n", &percent(r).to_string())])
 }
 
-/// Role numbers of the WIT `role` enum (`gorca-ext-api/wit/gorca-ext.wit`); a test keeps them in
-/// step with the file.
+/// Role codes of the semantic role registry (`gorca_ext_api::role`; a test keeps them equal to
+/// the registry). Role sets, not single roles: an alert dialog is a dialog (the legacy mapping
+/// folded the two), a meter is a progress bar. The sets are WIDER than the legacy ones in a few
+/// raw AT-SPI roles the model maps to the same semantic role (see the decisions row of
+/// 2026-10-25, M22b4 sub-cut-over 3): dialog gains file chooser, slider gains dial and rating,
+/// window gains desktop frame and input-method window. A scroll bar is not in `LEVELS`.
 pub mod role {
-    pub const WINDOW: u8 = 2;
-    pub const DIALOG: u8 = 3;
-    pub const SLIDER: u8 = 26;
-    pub const PROGRESS_BAR: u8 = 27;
-    pub const ALERT: u8 = 43;
+    use gorca_ext_api::role as r;
+    pub const WINDOW: u16 = r::WINDOW;
+    pub const DIALOGS: &[u16] = &[r::DIALOG, r::ALERT_DIALOG];
+    pub const LEVELS: &[u16] = &[r::SLIDER, r::PROGRESS_BAR, r::METER];
+    pub const SLIDER: u16 = r::SLIDER;
+    pub const PROGRESS_BAR: u16 = r::PROGRESS_BAR;
+    pub const DIALOG: u16 = r::DIALOG;
+    pub const ALERT: u16 = r::ALERT;
 }
 
 /// When a decision is asked for.
@@ -66,9 +73,10 @@ pub enum Moment {
 #[derive(Copy, Clone, Debug)]
 pub struct Facts<'a> {
     pub moment: Moment,
-    /// WIT role number (see [`role`]).
-    pub role: u8,
-    pub states: u64,
+    /// Role code of the semantic role registry (see [`role`]).
+    pub role: u16,
+    /// The `flags` group bits of the fused entry.
+    pub flags: u64,
     pub name: Option<&'a str>,
     pub description: Option<&'a str>,
     pub range: Option<Range>,
@@ -105,7 +113,7 @@ pub enum Then {
 #[derive(Copy, Clone, Debug)]
 pub struct When {
     pub moment: Moment,
-    pub roles: &'static [u8],
+    pub roles: &'static [u16],
     /// The node reports a value range from 0 to 1 (St levels).
     pub unit_range: bool,
 }
@@ -149,7 +157,7 @@ pub const RULES: &[Rule] = &[
         id: "shell.dialog-notice",
         when: When {
             moment: Moment::Showing,
-            roles: &[role::DIALOG],
+            roles: role::DIALOGS,
             unit_range: false,
         },
         then: Then::ReadAsNotice,
@@ -159,7 +167,7 @@ pub const RULES: &[Rule] = &[
         id: "shell.level-percent",
         when: When {
             moment: Moment::Focus,
-            roles: &[role::SLIDER, role::PROGRESS_BAR],
+            roles: role::LEVELS,
             unit_range: true,
         },
         then: Then::PercentValue,
@@ -169,7 +177,7 @@ pub const RULES: &[Rule] = &[
         id: "shell.osd-level",
         when: When {
             moment: Moment::Value,
-            roles: &[role::PROGRESS_BAR, role::SLIDER],
+            roles: role::LEVELS,
             unit_range: true,
         },
         then: Then::SayLevel,
@@ -243,7 +251,7 @@ pub fn decide(f: &Facts<'_>) -> Verdict {
 pub struct ShellExtension;
 
 impl Hooks for ShellExtension {
-    fn policy(&mut self, f: &PolicyFacts) -> PolicyVerdict {
+    fn policy(&mut self, f: &PolicyView) -> PolicyVerdict {
         let facts = Facts {
             moment: match f.moment {
                 PolicyMoment::Focus => Moment::Focus,
@@ -251,9 +259,8 @@ impl Hooks for ShellExtension {
                 PolicyMoment::Activate => Moment::Activate,
                 PolicyMoment::Showing => Moment::Showing,
             },
-            // The WIT role numbers are the order of the `Role` enum (kept in step by a test).
-            role: f.role as u8,
-            states: f.states,
+            role: f.role,
+            flags: f.flags,
             name: f.name.as_deref(),
             description: f.description.as_deref(),
             range: f.range,
@@ -288,11 +295,11 @@ mod tests {
         i18n::resolve(t, i18n::Lang::Ru).into_owned()
     }
 
-    fn facts(moment: Moment, role: u8, range: Option<Range>) -> Facts<'static> {
+    fn facts(moment: Moment, role: u16, range: Option<Range>) -> Facts<'static> {
         Facts {
             moment,
             role,
-            states: 0,
+            flags: 0,
             name: Some("Volume"),
             description: None,
             range,
@@ -309,23 +316,22 @@ mod tests {
     }
 
     #[test]
-    fn role_numbers_follow_the_wit_enum() {
-        let wit = gorca_ext_api::WIT_SOURCE;
-        let start = wit.find("enum role {").expect("role enum");
-        let body = &wit[start..];
-        let body = &body[body.find('{').expect("brace") + 1..body.find('}').expect("end")];
-        let names: Vec<String> = body
-            .split(',')
-            .map(|s| s.trim().trim_start_matches('%').to_owned())
-            .filter(|s| !s.is_empty())
-            .collect();
+    fn role_codes_follow_the_registry() {
         let at = |n: &str| {
-            u8::try_from(names.iter().position(|x| x == n).expect("role name")).expect("small")
+            u16::try_from(
+                gorca_ext_api::codes::ROLES
+                    .iter()
+                    .find(|(name, _)| *name == n)
+                    .expect("role name")
+                    .1,
+            )
+            .expect("small")
         };
         assert_eq!(at("window"), role::WINDOW);
         assert_eq!(at("dialog"), role::DIALOG);
+        assert_eq!(at("alertdialog"), gorca_ext_api::role::ALERT_DIALOG);
         assert_eq!(at("slider"), role::SLIDER);
-        assert_eq!(at("progress-bar"), role::PROGRESS_BAR);
+        assert_eq!(at("progressbar"), role::PROGRESS_BAR);
         assert_eq!(at("alert"), role::ALERT);
     }
 
@@ -419,16 +425,11 @@ mod tests {
         );
     }
 
-    fn pf(
-        moment: PolicyMoment,
-        role: gorca_ext_api::Role,
-        name: Option<&str>,
-        range: Option<Range>,
-    ) -> PolicyFacts {
-        PolicyFacts {
+    fn pf(moment: PolicyMoment, role: u16, name: Option<&str>, range: Option<Range>) -> PolicyView {
+        PolicyView {
             moment,
             role,
-            states: 0,
+            flags: 0,
             name: name.map(str::to_owned),
             description: None,
             range,
@@ -437,33 +438,41 @@ mod tests {
 
     #[test]
     fn the_policy_hook_speaks_the_same_verdicts_as_the_table() {
-        use gorca_ext_api::Role;
+        use gorca_ext_api::role as Role;
         let mut e = ShellExtension;
         assert_eq!(
-            e.policy(&pf(PolicyMoment::Focus, Role::Window, Some("Main"), None)),
+            e.policy(&pf(PolicyMoment::Focus, Role::WINDOW, Some("Main"), None)),
             PolicyVerdict::Silence
         );
         assert_eq!(
             e.policy(&pf(
                 PolicyMoment::Activate,
-                Role::Window,
+                Role::WINDOW,
                 Some("Main"),
                 None
             )),
             PolicyVerdict::Silence
         );
         assert_eq!(
-            e.policy(&pf(PolicyMoment::Showing, Role::Dialog, None, None)),
+            e.policy(&pf(PolicyMoment::Showing, Role::DIALOG, None, None)),
             PolicyVerdict::Notice
         );
         assert_eq!(
-            e.policy(&pf(PolicyMoment::Focus, Role::Button, Some("OK"), None)),
+            e.policy(&pf(
+                PolicyMoment::Focus,
+                gorca_ext_api::codes::ROLES
+                    .iter()
+                    .find(|(n, _)| *n == "button")
+                    .map_or(0, |(_, c)| u16::try_from(*c).unwrap_or(0)),
+                Some("OK"),
+                None
+            )),
             PolicyVerdict::Defer
         );
         assert_eq!(
             e.policy(&pf(
                 PolicyMoment::Focus,
-                Role::Slider,
+                Role::SLIDER,
                 Some("Volume"),
                 unit(0.5)
             )),
@@ -471,7 +480,7 @@ mod tests {
         );
         let PolicyVerdict::Say(s) = e.policy(&pf(
             PolicyMoment::Value,
-            Role::ProgressBar,
+            Role::PROGRESS_BAR,
             Some("Volume"),
             unit(0.25),
         )) else {

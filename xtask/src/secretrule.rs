@@ -35,9 +35,6 @@ const EXEMPT: &[&str] = &[
     // The role resolution of the fusion (an engine password role is never relabelled): it is the
     // source of the fused role, not a sink.
     "crates/gorca-sem-atspi/src/roles.rs",
-    // The policy facts carry the native role only (no snapshot, no entry): the extension sub-cut
-    // of M22b4 replaces them with entry accessors and this exemption with the shared question.
-    "crates/gorca-ext-host/src/host.rs",
     // The entry half of the question.
     "crates/gorca-present/src/compose.rs",
     "xtask/",

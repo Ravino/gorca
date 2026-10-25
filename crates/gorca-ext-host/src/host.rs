@@ -10,15 +10,14 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use gorca_core::{
-    AppExt, ContextMask, ExtCmdSpec, ExtCommands, ExtSink, ExtSource, ExtVerdict, MirrorDirectory,
-    PolicyFacts, PolicyMoment, PolicyVerdict, PresentContext,
+    AppExt, ContextMask, ExtCmdSpec, ExtCommands, ExtNode, ExtSink, ExtSource, ExtVerdict,
+    MirrorDirectory, PolicyMoment, PolicyVerdict, PolicyView, PresentContext,
 };
 use gorca_ext_api as api;
-use gorca_model::{AppId, AppInfo, NodeEvent, NodeSnapshot, Segment};
+use gorca_model::{AppId, AppInfo, NodeEvent, Segment};
 
 use crate::convert::{
-    MAX_NODE_TEXT_CHARS, MAX_SEGMENT_CHARS, event_to_ext, node_to_ext, role_to_ext,
-    segments_from_ext,
+    MAX_NODE_TEXT_CHARS, MAX_SEGMENT_CHARS, event_to_ext, node_to_ext, segments_from_ext,
 };
 use crate::instance::{ExtStats, ExtStatsSnapshot, HookKind, InstShared};
 use crate::kv::SettingsKv;
@@ -544,27 +543,22 @@ impl AppExts {
     }
 }
 
-/// The core's policy facts as an extension sees them (name and description clipped like a node's;
-/// a password field's text withheld).
-pub(crate) fn policy_facts_to_ext(f: &PolicyFacts<'_>) -> api::PolicyFacts {
-    let secret = f.role == gorca_model::Role::PasswordEntry;
+/// The core's policy view as an extension sees it (name and description clipped like a node's).
+/// The core withheld a secret field's text already (`ExtNode::new`).
+pub(crate) fn policy_view_to_ext(v: &PolicyView<'_>) -> api::PolicyView {
     let clip = |s: &str| s.chars().take(MAX_NODE_TEXT_CHARS).collect::<String>();
-    api::PolicyFacts {
-        moment: match f.moment {
+    api::PolicyView {
+        moment: match v.moment {
             PolicyMoment::Focus => api::PolicyMoment::Focus,
             PolicyMoment::Value => api::PolicyMoment::Value,
             PolicyMoment::Activate => api::PolicyMoment::Activate,
             PolicyMoment::Showing => api::PolicyMoment::Showing,
         },
-        role: role_to_ext(f.role),
-        states: f.states.bits(),
-        name: if secret { None } else { f.name.map(clip) },
-        description: if secret {
-            None
-        } else {
-            f.description.map(clip)
-        },
-        range: f
+        role: v.role.code(),
+        flags: v.flags,
+        name: v.name.map(clip),
+        description: v.description.map(clip),
+        range: v
             .range
             .map(|(current, min, max)| api::Range { current, min, max }),
     }
@@ -651,18 +645,13 @@ impl AppExt for AppExts {
         verdict
     }
 
-    fn present(
-        &self,
-        snap: &NodeSnapshot,
-        ctx: PresentContext,
-        epoch: u64,
-    ) -> Option<Vec<Segment>> {
-        let mut node = None;
+    fn present(&self, node: &ExtNode, ctx: PresentContext, epoch: u64) -> Option<Vec<Segment>> {
+        let mut converted = None;
         for slot in &self.slots {
             if !slot.manifest().hooks.contains(HookSet::PRESENT) {
                 continue;
             }
-            let n = node.get_or_insert_with(|| node_to_ext(snap));
+            let n = converted.get_or_insert_with(|| node_to_ext(node));
             let pctx = api::PresentCtx {
                 epoch,
                 reason: present_reason(ctx),
@@ -678,13 +667,13 @@ impl AppExt for AppExts {
         None
     }
 
-    fn policy(&self, facts: &PolicyFacts<'_>) -> Option<PolicyVerdict> {
+    fn policy(&self, view: &PolicyView<'_>) -> Option<PolicyVerdict> {
         let mut converted = None;
         for slot in &self.slots {
             if !slot.manifest().hooks.contains(HookSet::POLICY) {
                 continue;
             }
-            let f = converted.get_or_insert_with(|| policy_facts_to_ext(facts));
+            let f = converted.get_or_insert_with(|| policy_view_to_ext(view));
             // Never block the Reader: a busy or faulted slot is "no opinion".
             let Some(v) = slot.call(HookKind::Policy, false, |i| i.policy(f)) else {
                 continue;
