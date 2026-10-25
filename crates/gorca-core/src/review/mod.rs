@@ -16,7 +16,7 @@ pub mod flat;
 #[doc(hidden)]
 pub mod gate;
 #[cfg(test)]
-mod latency;
+mod latency_tests;
 pub mod model;
 pub mod objnav;
 pub mod segment;
