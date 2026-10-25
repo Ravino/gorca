@@ -62,12 +62,16 @@ pub enum World {
     Site,
 }
 
-/// What the writer may do about a plugin on a focus change (manifest `[plugin] priority`).
+/// What the writer may do about a plugin on a focus change (manifest `[plugin] class`, or the
+/// older name `priority`). A label is a prior and a hard constraint of the scheduler, never a
+/// promise (ADR-0026 section 2.4.7.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Priority {
+    /// No label: the scheduler starts from the middle prior and learns the rest.
+    #[default]
+    Unlabelled,
     /// The writer may wait for it, up to the 0.3 ms bound: for work that is cheap enough to be
     /// in the first utterance (the row names of a chat list).
-    #[default]
     Interactive,
     /// The writer never waits for it and it never gates a turn: its facts always arrive as
     /// refinements. For anything heavier.
@@ -217,10 +221,11 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, PackageError> {
             declared |= parse_perm(name)?;
         }
     }
-    let priority = match get("priority") {
-        None | Some("interactive") => Priority::Interactive,
+    let priority = match get("class").or_else(|| get("priority")) {
+        None => Priority::Unlabelled,
+        Some("interactive") => Priority::Interactive,
         Some("refinement") => Priority::Refinement,
-        Some(p) => return Err(PackageError::Manifest(format!("unknown priority `{p}`"))),
+        Some(p) => return Err(PackageError::Manifest(format!("unknown class `{p}`"))),
     };
     let memory_mib = match plugin.get("memory-mib") {
         None => DEFAULT_MEMORY_MIB,
@@ -433,12 +438,20 @@ mod tests {
     const M: &str = "[plugin]\nid = \"example.hello\"\nversion = \"1\"\n";
 
     #[test]
-    fn priority_defaults_to_interactive_and_rejects_unknown_names() {
+    fn class_defaults_to_unlabelled_and_rejects_unknown_names() {
+        assert_eq!(parse_manifest(M).expect("m").priority, Priority::Unlabelled);
+        let i = format!("{M}class = \"interactive\"\n");
         assert_eq!(
-            parse_manifest(M).expect("m").priority,
+            parse_manifest(&i).expect("m").priority,
             Priority::Interactive
         );
         let r = format!("{M}priority = \"refinement\"\n");
+        assert_eq!(
+            parse_manifest(&r).expect("m").priority,
+            Priority::Refinement,
+            "the older key name still works"
+        );
+        let r = format!("{M}class = \"refinement\"\n");
         assert_eq!(
             parse_manifest(&r).expect("m").priority,
             Priority::Refinement

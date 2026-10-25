@@ -1,0 +1,13 @@
+[package]
+name = "gorca-plugin-sched"
+description = "Statistical plugin scheduler (SPS, ADR-0026 section 2.4.7): pure integer state, no clock, no I/O."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

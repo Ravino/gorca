@@ -126,6 +126,37 @@ impl PluginReply {
 pub trait ReplySink: Send + Sync {
     /// Post a reply.
     fn send(&self, reply: PluginReply);
+
+    /// Post a reply with what the actor measured about the job (the scheduler's observations,
+    /// ADR-0026 section 2.4.7.6). Sinks that do not care keep the default.
+    fn send_timed(&self, reply: PluginReply, _timing: ReplyTiming) {
+        self.send(reply);
+    }
+}
+
+/// What the actor measured about one job, besides the guest time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReplyTiming {
+    /// From the writer's hand-off to the moment the worker picked the job up (thread start
+    /// latency plus any wait behind an earlier job of the same actor).
+    pub start: Duration,
+    /// `CLOCK_MONOTONIC` ns at which the writer handed the job to the actor.
+    pub sent_ns: u64,
+    /// `CLOCK_MONOTONIC` ns at which the worker picked the job up.
+    pub picked_ns: u64,
+    /// The worker had gone to park since its last job: the start was cold.
+    pub cold: bool,
+    /// `CLOCK_MONOTONIC` ns at which the reply was posted.
+    pub at_ns: u64,
+}
+
+/// A job with the time the writer will hold for it (`None`: dispatched, never waited for).
+#[derive(Debug, Clone)]
+pub struct PlannedJob {
+    /// The job.
+    pub job: DeriveJob,
+    /// How long after the waited jobs are out the writer waits for it at most.
+    pub hold: Option<Duration>,
 }
 
 /// The wait budget of one writer turn.
@@ -135,15 +166,37 @@ pub struct Turn {
     pub deadline_ns: u64,
     /// False when the writer already waited for this keypress path or flaps: send only.
     pub wait: bool,
+    /// What admitting one reply costs the writer after the wait. The wait ends at
+    /// `deadline_ns - per_reply_ns * (replies in + 1)`: the more waited jobs have answered, the
+    /// earlier the writer must stop for the turn to stay inside `D`. 0: a fixed deadline.
+    pub per_reply_ns: u64,
 }
 
 impl Turn {
     /// A turn whose writer started at `t0_ns` (`gorca_rt::process::monotonic_ns`).
     #[must_use]
     pub fn starting_at(t0_ns: u64, wait: bool) -> Self {
+        Self::clamped(t0_ns, wait, 0)
+    }
+
+    /// A turn whose wait must end `reserve_ns` before `D` so that apply + fuse fit inside it
+    /// (the absolute clamp of ADR-0026 section 2.4.7.4 step 7).
+    #[must_use]
+    pub fn clamped(t0_ns: u64, wait: bool, reserve_ns: u64) -> Self {
         Self {
-            deadline_ns: t0_ns + u64::try_from(D_INTERACTIVE.as_nanos()).unwrap_or(300_000),
+            deadline_ns: (t0_ns + u64::try_from(D_INTERACTIVE.as_nanos()).unwrap_or(300_000))
+                .saturating_sub(reserve_ns),
             wait,
+            per_reply_ns: 0,
+        }
+    }
+
+    /// As [`Turn::clamped`] with a per-reply admission cost: see [`Turn::per_reply_ns`].
+    #[must_use]
+    pub fn adaptive(t0_ns: u64, wait: bool, fuse_ns: u64, per_reply_ns: u64) -> Self {
+        Self {
+            per_reply_ns,
+            ..Self::clamped(t0_ns, wait, fuse_ns)
         }
     }
 }
@@ -173,6 +226,33 @@ pub trait WLaneRunner: Send {
         jobs: Vec<DeriveJob>,
         sink: &Arc<dyn ReplySink>,
     ) -> HandoffOutcome;
+
+    /// As [`WLaneRunner::interactive`] with a hold per job (SPS): the jobs with a hold are sent
+    /// first and the writer waits until each has replied or passed its own hold, never past
+    /// `turn.deadline_ns`; the jobs without one are dispatched in the same turn and not waited
+    /// for. Pre-armed workers are released once the jobs are out. The default has no per-job
+    /// holds: it waits for the jobs that have one, to the turn's deadline.
+    fn interactive_planned(
+        &mut self,
+        turn: &Turn,
+        jobs: Vec<PlannedJob>,
+        sink: &Arc<dyn ReplySink>,
+    ) -> HandoffOutcome {
+        let (w, r): (Vec<_>, Vec<_>) = jobs.into_iter().partition(|j| j.hold.is_some());
+        let r: Vec<DeriveJob> = r.into_iter().map(|j| j.job).collect();
+        if !r.is_empty() {
+            self.background(
+                r.into_iter()
+                    .map(|mut j| {
+                        j.interactive = false;
+                        j
+                    })
+                    .collect(),
+                sink,
+            );
+        }
+        self.interactive(turn, w.into_iter().map(|j| j.job).collect(), sink)
+    }
 
     /// Send background jobs; no wait.
     fn background(&mut self, jobs: Vec<DeriveJob>, sink: &Arc<dyn ReplySink>);
