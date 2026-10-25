@@ -1,6 +1,7 @@
 # ADR-0028: Virtual actions on the fused semantic model
 
-Status: **Accepted** (r2, 2026-10-26: owner answers QV-1..QV-7 = the recommendations, plus the verbosity requirement
+Status: **Accepted** (r3, 2026-10-26: the user-facing model restructured into four layers, §2.0, owner framing;
+r2, 2026-10-26: owner answers QV-1..QV-7 = the recommendations, plus the verbosity requirement
 §2.2.1; r1 Proposed 2026-10-26). Owner: architect.
 Amends: ADR-0026 r7.1 (the 0.10 `actions` interface, AC-4 and the `pointer` permission row; §2.7 permissions table
 gains `offer-actions` and `keys`), ADR-0025 MI-1 (the "a pointer effect needs a new ADR" clause: this is that ADR),
@@ -78,6 +79,79 @@ or later a connector reading `aria-actions`/AccessKit custom actions) **declares
 spoken hint and a list, and invokes it with a core command. The core runs the plan itself; no plugin code runs
 between the gesture and the effect.
 
+### 2.0 The user-facing model: four layers (r3)
+
+Owner framing (2026-10-26): virtual actions are an **extension of the interface with ordinary keyboard control**.
+Whatever a sighted user does with the mouse on a node (hover, right click, double click, the affordances that only
+appear under the pointer) is folded into one keyboard menu; whatever the page opens in answer (a popup, a menu, a
+modal) is then used with the keys the user already knows. Four layers, each with one owner and one job:
+
+| Layer | What it is | Owner | Where it lives | Keys |
+|---|---|---|---|---|
+| **L1 Native actions** | what the accessibility API already exposes for the node: AT-SPI `Action` names, later `aria-actions` relations (Gecko `ACTION`) and AccessKit `custom_actions` | the connector (S0, author intent) | read live from the connector, never copied | Enter/Space (browse), and items of the actions menu |
+| **L2 Offered actions** | mouse-only affordances an add-on makes reachable (right-click menu, double-click reply, hover toolbar button) | a plugin or native extension (§2.1, tiers §2.4) | `VActs` side table of the fused model | items of the actions menu; Enter only for a first-party primary action (VA-P1); optional first-party virtual button |
+| **L3 Aftermath** | what the page does after any action of L1 or L2: a popup, menu, listbox or modal appears, focus moves, it closes | the **core**, generic for every action and every page | browse / focus machinery that exists today (focus follow, menu entry speech, modal scope, re-anchor) plus one new `ActionOrigin` | the page's own keys: arrows, Enter, Escape |
+| **L4 The actions menu** | gorca's own UI that lists L1 + L2 for the current node | the **core** (gorca's UI, SS-4) | a virtual menu in a core-owned virtual document | `gorca+Shift+A` opens; arrows, Home/End, first letter, Enter, Escape |
+
+Separation rules: L2 never re-implements L3 (no plugin step "speak the menu" or "go back"); L4 never runs plugin
+code; L1 and L2 meet only in L4, where the de-duplication rules below make them one list.
+
+#### 2.0.1 L4: the actions menu (one menu everywhere)
+
+- **Target.** The node the user is on: the review position in review/object navigation, the browse cursor in
+  browse mode, else the focused object (the existing `review_target()` rule, `commands/mouse.rs:320`, so the menu
+  and the mouse commands agree on "here"). The same command, the same menu and the same keys in every application,
+  web or native.
+- **What it is.** A real menu in the model, not a dialog and not a window: a core-owned virtual document (the
+  `Mode::Chooser` engine planned for M15, in its *menu style*; ADR-0005 amendment) containing one node of role
+  `menu`, name "Actions" / «Действия», items of role `menuitem`, and `group` nodes for the sections. It is composed
+  and rendered by the normal pipeline (`compose` → `PresIr` → render), so it sounds exactly like a page menu: entry
+  says "Actions menu" and the first item with its position ("Reply, 1 of 3"), braille shows it like any menu.
+  Nothing is opened on screen (Wayland: a background process should not open a window; M15 rationale), zero IPC.
+- **Keys** (grabbed while the menu is open, released on close; one `SetKeyGrabs` generation each way, ADR-0005):
+  Up/Down move with wrap, Home/End, a letter jumps to the next item starting with it (cycling, NVDA/Orca menus),
+  Enter or Space runs the item, Escape closes and re-presents nothing but the cursor's node name (brief) so the user
+  knows where they are, any gorca command key closes the menu first. Tab is Down. No submenus.
+- **Order and grouping, no duplicates.** One list, native first:
+  1. **L1** native actions of the target, in the connector's order, each spoken with the core word for its action
+     class ("Click", "Press", "Expand", "Show context menu", ...);
+  2. **L2** offered actions, first-party owners before third-party, then by owner id, each under a `group` named
+     after the add-on (the group name is spoken only when the cursor crosses into the group, as for page menus;
+     with one owner and no native actions the group is flat).
+  De-duplication: (a) an L2 action whose plan is exactly `Invoke(host, c)` for a class `c` that L1 already lists is
+  dropped (counted at admission, `explain` names it); (b) Gecko's `clickAncestor` is shown as "Click" only when the
+  node has no L2 action and no other L1 action (it is the ancestor's click, not the node's); (c) a virtual button
+  is the same action as its L2 item, so it never adds a row; (d) two L2 actions of different owners with the same
+  kind on the same host both stay, each in its owner's group (the user hears whose it is).
+- **Item text.** L1: the core word. L2 first-party: the label. L2 third-party: `label, <kind word>: <target role>
+  <target observed name>` (VS-3; security text, not a report field). An item whose plan needs an absent capability
+  (pointer service, key injector) is present, says "unavailable" after its text and answers Enter with the reason.
+- **Empty and single.** No actions: "No actions" and the menu does not open. One action: the menu opens anyway
+  (no surprise activation; the user can press Enter at once).
+- **After Enter** the menu closes first, then the action runs (§2.3); L3 takes over from there.
+
+#### 2.0.2 L3: what happens after an action (generic, core-owned)
+
+Before any L1 or L2 action runs (from the menu, Enter in browse mode, a virtual button, `vactions.primary` or an
+ADR-0025 item click), the Reader records an **`ActionOrigin`**: the document, the cursor node, its item anchor
+(the existing `cursor_item` DOM-id tracking of `BrowseState`, `browse/mod.rs`, so a re-rendered row is still found)
+and the mode. Then the existing machinery applies, unchanged:
+
+| The page… | gorca does (existing behaviour reused) |
+|---|---|
+| moves focus into a menu / menu item / listbox / dialog | focus follows; a menu item focus enters focus mode `Auto` (`browse/forms.rs:160-171`), the menu is announced on entry (`web_menu_entered`, `browse/commands.rs:1385`), a modal dialog restricts the browse scope (`Scope::Modal`, `browse/mod.rs:37`) and its name is announced (`lead_dialog`) |
+| opens a popup without moving focus | the L2 plan may end with `await-node` + `focus`/`cursor` on the popup's first item (first-party), and the plugin should patch the popup container's role to `menu`/`dialog` with a name through ordinary facts (S1) so the generic rules above recognise it; L1 actions get the generic follow below |
+| closes the popup (Escape, or an item ran) | if focus landed somewhere meaningful (not the document root, not inside the removed subtree), follow it (e.g. Reply puts focus in the composer); otherwise **return to the origin**: browse mode re-anchors the cursor at `ActionOrigin` (item anchor first, then the existing `cursor_chain` re-anchor), says the node briefly, and the mode returns to what it was |
+| does nothing visible | outcome speech of §2.2 (label once, under `verbosity.confirmations`) |
+
+Generic follow for popups that appear without focus (any action, any page): a new subtree that appears within 1 s
+of the action in the same document, is a `menu`, `listbox`, `dialog`/`alertdialog`, or contains focusable
+`menuitem`s, and was not there before, becomes the **popup of the action**: the browse cursor moves to its first
+item and it is presented like a focused menu or dialog (entry speech, position). Escape while the cursor is in that
+popup goes to the page first (`popup_open` rule, `browse/mod.rs:626`), and when the popup is gone the origin rule
+applies. One origin at a time; a new action replaces it; it expires 60 s after the popup closed or when the user
+moves the cursor by their own command.
+
 ### 2.1 Model
 
 ```rust
@@ -126,8 +200,8 @@ pub struct VActs(SmallVec<[VAction; 2]>);   // per host node, <= 8
   node is removed, the source epoch bumps (hot reload, settings change, re-derive), the slot is masked, backs off or
   is disabled, the scope closes, or (T3 `inferred` facts) its TTL lapses (300 s default). A pending activation
   whose action disappears is cancelled with "Not available" (§2.5).
-- **Native actions are not copied.** The node's own AT-SPI/AccessKit actions stay where they are; the actions list
-  reads them live (as Orca does) and shows them first.
+- **Native actions are not copied.** The node's own AT-SPI/AccessKit actions (L1) stay where they are; the actions
+  menu (L4, §2.0.1) reads them live (as Orca does) and shows them first.
 
 ### 2.2 Presentation
 
@@ -138,13 +212,9 @@ pub struct VActs(SmallVec<[VAction; 2]>);   // per host node, <= 8
   focus, browse line entry, object navigation, quick nav and where-am-I; **not** in say-all and not on
   re-presentation of the same node within one browse line. Governed by `report.actions_hint` (§2.2.1).
   Braille: abbreviation `act` (later, with braille M-slices).
-- **List.** Core command `vactions.list` opens the core list surface (the one the M15a profile chooser uses;
-  SS-4, gorca's own UI; default chord `gorca+Shift+A` in every preset, owner QV-3, conflict-checked in VA-1
-  against ADR-0005's preset tables): first the node's native actions (connector names mapped to catalog words), then virtual
-  actions in owner order (T2 before T3). Each virtual entry reads `label`; a **T3** entry reads
-  `label, <kind word>, <add-on name>: <target role> <target observed name>` (host-built text describing what the
-  plan's first effect will touch, VS-3). Enter runs the entry; Escape closes. If there is exactly one entry, the
-  list still opens (no surprise activation).
+- **Actions menu.** Core command `vactions.menu` (default chord `gorca+Shift+A` in every preset, owner QV-3,
+  conflict-checked in VA-1 against ADR-0005's preset tables) opens the L4 menu of §2.0.1: native actions first,
+  then offered actions grouped by owner, no duplicates.
 - **Enter / Space in browse mode** (rule VA-P1): (1) a natively activatable node (link, form control, focusable
   widget, or an AT-SPI action other than `clickAncestor`) keeps today's behaviour; (2) otherwise, a **T2** `primary`
   virtual action runs; (3) otherwise today's `DoAction(0)` (including `clickAncestor`). A T3 action is never run by
@@ -171,7 +241,7 @@ key exists and both values are 0; M22d was to introduce them. VA-1 therefore add
 
 | Key | Values (default) | Bits | Silences | Never silenced |
 |---|---|---|---|---|
-| `report.actions_hint` | `word` \| `cue` \| `off` (`word`) | 2 | the "has actions" field (`cue` = the core `actions` earcon, no words) | Enter rule VA-P1, `vactions.list`, `vactions.primary` |
+| `report.actions_hint` | `word` \| `cue` \| `off` (`word`) | 2 | the "has actions" field (`cue` = the core `actions` earcon, no words) | Enter rule VA-P1, `vactions.menu`, `vactions.primary` |
 | `report.virtual_buttons` | `true` \| `false` (`true`) | 1 | the virtual button as a browse / object-nav / quick-nav stop | the action itself (list, Enter primary) |
 | `report.destructive_warning` | `full` \| `brief` \| `cue` (`full`) | 2 | the confirmation wording: `full` "{label}: this cannot be undone. Press again to confirm", `brief` "Again: {label}", `cue` the core `confirm` earcon only | the second press itself (VS-8). There is no `off`: a silently pending confirmation makes the first press sound like a failure |
 
@@ -184,7 +254,7 @@ key exists and both values are 0; M22d was to introduce them. VA-1 therefore add
   `max_press` 1), proposed default chord `gorca+Ctrl+Shift+A` subject to the VA-1 conflict check, and
   `report.virtual_buttons_toggle` (unbound). Both behave like the existing `*_toggle` commands: they change the
   session value of the active layer, kept only by the explicit save (ADR-0005, ADR-0016 touched set).
-- **Not report fields** (security text, VS-3/VS-4): the T3 attribution and target description in the list,
+- **Not report fields** (security text, VS-3/VS-4): the T3 attribution and target description in the actions menu,
   "Changed, not done", and every failure sentence.
 
 ### 2.3 Execution: the closed effect set
@@ -219,7 +289,7 @@ pub enum CancelWhy { NewGesture, AnyKey, FocusLeftScope, ActionWithdrawn, ScopeC
 
 | State | Event | Next | Effect |
 |---|---|---|---|
-| Idle | gesture (list Enter, Enter rule VA-P1, `vactions.primary`, virtual button) | Confirming if destructive, else Validating | destructive: the warning per `report.destructive_warning` |
+| Idle | gesture (actions-menu Enter, Enter rule VA-P1, `vactions.primary`, virtual button) | Confirming if destructive, else Validating | destructive: the warning per `report.destructive_warning` |
 | Confirming | same gesture within 2 s | Validating | — |
 | Confirming | timeout / any other key | Cancelled | none spoken on other key; "Cancelled" on timeout |
 | Validating | signature matches, capabilities available, rate ok | Stepping{0} | emit step 0 |
@@ -248,22 +318,22 @@ may use, spoken on install/enable) and `keys`. Existing `act`, `navigate`, `poin
 | `Pointer` | `pointer` | **never** (QP-5 unchanged) | helper `pointer` cap (MI-9: the owner writes it), `mouse.enabled`, `[vactions] pointer = true` (default true for T2, owner QV-7; every run is in the VS-9 audit line), `if_covered` forced to `Refuse` whatever `mouse.if_covered` says |
 | `Keys` | `keys` | **never** | focus must be inside the host's application and document at run time; printable keysyms without Ctrl/Alt/Super refused at admission (no text entry); never while focus is editable or secret |
 | `Await` | with any of the above | only after `Invoke` | ≤ 1 per plan for T3 |
-| `show = button`, `primary` on Enter | yes | no (degrade to attached / list-only) | — |
+| `show = button`, `primary` on Enter | yes | no (degrade to attached / menu-only) | — |
 
 Trust affects facts (ADR-0026 PF-5), **not input power**: T3-trusted gets no effect T3 lacks.
 
 ### 2.5 Security: spoofing, gesture, scope
 
-- **VS-1 Gesture binding.** A run starts only from a core command key event of this session (list Enter, the
+- **VS-1 Gesture binding.** A run starts only from a core command key event of this session (actions-menu Enter, the
   VA-P1 Enter rule, `vactions.primary`, Enter on a virtual button). No timer, event, fact, derive, reactor or
   plugin command can start a virtual action. ADR-0025 MI-1 holds: every injection traces to a user command.
 - **VS-2 No code at activation.** The plan is data admitted earlier; the plugin is not called during the run and
   learns nothing about it (no reply, no outcome, no timing). Plugin commands use `actions.perform` with the same
   executor and checks, under AC-3.
-- **VS-3 Announce what will be touched.** For T3, the list entry speaks the host-built description of the first
+- **VS-3 Announce what will be touched.** For T3, the actions-menu item speaks the host-built description of the first
   effect's target (role and observed name from S0) after the label and the add-on name, so a label "Reply" on a
   plan that presses "Delete" is audible as "…: button Delete". T2 labels are trusted.
-- **VS-4 Act on what was announced** (ADR-0024 §2.3.3 extended). When the hint or list entry is spoken, the core
+- **VS-4 Act on what was announced** (ADR-0024 §2.3.3 extended). When the hint or actions-menu item is spoken, the core
   records the signature of each `Host`/`Sub` target (role, observed name hash, generation) and the action's
   `basis`. Validation refuses with "Changed, not done" when a signature or the action changed after the
   announcement. Web targets use the existing `ClickAnnounced` re-read in the doc source.
@@ -354,12 +424,22 @@ Prerequisite **G-7**: the plugin host implements only `[[watch]]` (tag, one clas
 `crates/gorca-plugin-host/src/package.rs:110-135`); `[[selector]]` rows with ids (ADR-0019 §4.4) and
 `[[vaction]]` rows are new manifest parsing in VA-1, with the same native matcher.
 
-Behaviour: browse cursor on a message → "…, has actions" (unless `report.actions_hint` is off or `cue`); Enter → the menu opens and focus lands on its first item
-(Telegram's menu then handles arrows/Enter/Escape); `vactions.list` → "Message menu", "Reply". Without the helper
-`pointer` cap the hint is silent and the list says "Mouse not available" with the permission hint. Telegram K
+The plugin also patches the portal menu container (the parent of the `.MenuItem` nodes, inside
+`.MessageContextMenu`) to role `menu` with the name "Message menu" through an ordinary S1 fact, so the generic L3
+rules announce it like any page menu.
+
+Behaviour (the four layers): browse cursor on a message → "…, has actions" (unless `report.actions_hint` is off or
+`cue`). **Enter** (no native activation, first-party primary, VA-P1) or `gorca+Shift+A` → "Actions menu, Message
+menu 1 of 2" → Enter → right click → Telegram's menu opens; focus lands on its first item → "Message menu, Reply 1 of
+N" (L3: focus mode `Auto`, menu entry speech); arrows, first letters and Enter are Telegram's own; **Escape** closes
+it and the cursor is back on the message (origin re-anchor); choosing "Reply" puts focus in the composer and gorca
+follows it. "Reply" from the actions menu double-clicks and gorca follows the composer focus the same way. Without
+the helper `pointer` cap the hint is silent and both items say "unavailable" with the permission hint. Telegram K
 (`bubble[role=article]`) is a follow-up after a live check of its handlers.
 
-Slice order (each ≤ 2 days), after **WIT-11** (above): **VA-1** model side table, admission, `PresIr ACTIONS`, list surface, Enter rule,
+Slice order (each ≤ 2 days), after **WIT-11** (above): **VA-1** model side table, admission, `PresIr ACTIONS`, the L4 actions menu (the `Mode::Chooser` core in
+menu style, built here and reused by M15's elements list with its filter added there), the L3 `ActionOrigin` and
+generic popup follow, Enter rule,
 executor with `Invoke`/`Focus`/`ScrollIntoView`/`Cursor`, manifest parsing, the `report.*` keys, presets,
 `ReportFlags` plumbing and the toggle commands of §2.2.1 (behind `[vactions] enabled`, default off); **VA-2** pointer steps (G-1..G-3) and `Await` (G-5); **VA-TG1** the rows above + a fixture test on
 the recorded Telegram tree and one live run by the owner; **VA-3** virtual buttons; **VA-4** named `Invoke` for
@@ -376,7 +456,7 @@ QV-6) and records the choice in decisions.md.
 | Plugin callback at activation (`on-activate(id)` returns or performs effects) | rejected: code with input power at the moment of the gesture, timing side channel, harder to audit; the declarative plan gives the same reach for the closed effect set |
 | A `Group` slot "actions" in `SemEntry` | rejected: variable-length, would break the x32 layout and the ≤ 64 B `Semantics` budget |
 | Keep only plugin commands (0.10 `actions.*`) | rejected as the only path: not discoverable, invisible in browse/object nav; kept as `actions.perform` over the same executor |
-| Virtual nodes for every tier | rejected: a third party could plant convincing fake buttons; T3 gets list-only actions with attribution |
+| Virtual nodes for every tier | rejected: a third party could plant convincing fake buttons; T3 gets menu-only actions with attribution |
 | Open-ended scripting (loops, waits on arbitrary conditions) | rejected: four steps from a closed set cover the Telegram cases; anything more is a new step kind in a major bump |
 | Pointer via RemoteDesktop/libei directly | out of scope (ADR-0025 §8 verdict unchanged); the plan is backend-neutral, a new `PointerSink` needs no ADR change here |
 
@@ -428,7 +508,7 @@ found in `refs/at-spi2-core/atspi/atspi-constants.h`); that a right click on the
 or media element whose own handler wins (VA-TG1 live run); that Telegram's portal menu is reachable as a new node
 within 800 ms on a loaded host; that `div.Message` answers `clickAncestor` rather than `click` (if Telegram's
 renderer attaches its own click listener to the element, Gecko reports `click`, VA-P1 step 1 applies and Enter keeps
-`DoAction(0)`; the menu is then reached through `vactions.list` or `vactions.primary` unless QV-1 picks the
+`DoAction(0)`; the menu is then reached through `vactions.menu` or `vactions.primary` unless QV-1 picks the
 alternative).
 
 ## 7. Invariants
@@ -445,8 +525,19 @@ alternative).
 - **VA-10** Every run leaves one audit line without content text.
 - **VA-11** Silencing a report field (§2.2.1) never changes what a gesture does; failure and security sentences are
   not report fields.
+- **VA-12** One actions menu per node: L1 first, then L2 by owner; an action appears at most once (§2.0.1 de-duplication).
+- **VA-13** The actions menu is gorca's model only (no window, no IPC to open it) and behaves the same in every
+  application and mode.
+- **VA-14** After an action, a popup the page opened is presented by the generic core rules; when it closes without
+  a meaningful focus, the cursor returns to the action's origin. Plugins never script the return.
 
 ## 8. Changelog
+
+**r3 (2026-10-26)** — the user-facing model separated into four layers (§2.0): L1 native actions, L2 offered
+actions, L3 aftermath (generic core: focus follow, menu/dialog entry, `ActionOrigin` return, popup follow), L4 the
+actions menu (a real virtual menu, `Mode::Chooser` menu style, one list native first, de-duplication rules). The
+"list" became the actions menu (`vactions.menu`, `gorca+Shift+A`); VA-TG1 relies on L3 and a role patch for
+Telegram's menu; VA-12..VA-14 added. Model, steps, tiers, security, WIT and verbosity unchanged.
 
 **r2 (2026-10-26)** — Accepted. Owner answers QV-1..QV-7 (§6); hint "has actions" / «есть действия»; §2.2.1
 verbosity (`report.actions_hint`, `report.virtual_buttons`, `report.destructive_warning`, presets, quick toggle,
