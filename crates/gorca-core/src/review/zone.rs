@@ -48,11 +48,17 @@ fn review_ir(entry: &SemEntry, snap: &NodeSnapshot, contents: Option<&str>) -> P
         )
     });
     if let Some(t) = contents.filter(|t| !t.is_empty())
-        && entry.sem.role != SemRole::PasswordBox
+        && !is_secret(entry, snap)
     {
         apply_edits(&mut ir, &[IrEdit::SetValue(Arc::from(t))]);
     }
     ir
+}
+
+/// A field whose contents must never be read: a password by the fused role or by the toolkit's
+/// own role, whichever says so.
+fn is_secret(entry: &SemEntry, snap: &NodeSnapshot) -> bool {
+    entry.sem.role == SemRole::PasswordBox || snap.role == gorca_model::Role::PasswordEntry
 }
 
 /// The pieces the zone of a whole object says: the name, a role word for controls, the state
@@ -184,6 +190,13 @@ mod tests {
         assert_eq!(object_text(&field, Some("")), "Name edit");
         let pw = snap(SemRole::PasswordBox, "Password");
         assert_eq!(object_text(&pw, Some("hunter2")), "Password password edit");
+    }
+
+    #[test]
+    fn a_toolkit_password_entry_is_never_read_even_when_the_fused_role_is_a_text_box() {
+        let mut pw = snap(SemRole::TextBox, "Password");
+        pw.role = gorca_model::Role::PasswordEntry;
+        assert!(!object_text(&pw, Some("hunter2")).contains("hunter2"));
     }
 
     #[test]
