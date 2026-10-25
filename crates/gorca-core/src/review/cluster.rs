@@ -36,6 +36,17 @@ pub struct BuildNode {
     pub lines: Option<Arc<[TextLine]>>,
 }
 
+impl BuildNode {
+    /// A node of the walk with no text lines read.
+    pub fn of(snap: Arc<NodeSnapshot>, depth: u16) -> Self {
+        Self {
+            snap,
+            depth,
+            lines: None,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct BuildInput {
     pub app: AppId,
