@@ -1047,7 +1047,10 @@ impl PluginScope {
                     plugin,
                     t: job.t,
                     targets,
-                    body: ReplyBody::Failed { requeue: false },
+                    body: ReplyBody::Failed {
+                        requeue: false,
+                        fault: false,
+                    },
                 });
                 return None;
             }
@@ -1628,19 +1631,27 @@ impl PluginScope {
                         effects: effects_of(effects, &p.meta.name),
                         reads: reads.nodes,
                         overflow: reads.overflow,
+                        exec_us: u32::try_from(exec.as_micros()).unwrap_or(u32::MAX).max(1),
                     }
                 }
                 // A reply of a dead incarnation or a displaced job: its nodes run again.
-                PluginReply::Done { .. } | PluginReply::Cancelled { .. } => {
-                    ReplyBody::Failed { requeue: true }
-                }
+                PluginReply::Done { .. } | PluginReply::Cancelled { .. } => ReplyBody::Failed {
+                    requeue: true,
+                    fault: false,
+                },
                 PluginReply::Fault { .. } if crowded => {
                     tracing::debug!(plugin = %p.meta.name, "interactive grant too small: refine in the background");
-                    ReplyBody::Failed { requeue: true }
+                    ReplyBody::Failed {
+                        requeue: true,
+                        fault: false,
+                    }
                 }
                 PluginReply::Fault { kind, .. } => {
                     tracing::warn!(plugin = %p.meta.name, ?kind, "plugin call faulted");
-                    ReplyBody::Failed { requeue: false }
+                    ReplyBody::Failed {
+                        requeue: false,
+                        fault: true,
+                    }
                 }
             };
             let masked = Self::masked_now(p);
