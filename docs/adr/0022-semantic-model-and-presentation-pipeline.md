@@ -1,6 +1,8 @@
 # ADR-0022: Semantic model (roles, states, properties), one fusion stage and one presentation pipeline
 
-Status: **Proposed** (draft r2, 2026-10-18; r3 note 2026-10-19; r4 note 2026-10-24). Owner: architect.
+Status: **Accepted** (epoch closed on main, 2026-10-25, commit b099e424, end of section 8; draft r2, 2026-10-18; r3 note 2026-10-19; r4 note 2026-10-24). Owner: architect.
+
+**Status change (2026-10-26):** Proposed -> Accepted: every surface reads the fused model through `PresIr` v1, the legacy paths are deleted (tags `legacy/*-last`) and section 8 is closed by M22c part 3.
 
 **r4 (2026-10-24, owner rule: no legacy tails):** new section 8, "Cut-over and no-legacy rule".
 Shadow windows have expiry dates and exit gates; the legacy path of a surface is deleted in the
