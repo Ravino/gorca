@@ -1,0 +1,424 @@
+{
+ "steps": [
+  {
+   "target": "shell",
+   "step": "open quick settings (Super+S)",
+   "spoken": [
+    "100 percent, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.47,
+   "at_ms": [
+    240
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "focus: first button",
+   "spoken": [
+    "Take Screenshot, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1279
+   ],
+   "skipped_tabs": 0
+  },
+  {
+   "target": "shell",
+   "step": "object: current",
+   "spoken": [
+    "Take Screenshot, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.35,
+   "at_ms": [
+    61
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "object: next",
+   "spoken": [
+    "Settings, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    57
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "object: previous",
+   "spoken": [
+    "Take Screenshot, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    53
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "object: parent",
+   "spoken": [
+    "Take Screenshot Settings Lock Screen Power Off Menu, button, unavailable"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    54
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "object: first child",
+   "spoken": [
+    "100 percent, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    67
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: current line",
+   "spoken": [
+    "Take Screenshot Settings Lock Screen Power Off Menu button unavailable",
+    "layout unavailable"
+   ],
+   "ok": false,
+   "missing": [
+    "panel"
+   ],
+   "forbidden": [],
+   "s": 1.59,
+   "at_ms": [
+    151,
+    272
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: current",
+   "spoken": [
+    "Subscribe, check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    54
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: next",
+   "spoken": [
+    "Details, button, collapsed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    61
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: next again",
+   "spoken": [
+    "Volume, slider, 50"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    55
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: next again 2",
+   "spoken": [
+    "Mute, toggle button, not pressed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    54
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: next at the end",
+   "spoken": [
+    "not responding"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    76
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: previous",
+   "spoken": [
+    "Volume, slider, 50"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    53
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: parent",
+   "spoken": [
+    "P1 Wired, window"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    54
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: first child",
+   "spoken": [
+    "Subscribe, check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    54
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: next in flow",
+   "spoken": [
+    "Details, button, collapsed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    62
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: current line",
+   "spoken": [
+    "Details button collapsed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.43,
+   "at_ms": [
+    123
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: next line",
+   "spoken": [
+    "Volume slider 50"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.28,
+   "at_ms": [
+    1
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: next line 2",
+   "spoken": [
+    "Mute toggle button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.28,
+   "at_ms": [
+    1
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "focus: check box",
+   "spoken": [
+    "Subscribe, check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1274
+   ],
+   "skipped_tabs": 2
+  },
+  {
+   "target": "firefox",
+   "step": "object: current",
+   "spoken": [
+    "Subscribe, check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    59
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "object: next",
+   "spoken": [
+    "not responding"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.43,
+   "at_ms": [
+    108
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "object: previous",
+   "spoken": [
+    "not responding"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.52,
+   "at_ms": [
+    179
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "object: parent",
+   "spoken": [
+    "P1 Page, document"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.51,
+   "at_ms": [
+    223
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "object: first child",
+   "spoken": [
+    "P1 Page, heading, level 1"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.49,
+   "at_ms": [
+    150
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "object: next in flow",
+   "spoken": [
+    "Primary, landmark"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    54
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: current line",
+   "spoken": [
+    "Menu Bar toolbar"
+   ],
+   "ok": false,
+   "missing": [
+    "primary landmark"
+   ],
+   "forbidden": [],
+   "s": 1.68,
+   "at_ms": [
+    332
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: next line",
+   "spoken": [
+    "Close button"
+   ],
+   "ok": false,
+   "missing": [
+    "bullet beta"
+   ],
+   "forbidden": [],
+   "s": 1.28,
+   "at_ms": [
+    2
+   ]
+  }
+ ],
+ "load": "30.40 20.16 16.99 5/2171 2714946",
+ "governor": "powersave",
+ "reader": "/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/m22b3-bin/gorca-new2",
+ "date": "2026-10-25T02:26:32Z"
+}

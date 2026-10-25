@@ -1,0 +1,10 @@
+MESA: warning: Support for this platform is experimental with Xe KMD, bug reports may be ignored.
+[Parent 2797965, Main Thread] WARNING: impl_GetText: assertion 'ATK_IS_TEXT (user_data)' failed: 'glib warning', file toolkit/xre/nsSigHandlers.cpp:200
+
+** (firefox-esr:2797965): CRITICAL **: 06:00:18.070: impl_GetText: assertion 'ATK_IS_TEXT (user_data)' failed
+[Parent 2797965, Main Thread] WARNING: impl_GetText: assertion 'ATK_IS_TEXT (user_data)' failed: 'glib warning', file toolkit/xre/nsSigHandlers.cpp:200
+
+** (firefox-esr:2797965): CRITICAL **: 06:00:30.249: impl_GetText: assertion 'ATK_IS_TEXT (user_data)' failed
+[Parent 2797965, Main Thread] WARNING: impl_GetText: assertion 'ATK_IS_TEXT (user_data)' failed: 'glib warning', file toolkit/xre/nsSigHandlers.cpp:200
+
+** (firefox-esr:2797965): CRITICAL **: 06:00:34.421: impl_GetText: assertion 'ATK_IS_TEXT (user_data)' failed

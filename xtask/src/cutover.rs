@@ -108,7 +108,7 @@ pub const SURFACES: &[Surface] = &[
     Surface {
         name: "review",
         slice: "M22b3",
-        ready: false,
+        ready: true,
         package: "",
         test: "",
         families: &[],
@@ -1810,18 +1810,21 @@ mod tests {
 
     #[test]
     fn a_cut_over_surface_needs_a_committed_passing_report_on_this_history() {
-        let live: BTreeSet<String> = ["M22b2", "M22b3", "M22b4"].map(String::from).into();
+        let live: BTreeSet<String> = ["M22b4"].map(String::from).into();
         let yes = |_: &str| true;
-        // M22b1-5 has no rows left: focus and change are cut over.
-        assert_eq!(judge_reports(&live, &[], &yes, &yes).len(), 2);
-        let ok = [meta("focus", true, "a"), meta("change", true, "a")];
+        // M22b1-5, M22b2 and M22b3 have no rows left: focus, change, browse, quicknav and review
+        // are cut over.
+        assert_eq!(judge_reports(&live, &[], &yes, &yes).len(), 5);
+        let all = ["focus", "change", "browse", "quicknav", "review"];
+        let ok: Vec<ReportMeta> = all.iter().map(|s| meta(s, true, "a")).collect();
         assert!(judge_reports(&live, &ok, &yes, &yes).is_empty());
-        let failing = [meta("focus", false, "a"), meta("change", true, "a")];
+        let mut failing = ok.clone();
+        failing[4] = meta("review", false, "a");
         assert_eq!(judge_reports(&live, &failing, &yes, &yes).len(), 1);
         let untracked = |_: &str| false;
-        assert_eq!(judge_reports(&live, &ok, &untracked, &yes).len(), 2);
+        assert_eq!(judge_reports(&live, &ok, &untracked, &yes).len(), 5);
         let foreign = |_: &str| false;
-        assert_eq!(judge_reports(&live, &ok, &yes, &foreign).len(), 2);
+        assert_eq!(judge_reports(&live, &ok, &yes, &foreign).len(), 5);
     }
 
     #[test]
@@ -1837,8 +1840,9 @@ mod tests {
     fn every_surface_has_a_slice_that_legacy_allow_knows() {
         let text = std::fs::read_to_string(repo_root().join("xtask/legacy.allow")).expect("allow");
         for s in SURFACES {
-            // `M22b1-5` (focus, change) and `M22b2` (browse, quicknav) are cut over: their rows are deleted with the legacy path.
-            if s.slice == "M22b1-5" || s.slice == "M22b2" {
+            // `M22b1-5` (focus, change), `M22b2` (browse, quicknav) and `M22b3` (review) are cut
+            // over: their rows are deleted with the legacy path.
+            if matches!(s.slice, "M22b1-5" | "M22b2" | "M22b3") {
                 continue;
             }
             assert!(text.contains(s.slice), "{} names slice {}", s.name, s.slice);

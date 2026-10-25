@@ -159,6 +159,11 @@ bitflags! {
         /// The role came from the author's ARIA token (`role="..."`), not from the element or
         /// the engine. Browse mode announces some containers and items only then.
         const ROLE_AUTHORED = 1 << 16;
+        /// The engine calls this text a label (the AT-SPI `label` role): the caption of a control
+        /// or a line of dialog text, said with the control and not as a stop of its own. The model
+        /// has one `StaticText` role for it and for the engine's static text; object review keeps
+        /// a label out of its stops (ADR-0006 5.1) and reaches its text through flat review.
+        const TEXT_LABEL = 1 << 17;
     }
 }
 

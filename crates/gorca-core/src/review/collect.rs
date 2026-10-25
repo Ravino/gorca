@@ -8,12 +8,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use gorca_model::{
-    ChildList, Ifaces, Lookup, NodeKey, NodeSnapshot, PropMask, Rect, Role, StateSet,
+    ChildList, Ifaces, Lookup, NodeKey, NodeSnapshot, PropMask, Rect, Role, StructFlags,
 };
 
 use super::cluster::BuildNode;
 use super::model::{ReviewLimits, TruncWhy};
-use super::objnav::{NavSource, PresClass, class_in};
+use super::objnav::{NavSource, PresClass, class_of_snapshot};
 
 /// What a build wants from the app, in the order the task asks for it.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -188,7 +188,7 @@ impl<S: NavSource> Ctx<'_, S> {
             (w, _) => w,
         };
         let in_web = !matches!(web, Web::Outside);
-        if class_in(s, in_web) == PresClass::Unavailable {
+        if class_of_snapshot(s, in_web) == PresClass::Unavailable {
             return;
         }
         // Gecko leaves SHOWING off the nodes outside the viewport (and off most containers): such
@@ -196,7 +196,7 @@ impl<S: NavSource> Ctx<'_, S> {
         // a long page spends the node cap on what is scrolled away.
         if let Web::Inside(doc) = web
             && s.role != Role::DocumentWeb
-            && class_in(s, false) == PresClass::Unavailable
+            && class_of_snapshot(s, false) == PresClass::Unavailable
         {
             let known = s.have.contains(PropMask::BOUNDS) && !v.stale.contains(PropMask::BOUNDS);
             match (doc, s.bounds) {
@@ -224,8 +224,8 @@ impl<S: NavSource> Ctx<'_, S> {
         }
         let lacks_bounds = !s.have.contains(PropMask::BOUNDS) || v.stale.contains(PropMask::BOUNDS);
         let wants_bounds = depth == 0
-            || class_in(s, in_web) == PresClass::Content
-            || s.states.contains(StateSet::FOCUSABLE)
+            || class_of_snapshot(s, in_web) == PresClass::Content
+            || s.struct_state().contains(StructFlags::FOCUSABLE)
             || wants_lines(s);
         if lacks_bounds && wants_bounds {
             self.direct.push(Miss::Bounds(k));
@@ -236,6 +236,7 @@ impl<S: NavSource> Ctx<'_, S> {
         let idx = self.out.nodes.len();
         self.out.nodes.push(BuildNode {
             snap: Arc::clone(s),
+            web: in_web,
             depth,
             lines: None,
         });
@@ -407,7 +408,7 @@ pub(crate) mod testsrc {
 mod tests {
     use super::testsrc::*;
     use super::*;
-    use gorca_model::Rect;
+    use gorca_model::{Rect, StateSet};
 
     fn r(x: i32, y: i32) -> Rect {
         Rect { x, y, w: 50, h: 10 }

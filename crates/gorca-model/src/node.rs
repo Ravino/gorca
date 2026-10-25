@@ -120,6 +120,62 @@ impl PropMask {
         .union(PropMask::PARENT);
 }
 
+bitflags! {
+    /// The structural bits of a node's state (ADR-0022 section 8.1): whether it exists on the
+    /// screen and can take the focus. Nothing spoken is in here; every spoken state is a group of
+    /// the fused `SemEntry`. Navigation (object review, the review surface walk) reads these and
+    /// nothing else of [`StateSet`].
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+    pub struct StructFlags: u8 {
+        const SHOWING   = 1 << 0;
+        const VISIBLE   = 1 << 1;
+        const DEFUNCT   = 1 << 2;
+        const FOCUSABLE = 1 << 3;
+        const FOCUSED   = 1 << 4;
+        /// A multi-line text object (a geometry fact of the text layer, not a spoken state).
+        const MULTILINE = 1 << 5;
+    }
+}
+
+/// The structural state of a node, with whether the snapshot carried states at all. A snapshot
+/// from a fetch that did not ask for states ([`PropMask::STATES`] clear) is `unknown`: navigation
+/// treats such a node as present rather than hiding it.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub struct StructState {
+    flags: StructFlags,
+    known: bool,
+}
+
+impl StructState {
+    /// The snapshot carried no states.
+    pub const UNKNOWN: Self = Self {
+        flags: StructFlags::empty(),
+        known: false,
+    };
+
+    /// Structural state read from a snapshot that carried its states.
+    pub const fn known(flags: StructFlags) -> Self {
+        Self { flags, known: true }
+    }
+
+    /// The states were read (as opposed to never asked for).
+    pub const fn is_known(self) -> bool {
+        self.known
+    }
+
+    pub const fn contains(self, f: StructFlags) -> bool {
+        self.flags.contains(f)
+    }
+
+    pub const fn is_defunct(self) -> bool {
+        self.flags.contains(StructFlags::DEFUNCT)
+    }
+
+    pub const fn flags(self) -> StructFlags {
+        self.flags
+    }
+}
+
 /// Interned attribute key. The interner lives in the connector; the core only compares keys.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct AttrKey(pub u16);
@@ -201,6 +257,30 @@ pub struct NodeSnapshot {
     pub fresh: Freshness,
     /// Dual-carried semantics (see [`NodeSem`]).
     pub sem: NodeSem,
+}
+
+impl NodeSnapshot {
+    /// The structural state of the node (see [`StructState`]): the only part of [`StateSet`]
+    /// that navigation reads.
+    pub fn struct_state(&self) -> StructState {
+        if !self.have.contains(PropMask::STATES) {
+            return StructState::UNKNOWN;
+        }
+        let mut f = StructFlags::empty();
+        for (state, flag) in [
+            (StateSet::SHOWING, StructFlags::SHOWING),
+            (StateSet::VISIBLE, StructFlags::VISIBLE),
+            (StateSet::DEFUNCT, StructFlags::DEFUNCT),
+            (StateSet::FOCUSABLE, StructFlags::FOCUSABLE),
+            (StateSet::FOCUSED, StructFlags::FOCUSED),
+            (StateSet::MULTILINE, StructFlags::MULTILINE),
+        ] {
+            if self.states.contains(state) {
+                f |= flag;
+            }
+        }
+        StructState::known(f)
+    }
 }
 
 /// Result of a mirror read with the app-wide stale epoch applied (B-1 5.2).

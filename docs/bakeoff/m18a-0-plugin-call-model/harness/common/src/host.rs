@@ -168,25 +168,36 @@ pub struct St {
     dropped: u32,
     start_ns: u64,
     watchdog_ns: u64,
-    mac_key: u64,
+    mac_key: MacKey,
     abort: Option<FaultKind>,
 }
 
+/// Per-instance random MAC key. Keyed SipHash-1-3 (`std`'s `RandomState`, whose keys come from the OS
+/// RNG and are never exposed), so the cost matches a production keyed MAC. One key per `PluginRuntime`.
+#[derive(Clone, Debug)]
+pub struct MacKey(std::hash::RandomState);
+
+impl MacKey {
+    pub fn random() -> MacKey {
+        MacKey(std::hash::RandomState::new())
+    }
+}
+
 #[inline]
-fn mix(key: u64, idx: u32, gen: u8) -> u32 {
-    let mut z = key ^ ((idx as u64) << 8 | gen as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    (z ^ (z >> 31)) as u32
+fn mix(key: &MacKey, idx: u32, gen: u8) -> u32 {
+    use std::hash::{BuildHasher, Hasher};
+    let mut h = key.0.build_hasher();
+    h.write_u64(((gen as u64) << 32) | idx as u64);
+    h.finish() as u32
 }
 
 /// Mint a handle: `mac:32 | gen:8 | idx:24`.
-pub fn mint_handle(key: u64, gen: u8, idx: NodeId) -> u64 {
+pub fn mint_handle(key: &MacKey, gen: u8, idx: NodeId) -> u64 {
     ((mix(key, idx, gen) as u64) << 32) | ((gen as u64) << 24) | (idx as u64 & 0xFF_FFFF)
 }
 
 impl St {
-    fn new(mac_key: u64) -> St {
+    fn new(mac_key: MacKey) -> St {
         St {
             limits: StoreLimitsBuilder::new()
                 .memory_size(MEM_CAP)
@@ -235,7 +246,7 @@ impl St {
         let idx = (h & 0xFF_FFFF) as NodeId;
         let gen = ((h >> 24) & 0xFF) as u8;
         let mac = (h >> 32) as u32;
-        let ok = mac == mix(self.mac_key, idx, gen)
+        let ok = mac == mix(&self.mac_key, idx, gen)
             && self.rows.as_ref().is_some_and(|r| r.contains(idx));
         if !ok {
             self.forged += 1;
@@ -255,7 +266,7 @@ impl St {
     }
 
     fn handle(&self, n: NodeId) -> u64 {
-        mint_handle(self.mac_key, 1, n)
+        mint_handle(&self.mac_key, 1, n)
     }
 
     fn read(
@@ -713,7 +724,7 @@ pub struct GuestInstance {
 }
 
 impl GuestInstance {
-    pub fn new(lp: &LoadedPlugin, mac_key: u64) -> Result<GuestInstance> {
+    pub fn new(lp: &LoadedPlugin, mac_key: MacKey) -> Result<GuestInstance> {
         let t = now_ns();
         let mut store = Store::new(lp.pre.engine(), St::new(mac_key));
         store.limiter(|s| &mut s.limits);
@@ -760,12 +771,12 @@ impl GuestInstance {
         }
         st.token = token;
         st.rows = Some(spec.rows.clone());
-        let key = st.mac_key;
+        let key = st.mac_key.clone();
         let batch: Vec<exports::gorca::ext::rules::Dirty> = spec
             .nodes
             .iter()
             .map(|n| exports::gorca::ext::rules::Dirty {
-                node: mint_handle(key, 1, *n),
+                node: mint_handle(&key, 1, *n),
                 watch: 0,
                 cause: 2,
             })
@@ -919,13 +930,13 @@ pub struct PluginRuntime {
     he: Arc<HostEngine>,
     lp: Arc<LoadedPlugin>,
     inst: Option<GuestInstance>,
-    mac_key: u64,
+    mac_key: MacKey,
     pub instantiations: u32,
 }
 
 impl PluginRuntime {
     pub fn new(plugin: PluginId, he: Arc<HostEngine>, lp: Arc<LoadedPlugin>) -> PluginRuntime {
-        let mac_key = 0xA5A5_5A5A_1234_0000 ^ plugin as u64;
+        let mac_key = MacKey::random();
         PluginRuntime {
             plugin,
             he,
@@ -950,7 +961,7 @@ impl PluginRuntime {
 
     /// Instantiate and run `attach` now, off the writer turn (scope attach, background lane).
     pub fn warm(&mut self) -> Result<()> {
-        let mut i = GuestInstance::new(&self.lp, self.mac_key)?;
+        let mut i = GuestInstance::new(&self.lp, self.mac_key.clone())?;
         i.attach(5_000_000)?;
         self.inst = Some(i);
         self.instantiations += 1;
@@ -970,7 +981,7 @@ impl PluginRuntime {
         let start = now_ns();
         let queued_ns = start.saturating_sub(b.created_ns);
         if self.inst.is_none() {
-            match GuestInstance::new(&self.lp, self.mac_key) {
+            match GuestInstance::new(&self.lp, self.mac_key.clone()) {
                 Ok(i) => {
                     self.inst = Some(i);
                     self.instantiations += 1;

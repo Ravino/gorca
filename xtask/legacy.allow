@@ -12,12 +12,6 @@
 # Counts come from `cargo xtask legacy --print`. Test code is not scanned (it is deleted with the
 # path it exercises).
 
-
-
-role-spoken | crates/gorca-core/src/review/cluster.rs | 1 | 2026-11-28 | M22b3
-role-spoken | crates/gorca-core/src/present/utterance.rs | 1 | 2026-11-28 | M22b3
-role-spoken | crates/gorca-core/src/review/commands.rs | 1 | 2026-11-28 | M22b3
-
 agree-shadow | crates/gorca-core/src/app_actor.rs | 1 | 2026-12-12 | M22b4
 agree-shadow | crates/gorca-core/src/doc_actor/mod.rs | 1 | 2026-12-12 | M22b4
 attr-map | crates/gorca-core/src/statemodel/world.rs | 2 | 2026-12-12 | M22b4

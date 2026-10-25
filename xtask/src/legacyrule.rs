@@ -212,6 +212,12 @@ pub const BANS: &[Ban] = &[
         "delete with the legacy values it compares against (b4); the PresIr shadow is gorca-present",
     ),
     ban(
+        "snapshot-states",
+        ".states",
+        &["crates/gorca-core/src/review/"],
+        "NodeSnapshot::struct_state() (StructState: showing, visible, defunct, focusable); every spoken state is a group of the fused entry",
+    ),
+    ban(
         "ext-snapshot",
         "NodeSnapshot",
         &[

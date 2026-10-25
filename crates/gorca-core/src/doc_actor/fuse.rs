@@ -1013,10 +1013,10 @@ mod tests {
             eprintln!("M-3 chat log     : {chat:.1} fusions/rename, {t_chat:?}/rename");
             eprintln!("M-3 deep item    : {deep:.1} fusions/rename, {t_deep:?}/rename");
             eprintln!("M-3 nested items : {nested:.1} fusions/rename, {t_nested:?}/rename");
-            // The review's counts (3.0, 3.0, 130): a regression that widens the cascade fails.
-            assert!(chat <= 4.0, "{chat}");
-            assert!(deep <= 4.0, "{deep}");
-            assert!(nested <= 140.0, "{nested}");
+            // The counts (2.0, 2.0, 65: one fusion per reader whose name really changes; was 3.0, 3.0, 130): a regression that widens the cascade fails.
+            assert!(chat <= 3.0, "{chat}");
+            assert!(deep <= 3.0, "{deep}");
+            assert!(nested <= 70.0, "{nested}");
             // 10k events/s is 100 us per event; the worst shape gets a debug-build allowance.
             let limit = std::time::Duration::from_millis(2);
             assert!(t_chat < limit && t_deep < limit && t_nested < limit);

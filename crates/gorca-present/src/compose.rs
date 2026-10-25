@@ -338,13 +338,13 @@ pub fn compose(
             }
             Ok(ir)
         }
+        Reason::Review => Ok(crate::zone::review(entry, node, ctx)),
         Reason::Window => Ok(crate::desktop::compose_window(entry, node, ctx)),
         Reason::Notice => Ok(crate::desktop::compose_notice(entry, node, ctx, &[])),
         Reason::FocusAncestor
         | Reason::BrowseLine { .. }
         | Reason::QuickNav
         | Reason::SayAll
-        | Reason::Review
         | Reason::Change { .. }
         | Reason::ListEntry
         | Reason::Unknown { .. } => Err(ComposeError::Unsupported(reason.code())),

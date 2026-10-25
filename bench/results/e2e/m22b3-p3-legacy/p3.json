@@ -1,0 +1,886 @@
+{
+ "steps": [
+  {
+   "target": "shell",
+   "step": "open quick settings (Super+S)",
+   "spoken": [
+    "application not responding",
+    "100 percent, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 2.05,
+   "at_ms": [
+    174,
+    774
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "focus: first button",
+   "spoken": [
+    "Take Screenshot, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1271
+   ],
+   "skipped_tabs": 0
+  },
+  {
+   "target": "shell",
+   "step": "object: current",
+   "spoken": [
+    "Take Screenshot, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    55
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "object: next",
+   "spoken": [
+    "Settings, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    62
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "object: previous",
+   "spoken": [
+    "Take Screenshot, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    55
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "object: parent",
+   "spoken": [
+    "Take Screenshot Settings Lock Screen Power Off Menu, button, unavailable"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    55
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "object: first child",
+   "spoken": [
+    "100 percent, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    79
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: current line",
+   "spoken": [
+    "panel unavailable",
+    "layout unavailable"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.59,
+   "at_ms": [
+    126,
+    247
+   ],
+   "known_failure": "the layout actor is read as unavailable (docs/decisions.md, row 2026-10-25 'M22b3 backlog')"
+  },
+  {
+   "target": "shell",
+   "step": "flat: previous line",
+   "spoken": [
+    "panel unavailable"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    2
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: current word",
+   "spoken": [
+    "panel"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: next word",
+   "spoken": [
+    "unavailable"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: previous word",
+   "spoken": [
+    "panel"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: current character",
+   "spoken": [
+    "p"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: next character",
+   "spoken": [
+    "a"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    4
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: previous character",
+   "spoken": [
+    "p"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: next line",
+   "spoken": [
+    "panel unavailable"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    1
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: next line again",
+   "spoken": [
+    "panel unavailable"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.28,
+   "at_ms": [
+    2
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: previous line again",
+   "spoken": [
+    "panel unavailable"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    2
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "flat: previous line once more",
+   "spoken": [
+    "panel unavailable"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    4
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: current",
+   "spoken": [
+    "Subscribe, check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    56
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: next",
+   "spoken": [
+    "Details, button, collapsed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    64
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: next again",
+   "spoken": [
+    "Volume, slider, 50"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    56
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: next again 2",
+   "spoken": [
+    "Mute, toggle button, not pressed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    56
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: next at the end",
+   "spoken": [
+    "not responding"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.35,
+   "at_ms": [
+    85
+   ],
+   "known_failure": "navigation fetch times out at the end of a list instead of 'no next' (docs/decisions.md, row 2026-10-25 'M22b3 backlog')"
+  },
+  {
+   "target": "gtk4",
+   "step": "object: previous",
+   "spoken": [
+    "Volume, slider, 50"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.35,
+   "at_ms": [
+    56
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: parent",
+   "spoken": [
+    "P1 Wired, window"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    56
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: first child",
+   "spoken": [
+    "Subscribe, check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    56
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "object: next in flow",
+   "spoken": [
+    "Details, button, collapsed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    61
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: current line",
+   "spoken": [
+    "Details button collapsed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    52
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: next line",
+   "spoken": [
+    "Volume slider 50"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    4
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: next line 2",
+   "spoken": [
+    "Mute toggle button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: previous line",
+   "spoken": [
+    "Volume slider 50"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: current word",
+   "spoken": [
+    "Volume"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: next word",
+   "spoken": [
+    "slider"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    4
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: previous word",
+   "spoken": [
+    "Volume"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: current character",
+   "spoken": [
+    "V"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: next character",
+   "spoken": [
+    "o"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    4
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: previous character",
+   "spoken": [
+    "V"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: next line",
+   "spoken": [
+    "Mute toggle button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    4
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: next line again",
+   "spoken": [
+    "Bottom"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    4
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: previous line again",
+   "spoken": [
+    "Volume slider 50"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "flat: previous line once more",
+   "spoken": [
+    "Details button collapsed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "focus: check box",
+   "spoken": [
+    "Subscribe, check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1278
+   ],
+   "skipped_tabs": 2
+  },
+  {
+   "target": "firefox",
+   "step": "object: current",
+   "spoken": [
+    "Subscribe, check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    54
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "object: next",
+   "spoken": [
+    "not responding"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.36,
+   "at_ms": [
+    68
+   ],
+   "known_failure": "navigation fetch times out from the check box (docs/decisions.md, row 2026-10-25 'M22b3 backlog')"
+  },
+  {
+   "target": "firefox",
+   "step": "object: previous",
+   "spoken": [
+    "not responding"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.35,
+   "at_ms": [
+    82
+   ],
+   "known_failure": "navigation fetch times out from the check box (docs/decisions.md, row 2026-10-25 'M22b3 backlog')"
+  },
+  {
+   "target": "firefox",
+   "step": "object: parent",
+   "spoken": [
+    "P1 Page, document"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.35,
+   "at_ms": [
+    60
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "object: first child",
+   "spoken": [
+    "P1 Page, heading, level 1"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.36,
+   "at_ms": [
+    77
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "object: next in flow",
+   "spoken": [
+    "Primary, landmark"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    53
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: current line",
+   "spoken": [
+    "Primary landmark bullet Alpha"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.44,
+   "at_ms": [
+    116
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: next line",
+   "spoken": [
+    "bullet Beta"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: previous line",
+   "spoken": [
+    "Primary landmark bullet Alpha"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: current word",
+   "spoken": [
+    "Primary"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: next word",
+   "spoken": [
+    "landmark"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: previous word",
+   "spoken": [
+    "Primary"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: current character",
+   "spoken": [
+    "P"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    4
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: next character",
+   "spoken": [
+    "r"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: previous character",
+   "spoken": [
+    "P"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: next line",
+   "spoken": [
+    "bullet Beta"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: next line again",
+   "spoken": [
+    "Fruit table Fruit"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: previous line again",
+   "spoken": [
+    "bullet Beta"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.28,
+   "at_ms": [
+    2
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "flat: previous line once more",
+   "spoken": [
+    "Primary landmark bullet Alpha"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  }
+ ],
+ "load": "15.36 10.16 11.06 6/1833 2795485",
+ "governor": "powersave",
+ "reader": "/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/m22b3-bin/gorca-base",
+ "date": "2026-10-25T02:59:00Z"
+}

@@ -435,17 +435,18 @@ pub fn run_wq3(env: &RunEnv<'_>, sum: &mut Summary) -> Result<()> {
     );
     // (d) Instant::now pair, and handle MAC with a valid and a forged handle.
     sum.metric("wq3_clock_read_ns", clock_overhead_ns(1_000_000));
-    let key = 0xA5A5_5A5A_1234_0001u64;
+    let key = MacKey::random();
+    let other = MacKey::random();
     let n = 5_000_000u64;
     let t = now_ns();
     let mut acc = 0u64;
     for i in 0..n {
-        acc ^= mint_handle(key, 1, (i & 0xFFFF) as u32);
+        acc ^= mint_handle(&key, 1, (i & 0xFFFF) as u32);
     }
     let valid = (now_ns() - t) as f64 / n as f64;
     let t = now_ns();
     for i in 0..n {
-        acc ^= mint_handle(key ^ 1, 1, (i & 0xFFFF) as u32) ^ 1;
+        acc ^= mint_handle(&other, 1, (i & 0xFFFF) as u32) ^ 1;
     }
     let forged = (now_ns() - t) as f64 / n as f64;
     std::hint::black_box(acc);
