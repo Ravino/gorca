@@ -1134,6 +1134,13 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
         entry.hedge.set(g, info[i].conf.code());
         entry.taint.set(g, info[i].tier.code());
     }
+    // The secret mark is sticky and unforgeable: whatever the strata made of the flags group (a
+    // patch, a user override, a fact, the repair), it is set exactly when a source said so.
+    entry.sem.flags.remove(gorca_model::sem::SemFlags::SECRET);
+    if regs.secret() {
+        entry.sem.flags.insert(gorca_model::sem::SemFlags::SECRET);
+        known.set(Group::Flags, true);
+    }
     entry.known = known;
     entry.stale = stale;
     entry.fallback = fallback;
@@ -1301,6 +1308,105 @@ mod tests {
         assert_eq!(f.entry.sem.check, Check::NotCheckable);
         assert_eq!(f.entry.prov.get(Group::Check), Some(ProvCode::Default));
         assert!(f.entry.known.has(Group::Check), "known survives masking");
+    }
+
+    /// Patch hits that write the flags group (and one that takes the role away).
+    struct FlagPatch(gorca_model::sem::SemFlags);
+
+    impl PatchSource for FlagPatch {
+        fn hits(&self, _n: &S0Node, _nb: &Neighbours<'_>, out: &mut Vec<PatchHit>) {
+            out.push(PatchHit::set(Write::Val(Val::Flags(self.0))));
+            out.push(PatchHit::set(Write::Val(Val::Role(SemRole::TextBox))));
+        }
+    }
+
+    fn fuse_patched<P: PatchSource>(p: &Profile, r: &NodeRegs, patches: &P) -> Fused {
+        let c = NodeCands::none();
+        let n = s0(p, r, c, &NoQuirks).expect("alive");
+        fuse_node(
+            p,
+            r,
+            &n,
+            &Neighbours::NONE,
+            c,
+            patches,
+            &mut Scratch::default(),
+        )
+    }
+
+    fn secret_regs() -> NodeRegs {
+        use gorca_model::sem::SemFlags;
+        let mut r = alive_regs();
+        r.src_mut(PrimarySlot::P0)
+            .apply_obs(2, Write::Val(Val::Role(SemRole::PasswordBox)));
+        r.src_mut(PrimarySlot::P0).apply_obs(
+            3,
+            Write::Val(Val::Flags(SemFlags::SECRET | SemFlags::FOCUSABLE)),
+        );
+        r
+    }
+
+    #[test]
+    fn the_secret_mark_survives_every_overwrite_and_only_a_source_sets_it() {
+        use gorca_model::sem::SemFlags;
+        let p = profile();
+        let secret = |f: &Fused| f.entry.sem.flags.contains(SemFlags::SECRET);
+        let mut r = secret_regs();
+        assert!(secret(&fuse_one(&p, &r)));
+        // A newer write of the same source without the mark (a revalidation) does not clear it,
+        // nor does an `Absent` flags group.
+        r.src_mut(PrimarySlot::P0)
+            .apply_obs(9, Write::Val(Val::Flags(SemFlags::FOCUSABLE)));
+        assert!(secret(&fuse_one(&p, &r)));
+        r.src_mut(PrimarySlot::P0)
+            .apply_obs(10, Write::Absent(Group::Flags));
+        assert!(secret(&fuse_one(&p, &r)));
+        // A higher-ranked stratum (the other primary) that says plain flags does not clear it.
+        r.src_mut(PrimarySlot::P1)
+            .apply_obs(11, Write::Val(Val::Flags(SemFlags::empty())));
+        assert!(secret(&fuse_one(&p, &r)));
+        // A user override of the flags group does not clear it.
+        r.apply_user(
+            Group::Flags,
+            12,
+            crate::register::UserOp::Set(Write::Val(Val::Flags(SemFlags::empty()))),
+        );
+        assert!(secret(&fuse_one(&p, &r)));
+        // A patch (an extension or plugin fact) with flags 0 that also takes the role away: the
+        // role changes, the mark stays.
+        let f = fuse_patched(&p, &r, &FlagPatch(SemFlags::empty()));
+        assert_eq!(f.entry.sem.role, SemRole::TextBox);
+        assert!(secret(&f));
+        // A patch that sets the mark on a node no source marked is ignored.
+        let mut plain = alive_regs();
+        plain
+            .src_mut(PrimarySlot::P0)
+            .apply_obs(2, Write::Val(Val::Role(SemRole::TextBox)));
+        let f = fuse_patched(
+            &p,
+            &plain,
+            &FlagPatch(SemFlags::SECRET | SemFlags::FOCUSABLE),
+        );
+        assert!(!secret(&f));
+        assert!(
+            f.entry.sem.flags.contains(SemFlags::FOCUSABLE),
+            "other bits apply"
+        );
+    }
+
+    #[test]
+    fn the_secret_mark_join_does_not_depend_on_the_order_of_writes() {
+        use gorca_model::sem::SemFlags;
+        let marked = Write::Val(Val::Flags(SemFlags::SECRET));
+        let plain = Write::Val(Val::Flags(SemFlags::FOCUSABLE));
+        let mut a = alive_regs();
+        a.src_mut(PrimarySlot::P0).apply_obs(2, marked.clone());
+        a.src_mut(PrimarySlot::P0).apply_obs(5, plain.clone());
+        let mut b = alive_regs();
+        b.src_mut(PrimarySlot::P0).apply_obs(5, plain);
+        b.src_mut(PrimarySlot::P0).apply_obs(2, marked);
+        assert!(a.secret() && b.secret());
+        assert_eq!(a, b);
     }
 
     struct TwoHits;

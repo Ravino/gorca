@@ -793,3 +793,14 @@ snapshot) is set by the normaliser for the engine's password role and travels in
 focus snapshot, description); the description of a secret node also drops any text or value the
 mirror holds under it. Test: `a_toolkit_password_entry_with_a_fused_text_box_role_is_secret_in_every_browse_sink`.
 
+The mark is sticky and only a source can set it (second security finding): each source's register
+set (`SrcRegs`) keeps a monotone `secret` bit set by any write whose flags carry `SECRET`, never
+cleared by a later write, an `Absent` flags group or an older write (the join stays a function of
+the set of writes). `fuse_node` removes `SECRET` from the flags the strata made and sets it again
+exactly when a source said so, after the patch, user-override, fact and repair steps; so a higher
+stratum, a patch that takes the role away, a plugin or extension fact with flags 0 cannot clear it,
+and a fact that sets it on a node no source marked is ignored. Tests:
+`the_secret_mark_survives_every_overwrite_and_only_a_source_sets_it` and
+`the_secret_mark_join_does_not_depend_on_the_order_of_writes` (`gorca-fuse`). No Newton connector
+exists in this tree; when one is added its record must set `SECRET` for a password role.
+

@@ -11,7 +11,7 @@ use std::cmp::Ordering;
 
 use gorca_model::sem::{Group, GroupMask};
 
-use crate::value::{MAX_TEXT_BYTES, Seq, Slot, Write};
+use crate::value::{MAX_TEXT_BYTES, Seq, Slot, Val, Write};
 
 /// Primary sources a node can have registers for (AT-SPI and Newton today).
 pub const MAX_PRIMARIES: usize = 2;
@@ -96,11 +96,20 @@ pub struct SrcRegs {
     vals: Vec<Reg>,
     /// Observed `Absent` runs, sorted by seq.
     absent: Vec<(Seq, GroupMask)>,
+    /// Some write of this source carried `SemFlags::SECRET`. Monotone: a later write without the
+    /// mark, an `Absent` flags group or an older write never clears it, so the join stays a
+    /// function of the set of writes. Only a source can set it.
+    secret: bool,
 }
 
 impl SrcRegs {
     pub fn life(&self) -> Option<(Seq, bool)> {
         self.life
+    }
+
+    /// Whether any write of this source marked the node secret (see the field).
+    pub fn secret(&self) -> bool {
+        self.secret
     }
 
     pub fn inval(&self) -> Option<Seq> {
@@ -179,6 +188,11 @@ impl SrcRegs {
     /// before the join, so the result stays a function of the set of writes.
     pub fn apply_obs_capped(&mut self, seq: Seq, write: Write, max_text: usize) -> bool {
         let write = write.capped(max_text).0;
+        if let Write::Val(Val::Flags(f)) = &write
+            && f.contains(gorca_model::sem::SemFlags::SECRET)
+        {
+            self.secret = true;
+        }
         let g = write.group();
         let pos = self
             .vals
@@ -278,6 +292,7 @@ static EMPTY_SRC: SrcRegs = SrcRegs {
     inval: None,
     vals: Vec::new(),
     absent: Vec::new(),
+    secret: false,
 };
 
 /// A user override: a value or `Clear` (which wins as a register, then reads as "no override").
@@ -354,6 +369,12 @@ impl NodeRegs {
         if let Some(u) = self.user.as_mut() {
             u.shrink_to_fit();
         }
+    }
+
+    /// Whether any source marked the node secret (`SemFlags::SECRET`). Only source records decide
+    /// it: patches, user overrides and facts neither set nor clear it.
+    pub fn secret(&self) -> bool {
+        self.p0.secret || self.p1.as_deref().is_some_and(|p| p.secret)
     }
 
     pub fn user(&self) -> &[UserReg] {
