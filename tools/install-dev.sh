@@ -47,8 +47,16 @@ fi
 [ -f "$root/target/release/extensions/ext-gnome-shell/ext_gnome_shell.wasm" ] || echo "warning: the Shell policy component is not built (make ext); gorca falls back to the native build of the same policy" >&2
 
 mkdir -p "$(dirname "$unit_dst")"
-ln -sfn "$unit_src" "$unit_dst"
-ln -sfn "$id_src" "$id_dst"
+if [ -n "${GORCA_BIN:-}" ]; then
+    # Both units must run the same binary: the daemon asks the helper, which is `gorca
+    # --identity-helper`. Installed as copies with the binary path rewritten in both.
+    rm -f "$unit_dst" "$id_dst"
+    sed "s|^ExecStart=%h/.local/bin/gorca|ExecStart=$GORCA_BIN|" "$unit_src" >"$unit_dst"
+    sed "s|^ExecStart=%h/.local/bin/gorca|ExecStart=$GORCA_BIN|" "$id_src" >"$id_dst"
+else
+    ln -sfn "$unit_src" "$unit_dst"
+    ln -sfn "$id_src" "$id_dst"
+fi
 systemctl --user daemon-reload
 
 ours=$(find_ours)

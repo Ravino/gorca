@@ -297,7 +297,7 @@ fn identity_in(
 /// ([`crate::identity_svc`]).
 pub async fn exe_of_async(pid: u32, start: u64) -> Option<String> {
     let job = tokio::task::spawn_blocking(move || {
-        crate::identity_svc::resolve(pid, start, std::time::Duration::from_millis(200))
+        crate::identity_client::resolve(pid, start, std::time::Duration::from_millis(200))
     });
     match tokio::time::timeout(std::time::Duration::from_millis(250), job).await {
         Ok(Ok(e)) => e,

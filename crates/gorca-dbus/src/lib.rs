@@ -28,7 +28,7 @@ pub mod socket;
 
 pub use call::{DbusError, call_method, call_method_to, with_deadline};
 pub use lag::{LagDetector, ShedEvent};
-pub use socket::{peer_pid, set_recv_buffer, socket_backlog};
+pub use socket::{connect_unix_timeout, peer_pid, set_recv_buffer, socket_backlog};
 
 /// `max_queued` for our own connections (D-6). zbus defaults to 64, which backpressures into the
 /// broker and gets us disconnected.

@@ -39,6 +39,7 @@ mod explain_gate_tests;
 mod fetch;
 #[cfg(test)]
 mod golden_tests;
+mod identity_client;
 mod identity_svc;
 #[cfg(test)]
 mod info_golden_tests;

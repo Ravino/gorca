@@ -9,7 +9,9 @@ Documentation=https://github.com/Ravino/gorca/blob/main/docs/adr/0026-addon-plug
 PartOf=gorca.service
 
 [Service]
-Type=simple
+# notify: READY=1 is sent after the socket is bound, so gorca.service (After=) finds it.
+Type=notify
+NotifyAccess=main
 ExecStart=%h/.local/bin/gorca --identity-helper
 Restart=on-failure
 RestartSec=1
