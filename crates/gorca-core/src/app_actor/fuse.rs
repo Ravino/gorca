@@ -29,6 +29,10 @@ use gorca_mirror::MirrorWriter;
 use gorca_model::sem::{Group, SemEntry, SemText, SrcRecord};
 use gorca_model::{NodeKey, NodeSnapshot, SemTables};
 
+use crate::plugin_port::{
+    PluginBridge, PluginService, PluginSources, Row, ScopeSpec, Tree, now_ns,
+};
+
 /// Snapshots waiting to be written into the registers. A flood beyond this drops the **oldest**
 /// (the newer content supersedes it anyway); the dropped nodes simply carry no fused entry.
 const QUEUE_CAP: usize = 8192;
@@ -193,6 +197,48 @@ struct Awaiting {
     rec: Arc<SrcRecord>,
 }
 
+/// The app actor's plugin scope (M18a): the service, the identity the scope opens for, and the
+/// open bridge with its engine sources.
+struct AppPlugins {
+    service: Arc<dyn PluginService>,
+    scope: ScopeSpec,
+    open: Option<(PluginBridge, PluginSources)>,
+}
+
+/// The engine's structure as the plugin snapshot reads it (S0 structure only, PF-2).
+struct IvmTree<'a>(&'a Ivm<QuirkSet, NoPatches>);
+
+impl Tree for IvmTree<'_> {
+    fn parent(&self, n: u32) -> Option<u32> {
+        self.0.parent(NodeIdx(n)).map(|p| p.0)
+    }
+    fn children(&self, n: u32) -> Vec<u32> {
+        self.0.children(NodeIdx(n)).iter().map(|c| c.0).collect()
+    }
+}
+
+/// The S0 row of a snapshot: the observed record and neutral attributes, never a fused entry.
+fn row_of(snap: &NodeSnapshot, rec: &SrcRecord) -> Row {
+    use gorca_doc_source_api::web_attrs as attr;
+    let get = |k| {
+        snap.attrs
+            .iter()
+            .find(|(key, _)| *key == k)
+            .map(|(_, v)| Arc::clone(v))
+    };
+    Row {
+        role: rec.sem.role.code(),
+        states: snap.states.bits(),
+        name: rec.name.clone(),
+        text: None,
+        tag: get(attr::TAG),
+        class: get(attr::CLASS),
+        aria_role: get(attr::XML_ROLES),
+        dom_id: rec.dom_id.clone(),
+        secret: Row::is_secret_role(rec.sem.role),
+    }
+}
+
 /// The engine and its bookkeeping for one application.
 pub(super) struct FuseWriter {
     ivm: Ivm<QuirkSet, NoPatches>,
@@ -219,6 +265,7 @@ pub(super) struct FuseWriter {
     inval_sweep: Option<(u64, Vec<NodeIdx>)>,
     focus: Option<NodeKey>,
     focus_dirty: bool,
+    plugins: Option<AppPlugins>,
     started: Instant,
     stats: Arc<FuseStats>,
     /// Tests: a legacy disagreement panics (`debug_assert`) instead of only being counted.
@@ -289,10 +336,56 @@ impl FuseWriter {
             inval_sweep: None,
             focus: None,
             focus_dirty: false,
+            plugins: None,
             started: Instant::now(),
             stats: Arc::new(FuseStats::default()),
             strict: false,
             warned: std::cell::Cell::new(0),
+        }
+    }
+
+    /// Enable plugins for this application: `scope` is the identity they match on.
+    pub(super) fn set_plugins(&mut self, service: Arc<dyn PluginService>, scope: ScopeSpec) {
+        self.plugins = Some(AppPlugins {
+            service,
+            scope,
+            open: None,
+        });
+        self.reopen_plugins();
+    }
+
+    /// (Re)open the plugin scope over a fresh engine; nodes are re-fed as their snapshots arrive.
+    fn reopen_plugins(&mut self) {
+        let Some(pl) = self.plugins.as_mut() else {
+            return;
+        };
+        pl.open = None;
+        if pl.service.wants_url() && pl.scope.url.is_none() {
+            // Manifests with URL globs match documents (the document actor's scope), not apps.
+        }
+        let Some(runner) = pl.service.open(&pl.scope, Arc::new(|| {})) else {
+            return;
+        };
+        let metas = runner.plugins().to_vec();
+        let bridge = PluginBridge::new(runner, pl.service.governor(), pl.scope.clone());
+        let sources = PluginSources::register(&mut self.ivm, &metas);
+        pl.open = Some((bridge, sources));
+    }
+
+    fn bridge(&mut self) -> Option<&mut PluginBridge> {
+        self.plugins
+            .as_mut()
+            .and_then(|p| p.open.as_mut())
+            .map(|(b, _)| b)
+    }
+
+    fn apply_plugin_ops(&mut self) {
+        let Some((bridge, sources)) = self.plugins.as_mut().and_then(|p| p.open.as_mut()) else {
+            return;
+        };
+        let ops = bridge.take_ops();
+        if !ops.is_empty() {
+            sources.apply(&mut self.ivm, ops);
         }
     }
 
@@ -317,6 +410,7 @@ impl FuseWriter {
 
     fn reset(&mut self) {
         self.ivm = build_ivm(self.tables);
+        self.reopen_plugins();
         self.index.clear();
         self.nodes.clear();
         self.reg_bytes.clear();
@@ -387,6 +481,9 @@ impl FuseWriter {
             return;
         };
         for p in pubs {
+            if let Some(b) = self.bridge() {
+                b.remove(p.node.0);
+            }
             self.release(p.node);
         }
     }
@@ -472,6 +569,7 @@ impl FuseWriter {
         !self.queue.is_empty()
             || !self.awaiting.is_empty()
             || self.ivm.pending() > 0
+            || self.plugins.as_ref().and_then(|p| p.open.as_ref()).is_some_and(|(b, _)| b.has_work())
             || !self.pending_inval.is_empty()
             || self.inval_sweep.is_some()
     }
@@ -531,6 +629,9 @@ impl FuseWriter {
             && let Some(Some((_, p))) = self.nodes.get_mut(child.0 as usize)
         {
             *p = Some(parent);
+            if let Some(b) = self.bridge() {
+                b.touch(parent.0);
+            }
         }
     }
 
@@ -576,6 +677,9 @@ impl FuseWriter {
             (Some(pk), None) => self.remember_orphan(pk, key),
             (None, _) => {}
         }
+        if let Some(b) = self.bridge() {
+            b.upsert(idx.0, row_of(&q.snap, &rec));
+        }
         inputs.push(Input::Life {
             node: idx,
             src: PrimarySlot::P0,
@@ -620,7 +724,7 @@ impl FuseWriter {
         bump(&self.stats.applied, 1);
     }
 
-    fn refresh_focus_chain(&mut self) {
+    fn refresh_focus_chain(&mut self) -> Vec<NodeIdx> {
         self.focus_dirty = false;
         let mut chain = Vec::new();
         let mut cur = self.focus.and_then(|k| self.index.get(&k).copied());
@@ -636,6 +740,7 @@ impl FuseWriter {
                 .and_then(|(_, p)| *p);
         }
         self.ivm.set_focus_chain(&chain);
+        chain
     }
 
     /// One bounded unit of work: write queued snapshots into the registers, fuse (focus chain
@@ -643,6 +748,11 @@ impl FuseWriter {
     pub(super) fn step(&mut self, mirror: &mut MirrorWriter, budget: Duration) -> bool {
         if !self.has_work() && !self.focus_dirty {
             return false;
+        }
+        // The start of this writer turn: the plugins' bounded wait is measured from here.
+        let t0 = now_ns();
+        if let Some(b) = self.bridge() {
+            b.begin_turn();
         }
         if self.index.len() >= MAX_NODES || self.engine_bytes >= ENGINE_BYTES {
             bump(&self.stats.resets, 1);
@@ -666,9 +776,21 @@ impl FuseWriter {
         for e in rep.errors {
             tracing::debug!(error = %e, "fuse input refused");
         }
+        let mut chain: Vec<NodeIdx> = Vec::new();
         if self.focus_dirty {
-            self.refresh_focus_chain();
+            chain = self.refresh_focus_chain();
         }
+        // Plugins (M18a): the focus chain's watched nodes derive first (one bounded wait per
+        // keypress path), then the dirty ones in the background; what arrived is admitted.
+        if let Some((bridge, _)) = self.plugins.as_mut().and_then(|p| p.open.as_mut()) {
+            let tree = IvmTree(&self.ivm);
+            if !chain.is_empty() {
+                let ids: Vec<u32> = chain.iter().map(|c| c.0).collect();
+                bridge.interactive(&ids, &tree, t0);
+            }
+            bridge.background(&tree);
+        }
+        self.apply_plugin_ops();
         // Progress is guaranteed: a spent budget still fuses a few nodes, focus chain first.
         let budget = if Instant::now() >= deadline {
             Budget::calls(FLOOR_FUSIONS)
@@ -813,4 +935,112 @@ pub fn fuse_snapshots(
         .iter()
         .map(|n| read.get(n.key).hit().unwrap_or_else(|| Arc::clone(n)))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugin_port::testing::svc;
+    use gorca_mirror::ApplyOrigin;
+    use gorca_model::sem::{Group, SemRole};
+    use gorca_model::{AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, Role, StateSet};
+
+    fn key(n: u64) -> NodeKey {
+        NodeKey {
+            app: AppId {
+                connector: ConnectorId(1),
+                serial: 1,
+            },
+            local: LocalId(n),
+        }
+    }
+
+    fn snap(
+        n: u64,
+        parent: Option<u64>,
+        role: SemRole,
+        name: &str,
+        class: Option<&str>,
+    ) -> Arc<NodeSnapshot> {
+        let mut rec = SrcRecord::default();
+        rec.sem.role = role;
+        rec.name = Some(Arc::from(name));
+        rec.known.set(Group::Role, true);
+        rec.known.set(Group::Name, true);
+        let mut attrs = gorca_model::AttrMap::default();
+        if let Some(c) = class {
+            attrs.push((gorca_doc_source_api::web_attrs::CLASS, Arc::from(c)));
+        }
+        Arc::new(NodeSnapshot {
+            key: key(n),
+            role: Role::Unknown,
+            states: StateSet::empty(),
+            name: Some(Arc::from(name)),
+            description: None,
+            value: None,
+            parent: parent.map(key),
+            children: ChildList::Unknown,
+            interfaces: Ifaces::empty(),
+            attrs,
+            relations: gorca_model::Relations::default(),
+            bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
+            fresh: Freshness::Fresh { at: Instant::now() },
+            sem: gorca_model::NodeSem {
+                rec: Some(Arc::new(rec)),
+                entry: None,
+            },
+        })
+    }
+
+    fn run(w: &mut FuseWriter, m: &mut gorca_mirror::MirrorWriter) {
+        while w.step(m, Duration::from_millis(50)) {}
+    }
+
+    fn name(w: &FuseWriter, n: u64) -> Option<String> {
+        w.entry_of(key(n))
+            .and_then(|e| e.name.as_deref().map(str::to_owned))
+    }
+
+    #[test]
+    fn a_plugin_patch_reaches_the_app_actors_fused_entry() {
+        let (service, jobs) = svc(false);
+        let (mut mirror, _read) = gorca_mirror::mirror();
+        let mut w = FuseWriter::new(None);
+        w.set_plugins(
+            service,
+            ScopeSpec {
+                app: Arc::from("somebrowser"),
+                ..ScopeSpec::default()
+            },
+        );
+        let nodes = vec![
+            snap(1, None, SemRole::Generic, "root", None),
+            snap(2, Some(1), SemRole::Button, "AL Alice 15:00", Some("watch")),
+            snap(3, Some(2), SemRole::StaticText, "Alice", None),
+        ];
+        mirror.apply(
+            gorca_model::SnapshotBatch::new(nodes.clone()),
+            ApplyOrigin::Reply { issued_at: 1 },
+        );
+        w.enqueue(&nodes, 1);
+        run(&mut w, &mut mirror);
+        assert_eq!(name(&w, 2).as_deref(), Some("Alice!"));
+        assert_eq!(*jobs.lock().unwrap(), 1);
+        // The focus lands on the watched node: it already has a live fact, so nothing is asked.
+        w.set_focus(Some(key(2)));
+        run(&mut w, &mut mirror);
+        assert_eq!(*jobs.lock().unwrap(), 1);
+        // The child the call read changes: one more call.
+        let n3 = snap(3, Some(2), SemRole::StaticText, "Bob", None);
+        mirror.apply(
+            gorca_model::SnapshotBatch::new(vec![Arc::clone(&n3)]),
+            ApplyOrigin::Reply { issued_at: 2 },
+        );
+        w.enqueue(&[n3], 2);
+        run(&mut w, &mut mirror);
+        assert_eq!(name(&w, 2).as_deref(), Some("Bob!"));
+        assert_eq!(*jobs.lock().unwrap(), 2);
+    }
 }

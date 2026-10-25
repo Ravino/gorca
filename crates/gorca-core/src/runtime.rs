@@ -762,6 +762,10 @@ fn spawn_app_actor(
             tx: shared.senders.text.clone(),
             dropped: Arc::clone(&shared.text_dropped),
         });
+    let actor = match &shared.web.plugins {
+        Some(svc) => actor.with_plugins(Arc::clone(svc)),
+        None => actor,
+    };
     let actor = match &shared.ext {
         Some(src) => actor.with_ext(Arc::clone(src)),
         None => actor,

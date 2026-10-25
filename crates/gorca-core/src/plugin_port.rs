@@ -295,7 +295,7 @@ pub trait ScopeRunner: Send {
 }
 
 /// The daemon's plugin runtime as the writers see it.
-pub trait PluginService: Send + Sync {
+pub trait PluginService: Send + Sync + std::fmt::Debug {
     /// Some loaded manifest has a URL glob: documents must report their URL.
     fn wants_url(&self) -> bool;
     /// Open the plugins matching `scope`; `None` when nothing matches. `wake` must be called
@@ -1235,5 +1235,7 @@ impl PluginSources {
     }
 }
 
+#[cfg(test)]
+pub(crate) mod testing;
 #[cfg(test)]
 mod tests;
