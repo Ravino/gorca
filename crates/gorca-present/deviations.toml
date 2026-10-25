@@ -555,6 +555,7 @@ epoch = "m22b3"
 reason = "The engine reports label and static text as two roles; the model has one StaticText, and a nameless one is called text."
 until = "2026-11-28"
 
+[[deviation]]
 id = "role-word-improved"
 surface = "window"
 epoch = "m22b4"
