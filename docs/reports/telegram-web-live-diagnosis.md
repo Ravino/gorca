@@ -111,3 +111,32 @@ Probe in the transient units (`live_peer_identity_probe`, whole real path): hard
   `ProtectKernelModules=no`, `ProtectControlGroups=no`, `PrivateTmp=no`.
 * Daemon logs a WARN at startup when plugins are enabled and gorca is in a private user namespace.
 * Expected after restart: `plugin scope opened app=firefox-esr doc=true plugins=1`.
+
+## Follow-up 2 (scope opens, but `Malformed` / `Watchdog` faults)
+
+Reproduced with a live dump of the Telegram A document (`live_tree_probe`, ignored test, input
+`GORCA_LIVE_TREE=<json>`; 404 nodes, 30 chat rows): one background job with all rows ended in
+`Watchdog` (debug host; the owner's release build shows it once and `Malformed` mostly).
+
+* Cause 1 (`Watchdog`, and the strikes that mask the plugin): `PluginBridge::background` sent up
+  to `MAX_BATCH` = 64 dirty rows in one call. A Web A row costs a `subtree` of up to 64 nodes plus
+  one `attr` host call per node; 64 of them exceed the 1 ms background grant, and the host kills a
+  call at 4 grants of CPU.
+* Cause 2 (`Malformed`): a call may return at most 32 KiB of fact text and 1 KiB per message
+  argument (B-6); 64 rows with Cyrillic previews (2 bytes a letter, up to 348 characters) cross
+  either limit, and one such row fails the whole call, so every other row of its batch loses its name.
+* Cause 3 (host bug found on the way): `owned_by` attributed every effect of a multi-target call to
+  every target (the read set is the union), so a batch of k rows admitted k^2 facts
+  (10 rows gave 100 ops, each name 10 times) and kept k^2 tokens.
+* Not related: `RLIMIT_RTTIME SIGXCPU` on `gorca-input` (5 earlier occurrences in the journal since
+  2026-10-23, all before plugins were enabled; the input lane's pre-wake only arms, never spins).
+
+Fix: the bridge sizes background jobs per plugin from the measured microseconds per node
+(`BG_JOB_TARGET_US` = 250 per job, 1..32 nodes, 4 before the first measurement); a faulted call halves
+the size and its nodes are requeued; the plugin clips title/preview/count/time arguments (160/240/12/24
+characters); facts are owned by their own target. New pin in `plugins/pins.txt`.
+Tests: `a_long_busy_chat_list_derives_without_faults_and_without_duplicate_facts` (90 long rows, failed
+before: 2 jobs, 0 admitted), the live dump now gives 30 facts, 1 per row, no fault; `long_parts_are_cut...`.
+
+Logs: `RUST_LOG=info,gorca_daemon::plugins=debug` adds `plugin call exec_us=... grant_us=...`, `plugin fact`
+and message-catalog misses. Faults and masks are WARN already; the drop-in is only needed to see timings.
