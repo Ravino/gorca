@@ -358,7 +358,7 @@ until = "2026-12-12"
 id = "state-not-applicable"
 surface = "whereami"
 epoch = "m22b4"
-reason = "The legacy table spoke has popup and pressed straight from the AT-SPI state set; the model keeps pressed for toggles only and expresses a popup as expanded or collapsed (or submenu), as in the focus rows."
+reason = "The legacy table spoke pressed straight from the AT-SPI state set, so a native tab said pressed besides selected; the model keeps pressed for toggles only (as in the focus rows). Nothing else is accepted here: has popup, invalid entry, selected and unavailable are kept by the answer (a popup the model expresses as submenu or opens-list replaces the bare word)."
 until = "2026-12-12"
 
 [[deviation]]

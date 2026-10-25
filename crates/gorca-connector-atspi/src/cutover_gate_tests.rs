@@ -291,8 +291,10 @@ const WORD_PAIRS: &[(&str, &str)] = &[
     ("checked", "pressed"),
     ("checked", "on"),
     ("has popup", "submenu"),
-    ("has popup", "collapsed"),
-    ("has popup", "expanded"),
+    ("has popup", "opens grid"),
+    ("has popup", "opens list"),
+    ("has popup", "opens dialog"),
+    ("has popup", "opens tree"),
     ("collapsed has popup", "submenu"),
     ("expanded has popup", "submenu"),
 ];
@@ -300,8 +302,9 @@ const WORD_PAIRS: &[(&str, &str)] = &[
 /// The roles whose word the web table has none for where the legacy mapping spoke one.
 const UNWORDED: &[&str] = &["panel", "text", "label"];
 
-/// Legacy state words the model does not give the node (the row says why).
-const DROPPED_STATES: &[&str] = &["has popup", "pressed", "popup", "invalid entry"];
+/// Legacy state words the model does not give the node: only `pressed` on a native tab, whose
+/// AT-SPI state set has PRESSED (selected already carries the meaning).
+const DROPPED_STATES: &[&str] = &["pressed"];
 
 fn is_marker(c: char) -> bool {
     "*-+>\u{2022}\u{25E6}\u{25AA}\u{25AB}\u{2023}\u{00B7}\u{2013}\u{2014}\u{25CF}\u{25CB}\u{25A0}\u{25A1}\u{2043}"
@@ -491,11 +494,6 @@ impl Rules<'_> {
         // A number the model speaks as its text reading or formatted (2 and 02, 2 and Tuesday).
         if self.facts.value_role && x.parse::<f64>().is_ok() {
             return Some("value-text-spoken");
-        }
-        if let Some(base) = x.strip_suffix(format!(" {}", self.t("has popup")).as_str())
-            && base == y
-        {
-            return Some("state-not-applicable");
         }
         // A state word the model does not give the node, inside a part of states.
         for st in DROPPED_STATES {

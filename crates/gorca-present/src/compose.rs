@@ -11,7 +11,7 @@ use gorca_i18n::MsgId as M;
 use gorca_model::NodeKey;
 use gorca_model::sem::ProvCode;
 use gorca_model::sem::{
-    Avail, Check, Expand, Group, Invalid, Press, Select, SemEntry, SemFlags, SemRole,
+    Avail, Check, Expand, Group, Invalid, Popup, Press, Select, SemEntry, SemFlags, SemRole,
 };
 use smallvec::SmallVec;
 
@@ -287,6 +287,44 @@ pub fn compose(
                 ir.fields
                     .insert(at, word(FieldKind::STATE, M::StateSelected, Group::Select));
             }
+            // Validity and a popup are facts of the node too: the focus rows keep them to a few
+            // roles (a popup is expressed as expanded or collapsed, a container's validity is the
+            // engine's guess), the question lists them whenever the model has them.
+            let spoken = |ir: &PresIr, ids: &[M]| {
+                ir.fields
+                    .iter()
+                    .any(|f| matches!(&f.content, Content::Msg { id, .. } if ids.contains(id)))
+            };
+            let after_states = |ir: &PresIr| {
+                ir.fields
+                    .iter()
+                    .rposition(|f| f.kind == FieldKind::STATE)
+                    .map_or(ir.fields.len(), |i| i + 1)
+            };
+            if entry.sem.invalid != Invalid::No && !spoken(&ir, &[M::StateInvalidEntry]) {
+                let at = after_states(&ir);
+                ir.fields.insert(
+                    at,
+                    word(FieldKind::STATE, M::StateInvalidEntry, Group::Invalid),
+                );
+            }
+            if entry.sem.popup != Popup::No
+                && !spoken(
+                    &ir,
+                    &[
+                        M::StateHasPopup,
+                        M::StateSubmenu,
+                        M::StateOpensDialog,
+                        M::StateOpensGrid,
+                        M::StateOpensList,
+                        M::StateOpensTree,
+                    ],
+                )
+            {
+                let at = after_states(&ir);
+                ir.fields
+                    .insert(at, word(FieldKind::STATE, M::StateHasPopup, Group::Popup));
+            }
             // The answer to "where am I" is never empty: a node the focus rows say nothing for
             // (an unnamed generic container) still names its role.
             if ir.fields.is_empty() {
@@ -460,7 +498,7 @@ mod tests {
 
     #[test]
     fn where_am_i_keeps_selected_and_unavailable_and_is_never_empty() {
-        use gorca_model::sem::{Avail, Select};
+        use gorca_model::sem::{Avail, Invalid, Popup, Select};
         let mut web = CTX;
         web.web = true;
         // A disabled, selected list item: a web focus keeps quiet about both, the question does not.
@@ -477,6 +515,12 @@ mod tests {
         };
         assert!(!says(&focus, M::StateSelected));
         assert!(says(&ask, M::StateSelected) && says(&ask, M::StateUnavailable));
+        // A popup and a validity the focus rows keep quiet about are kept by the question.
+        let mut f = entry(SemRole::Button, "Menu");
+        f.sem.popup = Popup::Dialog;
+        f.sem.invalid = Invalid::True;
+        let ir = compose(&f, key(), Reason::WhereAmI, CTX).expect("where am i");
+        assert!(says(&ir, M::StateHasPopup) && says(&ir, M::StateInvalidEntry));
         // A node the focus rows say nothing for still names its role.
         let bare = entry(SemRole::Generic, "");
         let ir = compose(&bare, key(), Reason::WhereAmI, CTX).expect("where am i");

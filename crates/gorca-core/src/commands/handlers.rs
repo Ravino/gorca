@@ -574,6 +574,20 @@ impl Reader {
         }
     }
 
+    /// Must the explain log withhold the text of what was said about `node`? A password field's
+    /// words are never logged, whatever the opt-in. Fail closed: when the node has left the mirror
+    /// (a dialog that closed) or the utterance was not about a node, secrecy cannot be determined
+    /// and the text is withheld.
+    pub(crate) fn explain_withholds_text(&self, node: Option<&Arc<NodeSnapshot>>) -> bool {
+        match node {
+            Some(n) => {
+                crate::present::node::is_secret(&self.fused_entry(n), n)
+                    || self.last_spoken_is_sensitive()
+            }
+            None => true,
+        }
+    }
+
     /// `debug.explain_last` (dev builds): log where the words of the last utterance came from and
     /// say a short summary. Reads the mirror only; the fused entry of the node the utterance was
     /// about is read as it is now. Never touches the key path.
@@ -587,10 +601,7 @@ impl Reader {
             .last_spoken_node
             .and_then(|k| self.dir.lookup(k).hit());
         let entry = node.as_ref().and_then(|n| n.sem.entry.clone());
-        // What was said about a password field is never logged, whatever the opt-in.
-        let secret = node
-            .as_ref()
-            .is_some_and(|n| crate::present::node::is_secret(&self.fused_entry(n), n));
+        let secret = self.explain_withholds_text(node.as_ref());
         let r = super::diag::log_report(&self.sources, &u, entry.as_deref(), secret);
         let text = msg!(
             ExplainSummary,

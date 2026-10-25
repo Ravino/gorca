@@ -423,6 +423,25 @@ fn explain_last_says_a_summary_and_never_the_page_text() {
 }
 
 #[test]
+fn explain_withholds_the_text_of_a_password_and_fails_closed_without_a_node() {
+    let f = fixture();
+    let plain = snap(3, Role::Button, "Save", None);
+    assert!(!f.reader.explain_withholds_text(Some(&plain)));
+    // The native role says password.
+    let mut pw = (*snap(4, Role::TextEntry, "Pass", None)).clone();
+    pw.role = Role::PasswordEntry;
+    assert!(f.reader.explain_withholds_text(Some(&Arc::new(pw))));
+    // Only the source record says password (an engine reporting it over a text-box token).
+    let mut rec = (*snap(5, Role::TextEntry, "Pass", None)).clone();
+    let mut r = (**rec.sem.rec.as_ref().unwrap()).clone();
+    r.sem.role = gorca_model::sem::SemRole::PasswordBox;
+    rec.sem.rec = Some(Arc::new(r));
+    assert!(f.reader.explain_withholds_text(Some(&Arc::new(rec))));
+    // The node left the mirror, or the utterance was not about a node: secrecy is unknown.
+    assert!(f.reader.explain_withholds_text(None));
+}
+
+#[test]
 fn explain_last_is_a_dev_command_bound_in_every_preset() {
     let spec = CoreCmd::DebugExplainLast.spec();
     assert_eq!(spec.name, "debug.explain_last");

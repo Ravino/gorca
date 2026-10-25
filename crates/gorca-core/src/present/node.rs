@@ -361,13 +361,7 @@ impl Reader {
 /// the contents of a field asks this one question (focus, where-am-I, explain, browse); the IR of
 /// a secret carries the secret flag and is redacted before any sink that must not see it.
 pub(crate) fn is_secret(entry: &SemEntry, snap: &NodeSnapshot) -> bool {
-    gorca_present::is_secret_entry(entry)
-        || snap.role == gorca_model::Role::PasswordEntry
-        || snap
-            .sem
-            .rec
-            .as_ref()
-            .is_some_and(|r| r.sem.role == gorca_model::sem::SemRole::PasswordBox)
+    gorca_present::is_secret_entry(entry) || snap.is_sensitive()
 }
 
 /// The words of one node of the ancestry answer from its fused `entry` (`Reason::WhereAmI`): what

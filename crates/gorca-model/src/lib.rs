@@ -40,7 +40,7 @@ pub use node::{
     AttrKey, AttrMap, ChildList, Freshness, FreshnessEvent, Ifaces, Lookup, NodeSem, NodeSnapshot,
     NodeView, PropMask, RelationKind, Relations, SnapshotBatch, StateSet, Value,
 };
-pub use redact::RedactKey;
+pub use redact::{RedactKey, is_secret_node};
 pub use role::Role;
 pub use sem::{SemEntry, SemRole, Semantics};
 #[cfg(feature = "seg-origin")]
