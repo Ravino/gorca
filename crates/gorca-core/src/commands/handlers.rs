@@ -582,12 +582,16 @@ impl Reader {
             self.say(t(M::ExplainNone), fx);
             return;
         };
-        let entry = self
+        let node = self
             .cmd
             .last_spoken_node
-            .and_then(|k| self.dir.lookup(k).hit())
-            .and_then(|n| n.sem.entry.clone());
-        let r = super::diag::log_report(&self.sources, &u, entry.as_deref());
+            .and_then(|k| self.dir.lookup(k).hit());
+        let entry = node.as_ref().and_then(|n| n.sem.entry.clone());
+        // What was said about a password field is never logged, whatever the opt-in.
+        let secret = node
+            .as_ref()
+            .is_some_and(|n| crate::present::node::is_secret(&self.fused_entry(n), n));
+        let r = super::diag::log_report(&self.sources, &u, entry.as_deref(), secret);
         let text = msg!(
             ExplainSummary,
             segments = r.segments.len(),

@@ -27,7 +27,8 @@ mod web;
 
 pub use change::{changed_groups, compose_change};
 pub use compose::{
-    ComposeCtx, ComposeError, LABEL_CAP, ReportFlags, compose, name_is_blank, one_line_label,
+    ComposeCtx, ComposeError, LABEL_CAP, ReportFlags, compose, is_secret_entry, name_is_blank,
+    one_line_label,
 };
 pub use desktop::{compose_notice, compose_window, notice_has_words};
 pub use deviations::{Deviations, DeviationsError};

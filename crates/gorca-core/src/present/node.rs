@@ -193,8 +193,7 @@ impl Reader {
             // The contents of a field are text-layer data: the entry holds no value for them.
             if let Some(gorca_model::Value::Text(t)) = &snap.value
                 && !t.is_empty()
-                && !matches!(entry.sem.role, gorca_model::sem::SemRole::PasswordBox)
-                && snap.role != gorca_model::Role::PasswordEntry
+                && !is_secret(&entry, snap)
             {
                 apply_edits(&mut ir, &[IrEdit::SetValue(Arc::clone(t))]);
             }
@@ -357,6 +356,20 @@ impl Reader {
     }
 }
 
+/// Whether the node is a secret field (a password): the fused role, the native role of the
+/// snapshot or the role of its source record says so. Every path that could speak, log or route
+/// the contents of a field asks this one question (focus, where-am-I, explain, browse); the IR of
+/// a secret carries the secret flag and is redacted before any sink that must not see it.
+pub(crate) fn is_secret(entry: &SemEntry, snap: &NodeSnapshot) -> bool {
+    gorca_present::is_secret_entry(entry)
+        || snap.role == gorca_model::Role::PasswordEntry
+        || snap
+            .sem
+            .rec
+            .as_ref()
+            .is_some_and(|r| r.sem.role == gorca_model::sem::SemRole::PasswordBox)
+}
+
 /// The words of one node of the ancestry answer from its fused `entry` (`Reason::WhereAmI`): what
 /// `compose` and `render` say for it, sorted by the kind of field they came from. `snap` is read
 /// for the contents of a field only (text-layer data the entry does not hold).
@@ -369,8 +382,11 @@ pub(crate) fn words_of(
     use crate::commands::info::Words;
     use gorca_present::FieldKind;
     let mut w = Words::default();
+    let secret = is_secret(entry, snap);
     if let Ok(ir) = compose(entry, snap.key, Reason::WhereAmI, cctx) {
-        for (kind, tok) in gorca_present::render_kinds(&ir, opts) {
+        // The words go to the speech lane, but a secret's value never leaves the IR: redact first.
+        let ir = ir.redacted();
+        for (kind, tok) in gorca_present::render_kinds(ir.ir(), opts) {
             let text = tok.text.as_str().to_owned();
             match kind {
                 FieldKind::NAME | FieldKind::INFERRED_LABEL if w.name.is_none() => {
@@ -383,19 +399,20 @@ pub(crate) fn words_of(
                     w.role.push_str(&text);
                 }
                 FieldKind::STATE => w.states.push(text),
-                FieldKind::VALUE => w.values.push(text),
+                FieldKind::VALUE if !secret => w.values.push(text),
                 _ => {}
             }
         }
     }
     // The contents of a field are text-layer data: the entry holds none (as in a focus).
     if w.values.is_empty()
-        && !matches!(entry.sem.role, gorca_model::sem::SemRole::PasswordBox)
+        && !secret
         && let Some(gorca_model::Value::Text(t)) = &snap.value
         && !t.is_empty()
     {
         w.values.push(t.to_string());
     }
+    // A password field's description is its own help text, never its contents; it is kept.
     w.description = entry
         .sem
         .text
@@ -452,4 +469,122 @@ fn overlay_observed(e: &mut SemEntry, rec: &gorca_model::sem::SrcRecord) {
 /// The name the node is spoken with: its entry's (None when it has none).
 pub(crate) fn spoken_name(snap: &NodeSnapshot) -> Option<&str> {
     snap.sem.entry.as_ref().and_then(|e| e.name.as_deref())
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod secret_tests {
+    //! A password's contents are never spoken, whichever of the three signals says it is one: the
+    //! fused role, the native role of the snapshot, or the role of the source record.
+
+    use gorca_model::sem::{SemRole, SemText};
+    use gorca_model::{
+        AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSnapshot, Role,
+        StateSet, Value,
+    };
+
+    use super::*;
+
+    const SECRET: &str = "hunter2-correct-horse";
+
+    fn snapshot(role: Role) -> NodeSnapshot {
+        NodeSnapshot {
+            key: NodeKey {
+                app: AppId {
+                    connector: ConnectorId(1),
+                    serial: 1,
+                },
+                local: LocalId(5),
+            },
+            role,
+            states: StateSet::empty(),
+            name: Some(Arc::from("Password")),
+            description: None,
+            value: Some(Value::Text(Arc::from(SECRET))),
+            parent: None,
+            children: ChildList::Unknown,
+            interfaces: Ifaces::empty(),
+            attrs: gorca_model::AttrMap::default(),
+            relations: gorca_model::Relations::default(),
+            bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
+            fresh: Freshness::Defunct,
+            sem: gorca_model::NodeSem::NONE,
+        }
+        .with_test_record()
+    }
+
+    fn entry(role: SemRole) -> SemEntry {
+        let mut e = SemEntry::default();
+        e.sem.role = role;
+        e.name = Some(Arc::from("Password"));
+        e.sem.text = Some(Arc::new(SemText {
+            value_text: Some(Arc::from(SECRET)),
+            ..SemText::default()
+        }));
+        e
+    }
+
+    fn ctx(web: bool) -> ComposeCtx {
+        ComposeCtx {
+            flags: ReportFlags::default(),
+            may_refine: false,
+            web,
+            skip_selected: false,
+            hedge_inferred: false,
+            lang: gorca_i18n::Lang::En,
+        }
+    }
+
+    fn said(e: &SemEntry, s: &NodeSnapshot, web: bool) -> String {
+        let w = words_of(e, s, ctx(web), RenderOpts::default());
+        format!("{w:?}")
+    }
+
+    #[test]
+    fn the_secret_test_looks_at_the_fused_role_the_native_role_and_the_record() {
+        let plain = snapshot(Role::TextEntry);
+        assert!(!is_secret(&entry(SemRole::TextBox), &plain));
+        assert!(is_secret(&entry(SemRole::PasswordBox), &plain));
+        assert!(is_secret(
+            &entry(SemRole::TextBox),
+            &snapshot(Role::PasswordEntry)
+        ));
+        let mut rec = snapshot(Role::TextEntry);
+        let mut r = (**rec.sem.rec.as_ref().unwrap()).clone();
+        r.sem.role = SemRole::PasswordBox;
+        rec.sem.rec = Some(Arc::new(r));
+        assert!(is_secret(&entry(SemRole::TextBox), &rec));
+    }
+
+    #[test]
+    fn where_am_i_never_speaks_a_password_whichever_signal_marks_it() {
+        for web in [false, true] {
+            // The fused role says password.
+            let said = said(
+                &entry(SemRole::PasswordBox),
+                &snapshot(Role::TextEntry),
+                web,
+            );
+            assert!(!said.contains(SECRET), "fused role, web {web}: {said}");
+            // Only the native role says password: the fused role is a plain text box.
+            let said = said_native(web);
+            assert!(!said.contains(SECRET), "native role, web {web}: {said}");
+        }
+    }
+
+    fn said_native(web: bool) -> String {
+        said(
+            &entry(SemRole::TextBox),
+            &snapshot(Role::PasswordEntry),
+            web,
+        )
+    }
+
+    #[test]
+    fn an_ordinary_field_still_speaks_its_contents() {
+        let said = said(&entry(SemRole::TextBox), &snapshot(Role::TextEntry), false);
+        assert!(said.contains(SECRET), "{said}");
+    }
 }

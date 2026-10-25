@@ -226,6 +226,15 @@ const fn tri_state_word(class: Class) -> Option<M> {
     }
 }
 
+/// Whether the fused entry is a secret field (a password box): nothing that comes from its
+/// contents may be spoken, logged or routed. The one test every path uses together with the native
+/// role of the snapshot (`gorca-core`'s `is_secret`); a field of the IR carries
+/// [`FieldFlags::SECRET`] and goes through [`PresIr::redacted`] before any sink that must not see it.
+#[must_use]
+pub fn is_secret_entry(entry: &SemEntry) -> bool {
+    entry.sem.role == SemRole::PasswordBox
+}
+
 /// Compose the IR of `entry` for `reason`.
 ///
 /// # Errors
