@@ -98,7 +98,7 @@ pub use present::value_text;
 pub use present::{
     Content, DesktopEffect, WindowEffect, WindowInfo, WindowMsg, WindowState,
     announcement_utterance, clean_announcement, dialog_content, fetch_level, fetch_window,
-    is_notice_role, lead_segments, notice_segments, reads_content,
+    is_notice_role, reads_content,
 };
 pub use present::{
     FOCUS_FIELDS, FOCUS_FIELDS_LAZY, NoLabels, NodeLabel, PresentContext, PresentJob, PresentKind,

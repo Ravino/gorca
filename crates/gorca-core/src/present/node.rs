@@ -251,6 +251,38 @@ impl Reader {
             .into_vec()
     }
 
+    /// The title an activated window leads with, composed from its fused entry
+    /// (`Reason::Window`, M22b4): the name, and the role word for a dialog or an alert.
+    pub(crate) fn window_lead(&self, win: &NodeSnapshot) -> SmallVec<[Segment; 2]> {
+        let entry = self.fused_entry(win);
+        let cctx = self.compose_ctx(win.key, false, false);
+        match compose(&entry, win.key, Reason::Window, cctx) {
+            Ok(ir) => self.segments_of(&ir),
+            Err(_) => SmallVec::new(),
+        }
+    }
+
+    /// What a notice says (`Reason::Notice`, M22b4): the role word, the name, the description and
+    /// the static text inside. `None` when it has nothing to say beyond its role word.
+    pub(crate) fn notice_words(
+        &self,
+        snap: &NodeSnapshot,
+        lines: &[Arc<str>],
+    ) -> Option<SmallVec<[Segment; 6]>> {
+        let entry = self.fused_entry(snap);
+        let cctx = self.compose_ctx(snap.key, false, false);
+        let ir = gorca_present::compose_notice(&entry, snap.key, cctx, lines);
+        gorca_present::notice_has_words(&ir).then(|| self.segments_of(&ir))
+    }
+
+    /// The speech segments `render` makes of `ir`.
+    fn segments_of<A: smallvec::Array<Item = Segment>>(&self, ir: &PresIr) -> SmallVec<A> {
+        render(ir, self.render_opts())
+            .iter()
+            .map(|t| Segment::new(Arc::from(t.text.as_str()), t.kind))
+            .collect()
+    }
+
     /// Render `ir` into the utterance the speech lane takes.
     fn utterance_of(
         &self,
