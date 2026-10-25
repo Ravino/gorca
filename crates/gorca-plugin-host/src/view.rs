@@ -7,6 +7,19 @@
 
 use crate::trust::SystemScope;
 
+/// What the `app` and `doc-url` imports answer for a scope.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ScopeInfo {
+    /// The core's application identity (ADR-0016 matcher key).
+    pub name: String,
+    /// Engine registry code (0 unknown).
+    pub engine: u16,
+    /// True when the identity was verified by the connector.
+    pub verified: bool,
+    /// The document URL; read only when a loaded manifest has a URL glob (privacy).
+    pub url: Option<String>,
+}
+
 /// An immutable, `Send + Sync` view of the nodes a job may read.
 pub trait ModelView: Send + Sync + std::fmt::Debug {
     /// Live generation of `index`, or `None` when the slot is gone.
@@ -25,6 +38,10 @@ pub trait ModelView: Send + Sync + std::fmt::Debug {
     fn parent(&self, index: u32) -> Option<u32>;
     /// Child indices, at most `max`.
     fn children(&self, index: u32, max: u16) -> Vec<u32>;
+    /// The scope this view belongs to (`app`, `doc-url`).
+    fn scope(&self) -> ScopeInfo {
+        ScopeInfo::default()
+    }
     /// The system scope (SS-1..SS-4) a node belongs to, if any. The host classifies; the
     /// runtime refuses every read of such a node for third-party plugins (ADR-0026 §2.7).
     /// Contract: a node inside a secret subtree reports `SecretNode` for every descendant.

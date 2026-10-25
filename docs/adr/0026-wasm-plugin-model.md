@@ -1,6 +1,6 @@
 # ADR-0026: WASM plugin model on the fused semantic model (M18a)
 
-Status: **Proposed** (r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
+Status: **Proposed** (r6, 2026-10-25, SPS scheduling §2.4.7, DP-1 pending owner; r5 implementation notes, 2026-10-25; r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
 r4 applies the r3 review (`docs/reports/adr-0026-review.md`, section r3): deadline from the turn start, timer slack,
 wait mechanism, one wait per keypress path, tighter benign gates. r3 follows the owner decision of 2026-10-24 (canonical actor model: plugins are actors, **B' is the design
 target**, §2.4.6, §5) and records QP-1..QP-5 as confirmed (§6).
@@ -11,12 +11,18 @@ pointers). Builds on: ADR-0022 r2/r3 (registers, `FUSE`, SM-8, `PresIr`, §2.9 e
 §2.10 order), ADR-0024 r3 (fact sources, admission, `SourceState`, grants, taint, LB-1..LB-5,
 FS-1..FS-12), ADR-0016 r3.1 (profile layers L3/L4), ADR-0001 (actors, R3: results as messages),
 ADR-0025 (helper `pointer` capability).
+r6 folds in the statistical plugin scheduler (SPS): new §2.4.7, metrics PX-10..PX-13, the C-4 A/B and the
+M18a-2a..2f sub-slices; the idle-state decision DP-1 (§2.4.7.10) is **pending the owner**. r6 is written
+against the r5 implementation notes of branch `worktree-agent-a8189783046a42a6c` (not yet on main; its
+text is not copied here) and edits no r5 passage.
 Draft WIT (paper only, not built): **`wit/gorca-ext-0.10/`** (r1's `wit/gorca-ext-0.9/` draft was
 never shipped and is replaced; see §8).
 Inputs: `docs/reports/wasm-plugin-cost-spike.md` (wasmtime 49.0.3, loaded host),
 `docs/reports/adr-0026-review.md` (review r1: H-1..H-5, M-1..M-6, L-1..L-4),
 `docs/reports/plugin-fusion-math.md` (MQ-1..MQ-3, restrictions PF-1..PF-8),
-`docs/reports/wasm-hook-overhead.md`, `docs/reports/ext-telegram-web-demo.md` (branch 98cb234).
+`docs/reports/wasm-hook-overhead.md`, `docs/reports/ext-telegram-web-demo.md` (branch 98cb234),
+`docs/reports/plugin-statistical-scheduler.md` (SPS, r6), `docs/reports/m18a-2-review.md` (r6; currently
+uncommitted on branch `worktree-agent-a8189783046a42a6c`).
 Milestone: M18a (slices §2.9). Order fixed by the owner: **M22b1 → M18a runtime → first plugins**.
 
 ## 1. Context
@@ -359,7 +365,7 @@ enum PluginReply {
   The wait is the **only** blocking call in a writer and is bounded by B-2 by construction (an explicit,
   documented exception to "actors never block": `tokio::time` has about 1 ms granularity and cannot
   express 0.3 ms). The wake cost (about 5-20 µs, to be measured) is charged inside the 0.3 ms.
-- **Wait mechanism (normative, r4).** Never a blocking receive on a tokio channel (`blocking_recv`
+- **Wait mechanism (normative, r4; the countdown's membership and deadline are superseded by §2.4.7.4 in r6).** Never a blocking receive on a tokio channel (`blocking_recv`
   panics inside a runtime, and a park stalls the worker together with the tasks in its local queue).
   Per handoff the writer owns an **atomic countdown (initial value = number of plugin actors asked) and a
   futex word** (`futex_wait` with an absolute `CLOCK_MONOTONIC` deadline `D`, after spinning for about
@@ -401,8 +407,9 @@ enum PluginReply {
   n·c_max)`), which is the **serial-equivalent bound**: even if all n jobs ran on one thread they would
   fit in B-2. This is conservative; with free threads the true bound is the shared deadline `D`. A
   tighter grant for the parallel case (`a_k` up to the cap whenever `n` is at most the idle pool
-  threads, progressive filling over `T` threads otherwise) is **MQ-4** for the math researcher and
-  WQ-6 for the bake-off; the serial-equivalent rule applies until MQ-4 is proved.
+  threads, progressive filling over `T` threads otherwise) was **MQ-4**. **Answered in r6:** weighted
+  progressive filling per pre-armed queue and the per-call cap for a lone job on a parked thread
+  (§2.4.7.5); the serial-equivalent rule is retired.
 - **Wall accounting** (§2.5.2) is measured on the plugin thread around the guest call (`exec`); the
   mailbox delay (`queued`) is a separate metric and never an overrun. The writer's wait is bounded by
   `D` regardless of the guest.
@@ -436,12 +443,332 @@ enum PluginReply {
 | PF-5 taint-clean derivation | taint bits are computed by the host while serving imports on the actor (from the provenance on the frozen rows) and travel in `Done`; the guest cannot set them; admission re-checks tier against taint on the writer | T3 taint test with deferred admission |
 | PF-6 total S1 rank | CR-2 ranks by (tier, specificity, id, anchor key), never by arrival order, and `FUSE` is a pure function of the admitted set, so a late arrival cannot change the winner, only when it appears | permutation test: all arrival orders of 3 plugins' replies give the same fused entry |
 | PF-7 token fixes the basis | exactly the case it was written for (§2.6.1): `t` is the snapshot turn, `g` the `BindGen` at the snapshot; stale iff some `n ∈ R, c ∈ M` has `stamp > t` or the `BindGen` changed; `slot_epoch` additionally rejects replies of a dead incarnation | MQ-2 replay corpus with randomized delivery delay: 0 false accepts |
-| PF-8 interactive budget | the writer's added delay, measured **from the start of the writer turn** (snapshot, send, wait and fuse included), is at most `D` (0.3 ms) by the bounded wait with timer slack 1 ns, and one wait per keypress path; per-plugin grants are the serial-equivalent progressive filling (§2.4.2) until MQ-4 | PX-4 A1-A6 on B', stall max reported |
+| PF-8 interactive budget | the writer's added delay, measured **from the start of the writer turn** (snapshot, send, wait and fuse included), is at most `D` (0.3 ms) by the bounded wait with timer slack 1 ns, and one wait per keypress path; per plugin the wait is the hold `h_i` and the end is clamped to `t0 + D - fuse_reserve` (SPS-1, SPS-2, §2.4.7.8); grants are per-queue weighted progressive filling (§2.4.7.5) | PX-4 A1-A6 on B', stall max reported |
 
 Determinism (§2.4.5) is unchanged: once primary inputs are quiescent, every reply is admitted or
 rejected by the token, the re-derivations caused by rejections run on the final S0, and the final
 model equals `Full(S0)`. Only the *first utterance* depends on the race between the plugin and the
 0.3 ms deadline, which is what the "facts at first utterance" gate measures.
+
+#### 2.4.7 Scheduling: the statistical plugin scheduler, SPS (r6; normative once M18a-2d ships)
+
+Source: `docs/reports/plugin-statistical-scheduler.md` (the math report, "report" below: proofs §4,
+simulation §5) and its reference implementation `tools/research/plugin_sched/sps.py`. Tags: **[P]** proved
+in the report, **[M]** measured in the simulation only (synthetic workload, one host probe; not yet on
+gorca), **[H]** assumption. This section is the contract; the report is the rationale. Where the two
+differ, this section wins.
+
+**Scope.** SPS decides three things for the interactive slice of §2.4.6 and nothing else: (1) how many
+pool threads to wake early, (2) which thread each job runs on and its fuel share, (3) how long the
+writer waits for each plugin. It never decides *whether* a job exists (PF-4), *what* a job computes
+(PF-1/PF-2) or *whether a reply is admitted* (PF-7). The final model equals `Full(S0)` whatever SPS
+decides (§2.4.5, report §4.4).
+
+**Why statistics and not a bandit.** The writer measures every dispatched job whether or not it waited,
+so the wait decision has full-information feedback: nothing to explore (report §2). The one
+counterfactual, hot versus parked start, is a property of the host and is pooled over all plugins.
+
+##### 2.4.7.1 State (writer-owned, integer-only)
+
+All quantities are integers: times in µs, probabilities in Q16 (`Q = 65536`). The state is owned by the
+writer next to the `Slot` (§2.5.4), updated only while handling `PluginReply` (after publish) and at
+key-down; no atomics, no sharing, no PRNG, no clock reads inside the scheduler (time is an input).
+
+```rust
+// Interface sketch (crate gorca-plugin-sched, no dependency on wasmtime or tokio; paper only).
+pub struct PluginStats {                   // per (plugin, scope); lives in the slot table
+    exec: [u32; 16],                       // decayed log-histogram, edges 0,4,8,12,16,24,32,48,64,96,128,192,256,384,512,1024 us
+    n: u32,                                // replies seen (warm-up gate: 8)
+    act: SmallVec<[(KeyClass, u32 /*Q16*/); 6]>, // activation probability per key class, alpha += (hit - alpha) >> 5
+    useful: u32,                           // Q16, u += (changed - u) >> 5
+    m: u8, e: u16, ontime: u8,             // offence level, exclusion counter, on-time run
+    denied: u8,                            // hot-place denials g
+}
+pub struct HostStats { start_hot: [u32; 16], start_cold: [u32; 16], bucket_us: i64 /* spin token bucket */ }
+pub enum KeyClass { Nav, Tab, Enter, EditArrow, Type, Other }   // supplied by the input layer at key-down
+pub enum Label { Interactive, Unlabelled, Refinement }          // manifest class; a prior and a constraint only
+pub enum Place { Hot(u8 /*queue*/), Parked }
+pub struct Dispatch { place: Place, fuel: FuelGrant, hold: HoldUs /*0 = not waited*/, deadline_us: u32 }
+pub struct Plan { jobs: ArrayVec<Dispatch, 16>, wait_end_us: u32 /*0 = no wait*/ }
+
+// Pure functions of (state, inputs); the same input log gives bit-equal outputs.
+fn on_key_down(&mut self, scope: ScopeId, class: KeyClass, now_us: u64) -> PreWake;  // { threads: u8, until_us }
+fn plan(&mut self, triggered: &[Triggered], turn: TurnTimes) -> Plan;                 // dispatch epoch
+fn observe(&mut self, reply: &Observation);                                           // after publish
+```
+
+- Histogram: each sample adds 16, all counts halve every 64 samples (half-life 64 calls). `Q_h(p)` is the
+  **upper** edge of the first bucket whose cumulative mass reaches `p` (never under-estimates a
+  deadline); `F_h(t)` counts only buckets whose upper edge is `<= t` (never over-estimates a hit rate).
+  Both are conservative on purpose [P].
+- The CDF of `start + exec` is the 16-term convolution of the start histogram of the assigned state with
+  the plugin's exec histogram; it is cached per plugin and state after each reply, so `plan` only reads
+  arrays.
+- Until a plugin has 8 replies, its label prior counts as "fits within its hold" (`F = 1` at `d_i`).
+
+##### 2.4.7.2 Labels are priors and constraints
+
+The manifest carries an optional `class = "interactive" | "refinement"` (absent = unlabelled). A label
+gives the starting values and the hard limits below; statistics take over the rest.
+
+| Label | value prior `v` | activation prior `α` | may be waited | may pre-wake / take a hot place | weight `w` |
+|---|---|---|---|---|---|
+| `interactive` | 1.0 | 0.5 | yes | yes | 2 |
+| unlabelled | 0.5 | 0.25 | yes | yes | 1 |
+| `refinement` | 0.25 | 0.125 | **never** | **never** | 1 |
+
+Normative constraints (they hold whatever the statistics say, and a manifest cannot loosen them):
+- **L-1** A `refinement` plugin is never in the wait set, never causes a pre-wake and never takes a hot
+  place. Its job is still dispatched in the same turn (on a parked thread) and its reply is admitted
+  whenever it arrives (LB-4 refine).
+- **L-2** A **third-party** plugin (T3, including sideloaded and user-trusted) has `v <= 0.5`, at most
+  one hot-queue place per keypress, a hold `h <= 100 µs`, is **always ordered last** on any shared
+  thread queue, and is never waited for when its deadline was clipped by that cap. Self-labelling
+  `interactive` changes its prior and its fuel weight only.
+- **L-3** First-party `v <= 1`, trusted `v <= 0.75`. An owner override `always-wait` / `never-wait`
+  (first-party only) is applied before the statistics.
+- **L-4** The usefulness `u` is measured from facts that **changed the published entry** (fuse diff on
+  the focus chain), not from facts emitted. Until that bit exists (M18a-2b), `u` counts "emitted at
+  least one admitted fact", which a plugin can inflate; the tier caps bound the damage.
+
+##### 2.4.7.3 Key-down pre-wake (epoch K)
+
+On every key-down the input layer gives the context `x = (scope, KeyClass)`. Let `dw = D - snap - fuse`
+(`D` = 300 µs, `snap` and `fuse` are measured reserves, defaults 6 and 8 µs; M18a-2b measures
+`apply + fuse` and sets `fuse`, review fix 5). For each spin-eligible plugin of the scope (not
+`refinement`, not excluded):
+
+```text
+gain_i  = max(0, F_i^hot(dw) - F_i^parked(dw))
+score_i = alpha_i[x] * v_i * gain_i
+S       = { i : score_i >= theta },             theta = 0.01
+K       = min(|S|, K_max, max(1, ceil(k_mult * sum_{i in S} alpha_i[x])), floor(bucket / spin_est))     // K = 0 if S is empty
+```
+
+`K_max = 6`, `k_mult = 1`, `spin_est = 3 ms`. The scheduler returns `PreWake { threads: K, until: now + 50 ms }`;
+the runtime arms K **idle** pool threads to spin (the in-flight "pre-armed until" mechanism); plugin
+actors are not pinned to them. Spinning ends at the focus change (the thread starts its job or parks
+after the existing 40 µs idle tail) or at `until`.
+
+**CPU token bucket (normative).** The bucket holds 200 ms and refills at 150 ms per second of wall time
+(15 % of one core on average). `spin_est` is charged at key-down; when the thread parks, the actual
+cost (armed duration plus tail) is settled against the bucket (the difference may be negative; the
+bucket floor is `-200 ms`). With an empty bucket `K = 0`: the system degrades to the parked path, which
+still meets PF-8. Typing and editor arrows learn `α ≈ 0` within about 30 keypresses and then wake
+nothing; that alone is most of the CPU saving [M].
+
+##### 2.4.7.4 Dispatch (epoch D): order, placement, deadline, hold
+
+At the focus change the writer knows the triggered set `M` (§2.4.1, `|M| <= 16`). One call to `plan`:
+
+1. **Order** the jobs by: (a) tier class, third-party last; (b) **promoted** first (`g_i >= age_max = 8`),
+   largest `g_i` first; (c) WSPT key `v_i * w_i / e50_i` descending, where `e50_i = Q_exec_i(0.5)`
+   (the non-preemptive analogue of the cμ rule; guest calls are not pre-empted, only fuel stops them);
+   (d) rotating tie-break `(plugin id + focus-change counter) mod |M|`, never a fixed id.
+2. **Place** by list scheduling over the K pre-armed queues: take the least-loaded queue `k`; the job
+   goes there iff it is spin-eligible, its tier still has a place (third party: one), and
+   `free_k + Q_start^hot(0.9) <= Q_start^parked(0.9)`; otherwise it goes to the **parked** path. Then
+   `free_k += e90_i`. Jobs on the parked path are pushed to one shared cold queue and woken with a
+   **single** `FUTEX_WAKE` of count = number of cold jobs (the in-flight "one wake" fix); a woken thread
+   claims a job by CAS. A hot job needs no wake.
+3. **Deadline (union bound).** `d_i = off99_i + Q_start^state(0.99) + Q_exec_i(0.99) + 8 µs`, clipped to
+   `min(dw, tier cap)`. `off99_i` is the 99th-percentile queue offset from step 2. Since
+   `P(X+Y > a+b) <= P(X>a) + P(Y>b)`, a job meets `d_i` with probability >= 98 % when the histograms are
+   right [P]. "Thread start q99 + exec q99" is exactly this sum.
+4. **Writer stopping point.** `t* = argmax_{t in G} sum_{j in E} v_j * F_j(min(t, d_j), off_j) - lambda * t`,
+   `lambda = 3/Q` per µs. The grid `G` is the bucket edges `<= dw`, plus `dw`, plus every `d_j` (at most
+   32 points). `E` is the eligible set: wait-eligible label (L-1), `e_j = 0`, not busy (below), and not
+   (third party and clipped).
+5. **Holds and wait set.** `h_j = min(t*, d_j)`; `j in W` iff `v_j * F_j(h_j) >= lambda * h_j`. The writer
+   waits until `max_{j in W} min(reply_j, h_j)`, or does not wait at all when `W` is empty. Plugins
+   outside `W` are dispatched in the same turn with the same `Derive` content and still count when their
+   reply arrives in time. **This replaces the shared countdown to `D` of §2.4.6**: there any plugin in
+   the countdown could hold the writer to `D`.
+6. **Busy actor.** A job sent to an actor that is still running an earlier job (newest wins, displaced
+   job requeued, r5 gap 7) is dispatched but is **not in `E`**: its start is unknown, so waiting for it
+   would be unbounded guessing (review of M18a-2, fix 4). It is counted in `pa_busy`.
+7. **Absolute clamp (normative).** The deadline handed to the wait primitive is
+   `wait_end = min(t_snap_done + t*, t0 + D - fuse_reserve)`, where `t0` is the start of the writer turn
+   (§2.4.6) and `t_snap_done` is the measured time after the snapshot and send. The clamp makes PF-8
+   independent of the accuracy of the `snap` reserve and of every statistic.
+8. **Wait mechanism.** §2.4.6 stands (futex or `timerfd`, timer slack 1 ns, one wait per keypress path).
+   The countdown now counts `|W|`, not the number of plugins asked; the wake of the writer still comes
+   from the last member of `W` or from `wait_end`. The writer spin window (in-flight fix 2) is
+   `wait_end`, not `D`, so shorter holds also cut the writer's own spinning.
+
+**Determinism of the message.** A `Derive` job must not reveal whether its plugin is in `W` (same
+content, same `deadline` field). Normative; test below.
+
+##### 2.4.7.5 Fuel shares: weighted progressive filling (resolves MQ-4)
+
+For pre-armed queue `k` (jobs in queue order): pool `P_k = κ_int * (dw - Q_start^hot(0.5))`; grant
+`a = min(cap, R * w_i / W_rem)`, `R` the remaining pool, `W_rem` the remaining weight; unused fuel
+returns to `R`. A job on the parked path runs alone and gets `cap` (0.2 ms × `κ`); its effect on the
+writer is bounded by its hold, not by its fuel. Proposition B of MQ-3 holds per queue with weights [P]:
+`Σ grants <= P_k`; each grant is at least `min(cap, P_k * w_i / W_k)`; a queue's serial work fits in
+`dw` when κ is calibrated (ρ = 1). This is the **parallel grant rule** MQ-4 asked for, "progressive
+filling per thread, cap per lone job", and it replaces the serial-equivalent rule of §2.4.6 that gave
+ten plugins about 23 µs each (r5 gap 6). The rotating tie-break of §2.4.2 survives as step 1(d). The
+wall-overrun rule of §2.5.2 is measured against this grant.
+
+##### 2.4.7.6 Observations, offences, forgiveness
+
+`observe(pid, state, start, exec, resp, assignment, waited, useful)` (after publish):
+- adds `start` (queue offset excluded) to `start_h[state]` and `exec` to the plugin's `exec_h`; updates
+  `u`, `α` (per key class) and, if `e > 0`, decrements `e`;
+- **offence** iff all three hold: the plugin was waited for and `resp > h_i`; `exec > Q_exec_i(0.99) + 8 µs`
+  with the q99 stored at dispatch (the plugin's own code was slow, not the host's wake); the deadline
+  was not clipped. On an offence `m += 1`, `e = min(E, 2^m)` with `E = 256`, `ontime = 0`; the plugin is
+  not in `E` (the eligible set) for its next `e` activations;
+- every reply that is not late: `ontime += 1`; at `R = 32` set `m -= 1`, `ontime = 0`. The count includes
+  jobs the writer did not wait for.
+
+A plugin that behaves exactly like an honest plugin with a 3 % tail cannot be told apart from one and is
+accepted at the price the honest one would get ([H], inherent): this is a tolerance, not a detector.
+
+##### 2.4.7.7 Fallback and fail-safe
+
+If an invariant check fails (histogram total 0 after warm-up, `t* > dw`, `Σ grants > P_k`, a counter
+overflow), the writer uses the fixed **LABELS** policy for the rest of that scope (pre-wake interactive and
+unlabelled workers on non-typing keys, wait for non-refinement plugins up to `wait_end`, no statistics)
+and logs one `sched-fallback` line (kind only). This is the sched_ext watchdog pattern. PF-8 does not
+depend on the scheduler at all because of the absolute clamp (step 7).
+
+##### 2.4.7.8 Guarantees as normative invariants and their test obligations
+
+Notation: `N` activations of one plugin; `D` = 0.3 ms from the turn start.
+
+| Id | Invariant | Basis | Test obligation (all in M18a-2c unless noted) |
+|---|---|---|---|
+| **SPS-1** writer stall | The writer's plugin wait ends by `wait_end <= t0 + D - fuse_reserve`, whatever the plugins reply, however they time, and whatever the statistics hold (including corrupt ones). Observed stall adds only the writer's own wake lateness (host property, §2.4.7.9). | [P] report §4.1 plus the absolute clamp | (i) property test: random histograms, random `PluginStats` bytes, random reply times incl. never: `wait_end <= t0 + D - fuse_reserve` always; (ii) PX-4 A1..A13 on the integrated runtime: max stall `<= 0.35 ms` quiet host, p99 `<= 0.31 ms`; loaded-host max reported; (iii) fuzz `plan` input log 10^7 cases, 0 violations |
+| **SPS-2** per-plugin harm | Adding plugin `i` to `W` raises the writer's end by at most `h_i <= d_i`; a third-party plugin by at most 100 µs; a clipped third-party plugin is never in `E`. | [P] report §4.2 | property test: for random reply vectors, `end(W) - end(W \ {i}) <= h_i`; third-party `h <= 100`; A6/A13 adversaries with a self-declared `interactive` label: stall per keypress `<= 100 µs` over the benign stall |
+| **SPS-3** offence bound | Offences while waited satisfy `O <= N/(R+1) + N/E + log2(E) + 1` (R = 32, E = 256: 3.4 % of activations + 9). Each costs `<= h_i`. | [P] report §4.3 | Rust adversary harness with strategies honest, periodic, random 5 %, burst, slow, oracle (knows `W`): `N = 10^5`, assert the bound for each; oracle median stall within ±10 µs of the honest median; replicates sim `117/7495` order of magnitude |
+| **SPS-4** no job dropped, bounded exclusion | The set of dispatched jobs equals the triggered set `M` in every turn: SPS only places and waits. Wait exclusion after an offence lasts `<= E = 256` activations. A plugin denied a hot place is promoted after 8 denials and is denied at most `8 + ceil(m/K) <= 24` times. Third-party one-place cap excepted. | [P] report §4.4 | differential test: dispatched set with SPS == with a null scheduler on random triggers; assert `e <= 256` and `g <= 24` as `debug_assert`s and in the harness; PF-6 permutation test and MQ-2 replay corpus unchanged (0 false accepts) |
+| **SPS-5** cost | Per keypress: key-down `O(n_scope)`, dispatch `O(m log m + m*|G|)` with `m <= 16`, `|G| <= 32`, `K <= 6`; no allocation, no lock, no syscall inside `on_key_down` and `plan`. | [P] report §4.5 | bench `plan`: p99 `<= 10 µs` (report estimate: a few µs) at `m = 16`; `on_key_down` p99 `<= 2 µs`; counting allocator proves 0 allocations; both inside the 15 ms keypress budget with margin |
+| **SPS-6** determinism | State and decisions are integer functions of the input log (durations, contexts, triggered sets, usefulness bits). Replay of a recorded log gives bit-equal `Plan`s. | [P]+[M] | golden vector of `sps.py` reproduced bit-exactly (`(1, [(0,0,0,60,4086932,60), (2,None,0,286,4347800,0), (1,0,48,72,2043466,0)], [0], 60)`; use `i64 >> s`, not division, in the EWMA); cross-language replay of the 17 594-call log: 0 mismatches, output hash `9f3a899cdbc785ac`; a `GORCA_SCHED_LOG` ring writes the input log for field replay (no text, ids and numbers only) |
+| **SPS-7** labels | L-1..L-4 hold on every plan. | by construction | property tests: `refinement` never in `W`, never counted in `K`; no third-party job precedes a non-third-party job on any queue; third-party places `<= 1`; `v <= tier cap` |
+| **SPS-8** non-revealing | `Derive` content and deadline field are identical for jobs in and out of `W`. | design | test: serialise `DeriveJob` for the same job under two plans; bytes equal |
+| **SPS-9** CPU bound | Pre-wake spin is bounded by the bucket: `<= 200 ms` burst, `<= 150 ms/s` average per process; with no key activity the cost is zero. | by construction | measured per-pool-thread CPU time (`CLOCK_THREAD_CPUTIME_ID`) over a 60 s run at 5 keys/s and at a held key (30 keys/s): average `<= 150 ms/s`; idle 0 |
+
+SPS-1 bounds the scheduler's decision. It does not make the *measured* stall exactly <= 0.3 ms: the
+writer's own wake after `wait_end` is a host property (about 55/141/180 µs p50/p99/max for one wake on this
+host's default idle states, m18a-2 review §2). That is why the gate in §2.10 is p99 `<= 0.31 ms` and
+why §2.4.7.9 exists.
+
+##### 2.4.7.9 Interaction with the M18a-2 fixes in flight
+
+The branch `worktree-agent-a8189783046a42a6c` (not yet on main) ships interim latency fixes and r5 notes
+(`docs/reports/m18a-2-review.md`, §2 and ADR r5 "Gaps found while implementing"). SPS keeps the
+mechanisms and replaces the policies:
+
+| In-flight item | Under SPS |
+|---|---|
+| Fix 1: pre-wake on key-down (all scope workers, about 50 ms) | **Kept as a mechanism, replaced as a policy**: K threads from `on_key_down` under the token bucket (§2.4.7.3) instead of "all workers on every key". The 50 ms window is the `until` bound. Interim policy = LABELS = the §2.4.7.7 fallback |
+| Fix 2: writer spins the whole window | Kept; the window ends at `wait_end` (a hold-based bound), not at `D` |
+| Fix 3: one futex word, one `FUTEX_WAKE` | Kept for the **parked path only**: one wake of count = cold jobs on a shared cold queue. Hot jobs need no wake. Do not revert to a wake-all (it would wake threads that have no job) |
+| Fix 4: busy plugins out of the countdown | Subsumed by §2.4.7.4 step 6 (busy actor not in `E`) and by `W` replacing the countdown |
+| Fix 5: PX-6 on default power management, apply + run inside the measured turn | Kept and tightened: the `fuse` reserve is measured from it; no "quiet host" PASS (it disables every idle state above 20 µs and would hide §2.4.7.10) |
+| Adaptive spin of workers (idle spin before park, 40 µs today) | Kept as the **tail** after a job and after a pre-armed window; the pre-armed deadline overrides it. Spin cost is settled against the bucket |
+| Manifest classes `interactive` / `refinement` | Become the `Label` of §2.4.7.2: priors and hard constraints, never trusted for third parties beyond L-2 |
+| Shared countdown to `D` (§2.4.6 r4) | **Superseded** by `W`, `h_j`, `wait_end`; I-P8 changes accordingly (§7) |
+| Serial-equivalent grants (r5 gap 6, 23 µs each) | **Superseded** by §2.4.7.5 |
+| Gap 7 (busy actor not skipped) and gap 8 (2 ms governor window plus 20 ms limit) | Kept unchanged. The governor window stays until the input layer supplies a keypress id; SPS runs inside the one wait |
+| Review findings S-1, S-2, C-1, P-1 | Independent of SPS and gating; they land before anyone enables plugins (M18a-2 acceptance) |
+
+##### 2.4.7.10 Host idle states: a decision for the owner (DP-1, **PENDING OWNER**)
+
+**Finding.** Deep C-state exit latency dominates the p99. This host (16 CPUs, `intel_idle` driver,
+`menu` governor) has C2 127 µs and **C3 1048 µs** exit latency, all enabled. A parked pool thread
+sleeps through the 24 ms between keypresses in a deep state. Probe (review §2): one wake p50/p99/max
+55/141/180 µs, the slowest of ten 182/276/339 µs. In the SPS simulation [M] jobs on parked threads
+keep this tail: p99 stall 243–273 µs against 217–219 µs for pre-wake-all, and more spinning does not
+fix it (`k_mult = 2` gives p99 279 µs). With a per-CPU resume latency of 20 µs on the pool CPUs (the
+simulation models parked start as 70 % LN(8, 0.5) + 30 % LN(18, 0.4), cap 60 µs) the SPS p99 becomes
+233 µs at 0.1 % of a core. SPS still meets PF-8 by construction on default idle states; this decision
+is about the *p99 margin*, not about safety.
+
+**Options.**
+
+| | What | Cost / risk | Needs |
+|---|---|---|---|
+| **(a)** accept | no host change; SPS p99 243–273 µs [M], real value unknown on a loaded host | none; PX-6 p99 gate `0.31 ms` may be tight on a loaded host | nothing |
+| **(b)** lease on `/dev/cpu_dma_latency` | gorca opens it, writes a 32-bit latency (20 µs: forbids C2/C3, allows C1) **only while plugins are active**, closes it later. Kernel drops the request when the fd closes or the process dies (crash-safe by design) | system-wide while held (all CPUs keep out of C2/C3: some package power and heat); the aggregate is the minimum over all requesters, so it composes with other clients; no effect when idle | write access to the node (below) |
+| **(c)** persistent per-CPU limit | a root-owned unit or `tmpfiles.d` entry writes `pm_qos_resume_latency_us = 20` on dedicated pool CPUs | those CPUs never reach C2/C3 even when idle; pool threads must be pinned (`sched_setaffinity`), which fights the work-stealing and "prefer last thread" rules; reverts only if the owner removes it | root once, plus pinning |
+
+*Definition of "plugins active" for (b)*: the lease is taken on the first key-down with `K >= 1` or a
+focus change that dispatches an interactive batch, renewed by each such event, released 2 s after the
+last one, and capped at 30 s of continuous holding before a forced release and re-take (so a stuck
+state cannot pin the CPUs). Typing in an editor (`α ≈ 0`, `K = 0`) takes no lease.
+
+*How (b) can be granted.* Verified on this host: `/dev/cpu_dma_latency` is `crw------- root root`
+(10,259); `/sys/devices/system/cpu/cpu*/power/pm_qos_resume_latency_us` is `-rw-r--r-- root` (root-writable
+only); `udevadm` 257; no `cpu_dma_latency` rule exists in `/usr/lib/udev` or `/etc/udev`.
+
+| Method | How | Security | Verdict |
+|---|---|---|---|
+| **udev `uaccess`** | `SUBSYSTEM=="misc", KERNEL=="cpu_dma_latency", TAG+="uaccess"` in `70-gorca-cpu-dma-latency.rules` (parsed OK by `udevadm verify`). logind then adds an ACL for the user on the active seat. Precedent on this host: `70-uaccess.rules` lines 50 and 101 do exactly this for the seat-less `misc` nodes `kvm` and `rfkill` | any process of the active-seat user may then pin C-states, which is a power/heat nuisance comparable to a busy loop, with no confidentiality or integrity impact. No clamp is possible, so gorca clamps its own value to `>= 20 µs` | **smallest change; recommended path** |
+| group + mode | `GROUP="gorca-rt", MODE="0660"` | same, plus group membership and a re-login | worse than `uaccess` on a single-user desktop, fits headless/multi-seat |
+| root helper + polkit | a small system D-Bus service holds the fd on behalf of the caller (released on `NameOwnerChanged`), polkit action `org.gorca.pm-qos.hold` with `allow_active`, enforces a floor of 20 µs and the 30 s lease cap | strictest: clamp, audit, per-caller release; but a new root component and package for a 20-line job | choose only if the owner wants a clamp or a headless/remote use |
+| capability | `CAP_DAC_OVERRIDE` on the daemon | far too broad | **rejected** |
+
+*Failure mode.* `open` fails (`EACCES`, `ENOENT`, sandbox): log one `pm-qos-unavailable` line with the
+`errno`, behave as (a). No path in gorca depends on the lease.
+
+**Recommendation (architect, not a decision): (b) via the udev `uaccess` rule, default off
+(`[plugins] pm_qos = "off" | "lease"`), enabled by the owner after M18a-2d measures PX-13 on this host.**
+Rationale: it is the only option that is free when idle, crash-safe, needs no root code, and reversible
+by deleting one file; (c) costs permanent power and a pinning scheme that conflicts with work
+stealing; (a) is the right default until PX-6 on default idle states shows a miss. **Decision rows to
+add to `docs/decisions.md` once the owner answers: DP-1 = a / b / c, and for (b) the access method.**
+Installing the rule is a system-wide change and is the owner's action; no agent installs it.
+
+##### 2.4.7.11 Parameters (frozen for M18a-2d, re-tuned on PX-6 telemetry)
+
+| Parameter | Value | Parameter | Value |
+|---|---|---|---|
+| `D` | 300 µs | `K_max` / `k_mult` | 6 / 1 |
+| `snap` / `fuse` reserve | 6 / 8 µs (measured in M18a-2b) | spin bucket | 200 ms, refill 150 ms/s |
+| `λ` | 3/Q per µs | `spin_est` / pre-wake window | 3 ms / 50 ms |
+| `θ` | Q/100 | `α`, `u` shifts | 5 |
+| histogram half-life | 64 calls | warm-up | 8 replies |
+| deadline margin | 8 µs | `R` (forgiveness) / `E` (exclusion cap) | 32 / 256 |
+| `age_max` | 8 | third-party hold cap | 100 µs |
+
+The report's sweeps ([M], oracle adversary): `k_mult` 0.5/1/1.5/2 gives FFU 0.995/0.9985/0.9976/0.997
+and p99 300/263/265/279 µs; `λ` 3 to 65 (Q16) costs FFU 0.9985 to 0.981; spin refill 30/75/150 ms/s gives
+FFU 0.990/0.997/0.9985. `k_mult = 1`, `λ = 3`, 150 ms/s are the knee.
+
+##### 2.4.7.12 Slice plan with SPS, acceptance and benchmarks
+
+SPS does not change the order fixed by the owner (M22b1 → M18a runtime → first plugins). It splits the
+scheduling work out of M18a-2 into sub-slices so that M18a-2 can merge with the interim LABELS policy
+first. The rows below are inserted between M18a-2 and M18a-3 of §2.9; M18a-3..7 are unchanged except
+where §2.9 says so.
+
+| Slice | Content | Acceptance | Benchmarks |
+|---|---|---|---|
+| **M18a-2a** (the open M18a-2 branch) | Merge with the interim policy: pre-wake, writer spin, single wake, busy plugins untagged, manifest classes `interactive`/`refinement` as LABELS; fixes S-1, S-2, C-1, P-1 of the m18a-2 review | review verdict MERGE; PX-6 re-run on default idle states with apply + run inside the turn, result recorded as the **LABELS baseline** (not required to pass the 99 % gate) | PX-6 (baseline) |
+| **M18a-2b** telemetry | `Done` gains `start` (measured on the pool thread as `now - enqueue` at job start) and `exec`; the `changed` bit (fuse diff on the focus-chain entries); `KeyClass` from the input layer at key-down; `pa_busy`; the input-log ring `GORCA_SCHED_LOG`; measured `snap` and `apply + fuse` reserves | fields present on both writers; no allocation on the hot path; log contains ids and numbers only (a test pins it) | cost of telemetry `<= 1 µs` per reply |
+| **M18a-2c** `gorca-plugin-sched` | the pure crate of §2.4.7.1 with `on_key_down`, `plan`, `observe`; fallback; unit tests of SPS-1..SPS-9 against the harness (adversary strategies, replay, golden vector). No integration | SPS-1..SPS-9 test obligations pass; Rust output equals `sps.py` on the golden vector and the 17 594-call log | PX-10 (decision cost) |
+| **M18a-2d** integration | replace the countdown by `W`/`h_j`/`wait_end` in both writers; hot queues and the shared cold queue in the pool; token bucket; weighted progressive filling (closes MQ-4); `Label` from the manifest; scheduler-side fallback | **C-4 A/B** (below) passes; PX-4 A1..A13 gates unchanged; PX-6 SPS row passes on default idle states; PX-11, PX-12 | PX-4, PX-6, PX-10, PX-11, PX-12 |
+| **M18a-2e** idle-state lease (**conditional on DP-1**) | `PmQosLease` in the pool (open, write, renew, release, cap; `errno` fallback); config key; the udev rule shipped as a file the owner installs | with the lease: PX-13 gain measured; without it: behaviour identical to DP-1 (a) | PX-13 |
+| **M18a-2f** retention (deferred) | decayed-LFU eviction with TinyLFU admission for warm W instances above the B-7 budget (report §3.7) | only built when the 50-plugin × 2-lane RSS exceeds the budget; hit rate `>=` LRU on the Zipf-with-scans trace (report §5.6: 0.62 vs 0.50 at M = 8) | PX-3 |
+
+Gate for M18a-2d: M18a-2a merged and M18a-2b present. The R lane (M18a-5) and everything after use
+`plan` unchanged; the R lane has no wait.
+
+**C-4: SPS against LABELS (a measured A/B, not a worktree bake-off).** The question is contested only on
+the real host, so M18a-2d runs both policies behind the config switch `[plugins] scheduler = "sps" |
+"labels"` on one fixture (Signal private session, P-2 + 9 dummies, default idle states; then the PX-4
+adversaries, with a self-labelled `interactive` third party that stalls 190 µs only when waited
+(oracle)). The reviewer judges on the measured numbers. **SPS is adopted iff** all hold: (1) facts at
+first utterance on the benign fixture `>= 99 %` overall and `>= 97 %` per plugin, and within 0.5 points
+of LABELS; (2) scheduling CPU `<= 1/4` of LABELS; (3) with the oracle adversary the stall p50 changes
+by `<= 10 µs` against the honest run (LABELS: +128 µs in the simulation); (4) stall p99 per focus
+change `<= 0.31 ms`, and not more than 60 µs above LABELS; (5) SPS-1..SPS-9 pass. **If (4) fails but
+(1)-(3) pass**, SPS stays and DP-1 becomes mandatory (b). **If (1)-(3) fail**, LABELS stays as the
+shipped policy, the SPS crate remains as a replay tool, and the reviewer states which gate failed; the
+result is recorded in `docs/decisions.md`.
 
 ### 2.5 Performance and safety
 
@@ -670,6 +997,54 @@ it targets." T2 patches are first-party author intent, exempt like declarative r
 Reserved ids: every id in the compiled first-party list and the `gorca.` prefix. A T3 package using one
 is refused at install and at load. Store and signatures are ADR-0020 (Phase 4).
 
+**Application identity and the threat model (r5; normative for activation).**
+
+*Threat model.* A malicious process running as the same user can already present any accessibility
+tree it likes. If it impersonates Firefox, a plugin activates on the attacker's own content, and the
+attacker could have had that content spoken without any plugin. Identity verification therefore
+exists to stop **accidental misattribution and cheap spoofing**; it is **not a defence against a
+determined same-user adversary**, and nothing in the design relies on it being one. What a
+plugin must never gain from a spoofed identity is access to content of *another* application, which
+the scope rules (AC-2, one scope = one application or one document) already guarantee, and a higher
+trust tier than the package earned, which the pin list and the tier rules guarantee.
+
+*Evidence.* `app-info.name` and the matcher key are never the application's self-reported name. The
+connector establishes the **verified identity** of the bus peer (`AppInfo::exe`):
+1. the peer's pid from `org.freedesktop.DBus.GetConnectionCredentials`, re-checked against the process
+   start time before and after the reads (pids are reused);
+2. **native**: `/proc/<pid>/exe`, canonicalised, a live file (not `(deleted)`) under `/usr` or `/opt`
+   whose every path component is owned by root and not writable by anyone else (group-writable only
+   for group 0), the same file (device and inode) as the canonical path in gorca's own mount
+   namespace, and the process in gorca's mount namespace. The identity is the file name
+   (`firefox-esr`, `chromium`); it is trustworthy because only root could have put the file there. A
+   copy under `$HOME` or `/tmp`, a deleted binary and a process in a foreign mount namespace are
+   unverified whatever they are called;
+3. **snap**: only the AppArmor attribute `/proc/<pid>/attr/apparmor/current`, label
+   `snap.<name>.<app> (enforce)` (complain mode confines nothing), and an executable under
+   `/snap/<name>/` passing the inode check: identity `snap:<name>`;
+4. **flatpak**: `.flatpak-info` read through `/proc/<pid>/root` agrees with the systemd scope
+   (`app-flatpak-<id>-<n>.scope`), identity `flatpak:<app id>`. This evidence can be forged with a
+   user namespace, so a flatpak application is **sandboxed-unverified** (below). *TODO(portal):*
+   read the application id from the portal (`GetAppInfo`/`GetHostAppInfo`) to back it.
+
+Comparison with a manifest `[match] apps` entry is **case-sensitive**.
+
+*Consequence.* A scope whose identity is unverified (or sandboxed-unverified) is served **first-party
+plugins that are not URL-scoped only**; no third-party plugin and no URL-scoped plugin (a URL match
+reads page content) is activated for it. The decision is the plugin service's, taken when the scope
+opens; the core only carries `ScopeSpec.verified` (`plugin_port::scope_identity`).
+
+*URL patterns* (`[match] urls`) are matched structurally (`gorca-plugin-host::urlmatch`), never as
+flat strings: scheme (http and https only, exact), host (lower-cased, IDN as punycode; a wildcard is
+a leading `*.` that matches whole labels and never the bare suffix; `*` anywhere else in a host is a
+manifest error), port (the scheme default on both sides), path (`*` never crosses `?` or `#`); a
+pattern with no query or fragment ignores the URL's. Userinfo in a pattern is refused and a URL with
+userinfo never matches. `https://web.telegram.org*` and `https://web.telegram.org.evil.com/` are
+the cases this exists for.
+
+*Logging.* No text a plugin produced and no text the host hands a plugin reaches any log: facts log
+their kind and length, a plugin's `diag.log` line logs only its length (tests pin it).
+
 **System scopes (normative; review H-1).** Untrusted and trusted T3 plugins can never match, read,
 target, bind keys in or speak over these scopes; T2 plugins may (P-4 needs the Shell):
 
@@ -762,6 +1137,11 @@ and an xtask lint forbids application names in `crates/gorca-core` and `crates/g
 
 Gate before M18a-0: **M22b1 merged** (presenter reads only fused entries) and the registries frozen.
 
+**r6:** the scheduling work of M18a-2 is split into sub-slices **M18a-2a..2f** (table, acceptance and
+benchmarks in §2.4.7.12): 2a merges the runtime with the interim LABELS policy, 2b telemetry, 2c the
+`gorca-plugin-sched` crate, 2d integration and the C-4 A/B, 2e the idle-state lease (conditional on
+DP-1), 2f warm-instance retention (deferred). M18a-3..7 follow M18a-2d.
+
 | Slice | Content | Acceptance | Benchmarks |
 |---|---|---|---|
 | **M18a-0** | **C-3 bake-off**: measures A against B' to **confirm B'** (§5, confirmation rule); WQ-1..WQ-3 and WQ-6 measured; H-3 probes (PX-4 adversarial set); κ_int/κ_bg table per core class; lazy-parameter bindgen check (§2.5.3) | reviewer verdict on the measured numbers; budgets B-1..B-9 frozen in the exit report; decision row | PX-4, PX-6 (on the bake-off fixture), WQ-1..3 |
@@ -773,6 +1153,82 @@ Gate before M18a-0: **M22b1 merged** (presenter reads only fused entries) and th
 | M18a-6 | `present-edit` (stable once `PresIr` frozen), spoken permission review, sideload path, manifest/package fuzzing | fuzz 0 host crashes (XP-7); e2e: enabling a T3 plugin speaks every requested permission with its reason and requires explicit confirmation; trust marking speaks the warning; declining leaves it off | XP-2 |
 | M18a-7 | P-4 gnome-shell port, `builtin_ext.rs` deleted, app-name lint | M4b Shell e2e unchanged | XP-1 |
 
+**Status of the slices (r5, 2026-10-25).** M18a-1 (runtime foundation) is merged. What this revision
+implements of M18a-2..M18a-5, for the document actor (K2) and the app actor (K1) alike:
+`[plugins] enabled` (default off), package discovery (first-party directory with the compiled-in
+pin list, `$XDG_DATA_HOME/gorca/plugins`), a per-scope plugin actor set with writer-owned slots,
+`[match]`/`[[watch]]` manifest tables, native watch prefilter, the revision token and the trigger
+rule (`gorca-core::plugin_port`), computed S1 patches in `FUSE` (`Ivm::set_computed`) and S4 facts
+through the side table, taint and stratum by tier, the deterministic WASI shim, the keypress-path
+wait governor, progressive filling, the first-party `telegram-web` plugin. Not implemented: the R
+lane (`commands`, `reactor`, `output`, `actions`, `timers`, `settings`), `present-edit`, `attach`
+and `removed` calls, `requests`, `matches`/`select`/`prop`/`anchor-of`/`prov` (stubs),
+`hide`/categories, MQ-3 progressive filling across plugins by EWMA of the p95 (a mean is used),
+spoken permission review and the trust UI, `route-changed`.
+
+**Gaps found while implementing (r5).**
+1. ADR-0024 lists a *Patch* source class, but the frozen `SourceClass` registry has none and the side
+   table consumes Secondary and Inferred only. Computed S1 patches live beside the side table
+   (`Ivm::set_computed`, ranked `(taint, plugin id, group)`, cleared per source on mask); they have no
+   anchors, TTL or epoch state of their own: validity is the writer's token, masking is
+   `clear_computed_source`.
+2. (Resolved in r5.1) Fact values were literals, so a plugin could not localise what it asserts.
+   `prop-value` gained `message(msg-ref)`: a key of the plugin's own catalog (`i18n/<lang>.msg` in its
+   package, namespace = plugin id, the core's catalog format and caps), resolved on the plugin's worker
+   thread right after the call, in the process language of that moment (an unknown key drops the
+   fact). A language change does not re-derive yet (the source epoch bump of a settings change is
+   M18a-5). The catalogs are not covered by the pin: the installed directory is root's.
+3. The ADR names no manifest schema for activation. Chosen: `[match] apps/urls` and `[[watch]]
+   {id, tag, class, aria-role}`, all native.
+4. Neutral attributes `class` and `aria-role` were not in `SrcRecord`; added (document source only).
+   The rows plugins read are built from the normalised record (after the normaliser, before S-1
+   quirks), an approximation of "S0 after quirks".
+5. The revision token collapses the six read classes into one stamp per node (more false rejects,
+   never a false accept).
+6. The wall-overrun rule and the host watchdog are defined against the grant. Under progressive
+   filling a crowded share (23 us of fuel for ten plugins) made every healthy 90 us call an overrun and
+   demoted the plugin for 60 s. `FuelGrant::wall` now carries the basis (the per-call cap for an
+   interactive share). Out of fuel on a crowded interactive share is not a strike and goes to the
+   background slice (section 2.4.2 step 4), as written, but the slot table had no cell for it.
+7. A busy actor must not be skipped (bake-off finding, `busy_skips = 72 594`): the writer sends the
+   newest job anyway, it displaces the queued one, and the displaced job's nodes are re-queued.
+   Section 2.5.4 "Call needed while busy = coalesce" is realised that way, not as a skip.
+8. One wait per keypress path is realised as a time window (2 ms) on a process-wide governor plus the
+   writer's own once-per-20-ms limit; the input layer has no keypress identity to key it on.
+9. The document URL was missing in the core. The document source reads it from
+   `Document.GetAttributes` (`DocURL` in Gecko, `URI` in Blink) and reports it as a `RouteChanged`
+   hint after every `Reset`; a route change inside a document does not re-scope yet.
+10. A role patch reached only the entry. The translator now derives the article category flag from the
+    fused role (and patches it when a later fact changes the role), and the state-change overlay no
+    longer takes back a name whose provenance is Patch or User (it spoke the raw name again).
+11. PF-1 is only **partly** enforced at run time: the environment is deterministic (fixed per-call
+    random stream, clocks read 0, no `now-ms`) and the snapshot is read-only, but instance linear memory
+    persists between `derive` calls, so a plugin can keep state and its output is not strictly a function
+    of the view. First-party S1 plugins must pass the differential test in CI; for a user-trusted third
+    party the instance must be reset per call, which is not built because no trust marking exists yet
+    (`TrustedThirdParty` cannot occur).
+12. (r5.1) Review M18a-2 fixes: (S-1) packages in `$XDG_DATA_HOME/gorca/plugins` are **refused**
+    (logged, first-party unaffected) until M18a-3 brings `system-scopes`, per-plugin enable and the
+    spoken warning; only tests can allow them (`PluginOptions::allow_sideloaded`, never an
+    environment variable). (S-2) A secret node is never watched, derived or given a fact: its row
+    carries no text, a node that turns secret loses its token and facts, and a reply naming one is
+    dropped. (C-1) A plugin in backoff is unmasked when the backoff has run out (the runner raises
+    `BackoffExpired`, the scope keeps the writer ticking meanwhile); a mask retracts the plugin's
+    facts. (P-1) The document URL is read only when a loaded plugin matches on URLs, beside the
+    first block fetch, which never waits for it: the block is published at once and the URL
+    follows as a later `RouteChanged` hint. A URL-scoped scope then opens late and replays the rows
+    already in the document, so its facts arrive as refinements.
+13. (r5.1) Latency. Keypress pre-wake: the keyboard pump calls `Prewake::key_down` (rate limited to
+    one per 20 ms, never blocking), which keeps every open scope's idle workers spinning for 8 ms,
+    so they run when the focus change brings the job. The writer spins for the whole bounded window
+    instead of parking (a parked thread wakes late from a deep idle state). A busy plugin, and a
+    plugin that declares `[plugin] priority = "refinement"`, is left out of the countdown (its job
+    goes to the background slot; facts arrive as refinements); the default is `interactive`.
+    Message facts are resolved on the worker, which took the writer's admission from ~100 us to
+    ~55 us per turn. Numbers: `docs/reports/2026-10-25-wasm-engineer-m18a-wire.md`.
+14. First-party status needs a pin list compiled into the daemon: `plugins/pins.txt` is regenerated by
+    `tools/build-plugins.sh` and must be committed with the plugin; the daemon is rebuilt after it.
+
 ### 2.10 Metrics to validate
 
 | Id | Metric | Gate |
@@ -783,6 +1239,11 @@ Gate before M18a-0: **M22b1 merged** (presenter reads only fused entries) and th
 | PX-4 | fault injection, adversarial set (below), arm chosen in M18a-0 | compute-bound runaway: writer turn delayed ≤ grant + 50 µs p99. Memory/lifting adversaries (A1–A5): every overrun recorded; plugin demoted after the first overrun and `Backoff` after 3 in 60 s; writer stall max per occurrence reported and ≤ the M18a-0 frozen bound. A6: Σ ≤ B + n·c_max at ρ ≈ 1. A7–A13: the stated rule holds |
 | PX-5 | fuel-only vs fuel + epoch on the plugin corpus | fuel-only ≥ 20 % faster on compute-bound hooks, no escape in fault injection that epoch would have caught |
 | PX-6 | keypress → speech p99 with P-2 + 9 dummy matching plugins (Signal fixture) | Δp99 ≤ 0.3 ms vs no plugins; facts at first utterance ≥ 99 % of focus moves **overall and ≥ 95 % for every plugin** (review M-4); under B' the benign fixture on a quiet host requires ≥ 99 % overall and ≥ 97 % per plugin (r4) |
+| PX-6 (r6, SPS) | the same fixture on **default idle states** (never the quiet-host script) with SPS, apply + run inside the measured turn | the gates above, plus stall p99 per focus change `<= 0.31 ms`, p50 `<= 120 µs`; labelled by load and governor; a quiet-host PASS alone is not accepted |
+| PX-10 | `plan` / `on_key_down` cost (SPS-5) | `plan` p99 `<= 10 µs` at m = 16, `on_key_down` p99 `<= 2 µs`, 0 allocations |
+| PX-11 | pre-wake CPU (SPS-9) | pool-thread CPU time: average `<= 150 ms/s`, burst `<= 200 ms`; 0 when no keys; at 5 keys/s `<= 10 %` of one core (simulation 5.5-6.9 %) |
+| PX-12 | learning (SPS) | after 60 typing keypresses in an editor: `α[type] < 0.05` and `K = 0`; after 30 nav keypresses that move focus: `K >= 1`; a new plugin reaches its steady `h_i` within 64 activations |
+| PX-13 | idle-state lease (only if DP-1 is (b) or (c)) | stall p99 and FFU with and without the lease on default idle states; CPU idle-state residency and package energy (`perf stat -e power/energy-pkg/` or RAPL `energy_uj`, read as root under the host rules, labelled) with the lease held at 5 keys/s and idle; lease released 2 s after the last key |
 | PX-7 | 10k ev/s storm (50k for L3-50k), 3 plugins watching 50 % of nodes | ingress lag unchanged; per-event fusion+plugin p99 ≤ 10 µs; drops counted, writer never blocked |
 | PX-8 | quick nav by plugin category on 3000-chat Telegram mock | ≤ 5 ms key → speech (W1), no guest call per key |
 | PX-9 | revision-token bookkeeping | stamp update ≤ 20 ns per changed class; admission check ≤ 1 µs for \|R\| = 256; 0 false accepts on the MQ-2 replay corpus |
@@ -872,6 +1333,9 @@ its own target every call (self-trigger); A13 a loop of `subtree(max)` imports.
     max ≤ 1 ms with demotion, benign Δp99 ≤ 0.3 ms, facts at first utterance ≥ 99 %); (iii) arm C: A
     for T2 (first-party) and B' for T3.
   - Budget numbers (B-1..B-9, κ table) are frozen in the M18a-0 exit report, after WQ-1..WQ-3.
+  - **r6:** the policy inside B' (SPS against LABELS) is a separate measured A/B, **C-4**, in M18a-2d
+    (§2.4.7.12). It cannot overturn B' and B' does not depend on it: the absolute clamp of SPS-1 holds with
+    either policy.
 
 ## 6. Open questions
 
@@ -891,6 +1355,16 @@ parallel on T pool threads under one shared deadline (serial-equivalent progress
 safe default until it is proved; §2.4.6). Remaining: ρ across shapes and cores is unmeasured (WQ-2); the 6-class partition must match
 the final `read-*` permissions; relations and positions are assumed to behave like the S3 name edge.
 
+**MQ-4 (answered, r6):** §2.4.7.5 (report §3.5).
+
+Owner decision pending (r6):
+- **DP-1** idle-state policy for the plugin pool: (a) accept deep C-state wake tails, (b) a
+  `cpu_dma_latency` lease only while plugins are active, (c) a persistent per-CPU limit on dedicated pool
+  CPUs. Options, access methods and the architect's recommendation (b via udev `uaccess`, default off):
+  §2.4.7.10. **Not decided here.**
+- **QS-1** SPS parameter set of §2.4.7.11 is frozen only after PX-6 telemetry on the real host (the
+  simulation is synthetic and fitted to one wake probe).
+
 WASM engineer (M18a-0 unless noted):
 - **WQ-1** `derive` with a 64-node `view-node` batch (names ≤ 64 B): call cost p50/p99.
 - **WQ-2** Fuel calibration across guest shapes (ALU, string-heavy, call-heavy, pointer chase over the
@@ -903,17 +1377,25 @@ WASM engineer (M18a-0 unless noted):
 - **WQ-6** (M18a-0, r3/r4) B' mechanics: wake latency p50/p99/max of the writer → plugin actor → reply
   round trip (futex vs `timerfd`/`AsyncFd`, spin vs park, pool size T, P/E cores, loaded host); late
   wakeups with `PR_SET_TIMERSLACK` 1 ns versus the default; cost of building `FrozenRows` per focus
-  change (eager only; the lazy variant is rejected in r4); the parallel grant rule per MQ-4.
+  change (eager only; the lazy variant is rejected in r4); the parallel grant rule per MQ-4 (answered, r6).
+- **WQ-7** (M18a-2b/2d, r6) hot versus parked **exec** time of the same plugin: the report assumes exec is
+  independent of the thread state; if a freshly woken CPU inflates exec (cold caches), keep two exec
+  histograms per plugin (report §8).
 
 ## 7. Invariants (summary)
 
 - I-P1 No W-lane read, selector or admission sees any S1..S4 value, hide, flatten or plugin category.
 - I-P2 Plugin facts never enter S0; admission never triggers `derive`.
+- I-P9 (r6) The scheduler (SPS) decides placement, fuel shares and holds only: every triggered job is
+  dispatched in its own turn, the writer's plugin wait ends by `t0 + D - fuse_reserve` whatever the
+  statistics say, a plugin delays the writer by at most its own hold (third party `<= 100 µs`), a
+  `refinement` plugin is never waited for or pre-woken, and scheduler state is integer, writer-owned and
+  replayable (§2.4.7.8, SPS-1..SPS-9).
 - I-P3 Every guest call has a fuel grant and a wall measurement; no file read, deserialize or compile
   runs on a writer turn.
-- I-P8 (r3, r4) The only blocking call a writer makes for a plugin is the interactive wait (atomic
-  countdown + futex, timer slack 1 ns, never a tokio blocking receive), bounded by the shared deadline
-  `D` = B-2 = 0.3 ms from the start of the writer turn, at most once per keypress path; plugin results are messages; a reply is admitted only after the
+- I-P8 (r3, r4, r6) The only blocking call a writer makes for a plugin is the interactive wait (atomic
+  countdown over the wait set `W` of §2.4.7 + futex, timer slack 1 ns, never a tokio blocking receive), bounded by the shared deadline
+  `D` = B-2 = 0.3 ms from the start of the writer turn (per-plugin holds inside it, §2.4.7.4), at most once per keypress path; plugin results are messages; a reply is admitted only after the
   token check and only if its `slot_epoch` is current; a plugin actor never touches writer state.
 - I-P4 No host import copies a guest string or list before checking its cap.
 - I-P5 No T3 output is plain author intent (S1) or unattributed unprompted speech unless trusted /
@@ -923,6 +1405,19 @@ WASM engineer (M18a-0 unless noted):
 - I-P7 Slot state transitions are exactly §2.5.4; every cell is tested.
 
 ## 8. Changelog
+
+**r6 (2026-10-25)** — folds in the statistical plugin scheduler (`docs/reports/plugin-statistical-scheduler.md`)
+and the C-state finding of `docs/reports/m18a-2-review.md` §2. No change to the fact model, the lanes, the
+call model or the placement decision (B').
+
+| Source | Change |
+|---|---|
+| SPS report | new §2.4.7 (normative once M18a-2d ships): per-context activation stats, key-down pre-wake capped by a CPU token bucket, per-plugin deadline and hold (thread-start q99 + exec q99, capped by the optimal-stopping point), labels as priors and constraints (`refinement` never waited or pre-woken; third party hold <= 100 µs and last on a shared thread), weighted progressive filling, integer replayable state, fallback to LABELS |
+| MQ-4 | answered by §2.4.7.5; the serial-equivalent grant rule of §2.4.6 is retired |
+| Shared countdown (r4 R3-3) | membership and deadline superseded by the wait set `W` and holds; mechanism (futex or `timerfd`, slack 1 ns, one wait per keypress path) unchanged; absolute clamp `t0 + D - fuse_reserve` added so PF-8 does not depend on the `snap` reserve |
+| Guarantees | SPS-1..SPS-9 with test obligations; invariant I-P9; I-P8 updated |
+| M18a-2 review §2 | interaction table with the in-flight fixes (§2.4.7.9); the C-state finding becomes owner decision **DP-1** (§2.4.7.10), recommendation (b) via udev `uaccess`, **pending owner** |
+| Slices and metrics | M18a-2a..2f (§2.4.7.12, §2.9 pointer), C-4 A/B, PX-6 default-idle-state rule, PX-10..PX-13, WQ-7, QS-1 |
 
 **r4 (2026-10-24)** — applies the r3 review (`docs/reports/adr-0026-review.md`, section r3). No change to
 the fact model or the placement decision.
@@ -934,6 +1429,10 @@ the fact model or the placement decision.
 | R3-3 wait primitive | atomic countdown + futex (or `timerfd` via `AsyncFd`, measured); never `blocking_recv` or `tokio::time`; replies still via the mailbox; I-P8 updated |
 | R3-4 cascade | one bounded wait per keypress path (K1 and K2 share the first writer's deadline); flapping-focus cap of one interactive wait per N ms |
 | R3-5 gates | benign fixture: facts at first utterance >= 99 % overall and >= 97 % per plugin (PX-6 and the confirmation rule); 97/90 only for the adversarial mix; interactive jobs pre-empt background jobs; max is a quiet-host gate, loaded max reported |
+
+**r5 (2026-10-25)** — implementation notes of the first wiring of the runtime into the fusion writers
+(section 2.9 status and gaps, section 2.7 identity and threat model, URL matching, logging rule). No
+change to the fact model, the lanes or the call model; B' is as owner-decided.
 
 **r3 (2026-10-24)** — owner decisions of 2026-10-24 (`docs/decisions.md`). No change to the fact model;
 one runtime-placement change and one confirmation.

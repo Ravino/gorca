@@ -293,6 +293,12 @@ pub fn spec_of(n: &SrcNode, nested_doc: bool, sem: Option<Arc<SemEntry>>) -> Nod
     if let Some(e) = &sem {
         super::agree::check(n, flags, level, e);
     }
+    // The fused role is the one everything downstream reads: an add-on that makes a node an
+    // article (a patch, ADR-0026) makes it one for the categories and the announcement too.
+    let flags = match &sem {
+        Some(e) if e.sem.role == gorca_model::sem::SemRole::Article => flags | NodeFlags::ARTICLE,
+        Some(_) | None => flags,
+    };
     let mut s = NodeSpec::new(n.role).level(level).flags(flags);
     // A page can put a megabyte in aria-label: the translator applies the source's cap again.
     s.name = n.name.as_ref().map(|a| {
@@ -1033,10 +1039,27 @@ impl Translator {
 
     /// Replace the fused entry in the node's meta (everything else of the meta stays).
     fn patch_sem(w: &mut DocWriter, id: DocNodeId, e: Arc<SemEntry>) -> Result<(), DocError> {
-        let Some(meta) = w.doc().node(id).and_then(|v| v.meta) else {
+        let Some(view) = w.doc().node(id) else {
             return Ok(());
         };
-        if meta.sem.as_ref() == Some(&e) {
+        let (meta, cur_flags) = match view.meta {
+            Some(m) => (m, view.flags),
+            None => return Ok(()),
+        };
+        // The fused role decides the article flag (an add-on patch can make a node an article or
+        // take the role away again); the page's own tag or role token keeps it either way.
+        let raw = {
+            let find = |k: AttrKey| meta.attrs.iter().find(|(a, _)| *a == k).map(|(_, v)| &**v);
+            find(web_attrs::TAG) == Some("article")
+                || has_token(find(web_attrs::XML_ROLES), "article")
+        };
+        let article = raw || e.sem.role == gorca_model::sem::SemRole::Article;
+        let flags = if article {
+            cur_flags | NodeFlags::ARTICLE
+        } else {
+            NodeFlags(cur_flags.0 & !NodeFlags::ARTICLE.0)
+        };
+        if meta.sem.as_ref() == Some(&e) && flags == cur_flags {
             return Ok(());
         }
         let patched = NodeMeta {
@@ -1045,6 +1068,7 @@ impl Translator {
         };
         let patch = PropsPatch {
             meta: Some(Some(Arc::new(patched))),
+            flags: (flags != cur_flags).then_some(flags),
             ..PropsPatch::default()
         };
         w.apply(DocOp::SetProps { id, patch })?;

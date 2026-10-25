@@ -20,6 +20,7 @@ const TICK: Duration = Duration::from_secs(1);
 const STATS_EVERY: u64 = 60;
 
 /// Run the pump until the key channel closes or `shutdown`.
+#[allow(clippy::too_many_arguments)] // wiring: one handle per lane the pump feeds
 pub async fn pump_keys(
     mut keys: mpsc::Receiver<KeyItem>,
     senders: ReaderSenders,
@@ -27,6 +28,7 @@ pub async fn pump_keys(
     epoch: Arc<EpochCell>,
     speech: SpeechHandle,
     grabs: Arc<watch::Sender<GrabSet>>,
+    prewake: Arc<crate::plugins::Prewake>,
     shutdown: CancellationToken,
 ) {
     let mut lane = InputLane::new(Arc::clone(&links), epoch, Instant::now());
@@ -43,6 +45,9 @@ pub async fn pump_keys(
                     // Events were lost just before this one: forget at the gap, then go on.
                     lane.resync();
                 }
+                // The plugin workers start running now, ahead of the focus change this key may
+                // cause (a rate-limited, non-blocking atomic store and a futex wake).
+                prewake.key_down();
                 let out = lane.on_key(item.event, Instant::now());
                 if out.epoch_advanced {
                     speech.notify_epoch();

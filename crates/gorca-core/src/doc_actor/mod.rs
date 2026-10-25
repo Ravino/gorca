@@ -336,6 +336,20 @@ pub struct DocActorSpec {
     pub counters: Arc<DocCounters>,
     /// Which repair triggers this document's engine uses.
     pub repair: RepairPolicy,
+    /// The plugin runtime and this document's application identity; `None`: plugins are off.
+    pub plugins: Option<DocPluginSpec>,
+}
+
+/// What a document actor needs to open its plugin scope (ADR-0026 K2).
+#[allow(missing_debug_implementations)]
+pub struct DocPluginSpec {
+    pub service: Arc<dyn crate::plugin_port::PluginService>,
+    /// The core's application identity.
+    pub app: Arc<str>,
+    /// Engine registry code.
+    pub engine: u16,
+    /// The identity was established from the peer's credentials ([`crate::plugin_port::scope_identity`]).
+    pub verified: bool,
 }
 
 /// Create the channels, register the document in the directory and return the actor future.
@@ -881,10 +895,17 @@ async fn run(
         shutdown,
         counters,
         repair,
+        plugins,
         ..
     } = spec;
     // The source hands over the fusion tables of its engine before it is attached.
-    let fuse = source.fuse_setup().map(FuseStage::new);
+    let fuse = source
+        .fuse_setup()
+        .map(FuseStage::new)
+        .map(|f| match plugins {
+            Some(p) => f.with_plugins(p.service, p.app, p.engine, p.verified),
+            None => f,
+        });
     let (sink, mut deltas): (_, DeltaReceiver) = delta_channel(SINK_CAPACITY);
     let (req_tx, req_rx) = mpsc::channel(REQUEST_CAPACITY);
     let (join_port, _join_rx) = join_channel(1);

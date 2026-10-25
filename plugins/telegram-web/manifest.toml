@@ -1,0 +1,32 @@
+# First-party plugin P-3 (ADR-0026 section 2.8): Telegram Web A and K.
+# Everything Telegram-specific lives here; the core has no special case for it.
+
+[plugin]
+id = "gorca.telegram-web"
+version = "0.1.0"
+world = "site"
+
+[permissions]
+# Names of the chat rows' parts, their CSS classes, and the facts the plugin derives.
+grants = ["read-names", "read-attributes", "contribute-facts"]
+
+[match]
+# The verified identity of the browser (executable name of a system install).
+apps = ["firefox-esr", "firefox", "chromium", "chrome", "google-chrome"]
+urls = ["https://web.telegram.org/a/*", "https://web.telegram.org/k/*"]
+
+# A: a chat row is `div.ListItem-button[role=button]`.
+[[watch]]
+id = 1
+class = "ListItem-button"
+
+# K: a chat row is `a.chatlist-chat`.
+[[watch]]
+id = 2
+tag = "a"
+class = "chatlist-chat"
+
+# A: a message is `div.Message`, with no role of its own.
+[[watch]]
+id = 3
+class = "Message"

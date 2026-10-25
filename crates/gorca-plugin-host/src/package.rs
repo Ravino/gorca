@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use toml_edit::DocumentMut;
 
 use crate::trust::{PermError, Perms, TrustTier, effective_grants, parse_perm};
+use crate::urlmatch::UrlPattern;
 
 /// Component file cap (§2.5.3).
 pub const MAX_COMPONENT_BYTES: u64 = 8 << 20;
@@ -61,6 +62,18 @@ pub enum World {
     Site,
 }
 
+/// What the writer may do about a plugin on a focus change (manifest `[plugin] priority`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Priority {
+    /// The writer may wait for it, up to the 0.3 ms bound: for work that is cheap enough to be
+    /// in the first utterance (the row names of a chat list).
+    #[default]
+    Interactive,
+    /// The writer never waits for it and it never gates a turn: its facts always arrive as
+    /// refinements. For anything heavier.
+    Refinement,
+}
+
 /// A validated manifest.
 #[derive(Debug, Clone)]
 pub struct Manifest {
@@ -74,6 +87,61 @@ pub struct Manifest {
     pub declared: Perms,
     /// Requested instance memory in MiB.
     pub memory_mib: u32,
+    /// `[plugin] priority`: whether the writer may wait for this plugin's facts.
+    pub priority: Priority,
+    /// `[match] apps`: application identities (case-insensitive); empty = any application.
+    pub apps: Vec<String>,
+    /// `[match] urls`: document URL patterns (structured, see `urlmatch`); empty = no URL
+    /// condition.
+    pub urls: Vec<UrlPattern>,
+    /// `[[watch]]` selectors: the nodes the plugin's `derive` is called for.
+    pub watches: Vec<Watch>,
+}
+
+/// Longest list in `[match]` and number of `[[watch]]` tables (a manifest is untrusted input).
+pub const MAX_MATCH_ENTRIES: usize = 32;
+/// Longest single matcher string.
+pub const MAX_MATCH_LEN: usize = 256;
+
+/// A `[[watch]]` selector: every condition present must hold. Evaluated natively against the
+/// observed (S0) attributes of a node; guest code runs only for nodes a selector matched (PM-2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Watch {
+    /// Selector id handed to `derive` in `dirty.watch` (non-zero).
+    pub id: u16,
+    /// HTML tag (neutral attribute `tag`).
+    pub tag: Option<String>,
+    /// One class token (neutral attribute `class`, whitespace separated).
+    pub class: Option<String>,
+    /// Authored ARIA role (neutral attribute `aria-role`).
+    pub aria_role: Option<String>,
+}
+
+impl Watch {
+    /// True when the node's attributes satisfy every condition.
+    #[must_use]
+    pub fn matches(&self, tag: Option<&str>, class: Option<&str>, aria_role: Option<&str>) -> bool {
+        self.tag.as_deref().is_none_or(|t| tag == Some(t))
+            && self
+                .class
+                .as_deref()
+                .is_none_or(|c| class.is_some_and(|cl| cl.split_ascii_whitespace().any(|x| x == c)))
+            && self
+                .aria_role
+                .as_deref()
+                .is_none_or(|r| aria_role == Some(r))
+    }
+}
+
+impl Manifest {
+    /// True when `app` (and, when URL globs are declared, `url`) satisfy `[match]`.
+    #[must_use]
+    pub fn matches_scope(&self, app: &str, url: Option<&str>) -> bool {
+        let app_ok = self.apps.is_empty() || self.apps.iter().any(|a| a == app);
+        let url_ok =
+            self.urls.is_empty() || url.is_some_and(|u| self.urls.iter().any(|g| g.matches(u)));
+        app_ok && url_ok
+    }
 }
 
 /// Why a package was refused.
@@ -149,6 +217,11 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, PackageError> {
             declared |= parse_perm(name)?;
         }
     }
+    let priority = match get("priority") {
+        None | Some("interactive") => Priority::Interactive,
+        Some("refinement") => Priority::Refinement,
+        Some(p) => return Err(PackageError::Manifest(format!("unknown priority `{p}`"))),
+    };
     let memory_mib = match plugin.get("memory-mib") {
         None => DEFAULT_MEMORY_MIB,
         Some(v) => v
@@ -157,13 +230,90 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, PackageError> {
             .filter(|n| (1..=MAX_MEMORY_MIB).contains(n))
             .ok_or_else(|| PackageError::Manifest("memory-mib out of range".into()))?,
     };
+    let apps = string_list(&doc, "apps")?;
+    let urls = string_list(&doc, "urls")?
+        .iter()
+        .map(|u| UrlPattern::parse(u).map_err(|e| PackageError::Manifest(e.to_string())))
+        .collect::<Result<Vec<_>, _>>()?;
+    let watches = parse_watches(&doc)?;
     Ok(Manifest {
         id: id.to_string(),
         version: get("version").unwrap_or("0").to_string(),
         world,
         declared,
         memory_mib,
+        priority,
+        apps,
+        urls,
+        watches,
     })
+}
+
+fn string_list(doc: &DocumentMut, key: &str) -> Result<Vec<String>, PackageError> {
+    let Some(arr) = doc
+        .get("match")
+        .and_then(|t| t.get(key))
+        .and_then(|v| v.as_array())
+    else {
+        return Ok(Vec::new());
+    };
+    if arr.len() > MAX_MATCH_ENTRIES {
+        return Err(PackageError::Manifest(format!(
+            "match.{key} has too many entries"
+        )));
+    }
+    arr.iter()
+        .map(|v| {
+            v.as_str()
+                .filter(|s| !s.is_empty() && s.len() <= MAX_MATCH_LEN)
+                .map(str::to_owned)
+                .ok_or_else(|| PackageError::Manifest(format!("bad entry in match.{key}")))
+        })
+        .collect()
+}
+
+fn parse_watches(doc: &DocumentMut) -> Result<Vec<Watch>, PackageError> {
+    let Some(tables) = doc.get("watch").and_then(|w| w.as_array_of_tables()) else {
+        return Ok(Vec::new());
+    };
+    if tables.len() > MAX_MATCH_ENTRIES {
+        return Err(PackageError::Manifest("too many [[watch]] tables".into()));
+    }
+    let mut out: Vec<Watch> = Vec::new();
+    for t in tables {
+        let id = t
+            .get("id")
+            .and_then(toml_edit::Item::as_integer)
+            .and_then(|n| u16::try_from(n).ok())
+            .filter(|n| *n != 0)
+            .ok_or_else(|| PackageError::Manifest("watch.id must be 1..65535".into()))?;
+        if out.iter().any(|w| w.id == id) {
+            return Err(PackageError::Manifest(format!("duplicate watch.id {id}")));
+        }
+        let opt = |k: &str| -> Result<Option<String>, PackageError> {
+            match t.get(k) {
+                None => Ok(None),
+                Some(v) => v
+                    .as_str()
+                    .filter(|s| !s.is_empty() && s.len() <= MAX_MATCH_LEN)
+                    .map(|s| Some(s.to_owned()))
+                    .ok_or_else(|| PackageError::Manifest(format!("bad watch.{k}"))),
+            }
+        };
+        let w = Watch {
+            id,
+            tag: opt("tag")?,
+            class: opt("class")?,
+            aria_role: opt("aria-role")?,
+        };
+        if w.tag.is_none() && w.class.is_none() && w.aria_role.is_none() {
+            return Err(PackageError::Manifest(
+                "a [[watch]] needs tag, class or aria-role".into(),
+            ));
+        }
+        out.push(w);
+    }
+    Ok(out)
 }
 
 /// Classify a package into a trust tier. First-party status needs the installed location,
@@ -281,6 +431,53 @@ mod tests {
     use std::fs;
 
     const M: &str = "[plugin]\nid = \"example.hello\"\nversion = \"1\"\n";
+
+    #[test]
+    fn priority_defaults_to_interactive_and_rejects_unknown_names() {
+        assert_eq!(
+            parse_manifest(M).expect("m").priority,
+            Priority::Interactive
+        );
+        let r = format!("{M}priority = \"refinement\"\n");
+        assert_eq!(
+            parse_manifest(&r).expect("m").priority,
+            Priority::Refinement
+        );
+        let bad = format!("{M}priority = \"urgent\"\n");
+        assert!(parse_manifest(&bad).is_err());
+    }
+
+    #[test]
+    fn match_and_watch_tables_parse() {
+        let t = format!(
+            "{M}[match]\napps = [\"firefox\"]\nurls = [\"https://web.telegram.org/a/*\"]\n\
+             [[watch]]\nid = 1\nclass = \"Message\"\n[[watch]]\nid = 2\ntag = \"a\"\nclass = \"chat\"\n"
+        );
+        let m = parse_manifest(&t).expect("manifest");
+        assert!(m.matches_scope("firefox", Some("https://web.telegram.org/a/#1")));
+        assert!(!m.matches_scope("firefox", Some("https://web.telegram.org/k/")));
+        assert!(!m.matches_scope("firefox", None));
+        assert!(!m.matches_scope("gedit", Some("https://web.telegram.org/a/")));
+        assert!(!m.matches_scope("firefox", Some("https://web.telegram.org.evil.com/a/")));
+        assert!(
+            parse_manifest(&format!(
+                "{M}[match]\nurls = [\"https://web.telegram.org*\"]\n"
+            ))
+            .is_err()
+        );
+        assert_eq!(m.watches.len(), 2);
+        assert!(m.watches[0].matches(Some("div"), Some("Message x"), None));
+        assert!(!m.watches[0].matches(Some("div"), Some("Messages"), None));
+        assert!(m.watches[1].matches(Some("a"), Some("foo chat"), None));
+        assert!(!m.watches[1].matches(Some("div"), Some("chat"), None));
+        for bad in [
+            "[[watch]]\nid = 0\nclass = \"x\"\n",
+            "[[watch]]\nid = 1\n",
+            "[match]\napps = [1]\n",
+        ] {
+            assert!(parse_manifest(&format!("{M}{bad}")).is_err(), "{bad}");
+        }
+    }
 
     #[test]
     fn default_grants_are_empty() {

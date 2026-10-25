@@ -79,6 +79,183 @@ pub fn read_proc_info(pid: u32) -> ProcInfo {
     info
 }
 
+/// Prefixes of the root-owned system trees a native application's executable may live in.
+const SYSTEM_PREFIXES: &[&str] = &["/usr/", "/opt/"];
+
+/// True when `path` (absolute, canonical) is a regular file in a system tree that only root can
+/// change: under `/usr` or `/opt`, and the file and every directory above it owned by root, not
+/// writable by anyone else (group-writable only for group 0). A binary a user copied to `~/bin`
+/// or `/tmp` fails, whatever it is called.
+pub fn is_trusted_system_path(path: &std::path::Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let Some(text) = path.to_str() else {
+        return false;
+    };
+    if text.ends_with(" (deleted)") || !SYSTEM_PREFIXES.iter().any(|p| text.starts_with(p)) {
+        return false;
+    }
+    let root_only = |m: &std::fs::Metadata| {
+        let mode = m.mode();
+        m.uid() == 0 && mode & 0o002 == 0 && (mode & 0o020 == 0 || m.gid() == 0)
+    };
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.is_file() && root_only(&m) => {}
+        _ => return false,
+    }
+    path.ancestors()
+        .skip(1)
+        .filter(|a| !a.as_os_str().is_empty())
+        .all(|a| {
+            std::fs::symlink_metadata(a)
+                .is_ok_and(|m| m.is_dir() && !m.file_type().is_symlink() && root_only(&m))
+        })
+}
+
+/// The `[Application] name=` of the contents of a `.flatpak-info` file.
+pub fn parse_flatpak_info(text: &str) -> Option<String> {
+    let mut in_app = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_app = line == "[Application]";
+        } else if in_app && let Some(v) = line.strip_prefix("name=") {
+            let ok = !v.is_empty()
+                && v.len() <= 255
+                && v.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-');
+            return ok.then(|| v.to_owned());
+        }
+    }
+    None
+}
+
+/// The flatpak application id when the process is a flatpak sandbox: `.flatpak-info` names it
+/// and the systemd scope of the process agrees (`app-flatpak-<id>-<n>.scope`). Case-sensitive.
+pub fn flatpak_identity(info: &str, cgroup_scope: Option<&str>) -> Option<String> {
+    let id = parse_flatpak_info(info)?;
+    let scope = cgroup_scope?;
+    scope
+        .strip_prefix("app-flatpak-")
+        .is_some_and(|rest| rest.starts_with(&format!("{id}-")))
+        .then_some(id)
+}
+
+/// The snap name in an AppArmor label (`snap.<name>.<app> (enforce)`). Only an **enforced**
+/// confinement counts: the kernel sets the label, a process cannot choose it, but a profile in
+/// complain mode confines nothing.
+pub fn snap_identity(label: &str) -> Option<String> {
+    let label = label.trim();
+    let rest = label.strip_prefix("snap.")?;
+    if !label.ends_with("(enforce)") {
+        return None;
+    }
+    let name = rest.split(['.', ' ']).next()?;
+    (!name.is_empty()
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_'))
+    .then(|| name.to_owned())
+}
+
+/// True when the file `/proc/<pid>/exe` really is (same device, same inode) the file at `path`
+/// as gorca sees it. The `exe` link is resolved in the process's own mount namespace, so a
+/// process that bind-mounted a look-alike over a system path, or runs in a namespace where
+/// `/usr/bin/firefox` is something else, does not match.
+pub fn exe_is_file(pid: u32, path: &std::path::Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let (Ok(theirs), Ok(ours)) = (
+        std::fs::metadata(format!("/proc/{pid}/exe")),
+        std::fs::metadata(path),
+    ) else {
+        return false;
+    };
+    theirs.dev() == ours.dev() && theirs.ino() == ours.ino()
+}
+
+/// The mount namespace of a process (the target of `/proc/<pid>/ns/mnt`).
+fn mount_ns(pid: &str) -> Option<std::path::PathBuf> {
+    std::fs::read_link(format!("/proc/{pid}/ns/mnt")).ok()
+}
+
+/// The verified identity of process `pid`, or `None` (unverified). The process must still be the
+/// one that started at `start` (pids are reused). Evidence, in order:
+///
+/// 1. a **snap**: an enforced AppArmor label `snap.<name>.<app>` (only
+///    `/proc/<pid>/attr/apparmor/current`), and an executable under `/snap/<name>/` that is the
+///    same file (device and inode) as that path in gorca's namespace: identity `snap:<name>`;
+/// 2. a **native** application, in gorca's own mount namespace: `/proc/<pid>/exe`
+///    canonicalised, a live file in a root-owned system tree ([`is_trusted_system_path`]) that is
+///    the same file as the process runs ([`exe_is_file`]): identity is the file's name, which is
+///    trustworthy because only root could have put it there;
+/// 3. a **flatpak** sandbox (another mount namespace with a `.flatpak-info` naming the app and
+///    a matching systemd scope): identity `flatpak:<app id>`, which the caller treats as
+///    **sandboxed-unverified** (the core never treats a `flatpak:` identity as verified).
+///
+/// Anything else (a copy under `$HOME` or `/tmp`, a deleted binary, another mount namespace
+/// without the evidence above, an unreadable `/proc`) is unverified. The self-reported
+/// application name is never consulted. Comparison with a manifest's `[match] apps` is
+/// case-sensitive.
+///
+/// Threat model: this stops accidental misattribution and cheap spoofing. A determined process
+/// of the same user can already present any accessibility tree it likes, so impersonating an
+/// application gains it nothing it could not do without a plugin. It is not a defence against a
+/// same-user adversary (ADR-0026 section 2.7).
+///
+/// TODO(portal): a flatpak or snap application id from the portal (`org.freedesktop.portal`
+/// `GetHostAppInfo`/`GetAppInfo`) is the backed evidence; until it is read, a flatpak sandbox
+/// stays sandboxed-unverified because `.flatpak-info` can be forged with a user namespace.
+pub fn verified_identity(pid: u32, start: u64) -> Option<String> {
+    if read_proc_info(pid).start != Some(start) {
+        return None;
+    }
+    let found = identity_unchecked(pid);
+    // Re-check after the reads: the pid may have been recycled in between.
+    (read_proc_info(pid).start == Some(start))
+        .then_some(found)
+        .flatten()
+}
+
+fn identity_unchecked(pid: u32) -> Option<String> {
+    let ours = mount_ns("self");
+    let theirs = mount_ns(&pid.to_string());
+    let same_ns = ours.is_some() && ours == theirs;
+    // Snap: the kernel's enforced confinement label, then the executable under /snap/<name>/.
+    if let Ok(label) = std::fs::read_to_string(format!("/proc/{pid}/attr/apparmor/current"))
+        && let Some(name) = snap_identity(&label)
+    {
+        let target = std::fs::read_link(format!("/proc/{pid}/exe")).ok()?;
+        let canon = std::fs::canonicalize(&target).ok()?;
+        let under = canon.starts_with(format!("/snap/{name}/"));
+        return (under && exe_is_file(pid, &canon)).then(|| format!("snap:{name}"));
+    }
+    if !same_ns {
+        // Another mount namespace without a snap label: a flatpak sandbox, or an impostor.
+        let info = std::fs::read_to_string(format!("/proc/{pid}/root/.flatpak-info")).ok()?;
+        let scope = std::fs::read_to_string(format!("/proc/{pid}/cgroup"))
+            .ok()
+            .and_then(|s| parse_cgroup(&s));
+        return flatpak_identity(&info, scope.as_deref()).map(|id| format!("flatpak:{id}"));
+    }
+    let target = std::fs::read_link(format!("/proc/{pid}/exe")).ok()?;
+    if target.to_str()?.ends_with(" (deleted)") {
+        return None;
+    }
+    let canon = std::fs::canonicalize(&target).ok()?;
+    if !is_trusted_system_path(&canon) || !exe_is_file(pid, &canon) {
+        return None;
+    }
+    canon.file_name()?.to_str().map(str::to_owned)
+}
+
+/// [`verified_identity`] off the async executor under a deadline.
+pub async fn exe_of_async(pid: u32, start: u64) -> Option<String> {
+    let job = tokio::task::spawn_blocking(move || verified_identity(pid, start));
+    match tokio::time::timeout(std::time::Duration::from_millis(250), job).await {
+        Ok(Ok(e)) => e,
+        Ok(Err(_)) | Err(_) => None,
+    }
+}
+
 /// Kernel clock ticks per second in `/proc/<pid>/stat` times (`USER_HZ`: 100 on every Linux
 /// architecture gorca targets).
 const USER_HZ: u64 = 100;
@@ -135,6 +312,156 @@ mod tests {
     use super::*;
 
     const STAT: &str = "1234 (gnome-shell) S 1 1234 1234 0 -1 4194560 1000 0 0 0 10 5 0 0 20 0 12 0 98765 1000000 500 18446744073709551615 0 0 0 0 0 0 0 0 0 0 0 0 17 3 0 0 0 0 0";
+
+    use std::os::unix::fs::PermissionsExt as _;
+    use std::process::{Child, Command, Stdio};
+
+    fn spawn(path: &str) -> Child {
+        Command::new(path)
+            .arg("30")
+            .stdout(Stdio::null())
+            .spawn()
+            .expect("spawn")
+    }
+
+    fn start_of(c: &Child) -> u64 {
+        read_proc_info(c.id()).start.expect("start")
+    }
+
+    #[test]
+    fn a_system_binary_is_verified_by_its_file_name() {
+        let mut c = spawn("/usr/bin/sleep");
+        let id = verified_identity(c.id(), start_of(&c));
+        let _ = c.kill();
+        let _ = c.wait();
+        assert_eq!(id.as_deref(), Some("sleep"));
+    }
+
+    #[test]
+    fn a_copy_in_a_user_writable_directory_is_not_verified_whatever_it_is_called() {
+        let dir = tempfile::tempdir_in("/var/tmp").expect("tmp");
+        let copy = dir.path().join("firefox");
+        std::fs::copy("/usr/bin/sleep", &copy).expect("copy");
+        std::fs::set_permissions(&copy, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        let mut c = spawn(copy.to_str().expect("utf8"));
+        let id = verified_identity(c.id(), start_of(&c));
+        assert_eq!(
+            id,
+            None,
+            "a binary called firefox in {} is not Firefox",
+            dir.path().display()
+        );
+        // Deleted while running: unverified as well.
+        std::fs::remove_file(&copy).expect("rm");
+        assert_eq!(verified_identity(c.id(), start_of(&c)), None);
+        let _ = c.kill();
+        let _ = c.wait();
+        // And the path rules on their own.
+        assert!(!is_trusted_system_path(&copy));
+        assert!(!is_trusted_system_path(std::path::Path::new(
+            "/usr/bin/sleep (deleted)"
+        )));
+        assert!(!is_trusted_system_path(std::path::Path::new("/var/tmp/x")));
+        assert!(!is_trusted_system_path(std::path::Path::new(
+            "/usr/bin/does-not-exist"
+        )));
+        assert!(is_trusted_system_path(std::path::Path::new(
+            "/usr/bin/sleep"
+        )));
+    }
+
+    #[test]
+    fn the_executable_must_be_the_same_file_by_device_and_inode() {
+        let mut c = spawn("/usr/bin/sleep");
+        let pid = c.id();
+        let same = exe_is_file(pid, std::path::Path::new("/usr/bin/sleep"));
+        // Another file with the same content is not the process's executable.
+        let other = exe_is_file(pid, std::path::Path::new("/usr/bin/true"));
+        let _ = c.kill();
+        let _ = c.wait();
+        assert!(same);
+        assert!(!other);
+    }
+
+    #[test]
+    #[allow(clippy::disallowed_methods)] // polling a child process: a plain test thread
+    fn a_process_in_another_mount_namespace_is_unverified_without_sandbox_evidence() {
+        // `unshare` needs unprivileged user namespaces; where the kernel forbids them there is
+        // nothing to test.
+        let Ok(mut c) = Command::new("/usr/bin/unshare")
+            .args(["-Urm", "/usr/bin/sleep", "30"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        else {
+            return;
+        };
+        // Wait until the exec of sleep, so the namespace and the exe are the final ones.
+        let pid = c.id();
+        let mut ns_differs = false;
+        for _ in 0..100 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            if mount_ns(&pid.to_string()).is_some()
+                && mount_ns(&pid.to_string()) != mount_ns("self")
+            {
+                ns_differs = true;
+                break;
+            }
+        }
+        let id = read_proc_info(pid)
+            .start
+            .and_then(|st| verified_identity(pid, st));
+        let _ = c.kill();
+        let _ = c.wait();
+        if ns_differs {
+            assert_eq!(
+                id, None,
+                "a system binary in a foreign mount namespace is not verified"
+            );
+        }
+    }
+
+    #[test]
+    fn a_wrong_start_time_is_a_different_process() {
+        let me = std::process::id();
+        let start = read_proc_info(me).start.expect("own start time");
+        assert_eq!(verified_identity(me, start + 1), None);
+    }
+
+    #[test]
+    fn flatpak_and_snap_identities_are_ids_not_binary_names() {
+        let info = "[Application]\nname=org.mozilla.firefox\nruntime=runtime/x\n[Instance]\ninstance-id=1\n";
+        assert_eq!(
+            parse_flatpak_info(info).as_deref(),
+            Some("org.mozilla.firefox")
+        );
+        let scope = Some("app-flatpak-org.mozilla.firefox-1234.scope");
+        assert_eq!(
+            flatpak_identity(info, scope).as_deref(),
+            Some("org.mozilla.firefox")
+        );
+        // The scope must agree with the info file; a mismatch or no scope is unverified.
+        assert_eq!(
+            flatpak_identity(info, Some("app-flatpak-org.evil.app-1.scope")),
+            None
+        );
+        assert_eq!(flatpak_identity(info, None), None);
+        // Case-sensitive: a differently-cased id is a different application.
+        assert_eq!(
+            flatpak_identity(info, Some("app-flatpak-org.mozilla.Firefox-1.scope")),
+            None
+        );
+        assert_eq!(parse_flatpak_info("[Application]\nname=bad name\n"), None);
+        assert_eq!(
+            snap_identity("snap.chromium.chromium (enforce)\n").as_deref(),
+            Some("chromium")
+        );
+        // Complain mode confines nothing: not evidence.
+        assert_eq!(snap_identity("snap.chromium.chromium (complain)"), None);
+        assert_eq!(snap_identity("snap.chromium.chromium"), None);
+        assert_eq!(snap_identity("unconfined"), None);
+        assert_eq!(snap_identity("snap..x"), None);
+    }
 
     #[test]
     fn the_age_of_a_process_follows_uptime_and_start_ticks() {

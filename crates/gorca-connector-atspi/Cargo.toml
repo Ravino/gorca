@@ -30,6 +30,7 @@ workspace = true
 
 [dev-dependencies]
 serde_json = "1"
+tempfile = "3"
 tokio = { workspace = true, features = ["test-util"] }
 gorca-ingress = { workspace = true }
 gorca-core = { workspace = true }

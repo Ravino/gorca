@@ -197,6 +197,8 @@ pub struct HubCfg {
     pub counters: Arc<DocCounters>,
     /// The published profile snapshot: `browse.enabled` per application (ADR-0016 section 2.9).
     pub profiles: Arc<gorca_config::profiles::ProfileCell>,
+    /// The plugin runtime (M18a); `None` when plugins are off.
+    pub plugins: Option<Arc<dyn crate::plugin_port::PluginService>>,
 }
 
 struct Hub {
@@ -478,6 +480,21 @@ impl Hub {
             shutdown: token.clone(),
             counters: Arc::clone(&self.cfg.counters),
             repair,
+            plugins: self.cfg.plugins.as_ref().and_then(|svc| {
+                let a = self.apps.get(&app)?;
+                let (app, verified) =
+                    crate::plugin_port::scope_identity(&a.info.app_name, a.info.exe.as_ref());
+                Some(crate::doc_actor::DocPluginSpec {
+                    service: Arc::clone(svc),
+                    app,
+                    verified,
+                    engine: match a.info.web_engine {
+                        gorca_model::WebEngine::None => 0,
+                        gorca_model::WebEngine::Gecko => 1,
+                        gorca_model::WebEngine::Blink => 2,
+                    },
+                })
+            }),
         });
         self.cfg.docs.insert(handle);
         self.tokens.insert(doc, (app, token));
@@ -642,6 +659,10 @@ pub async fn run_hub(cfg: HubCfg, mut rx: mpsc::Receiver<HubMsg>, shutdown: Canc
         shutdown: shutdown.clone(),
         pending: std::collections::VecDeque::new(),
     };
+    // Only a loaded plugin that matches on URLs makes the sources read them.
+    if hub.cfg.plugins.as_ref().is_some_and(|p| p.wants_url()) {
+        hub.cfg.factory.set_report_url(true);
+    }
     loop {
         let wake = hub.next_wake();
         let sleep = async {

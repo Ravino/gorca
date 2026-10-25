@@ -26,7 +26,7 @@ use gorca_doc_source_api::{
     JoinKeyCaps, RepairReport, SourceCaps, SourceError, SourceKind, web_attrs,
 };
 use gorca_model::{
-    DocDelta, LocalId, NodeEvent, PropMask, Role, SrcNode, SrcNodeId, TextEdit, TextUnit,
+    DocDelta, DocHint, LocalId, NodeEvent, PropMask, Role, SrcNode, SrcNodeId, TextEdit, TextUnit,
 };
 use gorca_rt::{BoxFuture, Deadline, mpsc};
 use smallvec::SmallVec;
@@ -75,6 +75,11 @@ pub struct SourceConfig {
     /// What this engine's AT-SPI tree needs on top of the generic build (data from the
     /// connector's quirk table, never decided here from a name).
     pub quirks: EngineQuirks,
+    /// Read the document URL (`Document.GetAttributes`) and report it as a `RouteChanged` hint.
+    /// Only when some loaded plugin matches on URLs: otherwise the round trip is never made.
+    /// The read runs beside the build and **never delays the first block**: the hint follows as
+    /// a batch of its own when the answer arrives (and after every later `Reset`).
+    pub report_url: bool,
     /// Events that did not fit while dormant, after which a wake rebuilds from scratch anyway.
     pub dormant_marks: usize,
 }
@@ -135,6 +140,7 @@ impl SourceConfig {
             text_unit,
             runs: true,
             quirks: EngineQuirks::blink(chromium),
+            report_url: false,
             ..Self::default()
         }
     }
@@ -154,6 +160,7 @@ impl Default for SourceConfig {
             first_nodes: 400,
             runs: false,
             quirks: EngineQuirks::default(),
+            report_url: false,
             dormant_marks: 100_000,
         }
     }
@@ -446,6 +453,34 @@ async fn read_node_raw(
     Some((role, state, name, attrs, target))
 }
 
+/// The URL of the document: `Document.GetAttributes` carries `DocURL` (Gecko) or `URI` (Blink).
+/// One call under a one-second deadline (the first block waits for it, so the scope can open
+/// before any node is fed); `None` when the engine does not say (the page then matches no
+/// site-scoped plugin).
+async fn fetch_doc_url(app: &AppConn, root: &str) -> Option<Arc<str>> {
+    let dl = Deadline(Instant::now() + Duration::from_millis(1000));
+    let lane = app.next_lane();
+    let msg = app
+        .call(
+            lane,
+            dl,
+            root,
+            "org.a11y.atspi.Document",
+            "GetAttributes",
+            &(),
+        )
+        .await
+        .ok()?;
+    let attrs = wire::parse_string_map(msg.body().data().bytes()).ok()?;
+    let url = attrs
+        .iter()
+        .find(|(k, _)| k == "DocURL")
+        .or_else(|| attrs.iter().find(|(k, _)| k == "URI"))
+        .map(|(_, v)| v.as_str())
+        .filter(|u| !u.is_empty() && u.len() <= 2048)?;
+    Some(Arc::from(url))
+}
+
 /// Mutable per-document state of the running source.
 struct Live {
     /// The rectangle request in flight (label inference); a newer one aborts it.
@@ -502,6 +537,9 @@ impl Drop for Flight {
 struct Pusher {
     runs: Option<RunLayer>,
     batch: u64,
+    /// The document's URL (`Document.GetAttributes`, `DocURL` or `URI`): reported to the doc actor
+    /// right after every `Reset`, where plugins scoped to a site match it (ADR-0026 K2).
+    url: Option<Arc<str>>,
 }
 
 impl Pusher {
@@ -511,7 +549,13 @@ impl Pusher {
             None => deltas,
         };
         for d in deltas {
+            let reset = matches!(d, DocDelta::Reset { .. });
             sink.push(d);
+            if reset && let Some(url) = &self.url {
+                sink.push(DocDelta::Hint(DocHint::RouteChanged {
+                    url: Arc::clone(url),
+                }));
+            }
         }
         self.batch += 1;
         sink.push(DocDelta::Settled { batch: self.batch });
@@ -683,6 +727,7 @@ impl AtspiDocSource {
                     }
                 }),
                 batch: 0,
+                url: None,
             },
             locals: HashMap::new(),
             activity: Activity::Awake,
@@ -694,6 +739,12 @@ impl AtspiDocSource {
             touched_overflow: false,
         };
         let mut flight: Option<Flight> = None;
+        // The URL is read beside the build; its answer is reported as a hint when it comes.
+        let mut url_job: Option<tokio::task::JoinHandle<Option<Arc<str>>>> =
+            self.config.report_url.then(|| {
+                let (app, root) = (Arc::clone(&self.app), self.root_path.clone());
+                tokio::spawn(async move { fetch_doc_url(&app, &root).await })
+            });
 
         // Build. A failed block fetch is the one hard error: nothing to mirror.
         let t_attach = Instant::now();
@@ -791,6 +842,21 @@ impl AtspiDocSource {
             };
             tokio::select! {
                 () = ctx.shutdown.cancelled() => return Ok(()),
+                url = async {
+                    match url_job.as_mut() {
+                        Some(h) => h.await,
+                        None => std::future::pending().await,
+                    }
+                }, if url_job.is_some() => {
+                    url_job = None;
+                    if let Ok(Some(u)) = url {
+                        live.out.url = Some(Arc::clone(&u));
+                        live.out.emit(
+                            &ctx.sink,
+                            vec![DocDelta::Hint(DocHint::RouteChanged { url: u })],
+                        );
+                    }
+                }
                 req = ctx.requests.recv() => {
                     let Some(req) = req else { return Ok(()) };
                     self.handle_request(&mut live, &ctx, &mut flight, req).await;

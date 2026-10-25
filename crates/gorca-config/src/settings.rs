@@ -764,6 +764,15 @@ pub struct Settings {
     pub mouse: MouseSettings,
     pub verbosity: VerbositySettings,
     pub profiles: ProfilesSettings,
+    pub plugins: PluginsSettings,
+}
+
+/// `[plugins]` (ADR-0026): the WASM plugin runtime. A `Base` section read once at startup; the
+/// runtime is built when the daemon starts, so a change takes effect on the next start.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PluginsSettings {
+    /// Load plugin packages and let them add facts to the fused model. Off by default.
+    pub enabled: bool,
 }
 
 /// `[profiles]` (ADR-0016 PF-2): a `Base` section, never inside a profile.
@@ -965,6 +974,10 @@ const fn classify(section: &str, key: &str) -> (KeyScope, bool, bool) {
         } else {
             (KeyScope::App, true, false)
         }
+    } else if same(section, "plugins") {
+        // ADR-0026: whether code from add-on packages runs is the user's decision for the whole
+        // process: a Base key, never inside a profile, never set by a vendor row.
+        (KeyScope::Base, false, false)
     } else if same(section, "mouse") {
         // ADR-0025 2.8: the master switch is a Base key (never inside a profile, no row sets it); the item-click
         // policy is per application (a vendor row may set it for an app whose actions misbehave); the covered
@@ -1178,6 +1191,7 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     row("terminal", "prompt_regex", SettingType::Str, "\"\""),
     row("terminal", "secret_regex", SettingType::Str, "\"\""),
+    row("plugins", "enabled", SettingType::Bool, "false"),
     row("mouse", "enabled", SettingType::Bool, "true"),
     row(
         "mouse",
@@ -1346,6 +1360,11 @@ static DOCS: &[(&str, &str, &str)] = &[
         "editing",
         "word",
         "How coarse a word is: fine (letters and digits, each punctuation mark apart), medium (option tokens like --color=auto, identifiers and file names stay whole; slashes and other punctuation separate), coarse (everything between blanks); auto lets the application decide (terminals use medium).",
+    ),
+    (
+        "plugins",
+        "enabled",
+        "Load WASM plugin packages from the first-party directory and from $XDG_DATA_HOME/gorca/plugins, so they can add facts (names, roles) to what gorca presents. Off by default; takes effect when gorca starts.",
     ),
     (
         "mouse",
@@ -1594,6 +1613,7 @@ mod tests {
             "text",
             "browse",
             "terminal",
+            "plugins",
             "mouse",
             "verbosity",
             "profiles",
@@ -1631,6 +1651,7 @@ mod tests {
                 "text",
                 "browse",
                 "terminal",
+                "plugins",
                 "mouse",
                 "verbosity",
                 "profiles"

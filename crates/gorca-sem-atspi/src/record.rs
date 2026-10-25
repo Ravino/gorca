@@ -249,8 +249,15 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
         // The HTML `id` is not in `WANTED_ATTRS` (the app connector keeps only what the groups
         // read); the document source hands over every attribute it holds, `id` among them.
         let id = raw.attrs.iter().find(|(k, _)| *k == "id").map(|(_, v)| *v);
+        let class = raw
+            .attrs
+            .iter()
+            .find(|(k, _)| *k == "class")
+            .map(|(_, v)| *v);
         let mut cut = false;
         rec.dom_id = arc_capped(id, &mut cut);
+        rec.class = arc_capped(class, &mut cut);
+        rec.aria_role = arc_capped(a.xml_roles, &mut cut);
         if cut {
             notes.add(Notes::TRUNCATED);
         }

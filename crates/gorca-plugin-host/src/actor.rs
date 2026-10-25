@@ -131,6 +131,9 @@ struct Actor {
     slots: Mutex<Slots>,
     wake: AtomicU32,
     parked: AtomicU32,
+    /// Until this `CLOCK_MONOTONIC` instant an idle worker spins instead of parking (key-down
+    /// pre-wake): it is already running when the focus change brings its job.
+    spin_until: AtomicU64,
     inc: AtomicU64,
     running: Mutex<Option<Running>>,
     running_since: AtomicU64,
@@ -165,6 +168,7 @@ impl Actor {
             slots: Mutex::new(Slots::default()),
             wake: AtomicU32::new(0),
             parked: AtomicU32::new(0),
+            spin_until: AtomicU64::new(0),
             inc: AtomicU64::new(0),
             running: Mutex::new(None),
             running_since: AtomicU64::new(0),
@@ -358,6 +362,10 @@ fn worker_main(
             std::hint::spin_loop();
             continue;
         }
+        if monotonic_ns() < actor.spin_until.load(Acquire) {
+            std::hint::spin_loop();
+            continue;
+        }
         // Park (Dekker with the writer: publish `parked`, re-check, then futex on the sequence).
         let seq = actor.wake.load(SeqCst);
         actor.parked.store(1, SeqCst);
@@ -394,6 +402,17 @@ impl Core {
             .spawn(move || worker_main(&a, inc, exec, &g, cfg, &ready))?;
         lock(&self.threads).push(h);
         Ok(())
+    }
+
+    /// Keep every idle worker spinning for `spin` (wakes the parked ones).
+    fn prewake(&self, spin: Duration) {
+        let until = monotonic_ns() + ns(spin);
+        for a in &self.actors {
+            a.spin_until.store(until, Release);
+            if a.parked.load(SeqCst) != 0 {
+                a.kick();
+            }
+        }
     }
 
     /// Replace the executor of every actor stuck in one job for too long.
@@ -433,6 +452,30 @@ fn writer_slack() {
             s.set(true);
         }
     });
+}
+
+/// A handle that pre-wakes the workers of one runner (the key-down hook of the daemon). Weak:
+/// it never keeps a closed scope's threads alive.
+#[derive(Clone)]
+pub struct PrewakeHandle(std::sync::Weak<Core>);
+
+impl std::fmt::Debug for PrewakeHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PrewakeHandle")
+    }
+}
+
+impl PrewakeHandle {
+    /// Keep the runner's idle workers spinning for `spin`. False when the runner is gone.
+    pub fn arm(&self, spin: Duration) -> bool {
+        match self.0.upgrade() {
+            Some(c) => {
+                c.prewake(spin);
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 /// The production [`WLaneRunner`].
@@ -502,6 +545,12 @@ impl ActorRunner {
             supervisor: Some(supervisor),
             down: false,
         })
+    }
+
+    /// The pre-wake handle of this runner.
+    #[must_use]
+    pub fn prewake_handle(&self) -> PrewakeHandle {
+        PrewakeHandle(Arc::downgrade(&self.core))
     }
 
     /// Replace wedged actors now (the supervisor does this every 2 ms).

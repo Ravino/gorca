@@ -162,6 +162,7 @@ pub(crate) fn wire_input(
     links: Arc<LaneLinks>,
     grabs: watch::Receiver<GrabSet>,
     grab_control: Arc<watch::Sender<GrabSet>>,
+    prewake: Arc<crate::plugins::Prewake>,
 ) {
     if opts.no_keyboard {
         tracing::info!("keyboard monitoring disabled (--no-keyboard)");
@@ -199,6 +200,7 @@ pub(crate) fn wire_input(
                 Arc::clone(epoch),
                 speech,
                 grab_control,
+                prewake,
                 shutdown.child_token(),
             ),
         );

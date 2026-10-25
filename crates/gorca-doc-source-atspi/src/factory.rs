@@ -65,6 +65,8 @@ struct Inner {
     apps: tokio::sync::Mutex<HashMap<AppId, Arc<AppEntry>>>,
     /// Paths of document roots the factory located (the connector may not know them).
     roots: Mutex<HashMap<NodeKey, String>>,
+    /// Sources read and report the document URL (see `SourceConfig::report_url`).
+    report_url: std::sync::atomic::AtomicBool,
 }
 
 impl std::fmt::Debug for AtspiDocSourceFactory {
@@ -379,6 +381,7 @@ impl AtspiDocSourceFactory {
                 bus: tokio::sync::OnceCell::new(),
                 apps: tokio::sync::Mutex::new(HashMap::new()),
                 roots: Mutex::new(HashMap::new()),
+                report_url: std::sync::atomic::AtomicBool::new(false),
             }),
         }
     }
@@ -521,6 +524,12 @@ impl DocSourceFactory for AtspiDocSourceFactory {
         })
     }
 
+    fn set_report_url(&self, on: bool) {
+        self.inner
+            .report_url
+            .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
     fn create(
         &self,
         app: AppId,
@@ -533,6 +542,7 @@ impl DocSourceFactory for AtspiDocSourceFactory {
         // The engine's S-1 quirk rows and trust table are data in `gorca-sem-atspi`, selected by
         // the same facts the connector reported (never by a name test here).
         let fuse = crate::norm::fuse_setup(info);
+        let report_url = me.report_url.load(std::sync::atomic::Ordering::Relaxed);
         Box::pin(async move {
             let entry = me.entry(app).await?;
             let path = me.root_path(root).ok_or(SourceError::NotSupported)?;
@@ -550,6 +560,7 @@ impl DocSourceFactory for AtspiDocSourceFactory {
             } else {
                 crate::extras::WebQuirks::NONE
             };
+            config.report_url = report_url;
             let (source, _metrics) =
                 AtspiDocSource::new(Arc::clone(&entry.conn), path, config, events);
             let source = source
@@ -577,6 +588,7 @@ mod tests {
             connector_kind: ConnectorKind::Atspi,
             verified_shell: false,
             dump_complete: false,
+            exe: None,
             text_unit: gorca_model::TextUnit::Scalar,
             text_insert_slack: 0,
             edit_quirks: gorca_model::EditQuirks::default(),
