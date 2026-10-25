@@ -8,3 +8,5 @@ row-100 = {title}, {n} unread
 row-101 = {title}, {n} unread, {time}
 row-110 = {title}, {n} unread, {preview}
 row-111 = {title}, {n} unread, {preview}, {time}
+messages-list = Messages
+own-message = Your message

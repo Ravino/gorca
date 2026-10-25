@@ -340,6 +340,142 @@ async fn live_firefox_document_through_the_real_source_and_plugin() {
             )
         })
         .count();
+    // Every title (`fullName`) outside a chat-list row, with its ancestors: the chat header.
+    for (i, r) in &all_rows {
+        if !has(r, "fullName") {
+            continue;
+        }
+        let mut chain: Vec<String> = Vec::new();
+        let mut cur = *i;
+        let mut in_row = false;
+        while let Some(p) = parent.get(&cur) {
+            let pr = &all_rows[p];
+            in_row |= has(pr, "ListItem-button");
+            chain.push(format!(
+                "{}.{}",
+                pr.tag.as_deref().unwrap_or(""),
+                pr.class
+                    .as_deref()
+                    .unwrap_or("")
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+            ));
+            cur = *p;
+        }
+        if !in_row {
+            println!(
+                "TITLE node {i} role {} tag {:?} class {:?} name {:?} chain {}",
+                r.role,
+                r.tag.as_deref(),
+                r.class.as_deref(),
+                r.name
+                    .as_deref()
+                    .map(|n| n.chars().take(20).collect::<String>()),
+                chain.join(" < ")
+            );
+        }
+    }
+    if let Some(out) = std::env::var_os("GORCA_DUMP_CHAT") {
+        // The open chat: the `messages-layout` node, the header title, the message list and its
+        // first messages (each with its subtree), anonymised like the chat-list fixture.
+        let mut aliases: HashMap<String, String> = HashMap::new();
+        let mut alias = |s: &str| -> String {
+            let keep = s.trim().is_empty()
+                || s.trim().chars().all(|c| {
+                    c.is_ascii_digit() || matches!(c, ':' | '.' | ',' | ' ' | 'K' | 'M' | '?')
+                });
+            if keep {
+                return s.to_owned();
+            }
+            let n = aliases.len();
+            aliases
+                .entry(s.to_owned())
+                .or_insert_with(|| format!("Слово{n}"))
+                .clone()
+        };
+        let layout = all_rows
+            .iter()
+            .filter(|(_, r)| has(r, "messages-layout"))
+            .map(|(i, _)| *i)
+            .min()
+            .expect("a messages-layout node (open a chat first)");
+        let mut order: Vec<u32> = vec![layout];
+        let subtree = |root: u32, cap: usize, order: &mut Vec<u32>| {
+            let mut q = std::collections::VecDeque::from([root]);
+            let mut n = 0;
+            while let Some(x) = q.pop_front() {
+                if n >= cap {
+                    break;
+                }
+                n += 1;
+                if !order.contains(&x) {
+                    order.push(x);
+                }
+                q.extend(kids.get(&x).into_iter().flatten().copied());
+            }
+        };
+        let title = all_rows
+            .iter()
+            .filter(|(i, r)| {
+                has(r, "fullName") && {
+                    let mut c = **i;
+                    let mut in_row = false;
+                    while let Some(p) = parent.get(&c) {
+                        in_row |= has(&all_rows[p], "ListItem-button");
+                        c = *p;
+                    }
+                    !in_row
+                }
+            })
+            .map(|(i, _)| *i)
+            .min()
+            .expect("a header title");
+        subtree(title, 8, &mut order);
+        let list = all_rows
+            .iter()
+            .filter(|(_, r)| has(r, "MessageList"))
+            .map(|(i, _)| *i)
+            .min()
+            .expect("a MessageList");
+        let mut chain = vec![list];
+        while let Some(p) = parent.get(chain.last().unwrap()) {
+            if *p == layout {
+                break;
+            }
+            chain.push(*p);
+        }
+        for c in chain.iter().rev() {
+            order.push(*c);
+        }
+        for k in kids.get(&list).into_iter().flatten().take(14) {
+            subtree(*k, 30, &mut order);
+        }
+        let pos: HashMap<u32, usize> = order.iter().enumerate().map(|(k, i)| (*i, k + 1)).collect();
+        let mut json = vec![serde_json::json!({
+            "i": 0, "p": -1, "role": SemRole::Generic.code(), "tag": "div", "class": "", "name": "", "text": ""
+        })];
+        for i in &order {
+            let r = &all_rows[i];
+            let p = if *i == layout {
+                0
+            } else {
+                parent
+                    .get(i)
+                    .and_then(|p| pos.get(p))
+                    .map_or(0, |k| i64::try_from(*k).unwrap())
+            };
+            json.push(serde_json::json!({
+                "i": pos[i], "p": p, "role": r.role,
+                "tag": r.tag.as_deref().unwrap_or(""),
+                "class": r.class.as_deref().unwrap_or(""),
+                "name": r.name.as_deref().map(&mut alias).unwrap_or_default(),
+                "text": r.text.as_deref().map(&mut alias).unwrap_or_default(),
+            }));
+        }
+        std::fs::write(&out, serde_json::to_string_pretty(&json).unwrap()).unwrap();
+        println!("chat fixture written: {} nodes", json.len());
+    }
     if let Some(out) = std::env::var_os("GORCA_DUMP_FIXTURE") {
         // A small, anonymised slice of what the real source delivered: three chat rows and two
         // messages with their subtrees. Texts become aliases; times, dates and counts are kept.

@@ -167,3 +167,41 @@ The plugin matched the live rows all along; the names were dropped after the plu
   keep a wrong panel from passing. `live_document.rs` regenerates it (`GORCA_DUMP_FIXTURE=<path>`).
 * Not done: a spoken end-to-end run in a private session (the fact-to-speech path is the fusion's
   Patch-over-observed rule, covered by the `fuse` tests `a_plugin_patch_is_in_the_first_published_entry...`).
+
+## Follow-up 4: message list, headings, click handlers (owner requests)
+
+Facts only (role, level and description patches, names from the plugin catalog); no DOM injection.
+Structure read from the owner's open chat (read-only dumps, 2026-10-26); fixture
+`tests/fixtures/web/telegram-a-open-chat.json` is the real source output, anonymised.
+
+* Live shape: `div.messages-layout` holds the header title (`h3.fullName`, role button, a direct
+  child; there is no `MiddleHeader`/`ChatInfo` in the tree) and `div.Transition > div.MessageList`,
+  whose direct children are `div.sticky-date` separators and `div.Message.message-list-item`
+  (role section, no AT-SPI action; outgoing ones carry the class `own`). Replies
+  (`div.EmbeddedMessage`) have the action `click`, their children `clickAncestor`.
+* **Messages as a list**: `MessageList` becomes `list` named "Messages" / "Сообщения"; each
+  `div.Message` becomes `listitem`. Chosen over `article`: the list is announced once and each item then
+  carries a position ("3 of 40"; the messages are direct children of the list, so counting is exact),
+  while `article` says the word on every message and has no list context; quick-nav keeps working
+  (`L` list, `I` item); `A` no longer stops on messages. A role patch is the only handle the fact API
+  gives (`Value::Position/Grid` are not admitted).
+* **Own messages**: a message with class `own` gets the description "Your message" / "Ваше сообщение"
+  (catalog `own-message`), so the owner hears who wrote it without a name that would double the text.
+  Remove the `own` branch of `message_row` if it reads badly.
+* **Chat header**: the watch is `messages-layout`; its direct-child `h3.fullName` becomes a level-1
+  `heading` (matched by structure; chat-list titles are below `a.ListItem-button` and untouched).
+* **Date separators** (`div.sticky-date`) become level-2 headings. The **unread divider** rule
+  (`.unread-divider` / `.local-action-message`) is kept but its class names are NOT confirmed: no chat
+  with unread messages has been dumped; the test uses a synthetic divider.
+* Host fix found on the way: a fact on a node the call only read (the header title) was admitted once
+  per target of the batch; it is now admitted once (`admit_done`, the first target claims it).
+
+### Click handlers (recorded only, nothing implemented)
+
+Gecko exposes a real click handler as an action on the node that owns it and `clickAncestor` on its
+descendants. Chat list: `a.ListItem-button` (role link, `jump`) opens the chat, `h3.fullName`
+(`press`) and `button.Button` (`press`); everything inside a row has `clickAncestor` only.
+Open chat: `div.Message` has NO action (a message itself has no mouse-only handler); the only
+`click` seen is on `div.EmbeddedMessage` (the quoted reply inside a message: jumps to the replied
+message), its text and sender spans being `clickAncestor`. Menus (`message-action-buttons`,
+context menu) were not dumped.

@@ -1206,12 +1206,18 @@ impl PluginBridge {
             .get(plugin)
             .map_or_else(|| Arc::from(""), |m| Arc::clone(&m.name));
         // Per target: the new fact set replaces the old one (a missing fact is a retract).
+        // A fact on a node that is nobody's target (a node a call read) is admitted once, by the
+        // first target: the read set is the union of the batch's, so every target "owns" it.
+        let mut claimed: Vec<usize> = Vec::new();
         for tgt in targets {
             let mut new_facts: Vec<(u32, Group, bool)> = Vec::new();
-            for e in effects
-                .iter()
-                .filter(|e| owned_by(e.node, *tgt, &reads, targets))
-            {
+            for (ei, e) in effects.iter().enumerate() {
+                if !owned_by(e.node, *tgt, &reads, targets) || claimed.contains(&ei) {
+                    continue;
+                }
+                if e.node != *tgt {
+                    claimed.push(ei);
+                }
                 if self
                     .rows
                     .get(ix(e.node))

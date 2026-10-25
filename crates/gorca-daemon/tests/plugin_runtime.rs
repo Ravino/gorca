@@ -309,7 +309,7 @@ fn web_k_in_chromium_is_named_from_its_bare_text_leaves() {
 }
 
 #[test]
-fn web_k_name_is_not_doubled_and_web_a_messages_get_the_article_role() {
+fn web_k_name_is_not_doubled_and_web_a_messages_get_the_listitem_role() {
     let rt = runtime(PluginOptions::default());
     let mut b = open_bridge(
         &rt,
@@ -334,7 +334,7 @@ fn web_k_name_is_not_doubled_and_web_a_messages_get_the_article_role() {
             o,
             FactOp::Patch {
                 node: 1,
-                write: gorca_fuse::Write::Val(gorca_fuse::Val::Role(SemRole::Article)),
+                write: gorca_fuse::Write::Val(gorca_fuse::Val::Role(SemRole::ListItem)),
                 ..
             }
         )),
@@ -703,7 +703,7 @@ fn a_long_busy_chat_list_derives_without_faults_and_without_duplicate_facts() {
 /// text runs as separate leaves) and two messages. A fixture of the wrong panel cannot pass here:
 /// the plugin must name every chat row and give every message the article role.
 #[test]
-fn the_rows_the_real_source_delivered_for_live_web_a_are_named_and_the_messages_are_articles() {
+fn the_rows_the_real_source_delivered_for_live_web_a_are_named_and_the_messages_are_list_items() {
     let v: serde_json::Value = serde_json::from_slice(
         &std::fs::read(root().join("tests/fixtures/web/telegram-a-live.json")).unwrap(),
     )
@@ -773,11 +773,136 @@ fn the_rows_the_real_source_delivered_for_live_web_a_are_named_and_the_messages_
             matches!(
                 o,
                 FactOp::Patch {
-                    write: gorca_fuse::Write::Val(gorca_fuse::Val::Role(SemRole::Article)),
+                    write: gorca_fuse::Write::Val(gorca_fuse::Val::Role(SemRole::ListItem)),
                     ..
                 }
             )
         })
         .count();
     assert_eq!(articles, 2, "{ops:?}");
+}
+
+/// The open chat of Web A as the real document source delivered it (Firefox ESR, 2026-10-26, text
+/// anonymised; `live_document.rs` with `GORCA_DUMP_CHAT`): `div.messages-layout` holds the header
+/// title (`h3.fullName`, role button) and the `MessageList`, whose direct children are the
+/// `sticky-date` separators and the `Message` items. The message list is a list, each message a
+/// list item (outgoing ones described), the title a level-1 heading, each date separator a
+/// level-2 heading, and a synthetic unread divider is one too.
+#[test]
+fn the_open_chat_gets_a_message_list_headings_and_described_own_messages() {
+    let v: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(root().join("tests/fixtures/web/telegram-a-open-chat.json")).unwrap(),
+    )
+    .unwrap();
+    let rt = runtime(PluginOptions::default());
+    let mut b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/#1", true),
+    )
+    .expect("scope");
+    let mut kids: HashMap<u32, Vec<u32>> = HashMap::new();
+    let arc = |s: &str| (!s.is_empty()).then(|| Arc::<str>::from(s));
+    let mut class_of: HashMap<u32, String> = HashMap::new();
+    let mut list_node = 0;
+    for x in v.as_array().unwrap() {
+        let i = x["i"].as_u64().unwrap() as u32;
+        let p = x["p"].as_i64().unwrap();
+        if p >= 0 {
+            kids.entry(p as u32).or_default().push(i);
+        }
+        let class = x["class"].as_str().unwrap();
+        if class.split_whitespace().any(|t| t == "MessageList") {
+            list_node = i;
+        }
+        class_of.insert(i, class.to_owned());
+        b.upsert(
+            i,
+            Row {
+                role: x["role"].as_u64().unwrap() as u16,
+                name: arc(x["name"].as_str().unwrap()),
+                text: arc(x["text"].as_str().unwrap()),
+                tag: arc(x["tag"].as_str().unwrap()),
+                class: arc(class),
+                ..Row::default()
+            },
+        );
+    }
+    // A divider the dump did not have (no unread messages in that chat): a child of the list.
+    let divider = 100_000;
+    kids.entry(list_node).or_default().push(divider);
+    class_of.insert(divider, "unread-divider".to_owned());
+    b.upsert(
+        divider,
+        Row {
+            role: SemRole::Generic.code(),
+            tag: arc("div"),
+            class: arc("unread-divider"),
+            ..Row::default()
+        },
+    );
+    let ops = collect(&mut b, &Flat(kids), Duration::from_secs(10));
+    let with_class = |c: &str| -> Vec<u32> {
+        let mut v: Vec<u32> = class_of
+            .iter()
+            .filter(|(_, k)| k.split_whitespace().any(|t| t == c))
+            .map(|(i, _)| *i)
+            .collect();
+        v.sort_unstable();
+        v
+    };
+    let patches = |n: u32, pick: fn(&gorca_fuse::Val) -> Option<String>| -> Vec<String> {
+        ops.iter()
+            .filter_map(|o| match o {
+                FactOp::Patch {
+                    node,
+                    write: gorca_fuse::Write::Val(v),
+                    ..
+                } if *node == n => pick(v),
+                _ => None,
+            })
+            .collect()
+    };
+    let role = |v: &gorca_fuse::Val| match v {
+        gorca_fuse::Val::Role(r) => Some(format!("{r:?}")),
+        _ => None,
+    };
+    let level = |v: &gorca_fuse::Val| match v {
+        gorca_fuse::Val::Level(l) => Some(l.to_string()),
+        _ => None,
+    };
+    let desc = |v: &gorca_fuse::Val| match v {
+        gorca_fuse::Val::Description(d) => Some(d.to_string()),
+        _ => None,
+    };
+    let name = |v: &gorca_fuse::Val| match v {
+        gorca_fuse::Val::Name(d) => Some(d.to_string()),
+        _ => None,
+    };
+    assert_eq!(patches(list_node, role), vec!["List"], "{ops:?}");
+    assert!(
+        patches(list_node, name).iter().any(|n| !n.is_empty()),
+        "the list is named from the catalog: {ops:?}"
+    );
+    let messages = with_class("Message");
+    assert!(messages.len() >= 5, "{}", messages.len());
+    let mut own = 0;
+    for m in &messages {
+        assert_eq!(patches(*m, role), vec!["ListItem"], "message {m}");
+        let is_own = class_of[m].split_whitespace().any(|t| t == "own");
+        let d = patches(*m, desc);
+        assert_eq!(d.len(), usize::from(is_own), "message {m}: {d:?}");
+        own += usize::from(is_own);
+    }
+    assert!(own >= 1, "the dump has outgoing messages");
+    // The title is the only `fullName` outside a chat-list row in this document.
+    let header = with_class("fullName");
+    assert_eq!(header.len(), 1);
+    assert_eq!(patches(header[0], role), vec!["Heading"]);
+    assert_eq!(patches(header[0], level), vec!["1"]);
+    for d in with_class("sticky-date") {
+        assert_eq!(patches(d, role), vec!["Heading"], "date separator {d}");
+        assert_eq!(patches(d, level), vec!["2"]);
+    }
+    assert_eq!(patches(divider, role), vec!["Heading"]);
+    assert_eq!(patches(divider, level), vec!["2"]);
 }
