@@ -157,4 +157,4 @@ crates/gorca-daemon/src/plugins.rs | sps turn
 crates/gorca-daemon/src/plugins.rs | sps reply
 crates/gorca-daemon/src/plugins.rs | # scope plugins={} entries={}
 crates/gorca-daemon/src/cli.rs | GORCA_SCHED_LOG
-crates/gorca-daemon/src/lib.rs | gorca runs in a private user namespace (systemd PrivateTmp=, ProtectSystem=, 
+crates/gorca-daemon/src/lib.rs | gorca runs in a private user namespace (systemd PrivateTmp=, ProtectSystem=, \
