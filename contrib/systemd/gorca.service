@@ -22,15 +22,14 @@ TimeoutStopSec=5
 # Hardening. Deliberately NOT set: PrivateDevices (evdev/libei fallback, audio),
 # PrivateNetwork/PrivateUsers (D-Bus sockets under XDG_RUNTIME_DIR), RestrictRealtime
 # and MemoryDenyWriteExecute (RT scheduling, wasmtime JIT).
+# Also NOT set: ProtectSystem, ProtectKernelTunables, ProtectKernelModules, ProtectControlGroups,
+# PrivateTmp. In a *user* unit each of them puts the service in a user namespace of its own, and
+# the kernel then refuses /proc/<pid>/exe and /proc/<pid>/ns/* of every process outside it: gorca
+# could not verify any application identity, and URL-scoped plugins (Telegram Web) never open.
 NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 RestrictNamespaces=yes
 LockPersonality=yes
-PrivateTmp=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 SystemCallArchitectures=native
 

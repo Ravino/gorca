@@ -370,6 +370,16 @@ async fn wire_plugins(core: Core, opts: &Options, prewake: Arc<plugins::Prewake>
     if !settings.enabled {
         return core;
     }
+    if gorca_connector_atspi::in_private_user_ns() {
+        // A user unit with mount-namespace sandboxing (PrivateTmp=, ProtectSystem=, ...) runs in
+        // a user namespace; the kernel then refuses /proc/<pid>/exe of every other process, no
+        // application identity can be verified, and URL-scoped plugins never open.
+        tracing::warn!(
+            "gorca runs in a private user namespace (systemd PrivateTmp=, ProtectSystem=, \
+             ProtectKernelTunables= or ProtectControlGroups= in a user unit): application \
+             identities cannot be verified and URL-scoped plugins will not open; drop those options"
+        );
+    }
     let mut popts = opts.plugins.clone();
     popts.scheduler = match settings.scheduler {
         gorca_config::PluginScheduler::Labels => plugins::SchedulerPolicy::Labels,

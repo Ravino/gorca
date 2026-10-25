@@ -63,6 +63,7 @@ pub use fetch::locate::locate_object;
 pub use fetch::review::act_object;
 pub use fetch::{FetchCounters, FetchCountersSnapshot};
 pub use paths::{GLOBAL_BYTE_CAP as PATH_TABLE_BYTE_CAP, Owner, PathTable};
+pub use proc::in_private_user_ns;
 pub use role_map::map_role;
 pub use router::{AtspiRouter, RouterStats};
 pub use session::REGISTERED_EVENTS;
