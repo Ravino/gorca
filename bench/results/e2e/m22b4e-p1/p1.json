@@ -1,0 +1,463 @@
+{
+ "steps": [
+  {
+   "target": "shell",
+   "step": "focus: Alt+Tab switcher",
+   "spoken": [
+    "gtkwin dot py, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.34,
+   "at_ms": [
+    137
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "window: release Alt activates a window (title leads)",
+   "spoken": [
+    "Probe Window One, edit"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.36,
+   "at_ms": [
+    25
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "notification: banner is read (role, summary, body)",
+   "spoken": [
+    "alert, p1-e2e, Just now, Build finished, All 12 tests passed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.4,
+   "at_ms": [
+    95
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "open quick settings (Super+S)",
+   "spoken": [
+    "100 percent, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.38,
+   "at_ms": [
+    133
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "focus: first button",
+   "spoken": [
+    "Take Screenshot, button"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1280
+   ],
+   "skipped_tabs": 0
+  },
+  {
+   "target": "shell",
+   "step": "focus: a toggle button",
+   "spoken": [
+    "Dark Style, toggle button, not pressed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1273
+   ],
+   "skipped_tabs": 2
+  },
+  {
+   "target": "shell",
+   "step": "change: Space flips the toggle",
+   "spoken": [
+    "space",
+    "pressed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.44,
+   "at_ms": [
+    4,
+    182
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "change: Space flips it back",
+   "spoken": [
+    "space",
+    "not pressed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.44,
+   "at_ms": [
+    3,
+    125
+   ]
+  },
+  {
+   "target": "shell",
+   "step": "info: where am I (Insert+Tab)",
+   "spoken": [
+    "gnome-shell, Main stage window, panel, Dark Style toggle button, not pressed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.37,
+   "at_ms": [
+    46
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "focus: expander",
+   "spoken": [
+    "Details, button, collapsed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1282
+   ],
+   "skipped_tabs": 0
+  },
+  {
+   "target": "gtk4",
+   "step": "change: Space expands",
+   "spoken": [
+    "space",
+    "Details More text, expanded"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.44,
+   "at_ms": [
+    4,
+    126
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "focus: scale",
+   "spoken": [
+    "Volume, slider, 50"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1283
+   ],
+   "skipped_tabs": 0
+  },
+  {
+   "target": "gtk4",
+   "step": "change: Right sets the value",
+   "spoken": [
+    "60"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    8
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "focus: toggle button",
+   "spoken": [
+    "Mute, toggle button, not pressed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1283
+   ],
+   "skipped_tabs": 0
+  },
+  {
+   "target": "gtk4",
+   "step": "change: Space presses",
+   "spoken": [
+    "space",
+    "pressed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.44,
+   "at_ms": [
+    4,
+    126
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "focus: check button",
+   "spoken": [
+    "Subscribe, check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1285
+   ],
+   "skipped_tabs": 0
+  },
+  {
+   "target": "gtk4",
+   "step": "info: where am I (Insert+Tab)",
+   "spoken": [
+    "python3, P1 Wired window, panel, Subscribe check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.37,
+   "at_ms": [
+    46
+   ]
+  },
+  {
+   "target": "gtk4",
+   "step": "change: Space checks",
+   "spoken": [
+    "space",
+    "checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.44,
+   "at_ms": [
+    3,
+    125
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "browse: Ctrl+Home reads the first line",
+   "spoken": [
+    "heading level 1, P1 Page"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.37,
+   "at_ms": [
+    46
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "browse: Down reads a line",
+   "spoken": [
+    "Intro text for the browse cursor."
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "quicknav: k lands on a link",
+   "spoken": [
+    "link, Alpha"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "quicknav: t lands on the table",
+   "spoken": [
+    "out of list, table with 2 columns and 2 rows, Fruit"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "browse: Ctrl+Home returns to the top",
+   "spoken": [
+    "out of table, heading level 1, P1 Page"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.38,
+   "at_ms": [
+    47
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "quicknav: h lands on a heading",
+   "spoken": [
+    "heading level 2, Summary"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    3
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "focus: check box",
+   "spoken": [
+    "Subscribe, check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1262
+   ],
+   "skipped_tabs": 0
+  },
+  {
+   "target": "firefox",
+   "step": "info: where am I (Insert+Tab)",
+   "spoken": [
+    "Firefox, P1 Page \u2014 Mozilla Firefox window, Subscribe check box, not checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.37,
+   "at_ms": [
+    46
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "change: Space checks",
+   "spoken": [
+    "checked"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    14
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "focus: disclosure button",
+   "spoken": [
+    "Details, button, collapsed"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1271
+   ],
+   "skipped_tabs": 0
+  },
+  {
+   "target": "firefox",
+   "step": "change: Space expands",
+   "spoken": [
+    "expanded"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    14
+   ]
+  },
+  {
+   "target": "firefox",
+   "step": "focus: slider",
+   "spoken": [
+    "focus mode, Volume, slider, 50"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 0.0,
+   "at_ms": [
+    -1275
+   ],
+   "skipped_tabs": 0
+  },
+  {
+   "target": "firefox",
+   "step": "change: Right sets the value",
+   "spoken": [
+    "60"
+   ],
+   "ok": true,
+   "missing": [],
+   "forbidden": [],
+   "s": 1.29,
+   "at_ms": [
+    11
+   ]
+  }
+ ],
+ "load": "10.47 10.30 11.64 9/1841 3312008",
+ "governor": "powersave",
+ "reader": "/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/gorca-b4e",
+ "rev": "4d0769d650633b6734ed5b05598abcf8781ae587",
+ "dirty": false,
+ "date": "2026-10-25T06:36:35Z"
+}
