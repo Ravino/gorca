@@ -29,6 +29,7 @@ wasmtime = { workspace = true, features = [
 ] }
 
 [dev-dependencies]
+gorca-mirror = { workspace = true }
 # The native build of the test extension: the same source as the component (ADR-0008 3.3).
 ext-test = { path = "../../extensions/ext-test" }
 ext-gnome-shell = { path = "../../extensions/ext-gnome-shell" }

@@ -820,7 +820,7 @@ impl crate::AppExt for FakeApp {
 
     fn present(
         &self,
-        _snap: &NodeSnapshot,
+        _snap: &crate::ExtNode,
         _ctx: crate::PresentContext,
         _epoch: u64,
     ) -> Option<Vec<gorca_model::Segment>> {

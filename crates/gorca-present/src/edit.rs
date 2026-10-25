@@ -27,6 +27,9 @@ pub enum IrEdit {
     ReplaceAll(Vec<Field>),
     /// Replace the first `VALUE` field with `text`, or append one (the policy's value).
     SetValue(Arc<str>),
+    /// Like `SetValue`, and the field's origin names the hook that wrote it (`Origin::via`), so
+    /// `explain` can tell the policy's value from the composed one.
+    SetValueVia(Arc<str>, u32),
     /// Remove every field that says the catalog message `MsgId` (the "selected" word in a
     /// switcher, where being selected is the reason it is spoken at all).
     DropMsg(gorca_i18n::MsgId),
@@ -87,11 +90,19 @@ pub fn apply(ir: &mut PresIr, edits: &[IrEdit]) -> bool {
         }
     }
     for e in edits {
-        if let IrEdit::SetValue(text) = e {
+        let (text, via) = match e {
+            IrEdit::SetValue(text) => (text, 0),
+            IrEdit::SetValueVia(text, via) => (text, *via),
+            _ => continue,
+        };
+        {
             let f = Field::new(
                 FieldKind::VALUE,
                 Content::Text(Arc::clone(text)),
-                Origin::default(),
+                Origin {
+                    via,
+                    ..Origin::default()
+                },
             );
             match ir.fields.iter_mut().find(|x| x.kind == FieldKind::VALUE) {
                 Some(slot) => *slot = f,
@@ -108,6 +119,7 @@ pub fn apply(ir: &mut PresIr, edits: &[IrEdit]) -> bool {
             IrEdit::Silence
             | IrEdit::ReplaceAll(_)
             | IrEdit::SetValue(_)
+            | IrEdit::SetValueVia(..)
             | IrEdit::Prepend(_)
             | IrEdit::Append(_) => {}
         }

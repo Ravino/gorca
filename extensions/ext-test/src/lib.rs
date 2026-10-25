@@ -17,6 +17,7 @@
 //! | node / policy facts named `gorca-ext-speak` | `present` / `policy` make one `host::speak` call, then a short guest loop (a host call that takes wall time but no CPU), then answer `ext spoke` / `Defer` |
 //! | policy facts named `gorca-ext-silence` / `-crash` / `-spin` | `policy` answers `Silence` / panics / loops |
 //! | command 1 | speaks `ext hello` |
+//! | `present` of a node with local id >= 100 | speaks what `host::read_group` says of it (the accessor test) |
 //! | command 4 | counts calls in the settings KV, speaks the count |
 //! | command 5 | speaks through the `host` import (`host::speak`) |
 //! | terminal: a typed `P` / `S` / `M` | panic / loop / allocate 256 MiB |
@@ -31,7 +32,7 @@ use gorca_ext_api::terminal::{
     Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot, TerminalHooks, Unit, Urgency,
 };
 use gorca_ext_api::{
-    CommandResult, Event, EventVerdict, Hooks, Node, PolicyFacts, PolicyVerdict, PresentCtx, Prio,
+    CommandResult, Event, EventVerdict, Hooks, Node, PolicyVerdict, PolicyView, PresentCtx, Prio,
     Segment, export_extension, host,
 };
 
@@ -195,6 +196,21 @@ impl Hooks for TestExtension {
     }
 
     fn present(&mut self, n: &Node, _ctx: PresentCtx) -> Option<Vec<Segment>> {
+        // A node with a local id of 100 or more answers with what `host::read_group` says of it:
+        // the role, name, description and check groups, and an unknown group (code 4000).
+        if n.key.1 >= 100 {
+            let say = |g| format!("{:?}", host::read_group(n.key, g));
+            return Some(vec![Segment::text(format!(
+                "role={} name={} description={} check={} unknown={} node-role={} flags={}",
+                say(0),
+                say(1),
+                say(2),
+                say(3),
+                say(4000),
+                n.role,
+                n.flags
+            ))]);
+        }
         match n.name.as_deref() {
             Some("gorca-ext-present") => Some(vec![Segment::text("ext presented")]),
             Some("gorca-ext-speak") => {
@@ -207,7 +223,7 @@ impl Hooks for TestExtension {
         }
     }
 
-    fn policy(&mut self, f: &PolicyFacts) -> PolicyVerdict {
+    fn policy(&mut self, f: &PolicyView) -> PolicyVerdict {
         match f.name.as_deref() {
             Some("gorca-ext-silence") => PolicyVerdict::Silence,
             Some("gorca-ext-speak") => {

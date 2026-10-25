@@ -4,7 +4,8 @@
 //! name anywhere else; it asks [`AppProfile::for_app`], which matches on [`AppInfo`] the same
 //! way an extension manifest would.
 
-use gorca_model::{AppInfo, Role, Segment, StateSet, TextUnit};
+use gorca_model::sem::SemRole;
+use gorca_model::{AppInfo, Segment, TextUnit};
 
 /// When an application policy is asked.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -19,16 +20,32 @@ pub enum PolicyMoment {
     Showing,
 }
 
-/// What a policy sees of a node: plain data, nothing that lets it call back.
+/// What a policy sees of a node: plain data from the fused entry (role, `flags` bits, name,
+/// description, a value range), nothing that lets it call back and nothing of a secret field.
 #[derive(Copy, Clone, Debug)]
-pub struct PolicyFacts<'a> {
+pub struct PolicyView<'a> {
     pub moment: PolicyMoment,
-    pub role: Role,
-    pub states: StateSet,
+    pub role: SemRole,
+    pub flags: u64,
     pub name: Option<&'a str>,
     pub description: Option<&'a str>,
     /// `(current, min, max)` of a range value.
     pub range: Option<(f64, f64, f64)>,
+}
+
+impl<'a> PolicyView<'a> {
+    /// The view of `node` at `moment`. A secret node has no name, description or range already.
+    #[must_use]
+    pub fn of(moment: PolicyMoment, node: &'a crate::ext::ExtNode) -> Self {
+        Self {
+            moment,
+            role: node.role,
+            flags: node.flags,
+            name: node.name.as_deref(),
+            description: node.description.as_deref(),
+            range: node.range,
+        }
+    }
 }
 
 /// What a policy decides.
@@ -50,7 +67,7 @@ pub enum PolicyVerdict {
 /// it today; the WASM host of M5 implements the same trait. It must be quick and must not block:
 /// the Reader calls it inline.
 pub trait AppPolicy: Send + Sync + std::fmt::Debug {
-    fn decide(&self, facts: &PolicyFacts<'_>) -> PolicyVerdict;
+    fn decide(&self, view: &PolicyView<'_>) -> PolicyVerdict;
 }
 
 /// Per-application behaviour switches chosen from [`AppInfo`] when the app appears.

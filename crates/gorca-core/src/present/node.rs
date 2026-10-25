@@ -38,6 +38,22 @@ fn no_ext() -> &'static gorca_i18n::ext::ExtCatalogs {
     EMPTY.get_or_init(gorca_i18n::ext::ExtCatalogs::empty)
 }
 
+/// The fused entry of a snapshot without the document mirror (PV-1, no `Option`): the attached
+/// entry, else the provisional entry of the source record, else an entry that has only the name.
+/// Review reads the application mirror, whose snapshots carry the entry the app actor fused.
+pub(crate) fn entry_of(snap: &NodeSnapshot) -> Arc<SemEntry> {
+    if let Some(e) = &snap.sem.entry {
+        return Arc::clone(e);
+    }
+    if let Some(r) = &snap.sem.rec {
+        return Arc::new(r.provisional_entry());
+    }
+    Arc::new(SemEntry {
+        name: snap.name.clone(),
+        ..SemEntry::default()
+    })
+}
+
 /// What the focus presentation of a node came to.
 pub(crate) struct Built {
     pub utterance: gorca_model::Utterance,
@@ -83,13 +99,7 @@ impl Reader {
         if let Some(e) = self.web_entry(snap.key) {
             return e;
         }
-        if let Some(r) = &snap.sem.rec {
-            return Arc::new(r.provisional_entry());
-        }
-        Arc::new(SemEntry {
-            name: snap.name.clone(),
-            ..SemEntry::default()
-        })
+        entry_of(snap)
     }
 
     /// The snapshot with its fused entry attached (a clone only when the entry changes), so that
@@ -113,7 +123,12 @@ impl Reader {
         Arc::new(c)
     }
 
-    fn compose_ctx(&self, key: NodeKey, may_refine: bool, skip_selected: bool) -> ComposeCtx {
+    pub(crate) fn compose_ctx(
+        &self,
+        key: NodeKey,
+        may_refine: bool,
+        skip_selected: bool,
+    ) -> ComposeCtx {
         ComposeCtx {
             flags: ReportFlags::default(),
             may_refine,
@@ -134,27 +149,17 @@ impl Reader {
 
     /// What the application policy (ADR-0008 W3) says to a focus utterance of `snap`, as edits.
     fn policy_edits(&self, snap: &NodeSnapshot) -> PolicyEdits {
-        use crate::builtin_ext::{PolicyFacts, PolicyMoment, PolicyVerdict};
+        use crate::builtin_ext::{PolicyMoment, PolicyVerdict, PolicyView};
         if !self.policy_active(snap.key.app) {
             return PolicyEdits::Default;
         }
-        let range = match &snap.value {
-            Some(gorca_model::Value::Range { current, min, max }) => Some((*current, *min, *max)),
-            Some(gorca_model::Value::Text(_)) | None => None,
-        };
-        let facts = PolicyFacts {
-            moment: PolicyMoment::Focus,
-            role: snap.role,
-            states: snap.states,
-            name: snap.name.as_deref(),
-            description: snap.description.as_deref(),
-            range,
-        };
-        match self.decide_policy(snap.key.app, &facts) {
+        let node = crate::ext::ExtNode::new(snap, self.fused_entry(snap));
+        let view = PolicyView::of(PolicyMoment::Focus, &node);
+        match self.decide_policy(snap.key.app, &view) {
             PolicyVerdict::Default | PolicyVerdict::Notice => PolicyEdits::Default,
             PolicyVerdict::Silence => PolicyEdits::Silence,
             PolicyVerdict::Value(text) => {
-                PolicyEdits::Edits(vec![IrEdit::SetValue(Arc::from(text))])
+                PolicyEdits::Edits(vec![IrEdit::SetValueVia(Arc::from(text), VIA_POLICY)])
             }
             PolicyVerdict::Say(segs) => PolicyEdits::Edits(vec![IrEdit::ReplaceAll(
                 fields_from_tokens(segs.iter().map(|s| (s.kind, &*s.text)), VIA_POLICY),
@@ -175,7 +180,11 @@ impl Reader {
         policy: bool,
     ) -> Built {
         let may_refine = !matches!(snap.fresh, Freshness::Fresh { .. });
-        let mut ir: PresIr = if let Some(segs) = self.presenters.ext_segments(ctx, snap, epoch) {
+        let mut ir: PresIr = if let Some(segs) = self.presenters.ext_segments(
+            ctx,
+            &crate::ext::ExtNode::new(snap, self.fused_entry(snap)),
+            epoch,
+        ) {
             PresIr::new(
                 Reason::Focus,
                 snap.key,
@@ -193,8 +202,7 @@ impl Reader {
             // The contents of a field are text-layer data: the entry holds no value for them.
             if let Some(gorca_model::Value::Text(t)) = &snap.value
                 && !t.is_empty()
-                && !matches!(entry.sem.role, gorca_model::sem::SemRole::PasswordBox)
-                && snap.role != gorca_model::Role::PasswordEntry
+                && !is_secret(&entry, snap)
             {
                 apply_edits(&mut ir, &[IrEdit::SetValue(Arc::clone(t))]);
             }
@@ -215,6 +223,11 @@ impl Reader {
         }
         apply_edits(&mut ir, &edits);
         ir.may_refine = may_refine;
+        // `explain` lists the origins of what is spoken: the IR after the extension and policy.
+        *self
+            .last_ir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((id, ir.redacted()));
         Built {
             utterance: self.utterance_of(&ir, id, epoch, Prio::Interrupt, None),
             silent,
@@ -249,6 +262,60 @@ impl Reader {
         self.utterance_of(&ir, id, epoch, Prio::Interrupt, None)
             .segments
             .into_vec()
+    }
+
+    /// The words of one node of the ancestry answer (`Reason::WhereAmI`, M22b4), composed from its
+    /// fused entry: name, role, states and value as a focus on it would say them, plus the
+    /// description. An ancestor the mirror holds only as a source record has its provisional
+    /// entry (PV-1), so a lazily cached ancestor is spoken like any other.
+    pub(crate) fn info_words(&self, snap: &NodeSnapshot) -> crate::commands::info::Words {
+        // The document's entry first for a web node, as a focus does (`with_fused_entry`): the app
+        // actor attaches an entry to web nodes too, and the two must not disagree between surfaces.
+        let entry = self
+            .web_entry(snap.key)
+            .unwrap_or_else(|| self.fused_entry(snap));
+        let cctx = self.compose_ctx(snap.key, false, false);
+        words_of(&entry, snap, cctx, self.render_opts())
+    }
+
+    /// The words of every node of `chain`.
+    pub(crate) fn chain_words(
+        &self,
+        chain: &[Arc<NodeSnapshot>],
+    ) -> Vec<crate::commands::info::Words> {
+        chain.iter().map(|n| self.info_words(n)).collect()
+    }
+
+    /// The title an activated window leads with, composed from its fused entry
+    /// (`Reason::Window`, M22b4): the name, and the role word for a dialog or an alert.
+    pub(crate) fn window_lead(&self, win: &NodeSnapshot) -> SmallVec<[Segment; 2]> {
+        let entry = self.fused_entry(win);
+        let cctx = self.compose_ctx(win.key, false, false);
+        match compose(&entry, win.key, Reason::Window, cctx) {
+            Ok(ir) => self.segments_of(&ir),
+            Err(_) => SmallVec::new(),
+        }
+    }
+
+    /// What a notice says (`Reason::Notice`, M22b4): the role word, the name, the description and
+    /// the static text inside. `None` when it has nothing to say beyond its role word.
+    pub(crate) fn notice_words(
+        &self,
+        snap: &NodeSnapshot,
+        lines: &[Arc<str>],
+    ) -> Option<SmallVec<[Segment; 6]>> {
+        let entry = self.fused_entry(snap);
+        let cctx = self.compose_ctx(snap.key, false, false);
+        let ir = gorca_present::compose_notice(&entry, snap.key, cctx, lines);
+        gorca_present::notice_has_words(&ir).then(|| self.segments_of(&ir))
+    }
+
+    /// The speech segments `render` makes of `ir`.
+    fn segments_of<A: smallvec::Array<Item = Segment>>(&self, ir: &PresIr) -> SmallVec<A> {
+        render(ir, self.render_opts())
+            .iter()
+            .map(|t| Segment::new(Arc::from(t.text.as_str()), t.kind))
+            .collect()
     }
 
     /// Render `ir` into the utterance the speech lane takes.
@@ -323,6 +390,66 @@ impl Reader {
         // The caller numbers the utterance when it speaks it.
         Some(self.utterance_of(&ir, UttId(0), epoch, Prio::Message, refines))
     }
+}
+
+/// Whether the node is a secret field (a password): the fused role, the native role of the
+/// snapshot or the role of its source record says so. Every path that could speak, log or route
+/// the contents of a field asks this one question (focus, where-am-I, explain, browse); the IR of
+/// a secret carries the secret flag and is redacted before any sink that must not see it.
+pub(crate) fn is_secret(entry: &SemEntry, snap: &NodeSnapshot) -> bool {
+    gorca_present::is_secret_entry(entry) || snap.is_sensitive()
+}
+
+/// The words of one node of the ancestry answer from its fused `entry` (`Reason::WhereAmI`): what
+/// `compose` and `render` say for it, sorted by the kind of field they came from. `snap` is read
+/// for the contents of a field only (text-layer data the entry does not hold).
+pub(crate) fn words_of(
+    entry: &SemEntry,
+    snap: &NodeSnapshot,
+    cctx: ComposeCtx,
+    opts: RenderOpts<'_>,
+) -> crate::commands::info::Words {
+    use crate::commands::info::Words;
+    use gorca_present::FieldKind;
+    let mut w = Words::default();
+    let secret = is_secret(entry, snap);
+    if let Ok(ir) = compose(entry, snap.key, Reason::WhereAmI, cctx) {
+        // The words go to the speech lane, but a secret's value never leaves the IR: redact first.
+        let ir = ir.redacted();
+        for (kind, tok) in gorca_present::render_kinds(ir.ir(), opts) {
+            let text = tok.text.as_str().to_owned();
+            match kind {
+                FieldKind::NAME | FieldKind::INFERRED_LABEL if w.name.is_none() => {
+                    w.name = Some(text);
+                }
+                FieldKind::ROLE => {
+                    if !w.role.is_empty() {
+                        w.role.push(' ');
+                    }
+                    w.role.push_str(&text);
+                }
+                FieldKind::STATE => w.states.push(text),
+                FieldKind::VALUE if !secret => w.values.push(text),
+                _ => {}
+            }
+        }
+    }
+    // The contents of a field are text-layer data: the entry holds none (as in a focus).
+    if w.values.is_empty()
+        && !secret
+        && let Some(gorca_model::Value::Text(t)) = &snap.value
+        && !t.is_empty()
+    {
+        w.values.push(t.to_string());
+    }
+    // A password field's description is its own help text, never its contents; it is kept.
+    w.description = entry
+        .sem
+        .text
+        .as_deref()
+        .and_then(|t| t.description.as_ref())
+        .map(ToString::to_string);
+    w
 }
 
 /// The groups a state-change read observes, laid over `e`: the check, press, expand, select,
@@ -414,5 +541,123 @@ mod overlay_tests {
             overlay_observed(&mut e, &rec("AL Alice 15:00"));
             assert_eq!(e.name.as_deref(), Some("Alice, 1 unread"), "{p:?}");
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod secret_tests {
+    //! A password's contents are never spoken, whichever of the three signals says it is one: the
+    //! fused role, the native role of the snapshot, or the role of the source record.
+
+    use gorca_model::sem::{SemRole, SemText};
+    use gorca_model::{
+        AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSnapshot, Role,
+        StateSet, Value,
+    };
+
+    use super::*;
+
+    const SECRET: &str = "hunter2-correct-horse";
+
+    fn snapshot(role: Role) -> NodeSnapshot {
+        NodeSnapshot {
+            key: NodeKey {
+                app: AppId {
+                    connector: ConnectorId(1),
+                    serial: 1,
+                },
+                local: LocalId(5),
+            },
+            role,
+            states: StateSet::empty(),
+            name: Some(Arc::from("Password")),
+            description: None,
+            value: Some(Value::Text(Arc::from(SECRET))),
+            parent: None,
+            children: ChildList::Unknown,
+            interfaces: Ifaces::empty(),
+            attrs: gorca_model::AttrMap::default(),
+            relations: gorca_model::Relations::default(),
+            bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
+            fresh: Freshness::Defunct,
+            sem: gorca_model::NodeSem::NONE,
+        }
+        .with_test_record()
+    }
+
+    fn entry(role: SemRole) -> SemEntry {
+        let mut e = SemEntry::default();
+        e.sem.role = role;
+        e.name = Some(Arc::from("Password"));
+        e.sem.text = Some(Arc::new(SemText {
+            value_text: Some(Arc::from(SECRET)),
+            ..SemText::default()
+        }));
+        e
+    }
+
+    fn ctx(web: bool) -> ComposeCtx {
+        ComposeCtx {
+            flags: ReportFlags::default(),
+            may_refine: false,
+            web,
+            skip_selected: false,
+            hedge_inferred: false,
+            lang: gorca_i18n::Lang::En,
+        }
+    }
+
+    fn said(e: &SemEntry, s: &NodeSnapshot, web: bool) -> String {
+        let w = words_of(e, s, ctx(web), RenderOpts::default());
+        format!("{w:?}")
+    }
+
+    #[test]
+    fn the_secret_test_looks_at_the_fused_role_the_native_role_and_the_record() {
+        let plain = snapshot(Role::TextEntry);
+        assert!(!is_secret(&entry(SemRole::TextBox), &plain));
+        assert!(is_secret(&entry(SemRole::PasswordBox), &plain));
+        assert!(is_secret(
+            &entry(SemRole::TextBox),
+            &snapshot(Role::PasswordEntry)
+        ));
+        let mut rec = snapshot(Role::TextEntry);
+        let mut r = (**rec.sem.rec.as_ref().unwrap()).clone();
+        r.sem.role = SemRole::PasswordBox;
+        rec.sem.rec = Some(Arc::new(r));
+        assert!(is_secret(&entry(SemRole::TextBox), &rec));
+    }
+
+    #[test]
+    fn where_am_i_never_speaks_a_password_whichever_signal_marks_it() {
+        for web in [false, true] {
+            // The fused role says password.
+            let said = said(
+                &entry(SemRole::PasswordBox),
+                &snapshot(Role::TextEntry),
+                web,
+            );
+            assert!(!said.contains(SECRET), "fused role, web {web}: {said}");
+            // Only the native role says password: the fused role is a plain text box.
+            let said = said_native(web);
+            assert!(!said.contains(SECRET), "native role, web {web}: {said}");
+        }
+    }
+
+    fn said_native(web: bool) -> String {
+        said(
+            &entry(SemRole::TextBox),
+            &snapshot(Role::PasswordEntry),
+            web,
+        )
+    }
+
+    #[test]
+    fn an_ordinary_field_still_speaks_its_contents() {
+        let said = said(&entry(SemRole::TextBox), &snapshot(Role::TextEntry), false);
+        assert!(said.contains(SECRET), "{said}");
     }
 }

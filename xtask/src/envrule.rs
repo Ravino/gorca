@@ -43,6 +43,10 @@ const EXEMPT: &[&str] = &[
     "crates/gorca-connector-atspi/src/cutover_gate_tests.rs",
     // Test-only module (`#[cfg(test)] mod golden_tests`): `GORCA_BLESS=1` rewrites the golden files.
     "crates/gorca-connector-atspi/src/golden_tests.rs",
+    // Test-only module (`#[cfg(test)] mod desktop_golden_tests`): `GORCA_BLESS=1` rewrites the golden files.
+    "crates/gorca-connector-atspi/src/desktop_golden_tests.rs",
+    // Test-only module (`#[cfg(test)] mod info_golden_tests`): `GORCA_BLESS=1` rewrites the golden files.
+    "crates/gorca-connector-atspi/src/info_golden_tests.rs",
     // Test-only module (`#[cfg(test)] mod golden_tests` of browse): `GORCA_BLESS=1` rewrites the files.
     "crates/gorca-core/src/browse/golden_tests.rs",
     "xtask/",

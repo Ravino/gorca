@@ -432,16 +432,19 @@ fn p2_6_the_extension_catalogs_are_an_explicit_snapshot_of_render() {
     assert_eq!(with(&after), vec![(0, "hi 2".to_owned())], "immutable");
 }
 
-/// P2.7 only `Focus` has a rule row in `compose`; every other reason is the same typed error,
-/// whatever the entry (so a replay gate sees one deterministic "unsupported", never a panic).
+/// P2.7 `Focus`, `Review`, `WhereAmI`, `Window` and `Notice` have a rule row in `compose`; every other reason is the same
+/// typed error, whatever the entry (so a replay gate sees one deterministic "unsupported", never a panic).
 #[test]
 fn p2_7_unsupported_reasons_are_a_stable_typed_error() {
     for seed in 0..200 {
         let mut r = Rng::new(seed);
         let e = gen_entry(&mut r);
         let ctx = gen_ctx(&mut r);
-        for code in 1..=12u16 {
+        for code in (1..=7u16).chain(11..=12) {
             let reason = Reason::from_code(code, true, 3);
+            if reason == Reason::Review {
+                continue;
+            }
             let a = compose(&e, key(), reason, ctx).map(|_| ());
             assert_eq!(a, compose(&e, key(), reason, ctx).map(|_| ()));
             assert!(a.is_err(), "reason code {code} has no row yet");
@@ -582,6 +585,8 @@ fn gen_diff_ctx<'a>(r: &mut Rng, surface: &'a str) -> DiffCtx<'a> {
         unavailable_item: false,
         canvas_graphic: false,
         alert_dialog: false,
+        legacy_coarse: false,
+        legacy_fallback: false,
         lang: gorca_i18n::Lang::En,
     }
 }
@@ -807,6 +812,8 @@ fn run_case(c: &Case, dev: &Deviations, mutate: impl FnOnce(&mut Case)) -> DiffO
             unavailable_item: false,
             canvas_graphic: false,
             alert_dialog: false,
+            legacy_coarse: false,
+            legacy_fallback: false,
             lang: gorca_i18n::Lang::En,
         },
     )
@@ -1134,6 +1141,8 @@ fn every_used_classifier_is_reported() {
         unavailable_item: false,
         canvas_graphic: false,
         alert_dialog: false,
+        legacy_coarse: false,
+        legacy_fallback: false,
         lang: gorca_i18n::Lang::En,
     };
     let (outcome, used) = gorca_present::diff::diff_report(&l, &n, &permissive, ctx);
@@ -1180,6 +1189,8 @@ fn p3_9_adding_a_row_never_turns_allowed_into_different() {
             canvas_graphic: false,
             alert_dialog: false,
             untoggled: c1.untoggled || c2.untoggled,
+            legacy_coarse: false,
+            legacy_fallback: false,
             lang: gorca_i18n::Lang::En,
         };
         // A subset of rows.
@@ -1203,4 +1214,95 @@ fn p3_9_adding_a_row_never_turns_allowed_into_different() {
             );
         }
     }
+}
+
+// ---- the desktop rows (M22b4) ---------------------------------------------------------------------
+
+/// P2.9 the window lead-in and the notice are pure: the same entry gives the same words twice,
+/// whatever the entry holds, a window lead-in is never longer than its name and one role word,
+/// and a notice never repeats a piece.
+#[test]
+fn p2_9_window_and_notice_rows_are_deterministic_and_bounded() {
+    let _p = gorca_i18n::scoped(Lang::En);
+    for seed in 0..trials() {
+        let mut r = Rng::new(seed ^ 0xD35C);
+        let ctx = gen_ctx(&mut r);
+        let e = gen_entry(&mut r);
+        let o = RenderOpts::default();
+        let w = compose(&e, key(), Reason::Window, ctx).unwrap();
+        assert_eq!(w, compose(&e, key(), Reason::Window, ctx).unwrap());
+        assert!(w.fields.len() <= 2, "seed {seed}: {:?}", w.fields.len());
+        let lines: Vec<Arc<str>> = (0..r.below(4))
+            .map(|i| Arc::from(["a", " a ", "b", ""][i % 4]))
+            .collect();
+        let n = gorca_present::compose_notice(&e, key(), ctx, &lines);
+        assert_eq!(n, gorca_present::compose_notice(&e, key(), ctx, &lines));
+        let toks = render(&n, o);
+        let texts: Vec<&str> = toks
+            .iter()
+            .filter(|t| t.kind != SegmentKind::Role)
+            .map(|t| t.text.as_str())
+            .collect();
+        let mut seen = std::collections::BTreeSet::new();
+        for t in texts {
+            assert!(seen.insert(t), "seed {seed}: `{t}` said twice");
+        }
+    }
+}
+
+/// The cost of the desktop rows (M22b4 latency check): compose + render of a window lead-in and of
+/// a notice with three lines. `cargo test -p gorca-present --release --test determinism
+/// desktop_rows_cost -- --ignored --nocapture`. The legacy builders were a role-word lookup and a
+/// few pushes; the budget for the whole keypress-to-speech path is 15 ms, this must stay in
+/// microseconds.
+#[test]
+#[ignore = "timing; run with --release --ignored --nocapture"]
+fn desktop_rows_cost() {
+    let _p = gorca_i18n::scoped(Lang::En);
+    let mut r = Rng::new(7);
+    let ctx = gen_ctx(&mut r);
+    let mut e = gen_entry(&mut r);
+    e.sem.role = gorca_model::sem::SemRole::Dialog;
+    e.name = Some(Arc::from("Save changes to the document before closing?"));
+    let lines: Vec<Arc<str>> = vec![
+        Arc::from("If you do not save, your changes will be lost."),
+        Arc::from("Last saved 3 minutes ago"),
+        Arc::from("First line"),
+    ];
+    let o = RenderOpts::default();
+    let n = 200_000u32;
+    let mut sink = 0usize;
+    for _ in 0..1_000 {
+        sink += render(&compose(&e, key(), Reason::Window, ctx).unwrap(), o).len();
+    }
+    let mut w: Vec<u128> = Vec::new();
+    let mut nt: Vec<u128> = Vec::new();
+    for _ in 0..n {
+        let t = std::time::Instant::now();
+        sink += render(&compose(&e, key(), Reason::Window, ctx).unwrap(), o).len();
+        w.push(t.elapsed().as_nanos());
+        let t = std::time::Instant::now();
+        sink += render(&gorca_present::compose_notice(&e, key(), ctx, &lines), o).len();
+        nt.push(t.elapsed().as_nanos());
+    }
+    w.sort_unstable();
+    nt.sort_unstable();
+    let q = |v: &[u128], permille: usize| v[(v.len() * permille / 1000).min(v.len() - 1)];
+    println!(
+        "window lead-in  p50 {} ns  p99 {} ns  p99.9 {} ns",
+        q(&w, 500),
+        q(&w, 990),
+        q(&w, 999)
+    );
+    println!(
+        "notice (3 lines) p50 {} ns  p99 {} ns  p99.9 {} ns",
+        q(&nt, 500),
+        q(&nt, 990),
+        q(&nt, 999)
+    );
+    assert!(sink > 0);
+    assert!(
+        q(&w, 990) < 100_000 && q(&nt, 990) < 100_000,
+        "p99 above 100 us"
+    );
 }

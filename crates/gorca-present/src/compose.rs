@@ -11,7 +11,7 @@ use gorca_i18n::MsgId as M;
 use gorca_model::NodeKey;
 use gorca_model::sem::ProvCode;
 use gorca_model::sem::{
-    Avail, Check, Expand, Group, Invalid, Press, Select, SemEntry, SemFlags, SemRole,
+    Avail, Check, Expand, Group, Invalid, Popup, Press, Select, SemEntry, SemFlags, SemRole,
 };
 use smallvec::SmallVec;
 
@@ -226,6 +226,21 @@ const fn tri_state_word(class: Class) -> Option<M> {
     }
 }
 
+/// Whether the fused entry is a secret field (a password box): nothing that comes from its
+/// contents may be spoken, logged or routed. The one test every path uses together with the native
+/// role of the snapshot (`gorca-core`'s `is_secret`); a field of the IR carries
+/// [`FieldFlags::SECRET`] and goes through [`PresIr::redacted`] before any sink that must not see it.
+#[must_use]
+pub fn is_secret_entry(entry: &SemEntry) -> bool {
+    is_secret_role(entry.sem.role)
+}
+
+/// The same rule for a bare fused role (plugin rows and source records are not entries yet).
+#[must_use]
+pub fn is_secret_role(role: SemRole) -> bool {
+    role == SemRole::PasswordBox
+}
+
 /// Compose the IR of `entry` for `reason`.
 ///
 /// # Errors
@@ -239,14 +254,105 @@ pub fn compose(
     match reason {
         Reason::Focus if ctx.web => Ok(crate::web::web_focus(entry, node, ctx)),
         Reason::Focus => Ok(native_focus(entry, node, ctx)),
+        Reason::WhereAmI => {
+            // One node of the ancestry answer: what a focus on it would say, composed for this
+            // reason (the question decides which parts are used, not the words).
+            let mut ir = if ctx.web {
+                crate::web::web_focus(entry, node, ctx)
+            } else {
+                native_focus(entry, node, ctx)
+            };
+            ir.reason = Reason::WhereAmI;
+            // The question asks for the state of the node itself, whatever a focus on web content
+            // keeps quiet about: a disabled item is unavailable, a selected item is selected.
+            if entry.sem.avail == Avail::Disabled
+                && !ir.fields.iter().any(
+                    |f| matches!(&f.content, Content::Msg { id, .. } if *id == M::StateUnavailable),
+                )
+            {
+                let at = ir
+                    .fields
+                    .iter()
+                    .position(|f| f.kind == FieldKind::STATE)
+                    .unwrap_or(ir.fields.len());
+                ir.fields.insert(
+                    at,
+                    word(FieldKind::STATE, M::StateUnavailable, Group::Avail),
+                );
+            }
+            if entry.sem.select == Select::On
+                && !ir.fields.iter().any(
+                    |f| matches!(&f.content, Content::Msg { id, .. } if *id == M::StateSelected),
+                )
+            {
+                let at = ir
+                    .fields
+                    .iter()
+                    .rposition(|f| f.kind == FieldKind::STATE)
+                    .map_or(ir.fields.len(), |i| i + 1);
+                ir.fields
+                    .insert(at, word(FieldKind::STATE, M::StateSelected, Group::Select));
+            }
+            // Validity and a popup are facts of the node too: the focus rows keep them to a few
+            // roles (a popup is expressed as expanded or collapsed, a container's validity is the
+            // engine's guess), the question lists them whenever the model has them.
+            let spoken = |ir: &PresIr, ids: &[M]| {
+                ir.fields
+                    .iter()
+                    .any(|f| matches!(&f.content, Content::Msg { id, .. } if ids.contains(id)))
+            };
+            let after_states = |ir: &PresIr| {
+                ir.fields
+                    .iter()
+                    .rposition(|f| f.kind == FieldKind::STATE)
+                    .map_or(ir.fields.len(), |i| i + 1)
+            };
+            if entry.sem.invalid != Invalid::No && !spoken(&ir, &[M::StateInvalidEntry]) {
+                let at = after_states(&ir);
+                ir.fields.insert(
+                    at,
+                    word(FieldKind::STATE, M::StateInvalidEntry, Group::Invalid),
+                );
+            }
+            if entry.sem.popup != Popup::No
+                && !spoken(
+                    &ir,
+                    &[
+                        M::StateHasPopup,
+                        M::StateSubmenu,
+                        M::StateOpensDialog,
+                        M::StateOpensGrid,
+                        M::StateOpensList,
+                        M::StateOpensTree,
+                    ],
+                )
+            {
+                let at = after_states(&ir);
+                ir.fields
+                    .insert(at, word(FieldKind::STATE, M::StateHasPopup, Group::Popup));
+            }
+            // The answer to "where am I" is never empty: a node the focus rows say nothing for
+            // (an unnamed generic container) still names its role.
+            if ir.fields.is_empty() {
+                // The engine's text runs have no fused role: in web content they are text.
+                let w = native_role(entry.sem.role, entry.sem.press)
+                    .word
+                    .or_else(|| ctx.web.then_some(M::RoleStaticText));
+                if let Some(w) = w {
+                    ir.fields.push(word(FieldKind::ROLE, w, Group::Role));
+                }
+            }
+            Ok(ir)
+        }
+        Reason::Review => Ok(crate::zone::review(entry, node, ctx)),
+        Reason::Window => Ok(crate::desktop::compose_window(entry, node, ctx)),
+        Reason::Notice => Ok(crate::desktop::compose_notice(entry, node, ctx, &[])),
         Reason::FocusAncestor
         | Reason::BrowseLine { .. }
         | Reason::QuickNav
         | Reason::SayAll
-        | Reason::Review
         | Reason::Change { .. }
         | Reason::ListEntry
-        | Reason::WhereAmI
         | Reason::Unknown { .. } => Err(ComposeError::Unsupported(reason.code())),
     }
 }
@@ -394,6 +500,41 @@ mod tests {
 
     fn kinds(ir: &PresIr) -> Vec<FieldKind> {
         ir.fields.iter().map(|f| f.kind).collect()
+    }
+
+    #[test]
+    fn where_am_i_keeps_selected_and_unavailable_and_is_never_empty() {
+        use gorca_model::sem::{Avail, Invalid, Popup, Select};
+        let mut web = CTX;
+        web.web = true;
+        // A disabled, selected list item: a web focus keeps quiet about both, the question does not.
+        let mut e = entry(SemRole::ListItem, "Pro");
+        e.sem.avail = Avail::Disabled;
+        e.sem.select = Select::On;
+        let focus = compose(&e, key(), Reason::Focus, web).expect("focus");
+        let ask = compose(&e, key(), Reason::WhereAmI, web).expect("where am i");
+        assert_eq!(ask.reason, Reason::WhereAmI);
+        let says = |ir: &PresIr, id: M| {
+            ir.fields
+                .iter()
+                .any(|f| matches!(&f.content, Content::Msg { id: m, .. } if *m == id))
+        };
+        assert!(!says(&focus, M::StateSelected));
+        assert!(says(&ask, M::StateSelected) && says(&ask, M::StateUnavailable));
+        // A popup and a validity the focus rows keep quiet about are kept by the question.
+        let mut f = entry(SemRole::Button, "Menu");
+        f.sem.popup = Popup::Dialog;
+        f.sem.invalid = Invalid::True;
+        let ir = compose(&f, key(), Reason::WhereAmI, CTX).expect("where am i");
+        assert!(says(&ir, M::StateHasPopup) && says(&ir, M::StateInvalidEntry));
+        // A node the focus rows say nothing for still names its role.
+        let bare = entry(SemRole::Generic, "");
+        let ir = compose(&bare, key(), Reason::WhereAmI, CTX).expect("where am i");
+        assert!(!ir.fields.is_empty());
+        // A web text run with no fused role is text.
+        let run = entry(SemRole::Unknown, "");
+        let ir = compose(&run, key(), Reason::WhereAmI, web).expect("where am i");
+        assert!(says(&ir, M::RoleStaticText));
     }
 
     #[test]

@@ -538,6 +538,7 @@ mod tests {
         });
         let node = |s, depth, lines| BuildNode {
             snap: Arc::new(s),
+            web: false,
             depth,
             lines,
         };

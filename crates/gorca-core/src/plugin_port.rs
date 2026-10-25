@@ -109,7 +109,7 @@ pub struct Row {
 impl Row {
     /// True when the node is a secret one by its role.
     pub fn is_secret_role(role: SemRole) -> bool {
-        role == SemRole::PasswordBox
+        gorca_present::is_secret_role(role)
     }
 
     /// The neutral attribute `key` (`tag`, `class`, `aria-role`, `id`).

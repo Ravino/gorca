@@ -1281,6 +1281,20 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
     /// ancestor that has a name of its own).
     fn mark_content_readers(&mut self, p: NodeIdx) {
         self.mark_dirty(p);
+        self.mark_readers_above(p);
+    }
+
+    /// A child's name changed: only the readers need a new fusion. `p` itself joins them only
+    /// when it reads its children; a pass-through container (a nameless list or group) cannot
+    /// publish anything different, so fusing it would be pure cutoff work (the M-3 cascade).
+    fn mark_name_readers(&mut self, p: NodeIdx) {
+        if self.reads_children(p) {
+            self.mark_dirty(p);
+        }
+        self.mark_readers_above(p);
+    }
+
+    fn mark_readers_above(&mut self, p: NodeIdx) {
         let depth = self.profile.rules.content_depth;
         let mut cur = p;
         for _ in 0..depth {
@@ -2273,7 +2287,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             && let Some(p) = parent
             && (pos as usize) < max_children
         {
-            self.mark_content_readers(p);
+            self.mark_name_readers(p);
         }
         // Relation edge: dependents read this node's text.
         if text_proj(old_pub.as_deref()) != text_proj(published_entry.as_deref()) {

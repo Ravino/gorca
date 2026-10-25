@@ -62,7 +62,7 @@ pub use browse::{
     BrowseCounters, BrowseSettings, FocusCause, ModeWord, Scope, WebEv, WebFx, WebMode,
 };
 pub use builtin_ext::AppProfile;
-pub use builtin_ext::{AppPolicy, PolicyFacts, PolicyMoment, PolicyVerdict};
+pub use builtin_ext::{AppPolicy, PolicyMoment, PolicyVerdict, PolicyView};
 pub use commands::{
     ATSPI_SOURCE, AtAct, Availability, CapitalLevels, CmdSpec, CommandTable, Compiled,
     ConfigRequest, ContextMask, ControlMsg, CoreCmd, ExplainReport, GateOut, InputNotice,
@@ -85,8 +85,8 @@ pub use doc_actor::{
 };
 pub use doc_registry::{BUILD_HOLD, HubCfg, HubMsg, HubTx, WarmState, hub_channel, run_hub};
 pub use ext::{
-    AppExt, EXT_CMD_BASE, ExtCmdError, ExtCmdSpec, ExtCommands, ExtSink, ExtSource, ExtVerdict,
-    TermProvider, TermSession, segments_text,
+    AppExt, EXT_CMD_BASE, ExtCmdError, ExtCmdSpec, ExtCommands, ExtGroup, ExtNode, ExtSink,
+    ExtSource, ExtVerdict, TermProvider, TermSession, segments_text,
 };
 pub use focus::{FOCUS_FLAP_DELAY, FocusEffect, FocusMsg, FocusState, settle_delay};
 pub use health::{
@@ -99,7 +99,7 @@ pub use present::value_text;
 pub use present::{
     Content, DesktopEffect, WindowEffect, WindowInfo, WindowMsg, WindowState,
     announcement_utterance, clean_announcement, dialog_content, fetch_level, fetch_window,
-    is_notice_role, lead_segments, notice_segments, reads_content,
+    is_notice_role, reads_content,
 };
 pub use present::{
     FOCUS_FIELDS, FOCUS_FIELDS_LAZY, NoLabels, NodeLabel, PresentContext, PresentJob, PresentKind,
@@ -113,6 +113,8 @@ pub use reader::{
     BackgroundMsg, DUPLICATE_FOCUS_WINDOW, FetchKind, FocusLaneMsg, QueryReply, Reader,
     ReaderCounters, ReaderEffect, ReaderInbox, ReaderMsg, ReaderSenders, reader_channels,
 };
+#[doc(hidden)]
+pub use review::replay as review_replay;
 pub use review::{
     BuildError, BuildRequest, Completeness, FlatPos, LineModel, ModelId, NavFetchError, NavOp,
     ProbeItem, ReviewCounters, ReviewCursor, ReviewFrom, ReviewIo, ReviewKind, ReviewLimits,
@@ -123,3 +125,48 @@ pub use runtime::{
 };
 pub use terminal::{TermReads, raw_key};
 pub use text::{TextCounters, TextMsg, TextOp, TextReqId};
+
+/// "Where am I" over a chain of snapshots (leaf first, every node with its fused entry) in `lang`,
+/// as the parts the answer is made of: the entry point of the golden tests in
+/// `gorca-connector-atspi`, which replay the recorded corpora through it (M22b4).
+#[doc(hidden)]
+#[must_use]
+pub fn describe_where_am_i(
+    chain: &[std::sync::Arc<gorca_model::NodeSnapshot>],
+    repeat: u8,
+    brief: bool,
+    lang: gorca_i18n::Lang,
+    web: &[bool],
+) -> Vec<String> {
+    use gorca_config::Verbosity;
+    let words: Vec<_> = chain
+        .iter()
+        .zip(web)
+        .map(|(n, web)| {
+            let entry = n.sem.entry.clone().unwrap_or_default();
+            let ctx = gorca_present::ComposeCtx {
+                flags: gorca_present::ReportFlags::default(),
+                may_refine: false,
+                web: *web,
+                skip_selected: false,
+                hedge_inferred: false,
+                lang,
+            };
+            present::node::words_of(
+                &entry,
+                n,
+                ctx,
+                gorca_present::RenderOpts {
+                    lang,
+                    ..gorca_present::RenderOpts::default()
+                },
+            )
+        })
+        .collect();
+    let level = if brief {
+        Verbosity::Brief
+    } else {
+        Verbosity::Normal
+    };
+    commands::info::where_am_i_parts(chain, &words, repeat, level)
+}

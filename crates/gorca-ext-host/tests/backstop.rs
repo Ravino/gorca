@@ -19,10 +19,10 @@ use std::time::{Duration, Instant};
 
 use common::{Backend, app, info, manifest, settle, snap, wasm_bytes};
 use gorca_core::{
-    AppExt, ExtSink, ExtSource, MirrorDirectory, PolicyFacts, PolicyMoment, PresentContext,
+    AppExt, ExtSink, ExtSource, MirrorDirectory, PolicyMoment, PolicyView, PresentContext,
 };
 use gorca_ext_host::ExtHost;
-use gorca_model::{Role, StateSet};
+use gorca_model::Role;
 
 /// A sink whose `speak` takes `delay` of wall time without using CPU: a host call that is slow
 /// in wall time, exactly what a descheduled thread looks like to the epoch clock.
@@ -56,11 +56,11 @@ fn attach(h: &ExtHost, serial: u32) -> Arc<dyn AppExt> {
     h.attach(app(serial), &info("x")).expect("matches")
 }
 
-fn facts(name: &str) -> PolicyFacts<'_> {
-    PolicyFacts {
+fn facts(name: &str) -> PolicyView<'_> {
+    PolicyView {
         moment: PolicyMoment::Focus,
-        role: Role::Button,
-        states: StateSet::empty(),
+        role: gorca_model::sem::SemRole::Button,
+        flags: 0,
         name: Some(name),
         description: None,
         range: None,
@@ -74,7 +74,11 @@ fn a_hook_that_is_slow_in_wall_time_but_uses_no_cpu_does_not_fault() {
     let ae = attach(&h, 1);
     let node = snap(app(1), 1, Role::Button, Some("gorca-ext-speak"));
     for i in 0..5 {
-        let got = ae.present(&node, PresentContext::Focus, 1);
+        let got = ae.present(
+            &gorca_core::ExtNode::from_snapshot(&node),
+            PresentContext::Focus,
+            1,
+        );
         assert!(got.is_some(), "present {i} answered");
         assert_eq!(
             ae.policy(&facts("gorca-ext-speak")),
@@ -95,7 +99,11 @@ fn a_hook_stuck_in_a_host_call_is_cut_at_the_wall_ceiling() {
     let ae = attach(&h, 1);
     let node = snap(app(1), 1, Role::Button, Some("gorca-ext-speak"));
     let t = Instant::now();
-    let got = ae.present(&node, PresentContext::Focus, 1);
+    let got = ae.present(
+        &gorca_core::ExtNode::from_snapshot(&node),
+        PresentContext::Focus,
+        1,
+    );
     let wall = t.elapsed();
     assert!(got.is_none(), "a cut hook has no opinion");
     assert!(wall >= Duration::from_millis(100), "{wall:?}");
@@ -109,7 +117,13 @@ fn a_looping_hook_is_still_cut_quickly() {
     let (h, _sink) = host_with_sink(Duration::ZERO);
     let ae = attach(&h, 1);
     let node = snap(app(1), 1, Role::Button, Some("gorca-ext-spin"));
-    let (got, cpu) = gorca_testkit::cpu::cpu_time(|| ae.present(&node, PresentContext::Focus, 1));
+    let (got, cpu) = gorca_testkit::cpu::cpu_time(|| {
+        ae.present(
+            &gorca_core::ExtNode::from_snapshot(&node),
+            PresentContext::Focus,
+            1,
+        )
+    });
     assert!(got.is_none());
     // Fuel ends it at about 2 ms of CPU; the CPU backstop (6 ms) is the outer bound.
     assert!(cpu < Duration::from_millis(40), "{cpu:?}");
@@ -171,8 +185,22 @@ fn a_healthy_hook_never_faults_under_heavy_cpu_load() {
     let end = t0 + Duration::from_secs(8);
     let mut calls = 0u64;
     while Instant::now() < end {
-        assert!(ae.present(&node, PresentContext::Focus, 1).is_some());
-        assert!(ae.present(&plain, PresentContext::Focus, 1).is_some());
+        assert!(
+            ae.present(
+                &gorca_core::ExtNode::from_snapshot(&node),
+                PresentContext::Focus,
+                1
+            )
+            .is_some()
+        );
+        assert!(
+            ae.present(
+                &gorca_core::ExtNode::from_snapshot(&plain),
+                PresentContext::Focus,
+                1
+            )
+            .is_some()
+        );
         assert_eq!(ae.policy(&facts("gorca-ext-speak")), None);
         calls += 3;
     }

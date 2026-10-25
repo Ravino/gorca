@@ -8,9 +8,9 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use ext_gnome_shell::{Facts, Moment, Range, Verdict, decide, role};
-use gorca_core::{AppPolicy, PolicyFacts, PolicyMoment, PolicyVerdict};
-use gorca_model::{Role, Segment, SegmentKind};
+use ext_gnome_shell::{Facts, Moment, Range, Verdict, decide};
+use gorca_core::{AppPolicy, PolicyMoment, PolicyVerdict, PolicyView};
+use gorca_model::{Segment, SegmentKind};
 
 /// Faults after which the extension is off for the rest of the run.
 const DISABLE_AFTER: u32 = 3;
@@ -18,56 +18,6 @@ const DISABLE_AFTER: u32 = 3;
 #[derive(Debug, Default)]
 pub struct ShellPolicy {
     faults: AtomicU32,
-}
-
-/// The WIT role number of a core role (`gorca-ext-api/wit/gorca-ext.wit`, same order).
-fn ext_role(r: Role) -> u8 {
-    match r {
-        Role::Unknown => 0,
-        Role::Application => 1,
-        Role::Window => role::WINDOW,
-        Role::Dialog => role::DIALOG,
-        Role::Panel => 4,
-        Role::Document => 5,
-        Role::DocumentWeb => 6,
-        Role::Heading => 7,
-        Role::Paragraph => 8,
-        Role::Link => 9,
-        Role::Image => 10,
-        Role::List => 11,
-        Role::ListItem => 12,
-        Role::Table => 13,
-        Role::Row => 14,
-        Role::Cell => 15,
-        Role::ColumnHeader => 16,
-        Role::RowHeader => 17,
-        Role::Button => 18,
-        Role::ToggleButton | Role::Switch => 19,
-        Role::CheckBox => 20,
-        Role::RadioButton => 21,
-        Role::ComboBox => 22,
-        Role::TextEntry => 23,
-        Role::PasswordEntry => 24,
-        Role::SpinButton => 25,
-        Role::Slider => role::SLIDER,
-        Role::ProgressBar => role::PROGRESS_BAR,
-        Role::Menu => 28,
-        Role::MenuBar => 29,
-        Role::MenuItem => 30,
-        Role::Popover => 31,
-        Role::Tab => 32,
-        Role::TabList => 33,
-        Role::Tree => 34,
-        Role::TreeItem => 35,
-        Role::Toolbar => 36,
-        Role::StatusBar => 37,
-        Role::Separator => 38,
-        Role::Label => 39,
-        Role::StaticText => 40,
-        Role::Terminal => 41,
-        Role::Landmark => 42,
-        Role::Alert => role::ALERT,
-    }
 }
 
 fn kind(k: ext_gnome_shell::SegmentKind) -> SegmentKind {
@@ -86,7 +36,7 @@ fn resolve(text: &str) -> String {
 }
 
 impl AppPolicy for ShellPolicy {
-    fn decide(&self, f: &PolicyFacts<'_>) -> PolicyVerdict {
+    fn decide(&self, f: &PolicyView<'_>) -> PolicyVerdict {
         if self.faults.load(Ordering::Relaxed) >= DISABLE_AFTER {
             return PolicyVerdict::Default;
         }
@@ -100,8 +50,8 @@ impl AppPolicy for ShellPolicy {
                 PolicyMoment::Activate => Moment::Activate,
                 PolicyMoment::Showing => Moment::Showing,
             },
-            role: ext_role(f.role),
-            states: f.states.bits(),
+            role: f.role.code(),
+            flags: f.flags,
             name: name.as_deref(),
             description: description.as_deref(),
             range: f
@@ -130,13 +80,13 @@ impl AppPolicy for ShellPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gorca_model::StateSet;
+    use gorca_model::sem::SemRole;
 
-    fn facts(role: Role, range: Option<(f64, f64, f64)>) -> PolicyFacts<'static> {
-        PolicyFacts {
+    fn facts(role: SemRole, range: Option<(f64, f64, f64)>) -> PolicyView<'static> {
+        PolicyView {
             moment: PolicyMoment::Focus,
             role,
-            states: StateSet::empty(),
+            flags: 0,
             name: Some("Volume"),
             description: None,
             range,
@@ -147,21 +97,37 @@ mod tests {
     fn the_shell_window_claim_is_silenced_and_a_unit_slider_speaks_percent() {
         ext_gnome_shell::register_catalogs();
         let p = ShellPolicy::default();
-        assert_eq!(p.decide(&facts(Role::Window, None)), PolicyVerdict::Silence);
         assert_eq!(
-            p.decide(&facts(Role::Slider, Some((0.25, 0.0, 1.0)))),
+            p.decide(&facts(SemRole::Window, None)),
+            PolicyVerdict::Silence
+        );
+        assert_eq!(
+            p.decide(&facts(SemRole::Slider, Some((0.25, 0.0, 1.0)))),
             PolicyVerdict::Value("25 percent".to_owned())
         );
-        assert_eq!(p.decide(&facts(Role::Button, None)), PolicyVerdict::Default);
+        assert_eq!(
+            p.decide(&facts(SemRole::Button, None)),
+            PolicyVerdict::Default
+        );
     }
 
     #[test]
-    fn every_core_role_maps_to_the_wit_number_of_its_name() {
-        // The two roles the rules look at, plus a spread; the full order is checked by the
-        // extension's own test against the WIT file.
-        assert_eq!(ext_role(Role::Window), 2);
-        assert_eq!(ext_role(Role::Alert), 43);
-        assert_eq!(ext_role(Role::Button), 18);
-        assert_eq!(ext_role(Role::Landmark), 42);
+    fn the_roles_the_rules_look_at_are_the_registry_codes_of_the_model() {
+        assert_eq!(SemRole::Window.code(), ext_gnome_shell::role::WINDOW);
+        assert_eq!(SemRole::Dialog.code(), ext_gnome_shell::role::DIALOG);
+        assert_eq!(SemRole::Alert.code(), ext_gnome_shell::role::ALERT);
+        assert_eq!(SemRole::Slider.code(), ext_gnome_shell::role::SLIDER);
+        assert_eq!(
+            SemRole::ProgressBar.code(),
+            ext_gnome_shell::role::PROGRESS_BAR
+        );
+        for r in [SemRole::Dialog, SemRole::AlertDialog] {
+            assert!(ext_gnome_shell::role::DIALOGS.contains(&r.code()));
+        }
+        for r in [SemRole::Slider, SemRole::ProgressBar, SemRole::Meter] {
+            assert!(ext_gnome_shell::role::LEVELS.contains(&r.code()));
+        }
+        // A scroll bar is not a level (the legacy mapping had no scroll bar role at all).
+        assert!(!ext_gnome_shell::role::LEVELS.contains(&SemRole::Scrollbar.code()));
     }
 }

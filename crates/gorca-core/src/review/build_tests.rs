@@ -91,6 +91,7 @@ fn snap(
         fresh: Freshness::Fresh { at: Instant::now() },
         sem: gorca_model::NodeSem::NONE,
     }
+    .with_test_record()
 }
 
 /// What a toolkit gives for `want`: children as a count, bounds only when asked.

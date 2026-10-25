@@ -18,6 +18,7 @@ use gorca_model::sem::SemRole;
 /// Raw `AtspiRole` numbers used by name elsewhere in this crate.
 pub mod raw {
     pub const INVALID: u32 = 0;
+    pub const LABEL: u32 = 29;
     pub const PUSH_BUTTON: u32 = 43;
     pub const TOGGLE_BUTTON: u32 = 62;
     pub const ENTRY: u32 = 79;
@@ -44,7 +45,9 @@ pub const fn engine_role(raw: u32) -> EngineRole {
     match raw {
         0 | 67 | 70 => Unmapped, // invalid, unknown, extended
         1 | 29 | 116 => Role(R::StaticText),
-        2 | 101 => Role(R::Alert),
+        // A GTK info bar (102) is a message that appears by itself, spoken and read as a notice
+        // like an alert (M4b); a status bar (54) is not.
+        2 | 101 | 102 => Role(R::Alert),
         3 | 4 | 18 | 21 | 24 | 25 | 30 | 36 | 46 | 49 | 53 | 68 | 71 | 72 | 76 | 84 | 86 | 100
         | 104 => Role(R::Generic),
         // calendar, desktop icon, ruler: no model role.
@@ -76,7 +79,7 @@ pub const fn engine_role(raw: u32) -> EngineRole {
         48 => Role(R::Scrollbar),
         50 => Role(R::Separator),
         52 => Role(R::SpinButton),
-        54 | 102 => Role(R::Status),
+        54 => Role(R::Status),
         55 => Role(R::Table),
         56 => Role(R::Cell),
         60 => Role(R::Terminal),
@@ -514,6 +517,20 @@ pub fn resolve_role(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The Shell's notification banner (101) and GTK's info bar (102) are messages that appear
+    /// by themselves and are read as notices, like an alert; a status bar (54) is not. The notice
+    /// rule asks the fused role, so this mapping is what keeps an info bar read.
+    #[test]
+    fn a_gtk_info_bar_and_a_shell_notification_are_alerts_and_a_status_bar_is_not() {
+        for raw in [2, 101, 102] {
+            assert!(
+                matches!(engine_role(raw), EngineRole::Role(SemRole::Alert)),
+                "{raw}"
+            );
+        }
+        assert!(matches!(engine_role(54), EngineRole::Role(SemRole::Status)));
+    }
 
     #[test]
     fn every_aria_12_role_is_mapped() {

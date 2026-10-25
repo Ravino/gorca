@@ -1,0 +1,106 @@
+chromium/aria-props	46	lead	window	Role:alert
+chromium/aria-props	52	lead	window	Role:alert
+chromium/aria-props	75	lead	window	Text:Modal | Role:dialog
+chromium/aria-props	131	lead	window	Role:alert
+chromium/composite	76	lead	window	Text:Add Delivery Address | Role:dialog
+chromium/composite	82	lead	window	Text:Confirm delete | Role:dialog
+chromium/composite	86	lead	window	Text:Native dialog | Role:dialog
+chromium/composite	107	lead	window	Text:Game board
+chromium/errors	29	lead	window	Role:alert
+chromium/m8-flat	3	lead	window	Text:Cookie consent | Role:dialog
+chromium/m8-forms	85	lead	window	Text:Whiteboard app
+chromium/m8-quicknav	113	lead	window	Text:Calculator widget
+chromium/m8-quicknav	115	lead	window	Text:Plain object
+chromium/widgets	67	lead	window	Role:alert
+electron/signal-chat	0	lead	window	Text:signal-desktop
+electron/signal-chat	1	lead	window	Text:Signal
+electron/signal-compose	0	lead	window	Text:signal-desktop
+electron/signal-compose	1	lead	window	Text:Signal
+electron/signal-conversations	0	lead	window	Text:signal-desktop
+electron/signal-conversations	1	lead	window	Text:Signal
+electron/signal-search	0	lead	window	Text:signal-desktop
+electron/signal-search	1	lead	window	Text:Signal
+electron/welcome	0	lead	window	Text:signal-desktop
+electron/welcome	1	lead	window	Text:Signal
+firefox/aria-props	24	lead	window	Role:alert
+firefox/aria-props	27	lead	window	Role:alert
+firefox/aria-props	42	lead	window	Text:Modal | Role:dialog
+firefox/aria-props	80	lead	window	Role:alert
+firefox/composite	56	lead	window	Text:Add Delivery Address | Role:dialog
+firefox/composite	60	lead	window	Text:Confirm delete | Role:dialog
+firefox/composite	63	lead	window	Text:Native dialog | Role:dialog
+firefox/composite	76	lead	window	Text:Game board
+firefox/errors	19	lead	window	Role:alert
+firefox/m8-flat	2	lead	window	Text:Cookie consent | Role:dialog
+firefox/m8-forms	69	lead	window	Text:Whiteboard app
+firefox/m8-quicknav	75	lead	window	Text:Calculator widget
+firefox/widgets	59	lead	window	Role:alert
+gnome-shell/a11y-switcher	0	lead	window	Text:gnome-shell
+gnome-shell/a11y-switcher	1	lead	window	Text:Main stage
+gnome-shell/a11y-switcher	55	lead	window	Role:dialog
+gnome-shell/date-menu	0	lead	window	Text:gnome-shell
+gnome-shell/date-menu	1	lead	window	Text:Main stage
+gnome-shell/end-session-dialog	0	lead	window	Text:gnome-shell
+gnome-shell/end-session-dialog	1	lead	window	Text:Main stage
+gnome-shell/end-session-dialog	43	lead	window	Role:alert
+gnome-shell/end-session-dialog	66	lead	window	Role:dialog
+gnome-shell/notification-banner	0	lead	window	Text:gnome-shell
+gnome-shell/notification-banner	1	lead	window	Text:Main stage
+gnome-shell/notification-banner	43	lead	window	Role:alert
+gnome-shell/notification-list	0	lead	window	Text:gnome-shell
+gnome-shell/notification-list	1	lead	window	Text:Main stage
+gnome-shell/notification-list	67	lead	window	Role:alert
+gnome-shell/notification-list	93	lead	window	Role:alert
+gnome-shell/notification-list	118	lead	window	Role:alert
+gnome-shell/notification-list	143	lead	window	Role:alert
+gnome-shell/notification-urgent	0	lead	window	Text:gnome-shell
+gnome-shell/notification-urgent	1	lead	window	Text:Main stage
+gnome-shell/notification-urgent	43	lead	window	Role:alert
+gnome-shell/osd	0	lead	window	Text:gnome-shell
+gnome-shell/osd	1	lead	window	Text:Main stage
+gnome-shell/osd	43	lead	window	Role:alert
+gnome-shell/overview	0	lead	window	Text:gnome-shell
+gnome-shell/overview	1	lead	window	Text:Main stage
+gnome-shell/overview-apps	0	lead	window	Text:gnome-shell
+gnome-shell/overview-apps	1	lead	window	Text:Main stage
+gnome-shell/overview-search	0	lead	window	Text:gnome-shell
+gnome-shell/overview-search	1	lead	window	Text:Main stage
+gnome-shell/quick-settings	0	lead	window	Text:gnome-shell
+gnome-shell/quick-settings	1	lead	window	Text:Main stage
+gnome-shell/topbar	0	lead	window	Text:gnome-shell
+gnome-shell/topbar	1	lead	window	Text:Main stage
+gnome-shell/window-switcher	0	lead	window	Text:gnome-shell
+gnome-shell/window-switcher	1	lead	window	Text:Main stage
+gnome-shell/window-switcher	55	lead	window	Role:dialog
+gtk3/change-gallery	0	lead	window	Text:change_gallery.py
+gtk3/change-gallery	1	lead	window	Text:Change gallery
+gtk3/edit-entry	0	lead	window	Text:gtkedit.py
+gtk3/edit-entry	1	lead	window	Text:Edit Probe
+gtk3/edit-textview	0	lead	window	Text:gtkedit.py
+gtk3/edit-textview	1	lead	window	Text:Edit Probe
+gtk3/p9-gallery	0	lead	window	Text:gtk3_app.py
+gtk3/p9-gallery	1	lead	window	Text:P9 GTK3
+gtk3/probe-window	0	lead	window	Text:gtkwin.py
+gtk3/probe-window	1	lead	window	Text:Probe Window
+gtk4/accprops	0	lead	window	Text:sem-gallery
+gtk4/accprops	1	lead	window	Text:SEM gtk4 accprops
+gtk4/accprops	61	lead	window	Text:Label role-alert | Role:alert
+gtk4/accprops	71	lead	window	Text:Label role-dialog | Role:dialog
+gtk4/accprops	85	lead	window	Text:Label role-application
+gtk4/containers	0	lead	window	Text:sem-gallery
+gtk4/containers	1	lead	window	Text:SEM gtk4 containers
+gtk4/controls	0	lead	window	Text:sem-gallery
+gtk4/controls	1	lead	window	Text:SEM gtk4 controls
+vte/find-bar	0	lead	window	Text:org.gnome.Terminal
+vte/find-bar	1	lead	window	Text:Terminal
+vte/find-bar	69	lead	window	Text:Find
+vte/output	0	lead	window	Text:org.gnome.Terminal
+vte/output	1	lead	window	Text:Terminal
+vte/prompt	0	lead	window	Text:org.gnome.Terminal
+vte/prompt	1	lead	window	Text:Terminal
+vte/tab-switch	0	lead	window	Text:org.gnome.Terminal
+vte/tab-switch	1	lead	window	Text:Terminal
+vte/two-tabs	0	lead	window	Text:org.gnome.Terminal
+vte/two-tabs	1	lead	window	Text:Terminal
+vte/typed	0	lead	window	Text:org.gnome.Terminal
+vte/typed	1	lead	window	Text:Terminal

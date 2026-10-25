@@ -18,13 +18,9 @@
 //! Nothing here names an application (ADR-0008 WE-1); what Shell-specific policy needs lives in
 //! the `ext-gnome-shell` extension.
 
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use gorca_model::{
-    AppId, Epoch, NodeKey, NodeSnapshot, Politeness, Prio, Role, Segment, SegmentKind, UttId,
-    Utterance,
-};
+use gorca_model::{AppId, Epoch, NodeKey, Politeness, Prio, SegmentKind, UttId, Utterance};
 use smallvec::SmallVec;
 
 use super::fair::{Fair, Kind};
@@ -105,32 +101,19 @@ pub fn announcement_utterance(
 
 /// Roles that are read as a notice when one appears: the notification and alert roles (the
 /// connector maps both to `Alert`).
-pub fn is_notice_role(role: Role) -> bool {
-    matches!(role, Role::Alert)
+pub fn is_notice_role(role: gorca_model::sem::SemRole) -> bool {
+    matches!(role, gorca_model::sem::SemRole::Alert)
 }
 
-/// What a notice says: the role word, the name, the description, then the static text inside.
-/// Pieces equal to an earlier piece are dropped (a banner's name is often its title label).
-pub fn notice_segments(snap: &NodeSnapshot, texts: &[Arc<str>]) -> SmallVec<[Segment; 6]> {
-    let mut out: SmallVec<[Segment; 6]> = SmallVec::new();
-    out.push(seg(snap.role.spoken(), SegmentKind::Role));
-    let add = |out: &mut SmallVec<[Segment; 6]>, text: &str| {
-        let t = text.trim();
-        if t.is_empty() || out.iter().skip(1).any(|s| s.text.trim() == t) {
-            return;
-        }
-        out.push(seg(t, SegmentKind::Text));
-    };
-    if let Some(n) = &snap.name {
-        add(&mut out, n);
-    }
-    if let Some(d) = &snap.description {
-        add(&mut out, d);
-    }
-    for t in texts {
-        add(&mut out, t);
-    }
-    out
+/// Is the node an alert or a notification, by its fused role (the attached entry, else the source
+/// record's role, else the native role of a snapshot no fusion described)?
+pub fn is_notice_node(snap: &gorca_model::NodeSnapshot) -> bool {
+    snap.sem
+        .entry
+        .as_ref()
+        .map(|e| e.sem.role)
+        .or_else(|| snap.sem.rec.as_ref().map(|r| r.sem.role))
+        .map_or(snap.role == gorca_model::Role::Alert, is_notice_role)
 }
 
 /// What the Reader remembers about notices: the per-owner budgets (`fair`) and counters.
@@ -186,23 +169,22 @@ impl Reader {
     /// everywhere; for the rest the application's installed policy decides (the Shell's
     /// extension says its dialogs are, ADR-0008: the rule is data in `ext-gnome-shell`, not a
     /// branch here).
-    fn reads_as_notice(&self, app: AppId, role: Role) -> bool {
-        use crate::builtin_ext::{PolicyFacts, PolicyMoment, PolicyVerdict};
-        if is_notice_role(role) {
+    fn reads_as_notice(&self, app: AppId, snap: &gorca_model::NodeSnapshot) -> bool {
+        use crate::builtin_ext::{PolicyMoment, PolicyVerdict, PolicyView};
+        let mut node = crate::ext::ExtNode::new(snap, self.fused_entry(snap));
+        if is_notice_role(node.role) {
             return true;
         }
         if !self.policy_active(app) {
             return false;
         }
-        let facts = PolicyFacts {
-            moment: PolicyMoment::Showing,
-            role,
-            states: gorca_model::StateSet::empty(),
-            name: None,
-            description: None,
-            range: None,
-        };
-        self.decide_policy(app, &facts) == PolicyVerdict::Notice
+        // The `showing` moment carries the role only.
+        node.name = None;
+        node.description = None;
+        node.range = None;
+        node.flags = 0;
+        let view = PolicyView::of(PolicyMoment::Showing, &node);
+        self.decide_policy(app, &view) == PolicyVerdict::Notice
     }
 
     /// Speak `u` for `app` within its owner's budget, else keep it as the newest waiting one.
@@ -269,7 +251,7 @@ impl Reader {
         let now = self.now;
         // The mirror knows what it is already: a node of another role costs nothing.
         if let Some(snap) = self.dir.lookup(node).hit()
-            && !self.reads_as_notice(node.app, snap.role)
+            && !self.reads_as_notice(node.app, &snap)
         {
             return;
         }
@@ -328,27 +310,22 @@ impl Reader {
 
     /// The application answered a level read: the installed policy decides what is said.
     pub(crate) fn on_level_read(&mut self, info: &WindowInfo, fx: &mut ReaderEffects) {
-        use crate::builtin_ext::{PolicyFacts, PolicyMoment, PolicyVerdict};
+        use crate::builtin_ext::{PolicyMoment, PolicyVerdict, PolicyView};
         let Some(snap) = info.snap.as_ref() else {
             return;
         };
         if !self.policy_active(snap.key.app) {
             return;
         }
-        let range = match &snap.value {
-            Some(gorca_model::Value::Range { current, min, max }) => Some((*current, *min, *max)),
-            Some(gorca_model::Value::Text(_)) | None => None,
-        };
-        let label = info.texts.first().map(|t| &**t);
-        let facts = PolicyFacts {
-            moment: PolicyMoment::Value,
-            role: snap.role,
-            states: snap.states,
-            name: label.or(snap.name.as_deref()),
-            description: snap.description.as_deref(),
-            range,
-        };
-        let PolicyVerdict::Say(segs) = self.decide_policy(snap.key.app, &facts) else {
+        let node = crate::ext::ExtNode::new(snap, self.fused_entry(snap));
+        let label = info
+            .texts
+            .first()
+            .map(|t| &**t)
+            .filter(|_| !node.is_secret());
+        let mut view = PolicyView::of(PolicyMoment::Value, &node);
+        view.name = label.or(view.name);
+        let PolicyVerdict::Say(segs) = self.decide_policy(snap.key.app, &view) else {
             return;
         };
         let text: String = segs.iter().map(|s| &*s.text).collect::<Vec<_>>().join(",");
@@ -371,14 +348,13 @@ impl Reader {
         let Some(snap) = info.snap.as_ref() else {
             return;
         };
-        if !self.reads_as_notice(snap.key.app, snap.role) {
+        if !self.reads_as_notice(snap.key.app, snap) {
             return;
         }
-        let segs = notice_segments(snap, &info.texts);
         // Only the role word: an empty notification says nothing worth speaking.
-        if segs.len() < 2 {
+        let Some(segs) = self.notice_words(snap, &info.texts) else {
             return;
-        }
+        };
         let id = self.utt_id();
         let mut u = super::window::follow_up(segs, id, self.epoch.current());
         // A banner is a message the user has not asked for and may miss: it outlives the next
@@ -392,6 +368,7 @@ impl Reader {
 #[cfg(test)]
 #[allow(clippy::wildcard_enum_match_arm)]
 mod tests {
+    use std::sync::Arc;
     /// The bursts of `fair` (reads, speech, activations per second) and its window.
     const NOTICE_RATE_MAX: usize = 8;
     const NOTICE_SPEAK_MAX: usize = 3;
@@ -401,6 +378,7 @@ mod tests {
     use super::super::window::tests::{Fx, app, fixture, key, node, prios, said, snap};
     use super::*;
     use crate::reader::{BackgroundMsg, ReaderMsg};
+    use gorca_model::Role;
 
     fn bg(f: &mut Fx, m: BackgroundMsg, at: Instant) -> ReaderEffects {
         f.reader.handle(ReaderMsg::Background(m), at)
@@ -844,12 +822,12 @@ mod tests {
     impl crate::builtin_ext::AppPolicy for SayLevel {
         fn decide(
             &self,
-            f: &crate::builtin_ext::PolicyFacts<'_>,
+            f: &crate::builtin_ext::PolicyView<'_>,
         ) -> crate::builtin_ext::PolicyVerdict {
             use crate::builtin_ext::{PolicyMoment, PolicyVerdict};
             // Like `ext-gnome-shell`: a dialog that appears reads as a notice.
             if f.moment == PolicyMoment::Showing {
-                return if f.role == Role::Dialog {
+                return if f.role == gorca_model::sem::SemRole::Dialog {
                     PolicyVerdict::Notice
                 } else {
                     PolicyVerdict::Default

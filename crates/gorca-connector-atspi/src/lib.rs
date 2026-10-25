@@ -29,12 +29,16 @@
 
 mod connector;
 mod decode;
+#[cfg(test)]
+mod desktop_golden_tests;
 mod doc_source;
 mod enablement;
 mod events;
 mod fetch;
 #[cfg(test)]
 mod golden_tests;
+#[cfg(test)]
+mod info_golden_tests;
 #[cfg(test)]
 mod legacy_agreement_tests;
 mod proc;

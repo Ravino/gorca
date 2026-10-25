@@ -28,9 +28,10 @@ impl HostSnap {
         json!({"loadavg1": self.loadavg1, "psi_cpu_some_avg10": self.psi_cpu, "psi_mem_some_avg10": self.psi_mem, "governors": self.governors})
     }
 
-    /// Quiet limits of SPEC 4.1.
+    /// Quiet limits (SPEC 4.1 as clarified by C-4): loadavg1 < 1.5 (the busy-polling writer alone
+    /// contributes about 1.0 by the end of a run), PSI cpu some avg10 < 1.0, governor `performance`.
     pub fn is_quiet(&self) -> bool {
-        self.loadavg1 < 1.0 && self.psi_cpu < 1.0
+        self.loadavg1 < 1.5 && self.psi_cpu < 1.0 && self.governors == "performance"
     }
 }
 

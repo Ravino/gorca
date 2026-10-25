@@ -85,8 +85,13 @@ fn present_hold(attack: &str, n: u32) -> (Duration, Duration, Duration, u64) {
         let node = snap(app(i + 1), 1, Role::Button, Some(attack));
         // CPU time of the calling thread: the hold is the work the Reader does, not the
         // scheduler's mood (the host runs at load 10 to 48 here).
-        let (r, held) =
-            gorca_testkit::cpu::cpu_time(|| ae.present(&node, PresentContext::Focus, 1));
+        let (r, held) = gorca_testkit::cpu::cpu_time(|| {
+            ae.present(
+                &gorca_core::ExtNode::from_snapshot(&node),
+                PresentContext::Focus,
+                1,
+            )
+        });
         times.push(held);
         assert!(r.is_none(), "{attack}: a faulting hook has no opinion");
         settle(&h);

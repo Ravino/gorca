@@ -13,11 +13,16 @@ pub mod collect;
 mod commands;
 pub mod cursor;
 pub mod flat;
+#[cfg(test)]
+mod latency_tests;
 pub mod model;
 pub mod objnav;
+#[doc(hidden)]
+pub mod replay;
 pub mod segment;
 pub mod terminal;
 pub mod validity;
+pub mod zone;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

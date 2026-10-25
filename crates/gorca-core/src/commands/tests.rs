@@ -423,6 +423,25 @@ fn explain_last_says_a_summary_and_never_the_page_text() {
 }
 
 #[test]
+fn explain_withholds_the_text_of_a_password_and_fails_closed_without_a_node() {
+    let f = fixture();
+    let plain = snap(3, Role::Button, "Save", None);
+    assert!(!f.reader.explain_withholds_text(Some(&plain)));
+    // The native role says password.
+    let mut pw = (*snap(4, Role::TextEntry, "Pass", None)).clone();
+    pw.role = Role::PasswordEntry;
+    assert!(f.reader.explain_withholds_text(Some(&Arc::new(pw))));
+    // Only the source record says password (an engine reporting it over a text-box token).
+    let mut rec = (*snap(5, Role::TextEntry, "Pass", None)).clone();
+    let mut r = (**rec.sem.rec.as_ref().unwrap()).clone();
+    r.sem.role = gorca_model::sem::SemRole::PasswordBox;
+    rec.sem.rec = Some(Arc::new(r));
+    assert!(f.reader.explain_withholds_text(Some(&Arc::new(rec))));
+    // The node left the mirror, or the utterance was not about a node: secrecy is unknown.
+    assert!(f.reader.explain_withholds_text(None));
+}
+
+#[test]
 fn explain_last_is_a_dev_command_bound_in_every_preset() {
     let spec = CoreCmd::DebugExplainLast.spec();
     assert_eq!(spec.name, "debug.explain_last");
@@ -449,6 +468,40 @@ fn time_and_date() {
         spoken(&f.run(CoreCmd::InfoTimeDate, 2)),
         ["Tuesday, October 13, 2026"]
     );
+}
+
+#[test]
+fn where_am_i_never_speaks_the_contents_of_a_password_field() {
+    const SECRET: &str = "hunter2-correct-horse";
+    // The native role says password; the fused role (from the record) is whatever the connector
+    // made of it: no path may speak the contents.
+    let mut f = fixture();
+    let mut pw = (*snap(3, Role::PasswordEntry, "Password", Some(2))).clone();
+    pw.value = Some(gorca_model::Value::Text(Arc::from(SECRET)));
+    pw.description = Some(Arc::from("At least eight characters"));
+    f.writer.apply(
+        SnapshotBatch {
+            nodes: vec![
+                snap(1, Role::Application, "Files", None),
+                snap(2, Role::Window, "Login", Some(1)),
+                Arc::new(pw),
+            ],
+            ..Default::default()
+        },
+        gorca_mirror::ApplyOrigin::Push,
+    );
+    f.reader.handle(
+        ReaderMsg::Focus(crate::FocusLaneMsg::FocusChanged { node: key(3) }),
+        f.now,
+    );
+    f.reader.handle(ReaderMsg::Timer, f.now);
+    for repeat in 1..=3 {
+        let said = spoken(&f.run(CoreCmd::InfoWhereAmI, repeat)).join(" | ");
+        assert!(!said.is_empty(), "repeat {repeat} says something");
+        assert!(!said.contains(SECRET), "repeat {repeat}: {said}");
+    }
+    let info = spoken(&f.run(CoreCmd::DebugNodeInfo, 1)).join(" | ");
+    assert!(!info.contains(SECRET), "{info}");
 }
 
 #[test]
@@ -925,7 +978,7 @@ impl crate::AppExt for RecordingExt {
     }
     fn present(
         &self,
-        snap: &NodeSnapshot,
+        snap: &crate::ExtNode,
         _ctx: crate::PresentContext,
         _epoch: u64,
     ) -> Option<Vec<gorca_model::Segment>> {

@@ -9,7 +9,7 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 
 use gorca_config::Verbosity;
-use gorca_model::{ChildList, Freshness, NodeKey, NodeSnapshot, Role, StateSet, Value};
+use gorca_model::{ChildList, Freshness, NodeKey, NodeSnapshot, Role};
 
 use super::state::LocalTime;
 use crate::directory::MirrorDirectory;
@@ -35,8 +35,21 @@ pub(crate) fn ancestry(dir: &MirrorDirectory, leaf: &Arc<NodeSnapshot>) -> Vec<A
     out
 }
 
-fn named(n: &NodeSnapshot) -> Option<&str> {
-    n.name.as_deref().filter(|s| !s.is_empty())
+/// What the fused entry of one node says about it (`Reason::WhereAmI`, M22b4): the words of the
+/// ancestry answer. Built by the Reader from the node's entry through `gorca-present`; this
+/// module only arranges them.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct Words {
+    /// The name, `None` when the node has none worth saying.
+    pub name: Option<String>,
+    /// The role word(s), joined by a space.
+    pub role: String,
+    /// The state words.
+    pub states: Vec<String>,
+    /// The value (and the contents of a field).
+    pub values: Vec<String>,
+    /// The description, from the entry.
+    pub description: Option<String>,
 }
 
 /// 1-based position of `child` among the known children of `parent`, and their count.
@@ -79,33 +92,6 @@ fn is_container(role: Role) -> bool {
         )
 }
 
-fn state_words(s: StateSet) -> Vec<&'static str> {
-    const W: &[(StateSet, M)] = &[
-        (StateSet::DISABLED, M::StateUnavailable),
-        (StateSet::CHECKED, M::StateChecked),
-        (StateSet::PRESSED, M::StatePressed),
-        (StateSet::SELECTED, M::StateSelected),
-        (StateSet::EXPANDED, M::StateExpanded),
-        (StateSet::COLLAPSED, M::StateCollapsed),
-        (StateSet::REQUIRED, M::StateRequired),
-        (StateSet::INVALID, M::StateInvalidEntry),
-        (StateSet::READ_ONLY, M::StateReadOnly),
-        (StateSet::HAS_POPUP, M::StateHasPopup),
-    ];
-    W.iter()
-        .filter(|(f, _)| s.contains(*f))
-        .map(|(_, w)| tr(*w))
-        .collect()
-}
-
-fn value_text(v: &Value) -> Option<String> {
-    match v {
-        Value::Text(t) if !t.is_empty() => Some(t.to_string()),
-        Value::Range { current, .. } => Some(format!("{current}")),
-        Value::Text(_) => None,
-    }
-}
-
 /// Spell a text out: `Save` becomes "S a v e" (the speech service reads single letters).
 pub(crate) fn spell(text: &str) -> String {
     text.chars()
@@ -120,34 +106,44 @@ pub(crate) fn spell(text: &str) -> String {
         .join(" ")
 }
 
-/// Text of "where am I". `chain` is leaf first. `repeat`: 1 basic, 2 detailed, 3 spell the name.
-pub(crate) fn where_am_i(chain: &[Arc<NodeSnapshot>], repeat: u8, level: Verbosity) -> String {
-    let Some(leaf) = chain.first() else {
-        return tr(M::NoFocus).to_owned();
+/// Text of "where am I". `chain` is leaf first and `words` has the words of each node of it.
+/// `repeat`: 1 basic, 2 detailed, 3 spell the name.
+pub(crate) fn where_am_i_parts(
+    chain: &[Arc<NodeSnapshot>],
+    words: &[Words],
+    repeat: u8,
+    level: Verbosity,
+) -> Vec<String> {
+    let (Some(leaf), Some(lw)) = (chain.first(), words.first()) else {
+        return vec![tr(M::NoFocus).to_owned()];
     };
     if repeat >= 3 {
-        return match named(leaf) {
-            Some(n) => spell(n),
-            None => msg!(InfoNoName, role = leaf.role.spoken()),
+        return match lw.name.as_deref() {
+            Some(n) => vec![spell(n)],
+            None => vec![msg!(InfoNoName, role = lw.role.as_str())],
         };
     }
     let detailed = repeat == 2 || level == Verbosity::Verbose;
     let mut parts: Vec<String> = Vec::new();
     // Application and window.
-    let app = chain.iter().rev().find(|n| n.role == Role::Application);
-    if let Some(a) = app.and_then(|a| named(a))
+    let app = chain
+        .iter()
+        .zip(words)
+        .rev()
+        .find(|(n, _)| n.role == Role::Application);
+    if let Some(a) = app.and_then(|(_, w)| w.name.as_deref())
         && level != Verbosity::Brief
     {
         parts.push(a.to_owned());
     }
     let window = chain
         .iter()
-        .find(|n| matches!(n.role, Role::Window | Role::Dialog));
-    if let Some(w) = window {
-        let role = w.role.spoken();
-        parts.push(match named(w) {
-            Some(n) => msg!(InfoWindow, name = n, role = role),
-            None => role.to_owned(),
+        .zip(words)
+        .find(|(n, _)| matches!(n.role, Role::Window | Role::Dialog));
+    if let Some((_, w)) = window {
+        parts.push(match w.name.as_deref() {
+            Some(n) => msg!(InfoWindow, name = n, role = w.role.as_str()),
+            None => w.role.clone(),
         });
     }
     // Container chain between the window and the object, outermost first.
@@ -162,58 +158,70 @@ pub(crate) fn where_am_i(chain: &[Arc<NodeSnapshot>], repeat: u8, level: Verbosi
     }
     for (i, n) in containers.iter().rev() {
         let mut s = String::new();
-        if let Some(name) = named(n) {
+        let Some(w) = words.get(*i) else { continue };
+        if let Some(name) = w.name.as_deref() {
             s.push_str(name);
             s.push(' ');
         }
-        s.push_str(n.role.spoken());
+        s.push_str(&w.role);
         // Position of the item inside this container: the previous node in the chain.
         if let Some(child) = chain.get(i - 1)
             && let Some((at, of)) = position(n, child.key)
         {
             let _ = write!(s, ", {}", msg!(InfoPosition, at = at, of = of));
         }
-        parts.push(s);
+        // A container with no name and no role word says nothing (no lone ", 3 of 12").
+        let s = s.trim_end().trim_start_matches(", ");
+        if !s.is_empty() {
+            parts.push(s.to_owned());
+        }
     }
     // The object.
     let mut obj = String::new();
-    if let Some(n) = named(leaf) {
+    if let Some(n) = lw.name.as_deref() {
         obj.push_str(n);
         obj.push(' ');
     }
-    obj.push_str(leaf.role.spoken());
+    obj.push_str(&lw.role);
     let obj = obj.trim().to_owned();
     if !obj.is_empty() {
         parts.push(obj);
     }
-    let states = state_words(leaf.states);
-    if !states.is_empty() {
-        parts.push(states.join(" "));
+    if !lw.states.is_empty() {
+        parts.push(lw.states.join(" "));
     }
-    if let Some(v) = leaf.value.as_ref().and_then(value_text) {
-        parts.push(v);
-    }
+    parts.extend(lw.values.iter().cloned());
     if detailed {
-        if let Some(d) = leaf.description.as_deref().filter(|d| !d.is_empty()) {
+        if let Some(d) = lw.description.as_deref().filter(|d| !d.is_empty()) {
             parts.push(d.to_owned());
         }
         if matches!(leaf.fresh, Freshness::Stale { .. } | Freshness::Defunct) {
             parts.push(tr(M::InfoOutOfDate).to_owned());
         }
     }
-    parts.join(", ")
+    parts
+}
+
+pub(crate) fn where_am_i(
+    chain: &[Arc<NodeSnapshot>],
+    words: &[Words],
+    repeat: u8,
+    level: Verbosity,
+) -> String {
+    where_am_i_parts(chain, words, repeat, level).join(", ")
 }
 
 /// Title of the window the node is in; `None` when the mirror does not know the chain up to it.
-pub(crate) fn window_title(chain: &[Arc<NodeSnapshot>]) -> Option<String> {
-    let w = chain
+pub(crate) fn window_title(chain: &[Arc<NodeSnapshot>], words: &[Words]) -> Option<String> {
+    let (_, w) = chain
         .iter()
-        .find(|n| matches!(n.role, Role::Window | Role::Dialog))?;
-    Some(named(w).unwrap_or(w.role.spoken()).to_owned())
+        .zip(words)
+        .find(|(n, _)| matches!(n.role, Role::Window | Role::Dialog))?;
+    Some(w.name.clone().unwrap_or_else(|| w.role.clone()))
 }
 
-pub(crate) fn node_info(chain: &[Arc<NodeSnapshot>]) -> String {
-    let Some(n) = chain.first() else {
+pub(crate) fn node_info(chain: &[Arc<NodeSnapshot>], words: &[Words]) -> String {
+    let (Some(n), Some(w)) = (chain.first(), words.first()) else {
         return tr(M::NoFocus).to_owned();
     };
     let fresh = match n.fresh {
@@ -221,24 +229,23 @@ pub(crate) fn node_info(chain: &[Arc<NodeSnapshot>]) -> String {
         Freshness::Stale { .. } => "stale",
         Freshness::Defunct => "defunct",
     };
-    let states = state_words(n.states);
     format!(
         "node {} of application {}, role {}, {}, {} ancestors known, {} states, name {}",
         n.key.local.0,
         n.key.app.serial,
-        if n.role.spoken().is_empty() {
+        if w.role.is_empty() {
             "unknown"
         } else {
-            n.role.spoken()
+            w.role.as_str()
         },
         fresh,
         chain.len() - 1,
-        if states.is_empty() {
+        if w.states.is_empty() {
             "no listed".to_owned()
         } else {
-            states.join(" ")
+            w.states.join(" ")
         },
-        named(n).unwrap_or("none"),
+        w.name.as_deref().unwrap_or("none"),
     )
 }
 
@@ -296,6 +303,7 @@ pub(crate) fn date_text(t: LocalTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gorca_model::StateSet;
     use gorca_model::{AppId, AttrMap, ConnectorId, Ifaces, LocalId, Relations};
     use std::time::Instant;
 
@@ -372,6 +380,33 @@ mod tests {
         }
     }
 
+    /// The words of each node of `chain` from the entry its source record gives (as the Reader
+    /// does for a node it holds only as a record).
+    fn words(chain: &[Arc<NodeSnapshot>]) -> Vec<Words> {
+        use gorca_present::{ComposeCtx, ReportFlags};
+        chain
+            .iter()
+            .map(|n| {
+                let n = (**n).clone().with_test_record();
+                let entry = n.sem.rec.as_ref().map(|r| r.provisional_entry()).unwrap();
+                let ctx = ComposeCtx {
+                    flags: ReportFlags::default(),
+                    may_refine: false,
+                    web: false,
+                    skip_selected: false,
+                    hedge_inferred: false,
+                    lang: gorca_i18n::language(),
+                };
+                crate::present::node::words_of(
+                    &entry,
+                    &n,
+                    ctx,
+                    gorca_present::RenderOpts::default(),
+                )
+            })
+            .collect()
+    }
+
     /// app(1) > window(2) > list(3, 12 known children) > item(7 = third child)
     fn chain() -> Vec<Arc<NodeSnapshot>> {
         let item = node(7, Role::ListItem, Some("Inbox"), Some(3));
@@ -392,7 +427,7 @@ mod tests {
 
     #[test]
     fn basic_where_am_i_names_app_window_container_and_object() {
-        let t = where_am_i(&chain(), 1, Verbosity::Normal);
+        let t = where_am_i(&chain(), &words(&chain()), 1, Verbosity::Normal);
         assert_eq!(
             t,
             "Evolution, Mail window, Folders list, 3 of 12, Inbox list item"
@@ -401,7 +436,7 @@ mod tests {
 
     #[test]
     fn brief_verbosity_drops_the_application() {
-        let t = where_am_i(&chain(), 1, Verbosity::Brief);
+        let t = where_am_i(&chain(), &words(&chain()), 1, Verbosity::Brief);
         assert!(t.starts_with("Mail window"), "{t}");
     }
 
@@ -412,34 +447,46 @@ mod tests {
         item.description = Some(Arc::from("Unread messages"));
         item.states = StateSet::SELECTED | StateSet::FOCUSED;
         c[0] = Arc::new(item);
-        let t = where_am_i(&c, 2, Verbosity::Normal);
+        let t = where_am_i(&c, &words(&c), 2, Verbosity::Normal);
         assert!(
             t.ends_with("Inbox list item, selected, Unread messages"),
             "{t}"
         );
-        let basic = where_am_i(&c, 1, Verbosity::Normal);
+        let basic = where_am_i(&c, &words(&c), 1, Verbosity::Normal);
         assert!(!basic.contains("Unread"));
     }
 
     #[test]
     fn third_press_spells_the_name() {
-        assert_eq!(where_am_i(&chain(), 3, Verbosity::Normal), "I n b o x");
+        assert_eq!(
+            where_am_i(&chain(), &words(&chain()), 3, Verbosity::Normal),
+            "I n b o x"
+        );
         let c = vec![Arc::new(node(1, Role::Button, None, None))];
-        assert_eq!(where_am_i(&c, 3, Verbosity::Normal), "button, no name");
+        assert_eq!(
+            where_am_i(&c, &words(&c), 3, Verbosity::Normal),
+            "button, no name"
+        );
         assert_eq!(spell("a b"), "a space b");
     }
 
     #[test]
     fn partial_chains_still_speak() {
         let c = vec![Arc::new(node(7, Role::Button, Some("OK"), Some(2)))];
-        assert_eq!(where_am_i(&c, 1, Verbosity::Normal), "OK button");
-        assert_eq!(where_am_i(&[], 1, Verbosity::Normal), "no focus");
+        assert_eq!(
+            where_am_i(&c, &words(&c), 1, Verbosity::Normal),
+            "OK button"
+        );
+        assert_eq!(where_am_i(&[], &[], 1, Verbosity::Normal), "no focus");
     }
 
     #[test]
     fn window_title_finds_the_enclosing_window_or_dialog() {
-        assert_eq!(window_title(&chain()).as_deref(), Some("Mail"));
-        assert_eq!(window_title(&chain()[..1]), None);
+        assert_eq!(
+            window_title(&chain(), &words(&chain())).as_deref(),
+            Some("Mail")
+        );
+        assert_eq!(window_title(&chain()[..1], &words(&chain()[..1])), None);
     }
 
     #[test]
@@ -460,7 +507,7 @@ mod tests {
 
     #[test]
     fn node_info_lists_identity_and_freshness() {
-        let s = node_info(&chain());
+        let s = node_info(&chain(), &words(&chain()));
         assert!(
             s.contains("node 7 of application 3") && s.contains("fresh"),
             "{s}"

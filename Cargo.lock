@@ -1316,6 +1316,7 @@ dependencies = [
  "gorca-ext-api",
  "gorca-i18n",
  "gorca-input-api",
+ "gorca-mirror",
  "gorca-model",
  "gorca-rt",
  "gorca-testkit",

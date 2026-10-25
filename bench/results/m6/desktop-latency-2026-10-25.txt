@@ -1,0 +1,10 @@
+M22b4 sub-cut-over 1: cost of compose + render for the window lead-in and the notice (3 lines).
+cargo test -p gorca-present --release --test determinism desktop_rows_cost -- --ignored --nocapture
+200000 iterations, one thread, includes the Instant::now() pair around each call (about 20-30 ns).
+conditions: loadavg 12 (shared host, other agents building), governor powersave, rev 58a09c95 + test
+
+window lead-in   p50 287 ns  p99 317 ns  p99.9 440 ns
+notice (3 lines) p50 453 ns  p99 479 ns  p99.9 600 ns
+
+Budget: keypress to speech p99 < 15 ms. Both rows run once per window activation or banner, off the
+key path. The legacy builders were a role-word lookup and a few pushes (same order of magnitude).

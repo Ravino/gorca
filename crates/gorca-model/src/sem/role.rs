@@ -109,6 +109,24 @@ coded_enum! {
 }
 
 impl SemRole {
+    /// Roles that are a run of text inside a line: static text and the inline phrase roles. They
+    /// speak their text and nothing else.
+    pub const fn is_inline_text(self) -> bool {
+        matches!(
+            self,
+            SemRole::StaticText
+                | SemRole::Emphasis
+                | SemRole::Strong
+                | SemRole::Mark
+                | SemRole::Code
+                | SemRole::Time
+                | SemRole::Insertion
+                | SemRole::Deletion
+                | SemRole::Subscript
+                | SemRole::Superscript
+        )
+    }
+
     /// Roles on which a disabled state is meaningful (SM-5). Static and structural roles are
     /// `NotApplicable`, never "unavailable". The one list: the AT-SPI state mapping and the fusion
     /// applicability rules both read it.

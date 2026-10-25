@@ -6,10 +6,12 @@
 //! eviction); `Gone`, an invalidation of a zone field, or a different hash is.
 
 use gorca_mirror::MirrorRead;
-use gorca_model::{Lookup, NodeKey, NodeSnapshot, PropMask, StateSet, Value};
+use gorca_model::sem::{Avail, Check, Expand, Invalid, Press, Select, SemFlags};
+use gorca_model::{Lookup, NodeKey, NodeSnapshot, PropMask, StructFlags, Value};
 use smallvec::SmallVec;
 
 use super::model::LineModel;
+use crate::present::entry_of;
 
 /// The fields a zone depends on (ADR-0006 6.5 `ZONE_MASK`).
 pub const ZONE_MASK: PropMask = PropMask::NAME
@@ -19,18 +21,15 @@ pub const ZONE_MASK: PropMask = PropMask::NAME
     .union(PropMask::BOUNDS)
     .union(PropMask::CHILDREN);
 
-/// The states that change what a zone says or whether it exists.
-pub const REVIEW_STATES: StateSet = StateSet::SHOWING
-    .union(StateSet::VISIBLE)
-    .union(StateSet::CHECKED)
-    .union(StateSet::PRESSED)
-    .union(StateSet::SELECTED)
-    .union(StateSet::EXPANDED)
-    .union(StateSet::COLLAPSED)
-    .union(StateSet::DISABLED)
-    .union(StateSet::REQUIRED)
-    .union(StateSet::INVALID)
-    .union(StateSet::DEFUNCT);
+/// The structural bits that change whether a zone exists or can be reached.
+const STRUCT_BITS: StructFlags = StructFlags::SHOWING
+    .union(StructFlags::VISIBLE)
+    .union(StructFlags::DEFUNCT)
+    .union(StructFlags::FOCUSABLE)
+    .union(StructFlags::MULTILINE);
+
+/// The semantic flags that change what a zone says or how it is classified.
+const ZONE_FLAGS: SemFlags = SemFlags::REQUIRED.union(SemFlags::TEXT_LABEL);
 
 /// A small multiply-rotate hasher (FxHash): the check runs for every node of a model on a step.
 struct Fx(u64);
@@ -55,15 +54,46 @@ impl Fx {
     }
 }
 
-/// Hash of the fields of `s` that flat review depends on.
+/// Hash of what flat review says and does with `s`: the fused entry's role, name and the groups
+/// the zone words come from, the structural state, the contents of a field and the extents. A
+/// fused entry that changes without changing a word (a provisional one replaced by the real
+/// fusion) leaves the hash alone.
 pub fn snapshot_hash(s: &NodeSnapshot) -> u64 {
+    let e = entry_of(s);
+    let sem = &e.sem;
     let mut h = Fx(0);
-    h.word(s.role as u64);
-    h.word((s.states & REVIEW_STATES).bits());
-    if let Some(n) = &s.name {
+    h.word(u64::from(sem.role.code()));
+    // The spoken state groups, as the zone says them: which words, not which raw group values
+    // (a selectable node that is not selected says nothing more than one that cannot be).
+    let spoken = [
+        sem.avail == Avail::Disabled,
+        sem.check == Check::Mixed || sem.press == Press::Mixed,
+        sem.check == Check::On,
+        sem.press == Press::On,
+        sem.select == Select::On,
+        sem.expand == Expand::Expanded,
+        sem.expand == Expand::Collapsed,
+        sem.invalid != Invalid::No,
+    ];
+    h.word(spoken.iter().fold(0u64, |a, b| a << 1 | u64::from(*b)));
+    h.word(u64::from((sem.flags & ZONE_FLAGS).bits()));
+    let st = s.struct_state();
+    h.word(u64::from((st.flags() & STRUCT_BITS).bits()) | u64::from(st.is_known()) << 8);
+    if let Some(n) = &e.name {
         h.bytes(n.as_bytes());
     }
     h.word(0xff);
+    let text = sem.text.as_deref();
+    h.bytes(
+        text.and_then(|t| t.value_text.as_deref())
+            .unwrap_or_default()
+            .as_bytes(),
+    );
+    // A description decides whether a window or a landmark is a stop.
+    h.word(u64::from(
+        text.and_then(|t| t.description.as_deref())
+            .is_some_and(|d| !d.trim().is_empty()),
+    ));
     match &s.value {
         Some(Value::Text(t)) => h.bytes(t.as_bytes()),
         Some(Value::Range { current, .. }) => h.word(current.to_bits()),
@@ -127,6 +157,7 @@ mod tests {
     use super::*;
     use gorca_model::{
         AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeSnapshot, Rect, Role,
+        StateSet,
     };
     use std::sync::Arc;
     use std::time::Instant;
@@ -164,13 +195,19 @@ mod tests {
         .with_test_record()
     }
 
+    /// `s` with the source record it would have after the edit.
+    fn rec(mut s: NodeSnapshot) -> NodeSnapshot {
+        s.sem = gorca_model::NodeSem::NONE;
+        s.with_test_record()
+    }
+
     #[test]
     fn the_hash_follows_exactly_the_fields_a_zone_uses() {
         let a = snap(1);
         let mut b = a.clone();
         assert_eq!(snapshot_hash(&a), snapshot_hash(&b));
         b.name = Some(Arc::from("Cancel"));
-        assert_ne!(snapshot_hash(&a), snapshot_hash(&b));
+        assert_ne!(snapshot_hash(&a), snapshot_hash(&rec(b)));
         let mut c = a.clone();
         c.bounds = Some(Rect {
             x: 1,
@@ -179,15 +216,32 @@ mod tests {
             h: 4,
         });
         assert_ne!(snapshot_hash(&a), snapshot_hash(&c));
+        // A spoken state group, and a structural bit.
         let mut d = a.clone();
-        d.states |= StateSet::CHECKED;
+        d.states |= StateSet::DISABLED;
+        assert_ne!(snapshot_hash(&a), snapshot_hash(&rec(d)));
+        let mut d = a.clone();
+        d.states &= !StateSet::SHOWING;
         assert_ne!(snapshot_hash(&a), snapshot_hash(&d));
         // Fields no zone uses do not make a model dirty.
         let mut e = a.clone();
-        e.description = Some(Arc::from("tip"));
         e.states |= StateSet::FOCUSED;
         e.confirmed_seq = 9;
         assert_eq!(snapshot_hash(&a), snapshot_hash(&e));
+        let mut f = a.clone();
+        f.states |= StateSet::ENABLED | StateSet::SELECTABLE;
+        assert_eq!(snapshot_hash(&a), snapshot_hash(&rec(f)));
+    }
+
+    #[test]
+    fn a_description_matters_only_as_far_as_it_is_there() {
+        let a = snap(1);
+        let mut b = a.clone();
+        b.description = Some(Arc::from("tip"));
+        assert_ne!(snapshot_hash(&a), snapshot_hash(&rec(b)));
+        let mut c = a.clone();
+        c.description = Some(Arc::from("  "));
+        assert_eq!(snapshot_hash(&a), snapshot_hash(&rec(c)));
     }
 
     #[test]
@@ -198,6 +252,6 @@ mod tests {
         let mut b = snap(1);
         b.name = Some(Arc::from("a"));
         b.value = Some(Value::Text(Arc::from("bc")));
-        assert_ne!(snapshot_hash(&a), snapshot_hash(&b));
+        assert_ne!(snapshot_hash(&rec(a)), snapshot_hash(&rec(b)));
     }
 }

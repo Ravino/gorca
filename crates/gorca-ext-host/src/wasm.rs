@@ -326,10 +326,35 @@ impl std::fmt::Debug for WasmModule {
     }
 }
 
+/// Refuse a component built for another version of the extension world, and say which: the
+/// wasmtime error for a missing export names only the version the host wants, and a deployment
+/// that did not rerun `cargo xtask build-ext` would otherwise lose its extensions without a hint.
+fn check_built_for(exports: &[String], package: &str) -> wasmtime::Result<()> {
+    let want = package.rsplit('@').next().unwrap_or(package);
+    let built = exports
+        .iter()
+        .find_map(|n| n.strip_prefix("gorca:ext/hooks@"));
+    match built {
+        Some(v) if v == want => Ok(()),
+        Some(v) => wasmtime::bail!(
+            "built for gorca:ext@{v}, this host speaks gorca:ext@{want}: rebuild it with `cargo xtask build-ext`"
+        ),
+        None => wasmtime::bail!(
+            "not an extension component (no `gorca:ext/hooks` export); this host speaks gorca:ext@{want}"
+        ),
+    }
+}
+
 impl WasmModule {
     /// Compile `bytes` (a component) and link it against the host world.
     pub fn new(engine: &Arc<ExtEngine>, bytes: &[u8]) -> wasmtime::Result<Self> {
         let component = Component::new(&engine.engine, bytes)?;
+        let exports: Vec<String> = component
+            .component_type()
+            .exports(&engine.engine)
+            .map(|(name, _)| name.to_owned())
+            .collect();
+        check_built_for(&exports, api::WIT_PACKAGE)?;
         let mut linker: Linker<StoreData> = Linker::new(&engine.engine);
         Extension::add_to_linker::<StoreData, HasSelf<StoreData>>(&mut linker, |d| d)?;
         crate::wasi_pure::add(&mut linker, &component, &engine.engine)?;
@@ -636,20 +661,11 @@ fn term_action_to_api(a: wtm::TermAction) -> api::terminal::TermAction {
     }
 }
 
-macro_rules! to_wit_role {
-    ($($v:ident),*) => {
-        fn role_to_wit(r: api::Role) -> wt::Role {
-            match r { $(api::Role::$v => wt::Role::$v),* }
-        }
-    };
-}
-api::for_each_role!(to_wit_role);
-
 fn node_to_wit(n: &api::Node) -> wt::Node {
     wt::Node {
         key: n.key,
-        role: role_to_wit(n.role),
-        states: n.states,
+        role: n.role,
+        flags: n.flags,
         name: n.name.clone(),
         description: n.description.clone(),
         range: n.range.map(|r| wt::Range {
@@ -719,16 +735,16 @@ impl HookInstance for WasmInstance {
         Ok(r.map(|v| v.into_iter().map(segment_to_api).collect()))
     }
 
-    fn policy(&mut self, f: &api::PolicyFacts) -> Result<api::PolicyVerdict, Fault> {
-        let facts = wt::PolicyFacts {
+    fn policy(&mut self, f: &api::PolicyView) -> Result<api::PolicyVerdict, Fault> {
+        let facts = wt::PolicyView {
             moment: match f.moment {
                 api::PolicyMoment::Focus => wt::PolicyMoment::Focus,
                 api::PolicyMoment::Value => wt::PolicyMoment::Value,
                 api::PolicyMoment::Activate => wt::PolicyMoment::Activate,
                 api::PolicyMoment::Showing => wt::PolicyMoment::Showing,
             },
-            role: role_to_wit(f.role),
-            states: f.states,
+            role: f.role,
+            flags: f.flags,
             name: f.name.clone(),
             description: f.description.clone(),
             range: f.range.map(|r| wt::Range {
@@ -847,6 +863,25 @@ impl wh::Host for StoreData {
         Ok(n.map(|n| node_to_wit(&n)))
     }
 
+    fn read_group(
+        &mut self,
+        key: wt::NodeKey,
+        group: wt::GroupCode,
+    ) -> wasmtime::Result<Option<wt::GroupValue>> {
+        let v = self.shared.read_group(key, group);
+        self.work.charge(match &v {
+            Some(api::GroupValue::Text(t)) => t.len(),
+            Some(_) => 16,
+            None => 0,
+        })?;
+        Ok(v.map(|v| match v {
+            api::GroupValue::Code(c) => wt::GroupValue::Code(c),
+            api::GroupValue::Bits(b) => wt::GroupValue::Bits(b),
+            api::GroupValue::Number(n) => wt::GroupValue::Number(n),
+            api::GroupValue::Text(t) => wt::GroupValue::Text(t),
+        }))
+    }
+
     fn fetch(
         &mut self,
         _key: wt::NodeKey,
@@ -949,5 +984,30 @@ mod tests {
         );
         assert_eq!(wall_ceiling(HookKind::Present), Duration::from_millis(100));
         assert_eq!(wall_ceiling(HookKind::Command), Duration::from_secs(1));
+    }
+}
+
+#[cfg(test)]
+mod version_tests {
+    use super::check_built_for;
+
+    fn names(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn a_component_of_another_version_is_refused_with_both_versions_named() {
+        let ok = names(&["gorca:ext/hooks@0.4.0", "gorca:ext/terminal@0.4.0"]);
+        assert!(check_built_for(&ok, "gorca:ext@0.4.0").is_ok());
+        let old = names(&["gorca:ext/hooks@0.3.0", "gorca:ext/terminal@0.3.0"]);
+        let e = check_built_for(&old, "gorca:ext@0.4.0")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            e.contains("0.3.0") && e.contains("0.4.0") && e.contains("build-ext"),
+            "{e}"
+        );
+        let none = names(&["something-else"]);
+        assert!(check_built_for(&none, "gorca:ext@0.4.0").is_err());
     }
 }

@@ -1,26 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! What is left of the node presentation helpers after the M22b1 cut-over: the focus and change
 //! utterances are made by `gorca-present` (`present::node`). This module keeps the helpers the
-//! other surfaces still use: `seg`, the log's state names, the flat-review zone text (b3).
+//! other surfaces still use: `seg` and the log's state names.
 
 use std::sync::Arc;
 
-use gorca_i18n::{MsgId as M, t};
 use gorca_model::{NodeSnapshot, Segment, SegmentKind, StateSet, Value};
 use smallvec::SmallVec;
-
-/// State words in speaking order (catalog ids). TBD: verbosity settings.
-const STATE_WORDS: &[(StateSet, M)] = &[
-    (StateSet::DISABLED, M::StateUnavailable),
-    (StateSet::MIXED, M::StateHalfChecked),
-    (StateSet::CHECKED, M::StateChecked),
-    (StateSet::PRESSED, M::StatePressed),
-    (StateSet::SELECTED, M::StateSelected),
-    (StateSet::EXPANDED, M::StateExpanded),
-    (StateSet::COLLAPSED, M::StateCollapsed),
-    (StateSet::REQUIRED, M::StateRequired),
-    (StateSet::INVALID, M::StateInvalidEntry),
-];
 
 pub(super) fn seg(text: &str, kind: SegmentKind) -> Segment {
     Segment::new(Arc::from(text), kind)
@@ -64,88 +50,6 @@ pub fn log_states(n: &NodeSnapshot) -> SmallVec<[&'static str; 8]> {
         out.push("sensitive");
     }
     out.sort_unstable();
-    out
-}
-
-/// Roles whose own name is the content: the role word adds nothing in a line of text.
-fn is_plain_text_role(role: gorca_model::Role) -> bool {
-    use gorca_model::Role;
-    match role {
-        Role::Unknown
-        | Role::Label
-        | Role::StaticText
-        | Role::Paragraph
-        | Role::ListItem
-        | Role::Cell
-        | Role::Row
-        | Role::ColumnHeader
-        | Role::RowHeader => true,
-        Role::Application
-        | Role::Window
-        | Role::Dialog
-        | Role::Panel
-        | Role::Document
-        | Role::DocumentWeb
-        | Role::Heading
-        | Role::Link
-        | Role::Image
-        | Role::List
-        | Role::Table
-        | Role::Button
-        | Role::ToggleButton
-        | Role::Switch
-        | Role::CheckBox
-        | Role::RadioButton
-        | Role::ComboBox
-        | Role::TextEntry
-        | Role::PasswordEntry
-        | Role::SpinButton
-        | Role::Slider
-        | Role::ProgressBar
-        | Role::Menu
-        | Role::MenuBar
-        | Role::MenuItem
-        | Role::Popover
-        | Role::Tab
-        | Role::TabList
-        | Role::Tree
-        | Role::TreeItem
-        | Role::Toolbar
-        | Role::StatusBar
-        | Role::Separator
-        | Role::Terminal
-        | Role::Landmark
-        | Role::Alert => false,
-    }
-}
-
-/// What a flat-review zone says for a whole object (ADR-0006 6.3 rule 2): the name (or the
-/// value), then a role word for controls and the same state words as focus speech. "Wi-Fi toggle
-/// button checked", "Apply button", "Volume slider 40". Empty when the node has nothing to say.
-pub fn flat_zone_text(n: &NodeSnapshot) -> String {
-    let mut out = String::new();
-    let mut push = |s: &str| {
-        if !s.is_empty() {
-            if !out.is_empty() {
-                out.push(' ');
-            }
-            out.push_str(s);
-        }
-    };
-    if let Some(name) = n.name.as_deref().filter(|s| !s.is_empty()) {
-        push(name);
-    }
-    if !is_plain_text_role(n.role) {
-        push(n.role.spoken());
-    }
-    for (flag, word) in STATE_WORDS {
-        if n.states.contains(*flag) {
-            push(t(*word));
-        }
-    }
-    if let Some(v) = value_text(n.value.as_ref()) {
-        push(&v);
-    }
     out
 }
 
@@ -199,22 +103,5 @@ mod tests {
         let off = snap("x", StateSet::DISABLED | StateSet::SHOWING, None);
         assert_eq!(log_states(&off).as_slice(), ["showing"], "no sensitive");
         assert!(log_states(&snap("x", StateSet::empty(), None)).is_empty());
-    }
-
-    #[test]
-    fn a_zone_says_name_role_states_and_value() {
-        let mut s = snap(
-            "Volume",
-            StateSet::empty(),
-            Some(Value::Range {
-                current: 40.0,
-                min: 0.0,
-                max: 100.0,
-            }),
-        );
-        s.role = Role::Slider;
-        assert_eq!(flat_zone_text(&s), "Volume slider 40");
-        let c = snap("Wi-Fi", StateSet::CHECKED, None);
-        assert_eq!(flat_zone_text(&c), "Wi-Fi check box checked");
     }
 }

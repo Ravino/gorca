@@ -28,11 +28,10 @@ use gorca_rt::BudgetClass;
 use smallvec::SmallVec;
 
 use super::fair::Kind;
-use super::utterance::seg;
 use crate::SpeechIntent;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 use crate::review::NavSource;
-use crate::review::objnav::{PresClass, class};
+use crate::review::objnav::{PresClass, class_of_snapshot};
 
 /// How long an activation waits for the focus event that completes it. GTK sends the focus a few
 /// milliseconds after the activation; a window without any focusable widget never does.
@@ -148,62 +147,6 @@ impl WindowState {
             }
         }
     }
-}
-
-/// What a window utterance leads with: the title, and the role word for dialogs and alerts (a
-/// plain window is its title; "window" after every application name is noise).
-pub fn lead_segments(win: &NodeSnapshot) -> SmallVec<[Segment; 2]> {
-    let mut out = SmallVec::new();
-    if let Some(name) = win.name.as_deref().filter(|s| !s.trim().is_empty()) {
-        out.push(seg(name, SegmentKind::Text));
-    }
-    match win.role {
-        Role::Dialog | Role::Alert => out.push(seg(win.role.spoken(), SegmentKind::Role)),
-        Role::Unknown
-        | Role::Application
-        | Role::Window
-        | Role::Panel
-        | Role::Document
-        | Role::DocumentWeb
-        | Role::Heading
-        | Role::Paragraph
-        | Role::Link
-        | Role::Image
-        | Role::List
-        | Role::ListItem
-        | Role::Table
-        | Role::Row
-        | Role::Cell
-        | Role::ColumnHeader
-        | Role::RowHeader
-        | Role::Button
-        | Role::ToggleButton
-        | Role::Switch
-        | Role::CheckBox
-        | Role::RadioButton
-        | Role::ComboBox
-        | Role::TextEntry
-        | Role::PasswordEntry
-        | Role::SpinButton
-        | Role::Slider
-        | Role::ProgressBar
-        | Role::Menu
-        | Role::MenuBar
-        | Role::MenuItem
-        | Role::Popover
-        | Role::Tab
-        | Role::TabList
-        | Role::Tree
-        | Role::TreeItem
-        | Role::Toolbar
-        | Role::StatusBar
-        | Role::Separator
-        | Role::Label
-        | Role::StaticText
-        | Role::Terminal
-        | Role::Landmark => {}
-    }
-    out
 }
 
 /// Windows whose static text is read on open: dialogs and alerts (ARIA `alertdialog`).
@@ -331,7 +274,7 @@ impl<S: NavSource> Walk<'_, S> {
             return;
         };
         let snap = &v.snap;
-        if class(snap) == PresClass::Unavailable {
+        if class_of_snapshot(snap, false) == PresClass::Unavailable {
             return;
         }
         match part(snap.role) {
@@ -856,19 +799,14 @@ impl Reader {
     /// Does the installed application policy say the activation of this window is not worth
     /// speaking (the Shell's own "Main stage" window activates for every popup)?
     fn window_silenced(&self, snap: &NodeSnapshot) -> bool {
-        use crate::builtin_ext::{PolicyFacts, PolicyMoment, PolicyVerdict};
+        use crate::builtin_ext::{PolicyMoment, PolicyVerdict, PolicyView};
         if !self.policy_active(snap.key.app) {
             return false;
         }
-        let facts = PolicyFacts {
-            moment: PolicyMoment::Activate,
-            role: snap.role,
-            states: snap.states,
-            name: snap.name.as_deref(),
-            description: snap.description.as_deref(),
-            range: None,
-        };
-        self.decide_policy(snap.key.app, &facts) == PolicyVerdict::Silence
+        let mut node = crate::ext::ExtNode::new(snap, self.fused_entry(snap));
+        node.range = None;
+        let view = PolicyView::of(PolicyMoment::Activate, &node);
+        self.decide_policy(snap.key.app, &view) == PolicyVerdict::Silence
     }
 
     /// How a window's title goes out when no focus event followed it (`interrupts`) or when the
@@ -937,7 +875,7 @@ impl Reader {
         if self.window_silenced(&snap) {
             return;
         }
-        let lead = lead_segments(&snap);
+        let lead = self.window_lead(&snap);
         let texts = if reads_content(snap.role) {
             self.window_texts(window, None)
         } else {
@@ -1030,7 +968,7 @@ impl Reader {
             self.win.led = None;
             return;
         }
-        let mut lead: SmallVec<[Segment; 6]> = lead_segments(&win).into_iter().collect();
+        let mut lead: SmallVec<[Segment; 6]> = self.window_lead(&win).into_iter().collect();
         let mut texts = Vec::new();
         if reads_content(win.role) {
             texts = self.window_texts(window, Some(focus));
@@ -1125,7 +1063,8 @@ impl Reader {
             if near {
                 // The focus utterance is still playing: replace it by the complete line in
                 // reading order (title, role, text, focus), so the focus is never heard twice.
-                let segs: SmallVec<[Segment; 8]> = lead_segments(snap)
+                let segs: SmallVec<[Segment; 8]> = self
+                    .window_lead(snap)
                     .into_iter()
                     .chain(content_segments(&led.spoken))
                     .chain(led.tail.iter().cloned())
@@ -1141,7 +1080,7 @@ impl Reader {
                 let lead = if led.title_done {
                     SmallVec::new()
                 } else {
-                    lead_segments(snap)
+                    self.window_lead(snap)
                 };
                 led.title_done = true;
                 led.mode = LedMode::Queued;
@@ -1158,7 +1097,7 @@ impl Reader {
             let lead = if led.title_done {
                 SmallVec::new()
             } else {
-                lead_segments(snap)
+                self.window_lead(snap)
             };
             if lead.is_empty() && fresh.is_empty() {
                 return;
@@ -1417,8 +1356,10 @@ pub(crate) mod tests {
         let d = snap(&node(1, Role::Dialog, "Save", &[]));
         let w = snap(&node(2, Role::Window, "Files", &[]));
         let n = snap(&node(3, Role::Window, "", &[]));
+        let f = fixture(&[node(1, Role::Dialog, "Save", &[])]);
         let words = |s: &NodeSnapshot| -> Vec<String> {
-            lead_segments(s)
+            f.reader
+                .window_lead(s)
                 .iter()
                 .map(|g| g.text.to_string())
                 .collect()
@@ -1769,7 +1710,7 @@ pub(crate) mod tests {
     impl crate::builtin_ext::AppPolicy for Fake {
         fn decide(
             &self,
-            _f: &crate::builtin_ext::PolicyFacts<'_>,
+            _f: &crate::builtin_ext::PolicyView<'_>,
         ) -> crate::builtin_ext::PolicyVerdict {
             self.0.clone()
         }
@@ -1809,6 +1750,38 @@ pub(crate) mod tests {
         let seg = Segment::new(Arc::from("Custom"), SegmentKind::Text);
         let mut f = policy_fixture(V::Say(vec![seg]), true);
         assert_eq!(said(&focus(&mut f, 2, t)), ["Custom"]);
+    }
+
+    /// `debug.explain_last` lists the origins of the words actually spoken: the IR kept when the
+    /// focus utterance was built holds the application policy's edit (`via` 2), not a fresh
+    /// composition's plain value.
+    #[test]
+    fn the_kept_ir_is_the_one_that_was_spoken_with_the_policys_edit() {
+        use crate::builtin_ext::PolicyVerdict as V;
+        let t = Instant::now();
+        let mut f = policy_fixture(V::Value("50 percent".into()), true);
+        let fx = focus(&mut f, 2, t);
+        assert_eq!(said(&fx), ["Back, button, 50 percent"]);
+        let kept = f
+            .reader
+            .last_ir
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("the focus kept its IR");
+        let value = kept
+            .1
+            .ir()
+            .fields
+            .iter()
+            .find(|x| x.kind == gorca_present::FieldKind::VALUE)
+            .expect("the value field");
+        assert_eq!(value.origin.via, 2, "the policy wrote it");
+        // A plain focus keeps the composition, with no edit.
+        let mut plain = policy_fixture(V::Default, true);
+        focus(&mut plain, 2, t);
+        let kept = plain.reader.last_ir.lock().unwrap().clone().expect("kept");
+        assert!(kept.1.ir().fields.iter().all(|x| x.origin.via == 0));
     }
 
     #[test]
@@ -1852,10 +1825,10 @@ pub(crate) mod tests {
     impl crate::builtin_ext::AppPolicy for QuietStage {
         fn decide(
             &self,
-            f: &crate::builtin_ext::PolicyFacts<'_>,
+            f: &crate::builtin_ext::PolicyView<'_>,
         ) -> crate::builtin_ext::PolicyVerdict {
             use crate::builtin_ext::{PolicyMoment, PolicyVerdict};
-            if f.moment == PolicyMoment::Activate && f.role == Role::Window {
+            if f.moment == PolicyMoment::Activate && f.role == gorca_model::sem::SemRole::Window {
                 PolicyVerdict::Silence
             } else {
                 PolicyVerdict::Default

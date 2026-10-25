@@ -52,7 +52,10 @@ impl LegCfg {
             timerslack_ns: sc.timerslack_ns,
             pin: sc.pin_writer,
             track_faults: sc.kind == "a5",
-            flap_ms: sc.flap_ms,
+            // Spec clarification C-1: the N ms flapping cap exists only in the flap scenarios (default
+            // 20 ms there). Every other scenario runs uncapped (0 = no cap), so each focus change owns
+            // its bounded wait and M3/M4 measure the wait, not the cap.
+            flap_ms: sc.flap_ms.or(Some(if sc.kind == "flap" { 20 } else { 0 })),
             deterministic: false,
         }
     }
@@ -426,8 +429,10 @@ pub fn flap_metrics(sum: &mut Summary, out: &LegOut, n_ms: u64) {
         .collect();
     let mut worst = 0usize;
     let mut j = 0usize;
+    // n_ms == 0 means "no cap": the window degenerates to 1 ns (and j never passes i).
+    let win = (n_ms * 1_000_000).max(1);
     for i in 0..times.len() {
-        while times[i] - times[j] >= n_ms * 1_000_000 {
+        while j < i && times[i] - times[j] >= win {
             j += 1;
         }
         worst = worst.max(i - j + 1);

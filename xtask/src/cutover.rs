@@ -55,6 +55,23 @@ pub struct Surface {
 /// toolkits.
 const WEB_FAMILIES: &[&str] = &["firefox", "chromium", "electron", "telegram"];
 
+/// The families whose recordings hold a window, a dialog or an application top level. The Telegram
+/// fixtures are page-only recordings of a web app (no window node above the document), so there
+/// is no window lead-in to replay for them.
+const WINDOW_FAMILIES: &[&str] = &[
+    "gtk4",
+    "firefox",
+    "chromium",
+    "gtk3",
+    "electron",
+    "gnome-shell",
+    "vte",
+];
+
+/// The families whose recordings hold an alert or a dialog (the roles the Reader reads as a
+/// notice). GTK 3, Electron, Telegram and the terminal recordings hold none.
+const NOTICE_FAMILIES: &[&str] = &["gtk4", "firefox", "chromium", "gnome-shell"];
+
 pub const SURFACES: &[Surface] = &[
     Surface {
         name: "focus",
@@ -91,7 +108,7 @@ pub const SURFACES: &[Surface] = &[
     Surface {
         name: "review",
         slice: "M22b3",
-        ready: false,
+        ready: true,
         package: "",
         test: "",
         families: &[],
@@ -99,15 +116,23 @@ pub const SURFACES: &[Surface] = &[
     Surface {
         name: "window",
         slice: "M22b4",
-        ready: false,
+        ready: true,
         package: "",
         test: "",
-        families: &[],
+        families: WINDOW_FAMILIES,
     },
     Surface {
         name: "notification",
         slice: "M22b4",
-        ready: false,
+        ready: true,
+        package: "",
+        test: "",
+        families: NOTICE_FAMILIES,
+    },
+    Surface {
+        name: "whereami",
+        slice: "M22b4",
+        ready: true,
         package: "",
         test: "",
         families: &[],
@@ -498,6 +523,18 @@ pub const DROP_REASONS: &[(&str, &str)] = &[
     (
         "node-removed",
         "the real change removed the node; there is nothing left to speak about",
+    ),
+    (
+        "not-a-window-role",
+        "a node that is no window, dialog, alert or application top level: the Reader builds a window lead-in only for the activated window",
+    ),
+    (
+        "not-a-notice-role",
+        "a node that is neither an alert nor a dialog: a notice is read for an alert, and for a dialog when the application's policy says so",
+    ),
+    (
+        "ancestor-no-entry",
+        "an ancestor of the node is a text leaf or unreadable and has no fused entry, so the ancestry cannot be composed",
     ),
     (
         "hidden-node",
@@ -1076,7 +1113,7 @@ fn write_report(
 /// `cargo xtask cutover <surface> [--seed N]` or `cargo xtask cutover --check`.
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<bool> {
     let first = args.next().context(
-        "usage: cargo xtask cutover <surface> [--seed N] | --check   (surfaces: focus, change, browse, quicknav, review, window, notification, explain)",
+        "usage: cargo xtask cutover <surface> [--seed N] | --check   (surfaces: focus, change, browse, quicknav, review, window, notification, whereami, explain)",
     )?;
     if first == "--check" {
         return check();
@@ -1773,18 +1810,21 @@ mod tests {
 
     #[test]
     fn a_cut_over_surface_needs_a_committed_passing_report_on_this_history() {
-        let live: BTreeSet<String> = ["M22b2", "M22b3", "M22b4"].map(String::from).into();
+        let live: BTreeSet<String> = ["M22b4"].map(String::from).into();
         let yes = |_: &str| true;
-        // M22b1-5 has no rows left: focus and change are cut over.
-        assert_eq!(judge_reports(&live, &[], &yes, &yes).len(), 2);
-        let ok = [meta("focus", true, "a"), meta("change", true, "a")];
+        // M22b1-5, M22b2 and M22b3 have no rows left: focus, change, browse, quicknav and review
+        // are cut over.
+        assert_eq!(judge_reports(&live, &[], &yes, &yes).len(), 5);
+        let all = ["focus", "change", "browse", "quicknav", "review"];
+        let ok: Vec<ReportMeta> = all.iter().map(|s| meta(s, true, "a")).collect();
         assert!(judge_reports(&live, &ok, &yes, &yes).is_empty());
-        let failing = [meta("focus", false, "a"), meta("change", true, "a")];
+        let mut failing = ok.clone();
+        failing[4] = meta("review", false, "a");
         assert_eq!(judge_reports(&live, &failing, &yes, &yes).len(), 1);
         let untracked = |_: &str| false;
-        assert_eq!(judge_reports(&live, &ok, &untracked, &yes).len(), 2);
+        assert_eq!(judge_reports(&live, &ok, &untracked, &yes).len(), 5);
         let foreign = |_: &str| false;
-        assert_eq!(judge_reports(&live, &ok, &yes, &foreign).len(), 2);
+        assert_eq!(judge_reports(&live, &ok, &yes, &foreign).len(), 5);
     }
 
     #[test]
@@ -1800,8 +1840,9 @@ mod tests {
     fn every_surface_has_a_slice_that_legacy_allow_knows() {
         let text = std::fs::read_to_string(repo_root().join("xtask/legacy.allow")).expect("allow");
         for s in SURFACES {
-            // `M22b1-5` (focus, change) and `M22b2` (browse, quicknav) are cut over: their rows are deleted with the legacy path.
-            if s.slice == "M22b1-5" || s.slice == "M22b2" {
+            // `M22b1-5` (focus, change), `M22b2` (browse, quicknav) and `M22b3` (review) are cut
+            // over: their rows are deleted with the legacy path.
+            if matches!(s.slice, "M22b1-5" | "M22b2" | "M22b3") {
                 continue;
             }
             assert!(text.contains(s.slice), "{} names slice {}", s.name, s.slice);

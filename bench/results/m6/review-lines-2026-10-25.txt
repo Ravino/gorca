@@ -1,0 +1,3 @@
+lines: legacy 22, new 22
+review lines: IDENTICAL
+(bench/m6/review-lines.sh on 2026-10-25, base c4abd51f vs cut-over, mixed page of 7 rows)

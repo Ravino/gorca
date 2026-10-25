@@ -52,3 +52,32 @@ For `storm-*` the latency/lateness files hold ingress lag with plugins on / off.
     plus the fixture); `a3` runs three guests (log, assert text, attr key).
 11. The K1+K2 pair runs sequentially on one thread (conservative for the combined stall).
 12. `m8_isolation_pp` and `pf1_differences` are derived by `m18a0-report` across runs.
+
+## Spec clarifications made after the first arm runs (harness fixes, gates and arms untouched)
+
+- **C-1 flapping cap (SPEC section 2 "at most once per N ms", M3, M5).** The `N` ms cap now exists only in
+  scenarios of `kind = "flap"` (default 20 ms there) or with an explicit `flap_ms`. Every other scenario
+  (benign, adv-*, keypress, k1k2, storms) runs with the cap off (`flap_ms` 0 = no cap), so each focus change
+  owns its bounded wait. Reason: the stock scenarios space focus changes 0.3-2 ms apart, so the 20 ms cap denied
+  the wait on about 98 % of turns and the M3 gate (facts at first utterance) was impossible for any runner;
+  the cap is a flapping-focus protection (M5), not a property of the benign mix. `flap_ms = 0` is valid
+  (`flap_metrics` used to underflow). Arms that tune `N` are unaffected; no arm code changed.
+- **C-2 run isolation.** `run-all.sh` writes into `results/<UTC stamp>-<pid>/<arm>/`, keeps its log and a private
+  copy of the binaries there, and holds a PID lockfile (`/var/tmp/m18a0-run-all.lock`, `M18A0_LOCK` to
+  override): a second invocation refuses while the PID is alive; a dead PID is a stale lock and is replaced.
+- **C-3 watchdog per scenario.** `watchdog_s` in the scenario TOML, else `--watchdog-s`, else
+  `default_watchdog_s()`: 600 s, except `keypress` = max(600, 1.5 x 2 x pairs x leg_s + 120) = 1020 s for
+  keypress-onoff; adv-a3, adv-all, adv-each-added (per stage) = 2400 s (arm A needed it at 200k samples).
+  `--watchdog-s` overrides everything.
+- **C-4 quiet host.** `host/prepare.sh check|wait` requires loadavg1 < 1.5, PSI cpu some avg10 < 1.0,
+  every governor `performance`, and no process named cargo, rustc or *e2e*. `run-all.sh --condition quiet`
+  waits (`--quiet-wait`, default 900 s) before each run; on timeout the run still happens, labelled
+  `quiet-precondition-timeout`. `meta.json` `quiet_violated` uses the same limits at run start and end
+  (the busy-polling writer itself adds about 1.0 to loadavg1, so the old 1.0 limit flagged every run).
+- **C-5 handle MAC.** `MacKey` = per-`PluginRuntime` random key; the MAC is keyed SipHash-1-3 (std
+  `RandomState`, OS-seeded, never exposed), 32 bits kept in the handle. WQ-3 now measures that cost.
+
+Known: `selftest` "every plugin saw stale replies dropped" is flaky on a loaded host (a cold first-call wall
+overrun demotes a plugin; passed 2 of 3 here at loadavg 4+). `guests/build.sh` failed in this worktree
+(E0463, wasm32-wasip2 std not found by `cargo`); the guests were copied from the B' worktree (same sources,
+SHA256SUMS verified).

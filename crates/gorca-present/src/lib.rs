@@ -15,6 +15,7 @@
 pub mod browse;
 pub mod change;
 pub mod compose;
+pub mod desktop;
 pub mod deviations;
 pub mod diff;
 pub mod edit;
@@ -23,11 +24,14 @@ pub use gorca_present_ir as ir;
 pub mod render;
 pub mod roles;
 mod web;
+pub mod zone;
 
 pub use change::{changed_groups, compose_change};
 pub use compose::{
-    ComposeCtx, ComposeError, LABEL_CAP, ReportFlags, compose, name_is_blank, one_line_label,
+    ComposeCtx, ComposeError, LABEL_CAP, ReportFlags, compose, is_secret_entry, is_secret_role,
+    name_is_blank, one_line_label,
 };
+pub use desktop::{compose_notice, compose_window, notice_has_words};
 pub use deviations::{Deviations, DeviationsError};
 pub use diff::{DiffCtx, DiffOutcome, LegacyToken, diff, diff_report};
 pub use edit::{IrEdit, apply as apply_edits, fields_from_tokens, kind_of_token};
@@ -37,3 +41,4 @@ pub use ir::{
     FlatSpan, IrFlags, LangId, LangTags, Origin, PRES_IR_VERSION, PresIr, Reason, Redacted, RowId,
 };
 pub use render::{RenderOpts, Token, TokenText, render, render_kinds};
+pub use zone::{plain_text_role, review_role_word, role_word_of};

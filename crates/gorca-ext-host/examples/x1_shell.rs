@@ -23,9 +23,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use gorca_core::{AppExt, ExtSource, MirrorDirectory, PolicyFacts, PolicyMoment, PolicyVerdict};
+use gorca_core::{AppExt, ExtSource, MirrorDirectory, PolicyMoment, PolicyVerdict, PolicyView};
 use gorca_ext_host::{ExtHost, Manifest};
-use gorca_model::{AppId, AppInfo, ConnectorId, ConnectorKind, Role, StateSet};
+use gorca_model::sem::SemRole;
+use gorca_model::{AppId, AppInfo, ConnectorId, ConnectorKind};
 
 const MANIFEST: &str = include_str!("../../../extensions/ext-gnome-shell/ext.toml");
 
@@ -100,14 +101,14 @@ fn row(case: &str, mut v: Vec<u64>) {
 
 fn facts(
     moment: PolicyMoment,
-    role: Role,
+    role: SemRole,
     name: Option<&'static str>,
     range: Option<(f64, f64, f64)>,
-) -> PolicyFacts<'static> {
-    PolicyFacts {
+) -> PolicyView<'static> {
+    PolicyView {
         moment,
         role,
-        states: StateSet::FOCUSED,
+        flags: 0x80,
         name,
         description: None,
         range,
@@ -122,45 +123,45 @@ fn main() {
         std::fs::read(root.join("target/ext-wasm/wasm32-wasip2/release/ext_gnome_shell.wasm"))
             .expect("build the component first: cargo xtask build-ext");
 
-    let cases: [(&str, PolicyFacts<'static>); 6] = [
+    let cases: [(&str, PolicyView<'static>); 6] = [
         (
             "slider_focus_value",
             facts(
                 PolicyMoment::Focus,
-                Role::Slider,
+                SemRole::Slider,
                 Some("Volume"),
                 Some((0.5, 0.0, 1.0)),
             ),
         ),
         (
             "window_focus_silence",
-            facts(PolicyMoment::Focus, Role::Window, Some("Main"), None),
+            facts(PolicyMoment::Focus, SemRole::Window, Some("Main"), None),
         ),
         (
             "stage_activate_silence",
             facts(
                 PolicyMoment::Activate,
-                Role::Window,
+                SemRole::Window,
                 Some("Main stage"),
                 None,
             ),
         ),
         (
             "dialog_showing_notice",
-            facts(PolicyMoment::Showing, Role::Dialog, None, None),
+            facts(PolicyMoment::Showing, SemRole::Dialog, None, None),
         ),
         (
             "osd_level_say",
             facts(
                 PolicyMoment::Value,
-                Role::ProgressBar,
+                SemRole::ProgressBar,
                 Some("Volume"),
                 Some((0.25, 0.0, 1.0)),
             ),
         ),
         (
             "button_focus_defer",
-            facts(PolicyMoment::Focus, Role::Button, Some("OK"), None),
+            facts(PolicyMoment::Focus, SemRole::Button, Some("OK"), None),
         ),
     ];
     for (label, bytes) in [("wasm", Some(&wasm[..])), ("native", None)] {

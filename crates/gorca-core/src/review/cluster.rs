@@ -10,16 +10,18 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
-use gorca_model::{AppId, Ifaces, NodeKey, NodeSnapshot, Rect, Role, StateSet, TextLine, Value};
+use gorca_model::sem::{SemEntry, SemRole};
+use gorca_model::{AppId, Ifaces, NodeKey, NodeSnapshot, Rect, StructFlags, TextLine, Value};
 use smallvec::SmallVec;
 
 use super::model::{
     Completeness, Line, LineModel, LineSource, NodeCheck, ReviewLimits, TruncWhy, Zone, ZoneKind,
     next_model_id,
 };
-use super::objnav::{PresClass, class};
+use super::objnav::{PresClass, class_of_snapshot};
 use super::validity::snapshot_hash;
-use crate::present::flat_zone_text;
+use super::zone;
+use crate::present::entry_of;
 
 /// U+FFFC OBJECT REPLACEMENT CHARACTER: an embedded object inside a text.
 const EMBEDDED: char = '\u{fffc}';
@@ -30,10 +32,25 @@ const COORD_MAX: i64 = 1_000_000;
 #[derive(Clone, Debug)]
 pub struct BuildNode {
     pub snap: Arc<NodeSnapshot>,
+    /// The node is inside a web document.
+    pub web: bool,
     /// Depth below the surface root (0 for the root).
     pub depth: u16,
     /// Visible lines of the node's text, if it was asked for them.
     pub lines: Option<Arc<[TextLine]>>,
+}
+
+impl BuildNode {
+    /// A node of the walk with no text lines read (the latency series build pages with it).
+    #[cfg(test)]
+    pub fn of(snap: Arc<NodeSnapshot>, depth: u16) -> Self {
+        Self {
+            snap,
+            web: false,
+            depth,
+            lines: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -70,27 +87,61 @@ pub fn sane_rect(r: Rect) -> Option<Rect> {
         .then_some(r)
 }
 
-fn is_entry(role: Role) -> bool {
-    matches!(role, Role::TextEntry | Role::PasswordEntry)
-}
-
-/// Controls whose name is spoken as one zone together with their role.
-fn is_control(role: Role) -> bool {
+fn is_entry(e: &SemEntry) -> bool {
     matches!(
-        role,
-        Role::Button
-            | Role::ToggleButton
-            | Role::CheckBox
-            | Role::RadioButton
-            | Role::MenuItem
-            | Role::Tab
-            | Role::Link
-            | Role::TreeItem
+        e.sem.role,
+        SemRole::TextBox | SemRole::SearchBox | SemRole::PasswordBox
     )
 }
 
-fn label_role(role: Role) -> bool {
-    matches!(role, Role::Label | Role::StaticText)
+/// Controls whose name is spoken as one zone together with their role.
+fn is_control(role: SemRole) -> bool {
+    matches!(
+        role,
+        SemRole::Button
+            | SemRole::Switch
+            | SemRole::Checkbox
+            | SemRole::MenuItemCheckbox
+            | SemRole::Radio
+            | SemRole::MenuItemRadio
+            | SemRole::MenuItem
+            | SemRole::Tab
+            | SemRole::Link
+            | SemRole::TreeItem
+    )
+}
+
+/// Roles whose accessible name is made of their content: a name change of a descendant changes
+/// the name, and the name is not a line of its own.
+fn name_is_content(role: SemRole) -> bool {
+    matches!(
+        role,
+        SemRole::Heading
+            | SemRole::Link
+            | SemRole::ListItem
+            | SemRole::Option
+            | SemRole::Term
+            | SemRole::Definition
+            | SemRole::Row
+            | SemRole::Cell
+            | SemRole::GridCell
+            | SemRole::ColumnHeader
+            | SemRole::RowHeader
+            | SemRole::Button
+            | SemRole::Switch
+            | SemRole::Checkbox
+            | SemRole::MenuItemCheckbox
+            | SemRole::Radio
+            | SemRole::MenuItemRadio
+            | SemRole::MenuItem
+            | SemRole::Tab
+            | SemRole::TreeItem
+    )
+}
+
+/// A role that is text on its own line: a label, static text, a paragraph.
+fn label_role(role: SemRole) -> bool {
+    role.is_inline_text() || matches!(role, SemRole::Caption)
 }
 
 fn norm(s: &str) -> String {
@@ -98,7 +149,7 @@ fn norm(s: &str) -> String {
 }
 
 fn focusable(s: &NodeSnapshot) -> bool {
-    s.states.contains(StateSet::FOCUSABLE)
+    s.struct_state().contains(StructFlags::FOCUSABLE)
 }
 
 fn actionable(s: &NodeSnapshot) -> bool {
@@ -108,8 +159,9 @@ fn actionable(s: &NodeSnapshot) -> bool {
 /// The object zone of a node, if it has anything to say or can be acted on.
 fn object_zone(n: &BuildNode, surface: Option<Rect>) -> Option<Zone> {
     let s = &*n.snap;
-    let mut text = if is_entry(s.role) && s.value.is_none() && n.lines.is_some() {
-        // A single-line entry: the label, the role and what is typed.
+    let entry = entry_of(s);
+    // A single-line entry: the label, the role and what is typed.
+    let typed: Option<Arc<str>> = if is_entry(&entry) && s.value.is_none() && n.lines.is_some() {
         let typed = n
             .lines
             .as_deref()
@@ -120,31 +172,23 @@ fn object_zone(n: &BuildNode, surface: Option<Rect>) -> Option<Zone> {
                     .join(" ")
             })
             .unwrap_or_default();
-        let mut shadow = (*n.snap).clone();
-        shadow.value = (!typed.is_empty()).then(|| Value::Text(Arc::from(typed)));
-        flat_zone_text(&shadow)
+        (!typed.is_empty()).then(|| Arc::from(typed))
+    } else if let Some(Value::Text(t)) = &s.value {
+        Some(Arc::clone(t))
     } else {
-        flat_zone_text(s)
+        None
     };
-    if text.is_empty() {
-        if !(focusable(s) || actionable(s)) {
-            return None;
-        }
-        let w = s.role.spoken();
-        if w.is_empty() {
-            gorca_i18n::t(gorca_i18n::MsgId::WordObject)
-        } else {
-            w
-        }
-        .clone_into(&mut text);
+    let tokens = zone::zone_tokens(s, n.web, typed.as_deref(), focusable(s) || actionable(s));
+    if tokens.is_empty() {
+        return None;
     }
     Some(Zone {
         node: s.key,
         kind: ZoneKind::Object,
-        text: Arc::from(text),
+        text: Arc::from(zone::join_tokens(&tokens)),
         rect: placed(s.bounds, surface),
-        name: s.name.clone().filter(|n| !n.is_empty()),
-        label_like: label_role(s.role),
+        name: entry.name.clone().filter(|n| !n.is_empty()),
+        label_like: label_role(entry.sem.role),
     })
 }
 
@@ -193,7 +237,7 @@ fn text_zones(n: &BuildNode, surface: Option<Rect>) -> Vec<Zone> {
                 text: Arc::from(t),
                 rect,
                 name: None,
-                label_like: label_role(s.role),
+                label_like: label_role(entry_of(s).sem.role),
             });
         }
     }
@@ -203,8 +247,9 @@ fn text_zones(n: &BuildNode, surface: Option<Rect>) -> Vec<Zone> {
 /// Zones of the subtree rooted at node `i`, children already folded (rules 1 to 4, absorb).
 fn finalize(n: &BuildNode, kids: Vec<Zone>, surface: Option<Rect>) -> Vec<Zone> {
     let s = &*n.snap;
+    let entry = entry_of(s);
     let has_lines = n.lines.as_ref().is_some_and(|l| !l.is_empty());
-    let single_line_entry = is_entry(s.role) && !s.states.contains(StateSet::MULTILINE);
+    let single_line_entry = is_entry(&entry) && !s.struct_state().contains(StructFlags::MULTILINE);
     if has_lines && !single_line_entry {
         let mut own = text_zones(n, surface);
         if !own.is_empty() {
@@ -220,17 +265,19 @@ fn finalize(n: &BuildNode, kids: Vec<Zone>, surface: Option<Rect>) -> Vec<Zone> 
     }
     if kids.is_empty() {
         // A label or paragraph without a text interface still says its name.
-        let named_text = matches!(s.role, Role::Label | Role::StaticText | Role::Paragraph)
-            && s.name.as_deref().is_some_and(|n| !n.trim().is_empty());
-        let eligible =
-            class(s) == PresClass::Content || focusable(s) || actionable(s) || named_text;
+        let named_text = (label_role(entry.sem.role) || entry.sem.role == SemRole::Paragraph)
+            && entry.name.as_deref().is_some_and(|n| !n.trim().is_empty());
+        let eligible = class_of_snapshot(s, false) == PresClass::Content
+            || focusable(s)
+            || actionable(s)
+            || named_text;
         return if eligible {
             object_zone(n, surface).into_iter().collect()
         } else {
             Vec::new()
         };
     }
-    let name = s.name.as_deref().map(norm).filter(|x| !x.is_empty());
+    let name = entry.name.as_deref().map(norm).filter(|x| !x.is_empty());
     let joined = norm(
         &kids
             .iter()
@@ -239,7 +286,7 @@ fn finalize(n: &BuildNode, kids: Vec<Zone>, surface: Option<Rect>) -> Vec<Zone> 
             .join(" "),
     );
     // A control whose name is just its label's text is one zone: "OK button", not "OK".
-    if is_control(s.role)
+    if is_control(entry.sem.role)
         && let Some(nm) = &name
         && *nm == joined
         && let Some(mut z) = object_zone(n, surface)
@@ -251,10 +298,10 @@ fn finalize(n: &BuildNode, kids: Vec<Zone>, surface: Option<Rect>) -> Vec<Zone> 
     }
     // A named container says its name first, unless the name is made of its content (rule 3).
     if let Some(nm) = &name
-        && !s.role.takes_name_from_content()
+        && !name_is_content(entry.sem.role)
         // A window's title is `info.window_title`, not a line of its content.
-        && !matches!(s.role, Role::Window | Role::Application)
-        && class(s) == PresClass::Content
+        && !matches!(entry.sem.role, SemRole::Window | SemRole::Application)
+        && class_of_snapshot(s, false) == PresClass::Content
         && *nm != joined
         && let Some(z) = object_zone(n, surface)
     {
@@ -327,7 +374,8 @@ fn collect_zones(input: &BuildInput, surface_rect: Option<Rect>) -> Vec<Zone> {
             }
         }
         parent[i] = stack.last().copied();
-        skip[i] = class(&node.snap) == PresClass::Unavailable || parent[i].is_some_and(|p| skip[p]);
+        skip[i] = class_of_snapshot(&node.snap, false) == PresClass::Unavailable
+            || parent[i].is_some_and(|p| skip[p]);
         stack.push(i);
     }
     let mut pending: Vec<Vec<(usize, Vec<Zone>)>> = vec![Vec::new(); n];
@@ -596,7 +644,7 @@ pub fn build_line_model(input: &BuildInput, limits: &ReviewLimits) -> LineModel 
 mod tests {
     use super::super::collect::testsrc::{key, snap};
     use super::*;
-    use gorca_model::PropMask;
+    use gorca_model::{PropMask, Role, StateSet};
 
     fn bn(mut s: NodeSnapshot, depth: u16, r: Option<Rect>) -> BuildNode {
         s.bounds = r;
@@ -605,6 +653,7 @@ mod tests {
         }
         BuildNode {
             snap: Arc::new(s),
+            web: false,
             depth,
             lines: None,
         }

@@ -153,14 +153,13 @@ fn cmd_run(args: &[String]) -> Result<bool> {
         base.timerslack_ns = Some(s);
     }
     let kappa = opt(args, "--kappa").and_then(|k| k.parse().ok());
-    let watchdog_s: u64 = opt(args, "--watchdog-s")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(600);
+    let watchdog_cli: Option<u64> = opt(args, "--watchdog-s").and_then(|v| v.parse().ok());
     let label = opt(args, "--label");
     let mut all_ok = true;
     for sc in base.expand() {
         let stem = format!("{}-{}-{}-{}", meta::utc_stamp(), arm, condition, sc.name);
         let dir = unique_dir(&out, &stem)?;
+        let watchdog_s = watchdog_cli.unwrap_or_else(|| sc.default_watchdog_s());
         all_ok &= run_one(
             &sc,
             &arm,
@@ -246,7 +245,7 @@ fn run_one(
     let after = meta::host_snap();
     if condition == "quiet" && (!before.is_quiet() || !after.is_quiet()) {
         sum.quiet_violated = true;
-        sum.notes.push("quiet-violated: loadavg or PSI above 1.0 at the start or the end of the run; kept and labelled".into());
+        sum.notes.push("quiet-violated: loadavg1 >= 1.5, PSI cpu >= 1.0 or governor != performance at the start or the end of the run; kept and labelled".into());
     }
     let ok = r.is_ok();
     if let Err(e) = r {
