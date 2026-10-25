@@ -268,9 +268,7 @@ impl crate::review::NavSource for MirrorDirectory {
 mod tests {
     use super::*;
     use gorca_mirror::mirror;
-    use gorca_model::{
-        ChildList, ConnectorId, Freshness, Ifaces, LocalId, Role, SnapshotBatch, StateSet,
-    };
+    use gorca_model::{ConnectorId, Freshness, LocalId, Role, SnapshotBatch, StateSet};
     use std::time::Instant;
 
     fn app(n: u32) -> AppId {
@@ -281,27 +279,18 @@ mod tests {
     }
 
     fn snap(a: u32, n: u64) -> Arc<NodeSnapshot> {
-        Arc::new(NodeSnapshot {
-            key: NodeKey {
-                app: app(a),
-                local: LocalId(n),
-            },
-            role: Role::Button,
-            states: StateSet::empty(),
-            name: Some(Arc::from("ok")),
-            description: None,
-            value: None,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: gorca_model::PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        })
+        Arc::new(
+            NodeSnapshot::new(
+                NodeKey {
+                    app: app(a),
+                    local: LocalId(n),
+                },
+                Freshness::Fresh { at: Instant::now() },
+            )
+            .with_name(Some(Arc::from("ok")))
+            .with_have(gorca_model::PropMask::PRESENT)
+            .with_source(Role::Button, StateSet::empty()),
+        )
     }
 
     #[test]

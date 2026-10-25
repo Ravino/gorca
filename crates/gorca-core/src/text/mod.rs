@@ -653,7 +653,7 @@ impl Reader {
         }
         // Byte offsets (VTE; a capability the connector reports, not a name) are the terminal
         // layer's. Gecko's UTF-16 offsets are followed as they are (`TextUnit::window_follows`).
-        if !self.dir.text_window_follows(snap.key.app) {
+        if !self.dir.text_window_follows(snap.key().app) {
             self.text_untrack("app not followed");
             return;
         }
@@ -670,7 +670,7 @@ impl Reader {
                 let was_off = self.text.caret.is_off();
                 self.text_step(
                     In::Track {
-                        node: snap.key,
+                        node: snap.key(),
                         kind,
                     },
                     fx,
@@ -974,7 +974,7 @@ impl Reader {
                 gorca_model::Lookup::Hit(s) => s,
                 gorca_model::Lookup::Miss | gorca_model::Lookup::Gone => return Ancestry::Unknown,
             };
-            match snap.parent {
+            match snap.parent() {
                 Some(p) if p == root => return Ancestry::Inside,
                 Some(p) => cur = p,
                 None => return Ancestry::Outside,
@@ -1490,7 +1490,7 @@ impl Reader {
             (true, Some(s))
                 if s.struct_state().contains(StructFlags::FOCUSED)
                     && entry_of(&s).sem.role == SemRole::Terminal
-                    && self.term_resume(s.key, fx) => {}
+                    && self.term_resume(s.key(), fx) => {}
             (true, Some(s)) if s.struct_state().contains(StructFlags::FOCUSED) => {
                 self.text_track(&s, fx);
             }

@@ -17,9 +17,8 @@ use std::time::{Duration, Instant};
 use gorca_connector_api::{ActionReq, BackendError, BackendOp, BackendReply, BackendRequest};
 use gorca_mirror::{ApplyOrigin, MirrorRead, mirror};
 use gorca_model::{
-    AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, Lookup, NodeKey,
-    NodeSnapshot, PropMask, Rect, Relations, Role, SnapshotBatch, StateSet, TextLine, TextLines,
-    TextQuery,
+    AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, Lookup, NodeKey, NodeSnapshot,
+    PropMask, Rect, Role, SnapshotBatch, StateSet, TextLine, TextLines, TextQuery,
 };
 use gorca_rt::{BudgetClass, Clock, mpsc};
 
@@ -73,41 +72,32 @@ fn snap(
     kids: &[u64],
     r: Option<Rect>,
 ) -> NodeSnapshot {
-    NodeSnapshot {
-        key: key(n),
-        role,
-        states: StateSet::SHOWING | StateSet::VISIBLE | StateSet::FOCUSABLE,
-        name: (!name.is_empty()).then(|| Arc::from(name)),
-        description: None,
-        value: None,
-        parent: parent.map(key),
-        children: ChildList::Known(kids.iter().map(|k| key(*k)).collect()),
-        interfaces: Ifaces::empty(),
-        attrs: AttrMap::default(),
-        relations: Relations::default(),
-        bounds: r,
-        have: PropMask::ALL,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    }
-    .with_test_record()
+    NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+        .with_name((!name.is_empty()).then(|| Arc::from(name)))
+        .with_parent(parent.map(key))
+        .with_children(ChildList::Known(kids.iter().map(|k| key(*k)).collect()))
+        .with_bounds(r)
+        .with_have(PropMask::ALL)
+        .with_test_source(
+            role,
+            StateSet::SHOWING | StateSet::VISIBLE | StateSet::FOCUSABLE,
+        )
 }
 
 /// What a toolkit gives for `want`: children as a count, bounds only when asked.
 fn reply_node(s: &NodeSnapshot, want: PropMask) -> Arc<NodeSnapshot> {
     let mut n = s.clone();
-    n.children = match &s.children {
+    n.set_children(match s.children() {
         ChildList::Known(k) => ChildList::Count(u32::try_from(k.len()).unwrap_or(0)),
         other => other.clone(),
-    };
+    });
     let mut have = PropMask::PRESENT | PropMask::PARENT | PropMask::CHILDREN;
     if want.contains(PropMask::BOUNDS) {
         have |= PropMask::BOUNDS;
     } else {
-        n.bounds = None;
+        n.set_bounds(None);
     }
-    n.have = have;
+    n.set_have(have);
     Arc::new(n)
 }
 
@@ -205,7 +195,7 @@ fn answer(s: &Script, op: &BackendOp) -> Option<Result<BackendReply, BackendErro
             let Some(p) = get(node) else {
                 return Some(Err(BackendError::Gone));
             };
-            let ChildList::Known(kids) = &p.children else {
+            let ChildList::Known(kids) = &p.children() else {
                 return Some(Ok(BackendReply::Subtree(SnapshotBatch::default())));
             };
             let nodes = kids
@@ -223,7 +213,7 @@ fn answer(s: &Script, op: &BackendOp) -> Option<Result<BackendReply, BackendErro
             while let Some(k) = cur {
                 let Some(n) = get(&k) else { break };
                 out.push(reply_node(n, *want));
-                cur = n.parent;
+                cur = n.parent();
             }
             Some(Ok(BackendReply::Subtree(SnapshotBatch::new(out))))
         }
@@ -309,11 +299,11 @@ async fn expanding_a_node_makes_its_child_list_known_and_brings_extents() {
     let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
         panic!("parent missing")
     };
-    assert!(matches!(&v.snap.children, ChildList::Known(k) if k.len() == 5));
+    assert!(matches!(&v.snap.children(), ChildList::Known(k) if k.len() == 5));
     let Lookup::Hit(c) = f.io.mirror.view(key(4)) else {
         panic!("child missing")
     };
-    assert!(c.snap.have.contains(PropMask::BOUNDS) && c.snap.bounds.is_some());
+    assert!(c.snap.have().contains(PropMask::BOUNDS) && c.snap.bounds().is_some());
     assert_eq!(
         f.requests.load(Ordering::Relaxed),
         2,
@@ -355,9 +345,13 @@ async fn a_cold_build_fetches_what_is_missing_and_a_warm_build_fetches_nothing()
 async fn text_lines_are_asked_for_once_and_reused_for_clean_nodes() {
     let mut s = form(1);
     let mut label = snap(9, Role::Label, "", Some(2), &[], rect(0, 100, 200, 40));
-    label.interfaces = Ifaces::TEXT;
+    label.set_caps(gorca_model::NodeCaps::new(Ifaces::TEXT));
     s.nodes.insert(key(9), label);
-    if let Some(ChildList::Known(k)) = s.nodes.get_mut(&key(2)).map(|n| &mut n.children) {
+    if let Some(ChildList::Known(k)) = s
+        .nodes
+        .get_mut(&key(2))
+        .map(gorca_model::NodeSnapshot::children_mut)
+    {
         k.push(key(9));
     }
     s.lines.insert(
@@ -499,7 +493,7 @@ async fn revalidation_compares_extents_and_text_and_updates_the_mirror() {
         let mut s = f.script.lock().unwrap();
         for i in 0..3u64 {
             if let Some(n) = s.nodes.get_mut(&key(3 + i)) {
-                n.bounds = rect(0, i32::try_from(i).unwrap_or(0) * 30 - 50, 100, 24);
+                n.set_bounds(rect(0, i32::try_from(i).unwrap_or(0) * 30 - 50, 100, 24));
             }
         }
     }
@@ -522,9 +516,13 @@ async fn revalidation_compares_extents_and_text_and_updates_the_mirror() {
 async fn f5_an_unchanged_text_node_revalidates_as_the_same() {
     let mut s = form(1);
     let mut label = snap(9, Role::Label, "", Some(2), &[], rect(0, 100, 200, 40));
-    label.interfaces = Ifaces::TEXT;
+    label.set_caps(gorca_model::NodeCaps::new(Ifaces::TEXT));
     s.nodes.insert(key(9), label);
-    if let Some(ChildList::Known(k)) = s.nodes.get_mut(&key(2)).map(|n| &mut n.children) {
+    if let Some(ChildList::Known(k)) = s
+        .nodes
+        .get_mut(&key(2))
+        .map(gorca_model::NodeSnapshot::children_mut)
+    {
         k.push(key(9));
     }
     s.lines.insert(
@@ -598,7 +596,11 @@ async fn f7_a_deep_surface_is_built_completely() {
             rect(0, 0, 50, 20),
         ),
     );
-    if let Some(ChildList::Known(k)) = s.nodes.get_mut(&key(depth)).map(|n| &mut n.children) {
+    if let Some(ChildList::Known(k)) = s
+        .nodes
+        .get_mut(&key(depth))
+        .map(gorca_model::NodeSnapshot::children_mut)
+    {
         k.push(key(depth + 1));
     }
     let f = fake(s);
@@ -632,7 +634,7 @@ async fn child_paging_stops_when_the_build_budget_is_used_up() {
         panic!("parent missing")
     };
     assert!(
-        !matches!(&v.snap.children, ChildList::Known(_)),
+        !matches!(&v.snap.children(), ChildList::Known(_)),
         "an incomplete list must not be recorded as known"
     );
     assert!(matches!(f.io.mirror.view(key(3 + 255)), Lookup::Hit(_)));
@@ -660,7 +662,7 @@ async fn child_paging_stops_when_the_build_budget_is_used_up() {
     let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
         panic!("parent missing")
     };
-    assert!(matches!(&v.snap.children, ChildList::Known(k) if k.len() == 600));
+    assert!(matches!(&v.snap.children(), ChildList::Known(k) if k.len() == 600));
     // Without a deadline the whole list is read, page after page.
     let g = fake(form(600));
     expand(&g.io, key(2), BudgetClass::Interactive, true, None)
@@ -670,15 +672,19 @@ async fn child_paging_stops_when_the_build_budget_is_used_up() {
     let Lookup::Hit(v) = g.io.mirror.view(key(2)) else {
         panic!("parent missing")
     };
-    assert!(matches!(&v.snap.children, ChildList::Known(k) if k.len() == 600));
+    assert!(matches!(&v.snap.children(), ChildList::Known(k) if k.len() == 600));
 }
 
 fn text_page(label_lines: &str) -> Script {
     let mut s = form(1);
     let mut label = snap(9, Role::Label, "", Some(2), &[], rect(0, 100, 200, 40));
-    label.interfaces = Ifaces::TEXT;
+    label.set_caps(gorca_model::NodeCaps::new(Ifaces::TEXT));
     s.nodes.insert(key(9), label);
-    if let Some(ChildList::Known(k)) = s.nodes.get_mut(&key(2)).map(|n| &mut n.children) {
+    if let Some(ChildList::Known(k)) = s
+        .nodes
+        .get_mut(&key(2))
+        .map(gorca_model::NodeSnapshot::children_mut)
+    {
         k.push(key(9));
     }
     s.lines.insert(
@@ -748,7 +754,11 @@ async fn busy_retries_stop_at_the_build_budget() {
 
 fn reorder_children(f: &Fake, parent: u64, f_: impl FnOnce(&mut Vec<NodeKey>)) {
     let mut s = f.script.lock().unwrap();
-    if let Some(ChildList::Known(k)) = s.nodes.get_mut(&key(parent)).map(|n| &mut n.children) {
+    if let Some(ChildList::Known(k)) = s
+        .nodes
+        .get_mut(&key(parent))
+        .map(gorca_model::NodeSnapshot::children_mut)
+    {
         let mut v: Vec<NodeKey> = k.iter().copied().collect();
         f_(&mut v);
         *k = v.into_iter().collect();
@@ -777,7 +787,7 @@ async fn a_list_that_grows_between_passes_is_read_again_from_the_start() {
     let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
         panic!("parent missing")
     };
-    let ChildList::Known(k) = &v.snap.children else {
+    let ChildList::Known(k) = &v.snap.children() else {
         panic!("not known")
     };
     let uniq: HashSet<_> = k.iter().collect();
@@ -802,7 +812,7 @@ async fn a_list_reordered_between_passes_is_read_again_from_the_start() {
     let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
         panic!("parent missing")
     };
-    let ChildList::Known(k) = &v.snap.children else {
+    let ChildList::Known(k) = &v.snap.children() else {
         panic!("not known")
     };
     let uniq: HashSet<_> = k.iter().collect();

@@ -3,9 +3,7 @@
 
 use std::time::Duration;
 
-use gorca_model::{
-    AttrMap, ChildList, ConnectorId, Ifaces, LocalId, Relations, Role, StateSet, Value,
-};
+use gorca_model::{ChildList, ConnectorId, LocalId, Role, StateSet, Value};
 
 use super::*;
 
@@ -24,24 +22,12 @@ fn key(n: u64) -> NodeKey {
 }
 
 fn node(n: u64, name: &str) -> Arc<NodeSnapshot> {
-    Arc::new(NodeSnapshot {
-        key: key(n),
-        role: Role::Button,
-        states: StateSet::empty(),
-        name: Some(Arc::from(name)),
-        description: None,
-        value: None,
-        parent: None,
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
-        attrs: AttrMap::default(),
-        relations: Relations::default(),
-        bounds: None,
-        have: PropMask::PRESENT,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    })
+    Arc::new(
+        NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+            .with_name(Some(Arc::from(name)))
+            .with_have(PropMask::PRESENT)
+            .with_source(Role::Button, StateSet::empty()),
+    )
 }
 
 fn batch(nodes: Vec<Arc<NodeSnapshot>>) -> SnapshotBatch {
@@ -55,7 +41,7 @@ fn reply_at(w: &MirrorWriter) -> ApplyOrigin {
 fn name_of(r: &MirrorHandle, n: u64) -> Option<String> {
     r.get(key(n))
         .hit()
-        .and_then(|s| s.name.as_deref().map(str::to_owned))
+        .and_then(|s| s.name().as_deref().map(str::to_owned))
 }
 
 #[test]
@@ -189,7 +175,7 @@ fn the_stale_epoch_is_o1_and_clears_with_a_newer_request() {
 fn partial_nodes_do_not_satisfy_a_full_need() {
     let (mut w, r) = mirror();
     let mut n = (*node(1, "item")).clone();
-    n.have = PropMask::CACHE_ITEM;
+    n.set_have(PropMask::CACHE_ITEM);
     w.apply(batch(vec![Arc::new(n)]), ApplyOrigin::Push);
     let v = r.view(key(1)).hit().unwrap();
     assert!(v.satisfies(PropMask::NAME | PropMask::ROLE | PropMask::STATES));
@@ -204,25 +190,25 @@ fn partial_nodes_do_not_satisfy_a_full_need() {
 fn a_partial_reply_keeps_fresh_fields_only_the_old_snapshot_had() {
     let (mut w, r) = mirror();
     let mut full = (*node(1, "slider")).clone();
-    full.value = Some(Value::Range {
+    full.set_value(Some(Value::Range {
         current: 3.0,
         min: 0.0,
         max: 10.0,
-    });
+    }));
     w.apply(batch(vec![Arc::new(full)]), ApplyOrigin::Push);
     let mut dump_row = (*node(1, "slider")).clone();
-    dump_row.have = PropMask::CACHE_ITEM;
+    dump_row.set_have(PropMask::CACHE_ITEM);
     w.apply(batch(vec![Arc::new(dump_row)]), reply_at(&w));
     let v = r.view(key(1)).hit().unwrap();
-    assert!(v.snap.value.is_some());
+    assert!(v.snap.value().is_some());
     assert!(v.satisfies(PropMask::PRESENT));
     // Once an event says the value is stale it is not carried over.
     w.invalidate(key(1), PropMask::VALUE, Instant::now());
     let mut dump_row = (*node(1, "slider")).clone();
-    dump_row.have = PropMask::CACHE_ITEM;
+    dump_row.set_have(PropMask::CACHE_ITEM);
     w.apply(batch(vec![Arc::new(dump_row)]), reply_at(&w));
     let v = r.view(key(1)).hit().unwrap();
-    assert!(!v.snap.have.contains(PropMask::VALUE));
+    assert!(!v.snap.have().contains(PropMask::VALUE));
     w.check_invariants().unwrap();
 }
 
@@ -248,17 +234,21 @@ fn an_older_reply_does_not_replace_newer_content() {
 fn foreign_keys_are_dropped_and_counted() {
     let (mut w, r) = mirror_for(app(), None);
     let mut foreign = (*node(1, "evil")).clone();
-    foreign.key.app = AppId {
-        connector: ConnectorId(0),
-        serial: 2,
+    let foreign_key = NodeKey {
+        app: AppId {
+            connector: ConnectorId(0),
+            serial: 2,
+        },
+        local: foreign.key().local,
     };
+    foreign.set_key(foreign_key);
     let out = w.apply(
         batch(vec![Arc::new(foreign.clone()), node(2, "mine")]),
         ApplyOrigin::Push,
     );
     assert_eq!((out.dropped_foreign, out.applied), (1, 1));
-    assert_eq!(r.get(foreign.key), Lookup::Miss);
-    w.tombstone(foreign.key, Instant::now(), RemovalCause::Event);
+    assert_eq!(r.get(foreign.key()), Lookup::Miss);
+    w.tombstone(foreign.key(), Instant::now(), RemovalCause::Event);
     assert_eq!(r.stats().tombstones, 0);
 }
 
@@ -269,7 +259,7 @@ fn the_node_cap_evicts_oldest_but_never_the_focus_or_its_ancestry() {
     // 1 <- 2 <- 3 chain; 3 is focused.
     for (n, p) in [(1u64, None), (2, Some(1u64)), (3, Some(2))] {
         let mut s = (*node(n, "chain")).clone();
-        s.parent = p.map(key);
+        s.set_parent(p.map(key));
         w.apply(batch(vec![Arc::new(s)]), ApplyOrigin::Push);
     }
     w.set_focus(Some(key(3)));
@@ -372,10 +362,10 @@ fn app_n(n: u32) -> AppId {
 
 fn node_of(a: AppId, n: u64) -> Arc<NodeSnapshot> {
     let mut s = (*node(n, "x")).clone();
-    s.key = NodeKey {
+    s.set_key(NodeKey {
         app: a,
         local: LocalId(n),
-    };
+    });
     Arc::new(s)
 }
 
@@ -550,26 +540,30 @@ fn remembering_invalidations_of_unknown_keys_is_bounded() {
 fn a_partial_reply_keeps_parent_children_and_description() {
     let (mut w, r) = mirror();
     let mut full = (*node(2, "Label")).clone();
-    full.parent = Some(key(1));
-    full.description = Some(Arc::from("desc"));
-    full.children = ChildList::Count(3);
-    full.have = PropMask::PRESENT | PropMask::PARENT | PropMask::CHILDREN;
+    full.set_parent(Some(key(1)));
+    full.set_description(Some(Arc::from("desc")));
+    full.set_children(ChildList::Count(3));
+    full.set_have(PropMask::PRESENT | PropMask::PARENT | PropMask::CHILDREN);
     w.apply(batch(vec![Arc::new(full)]), reply_at(&w));
     let mut part = (*node(2, "Label")).clone();
-    part.have = PropMask::PRESENT.difference(PropMask::DESCRIPTION);
+    part.set_have(PropMask::PRESENT.difference(PropMask::DESCRIPTION));
     w.apply(batch(vec![Arc::new(part)]), reply_at(&w));
     let v = r.view(key(2)).hit().unwrap();
-    assert_eq!(v.snap.parent, Some(key(1)));
-    assert_eq!(v.snap.children, ChildList::Count(3));
-    assert!(v.snap.have.contains(PropMask::PARENT | PropMask::CHILDREN));
+    assert_eq!(v.snap.parent(), Some(key(1)));
+    assert_eq!(*v.snap.children(), ChildList::Count(3));
+    assert!(
+        v.snap
+            .have()
+            .contains(PropMask::PARENT | PropMask::CHILDREN)
+    );
     // But a field an event made stale is not carried over.
     w.invalidate(key(2), PropMask::CHILDREN, Instant::now());
     let mut part = (*node(2, "Label")).clone();
-    part.have = PropMask::PRESENT.difference(PropMask::DESCRIPTION);
+    part.set_have(PropMask::PRESENT.difference(PropMask::DESCRIPTION));
     w.apply(batch(vec![Arc::new(part)]), reply_at(&w));
     let v = r.view(key(2)).hit().unwrap();
-    assert!(!v.snap.have.contains(PropMask::CHILDREN));
-    assert_eq!(v.snap.parent, Some(key(1)));
+    assert!(!v.snap.have().contains(PropMask::CHILDREN));
+    assert_eq!(v.snap.parent(), Some(key(1)));
 }
 
 /// Revived keys count against the node cap (reviewer probe: live 20 with a cap of 10).
@@ -598,12 +592,12 @@ fn a_defunct_reply_becomes_a_tombstone() {
     let (mut w, r) = mirror();
     w.apply(batch(vec![node(1, "alive")]), ApplyOrigin::Push);
     let mut dead = (*node(1, "dying")).clone();
-    dead.states = StateSet::DEFUNCT;
+    dead.set_test_states(StateSet::DEFUNCT);
     let out = w.apply(batch(vec![Arc::new(dead)]), reply_at(&w));
     assert_eq!(out.defunct, 1);
     assert_eq!(r.get(key(1)), Lookup::Gone);
     let mut dead2 = (*node(2, "never seen")).clone();
-    dead2.states = StateSet::DEFUNCT;
+    dead2.set_test_states(StateSet::DEFUNCT);
     w.apply(batch(vec![Arc::new(dead2)]), reply_at(&w));
     assert_eq!(r.get(key(2)), Lookup::Gone);
     w.check_invariants().unwrap();
@@ -641,7 +635,7 @@ fn counters_stay_exact_under_random_operations() {
             }
             2 => {
                 let mut s = (*node(k, "n")).clone();
-                s.have = PropMask::CACHE_ITEM;
+                s.set_have(PropMask::CACHE_ITEM);
                 let issued_at = w.seq().saturating_sub(next() % 3);
                 w.apply(
                     batch(vec![Arc::new(s)]),
@@ -678,7 +672,7 @@ fn readers_see_whole_nodes_while_the_writer_runs() {
             std::thread::spawn(move || {
                 for _ in 0..20_000 {
                     let n = r.view(key(1)).hit().unwrap();
-                    let name = n.snap.name.as_deref().unwrap();
+                    let name = n.snap.name().as_deref().unwrap();
                     assert!(name.starts_with('v'));
                 }
             })
@@ -738,10 +732,10 @@ fn a_fresh_node_ages_on_read_after_the_ttl_and_a_stale_one_does_not() {
 fn with_rec(n: u64, name: &str) -> (Arc<NodeSnapshot>, Arc<gorca_model::sem::SrcRecord>) {
     let rec = Arc::new(gorca_model::sem::SrcRecord::default());
     let mut s = (*node(n, name)).clone();
-    s.sem = gorca_model::NodeSem {
+    s.set_sem(gorca_model::NodeSem {
         rec: Some(Arc::clone(&rec)),
         entry: None,
-    };
+    });
     (Arc::new(s), rec)
 }
 
@@ -756,14 +750,14 @@ fn a_fused_entry_replaces_the_record_of_the_snapshot_it_was_made_from() {
     let entry = Arc::new(gorca_model::sem::SemEntry::default());
     assert!(w.attach_sem(key(1), &rec, Arc::clone(&entry)));
     let got = r.get(key(1)).hit().unwrap();
-    assert!(got.sem.rec.is_none());
+    assert!(got.sem().rec.is_none());
     assert!(
-        got.sem
+        got.sem()
             .entry
             .as_ref()
             .is_some_and(|e| Arc::ptr_eq(e, &entry))
     );
-    assert_eq!(got.name.as_deref(), Some("ok"), "legacy fields untouched");
+    assert_eq!(got.name().as_deref(), Some("ok"), "legacy fields untouched");
     assert_eq!(
         r.revision(),
         rev,
@@ -787,7 +781,7 @@ fn an_entry_never_sticks_to_a_replaced_or_missing_snapshot() {
     w.apply(batch(vec![s2]), reply_at(&w));
     let entry = Arc::new(gorca_model::sem::SemEntry::default());
     assert!(!w.attach_sem(key(1), &rec1, Arc::clone(&entry)), "replaced");
-    assert!(r.get(key(1)).hit().unwrap().sem.entry.is_none());
+    assert!(r.get(key(1)).hit().unwrap().sem().entry.is_none());
     assert!(!w.attach_sem(key(9), &rec1, Arc::clone(&entry)), "missing");
     w.tombstone(key(1), Instant::now(), RemovalCause::Event);
     assert!(!w.attach_sem(key(1), &rec1, entry), "tombstoned");
@@ -813,10 +807,10 @@ fn hostile(n: u64, len: usize) -> (Arc<NodeSnapshot>, Arc<gorca_model::sem::SrcR
         ..Default::default()
     });
     let mut s = (*node(n, "x")).clone();
-    s.sem = gorca_model::NodeSem {
+    s.set_sem(gorca_model::NodeSem {
         rec: Some(Arc::clone(&rec)),
         entry: None,
-    };
+    });
     (Arc::new(s), rec)
 }
 

@@ -1331,7 +1331,7 @@ impl Reader {
             if matches!(role_of(&sn), SemRole::DocumentWeb | SemRole::Document) {
                 return false;
             }
-            match sn.parent {
+            match sn.parent() {
                 Some(p) => cur = p,
                 None => return crate::nodekind::is_app_node(&sn),
             }
@@ -1455,7 +1455,7 @@ impl Reader {
         else {
             return;
         };
-        if focus != snap.key {
+        if focus != snap.key() {
             return;
         }
         let editable = forms::passes_through(

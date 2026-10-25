@@ -290,44 +290,46 @@ mod tests {
 
     use super::*;
     use crate::web::{DocOp, NodeSpec, SubtreeSpec};
-    use gorca_model::Role;
+    use gorca_model::sem::SemRole;
 
-    fn cell(role: Role, t: &str) -> SubtreeSpec {
+    fn cell(role: SemRole, t: &str) -> SubtreeSpec {
         SubtreeSpec::with_children(
             NodeSpec::new(role).flags(NodeFlags::CELL),
-            vec![SubtreeSpec::leaf(NodeSpec::new(Role::StaticText).text(t))],
+            vec![SubtreeSpec::leaf(
+                NodeSpec::new(SemRole::StaticText).text(t),
+            )],
         )
     }
 
     fn row(cells: Vec<SubtreeSpec>) -> SubtreeSpec {
-        SubtreeSpec::with_children(NodeSpec::new(Role::Row).flags(NodeFlags::BLOCK), cells)
+        SubtreeSpec::with_children(NodeSpec::new(SemRole::Row).flags(NodeFlags::BLOCK), cells)
     }
 
     // table: thead[ A B ], tbody[ r1 1 2 ], tbody[ r2 3 4 ]
     fn page() -> (WebDoc, DocNodeId) {
         let mut d = WebDoc::new(3);
-        let group = |rows| SubtreeSpec::with_children(NodeSpec::new(Role::Unknown), rows);
+        let group = |rows| SubtreeSpec::with_children(NodeSpec::new(SemRole::Unknown), rows);
         let table = SubtreeSpec::with_children(
-            NodeSpec::new(Role::Table),
+            NodeSpec::new(SemRole::Table),
             vec![
                 group(vec![row(vec![
-                    cell(Role::ColumnHeader, "Name"),
-                    cell(Role::ColumnHeader, "A"),
-                    cell(Role::ColumnHeader, "B"),
+                    cell(SemRole::ColumnHeader, "Name"),
+                    cell(SemRole::ColumnHeader, "A"),
+                    cell(SemRole::ColumnHeader, "B"),
                 ])]),
                 group(vec![row(vec![
-                    cell(Role::RowHeader, "r1"),
-                    cell(Role::Cell, "1"),
-                    cell(Role::Cell, "2"),
+                    cell(SemRole::RowHeader, "r1"),
+                    cell(SemRole::Cell, "1"),
+                    cell(SemRole::Cell, "2"),
                 ])]),
                 group(vec![row(vec![
-                    cell(Role::RowHeader, "r2"),
-                    cell(Role::Cell, "3"),
-                    cell(Role::Cell, "4"),
+                    cell(SemRole::RowHeader, "r2"),
+                    cell(SemRole::Cell, "3"),
+                    cell(SemRole::Cell, "4"),
                 ])]),
             ],
         );
-        let root = SubtreeSpec::with_children(NodeSpec::new(Role::DocumentWeb), vec![table]);
+        let root = SubtreeSpec::with_children(NodeSpec::new(SemRole::DocumentWeb), vec![table]);
         assert!(
             d.apply(&DocOp::InsertSubtree {
                 parent: None,

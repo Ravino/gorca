@@ -123,13 +123,12 @@ const fn ban(
 /// Modules already moved off the legacy node record (M22c ratchet, ADR-0022 section 8.7): they
 /// read the fused entry only. A module joins this list in the commit that ports it and never
 /// leaves; the rule then fails on every legacy `Role`, `StateSet` or interface read in it.
-const PORTED: &[&str] = &["crates/gorca-core/src/"];
-/// Files of [`PORTED`] that are not ported yet: the two bridges that hand a snapshot's raw state
-/// bits to the plugin watch rows (`plugin_port::Row`), which another slice owns. They leave this
-/// list when `Row` carries the fused facts; the list never grows.
-const UNPORTED: &[&str] = &[
-    "crates/gorca-core/src/app_actor/fuse.rs",
-    "crates/gorca-core/src/doc_actor/fuse.rs",
+const PORTED: &[&str] = &[
+    "crates/gorca-core/src/",
+    "crates/gorca-mirror/src/",
+    "crates/gorca-present/src/",
+    "crates/gorca-ext-host/src/",
+    "extensions/",
 ];
 /// The browse-mode speech paths and the live-region snapshot: they read document text only through
 /// `speakable::text_in`, which masks the text under a secret field.
@@ -336,7 +335,6 @@ pub fn scan(file: &str, source: &str) -> Vec<Hit> {
     let bans: Vec<&Ban> = BANS
         .iter()
         .filter(|b| b.scope.iter().any(|p| file.starts_with(p)))
-        .filter(|b| !(std::ptr::eq(b.scope, PORTED) && UNPORTED.contains(&file)))
         .collect();
     let mut hits = Vec::new();
     let mut lines = source.lines().enumerate().peekable();
@@ -576,8 +574,8 @@ mod tests {
         );
         // The same text elsewhere is not in the ratchet (the model defines these types).
         assert!(scan("crates/gorca-model/src/x.rs", src).is_empty());
-        // The plugin bridges are the listed exceptions inside the ratcheted tree.
-        assert!(scan("crates/gorca-core/src/doc_actor/fuse.rs", src).is_empty());
+        // The plugin bridges are ported too: no exception is left inside the ratcheted tree.
+        assert!(!scan("crates/gorca-core/src/doc_actor/fuse.rs", src).is_empty());
         assert!(!scan("crates/gorca-core/src/doc_actor/live.rs", src).is_empty());
     }
 

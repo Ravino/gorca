@@ -188,6 +188,7 @@ mod tests {
             attrs: smallvec![(web_attrs::DOM_ID, Arc::from(format!("d{id}").as_str()))],
             local: None,
             rec: None,
+            synth_role: gorca_model::testing::sem_role(Role::Panel),
         }
     }
 

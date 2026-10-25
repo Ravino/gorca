@@ -37,7 +37,9 @@ interface model {
   prop: func(n: node-ref, group: group-code) -> option<prop-value>;
   /// Needs `read-names`.
   name: func(n: node-ref) -> option<string>;
-  /// Registry state bits (focused, selected, editable, ...).
+  /// State bits of the observed view: the `flags` group in bits 0..31 and the structural bits
+  /// of the source's states (showing, visible, defunct, focusable, focused, multi-line, active)
+  /// in bits 32..39.
   states: func(n: node-ref) -> u64;
   parent: func(n: node-ref) -> option<node-ref>;
   children: func(n: node-ref, max: u16) -> list<node-ref>;

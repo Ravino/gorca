@@ -911,7 +911,7 @@ impl AppActor {
     }
 
     fn parent_of(&self, k: NodeKey) -> Option<NodeKey> {
-        self.read.view(k).hit().and_then(|v| v.snap.parent)
+        self.read.view(k).hit().and_then(|v| v.snap.parent())
     }
 
     /// Mark fields of `k` untrustworthy in the mirror and, when one of them feeds the fused entry,
@@ -997,7 +997,7 @@ impl AppActor {
             if !crate::nodekind::role_of(&v.snap).takes_name_from_content() {
                 break;
             }
-            cur = v.snap.parent;
+            cur = v.snap.parent();
         }
     }
 

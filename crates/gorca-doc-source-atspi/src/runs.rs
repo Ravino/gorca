@@ -106,6 +106,7 @@ fn run_node(id: SrcNodeId, text: &Arc<str>) -> SrcNode {
         attrs: SmallVec::new(),
         local: None,
         rec: None,
+        synth_role: gorca_model::SemRole::StaticText,
     }
 }
 
@@ -334,6 +335,7 @@ mod tests {
             attrs: SmallVec::new(),
             local: None,
             rec: None,
+            synth_role: gorca_model::SemRole::Unknown,
         }
     }
 

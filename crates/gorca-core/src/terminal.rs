@@ -399,18 +399,18 @@ impl Reader {
     pub(crate) fn term_track(&mut self, snap: &NodeSnapshot, fx: &mut ReaderEffects) {
         self.term_untrack("retrack");
         let cfg = self.term_config();
-        let sess = self.term_open_real(snap.key, &cfg).or_else(|| {
+        let sess = self.term_open_real(snap.key(), &cfg).or_else(|| {
             // An application with extensions whose terminal policy is gone (disabled after
             // repeated faults) is still watched for secret prompts, by the core alone: fail closed.
             self.ext
                 .as_ref()
-                .and_then(|src| src.for_app(snap.key.app))
+                .and_then(|src| src.for_app(snap.key().app))
                 .map(|_| Box::new(WatchOnly::default()) as Box<dyn TermSession>)
         });
         let Some(sess) = sess else {
             return;
         };
-        self.term_start(snap.key, sess, fx);
+        self.term_start(snap.key(), sess, fx);
     }
 
     /// The extension host's terminal policy for this application (the WASM component), else the

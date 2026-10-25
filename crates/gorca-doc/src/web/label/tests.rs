@@ -10,11 +10,11 @@ use std::sync::Arc;
 
 use super::*;
 use crate::web::{DocOp, NodeSpec, SubtreeSpec};
-use gorca_model::Role;
+use gorca_model::sem::SemRole;
 
 const BR: NodeFlags = NodeFlags::BREAK_BEFORE;
 
-fn node(role: Role, text: Option<&str>, flags: NodeFlags) -> SubtreeSpec {
+fn node(role: SemRole, text: Option<&str>, flags: NodeFlags) -> SubtreeSpec {
     let mut n = NodeSpec::new(role);
     n.text = text.map(Arc::from);
     n.flags = flags;
@@ -22,10 +22,10 @@ fn node(role: Role, text: Option<&str>, flags: NodeFlags) -> SubtreeSpec {
 }
 
 fn text(t: &str, flags: NodeFlags) -> SubtreeSpec {
-    node(Role::StaticText, Some(t), flags)
+    node(SemRole::StaticText, Some(t), flags)
 }
 
-fn ctl(role: Role, flags: NodeFlags) -> SubtreeSpec {
+fn ctl(role: SemRole, flags: NodeFlags) -> SubtreeSpec {
     node(role, Some("\u{FFFC}"), flags)
 }
 
@@ -33,7 +33,7 @@ fn ctl(role: Role, flags: NodeFlags) -> SubtreeSpec {
 /// (root first).
 fn doc(children: Vec<SubtreeSpec>) -> (WebDoc, Vec<DocNodeId>) {
     let mut d = WebDoc::new(1);
-    let root = SubtreeSpec::with_children(NodeSpec::new(Role::DocumentWeb), children);
+    let root = SubtreeSpec::with_children(NodeSpec::new(SemRole::DocumentWeb), children);
     let out = d
         .apply(&DocOp::InsertSubtree {
             parent: None,
@@ -53,7 +53,7 @@ fn a_label_on_the_same_line_is_found_on_the_left() {
     let (d, ids) = doc(vec![
         text("Phone", BR),
         text(" ", NodeFlags::NONE),
-        ctl(Role::TextEntry, NodeFlags::NONE),
+        ctl(SemRole::TextBox, NodeFlags::NONE),
     ]);
     let p = plan(&d, ids[3], gorca_model::sem::SemRole::TextBox).unwrap();
     assert_eq!(p.cands[0].side, Side::Left);
@@ -74,7 +74,7 @@ fn a_label_on_the_same_line_is_found_on_the_left() {
 fn the_text_on_the_line_above_labels_a_control_that_starts_its_line() {
     let (d, ids) = doc(vec![
         text("Romeo unassociated sibling", BR),
-        ctl(Role::TextEntry, BR),
+        ctl(SemRole::TextBox, BR),
     ]);
     let p = plan(&d, ids[2], gorca_model::sem::SemRole::TextBox).unwrap();
     let above = p.cands.iter().find(|c| c.side == Side::Above).unwrap();
@@ -100,9 +100,9 @@ fn the_text_on_the_line_above_labels_a_control_that_starts_its_line() {
 fn a_widget_on_the_line_ends_the_left_text() {
     let (d, ids) = doc(vec![
         text("Name", BR),
-        ctl(Role::Button, NodeFlags::NONE),
+        ctl(SemRole::Button, NodeFlags::NONE),
         text("Email", NodeFlags::NONE),
-        ctl(Role::TextEntry, NodeFlags::NONE),
+        ctl(SemRole::TextBox, NodeFlags::NONE),
     ]);
     let p = plan(&d, ids[4], gorca_model::sem::SemRole::TextBox).unwrap();
     assert_eq!(p.cands[0].text, "Email");
@@ -112,7 +112,7 @@ fn a_widget_on_the_line_ends_the_left_text() {
 fn a_check_box_prefers_the_text_on_its_right() {
     let (d, ids) = doc(vec![
         text("Newsletter", BR),
-        ctl(Role::CheckBox, NodeFlags::NONE),
+        ctl(SemRole::Checkbox, NodeFlags::NONE),
         text("Subscribe to updates", NodeFlags::NONE),
     ]);
     let p = plan(&d, ids[2], gorca_model::sem::SemRole::Checkbox).unwrap();
@@ -129,7 +129,7 @@ fn a_check_box_prefers_the_text_on_its_right() {
 #[test]
 fn a_combo_box_does_not_take_a_label_from_its_right() {
     let (d, ids) = doc(vec![
-        ctl(Role::ComboBox, BR),
+        ctl(SemRole::Combobox, BR),
         text("Country", NodeFlags::NONE),
     ]);
     let p = plan(&d, ids[1], gorca_model::sem::SemRole::Combobox);
@@ -139,8 +139,8 @@ fn a_combo_box_does_not_take_a_label_from_its_right() {
 #[test]
 fn headings_and_list_items_are_never_labels() {
     let (d, ids) = doc(vec![
-        SubtreeSpec::with_children(NodeSpec::new(Role::Heading), vec![text("Sign in", BR)]),
-        ctl(Role::TextEntry, BR),
+        SubtreeSpec::with_children(NodeSpec::new(SemRole::Heading), vec![text("Sign in", BR)]),
+        ctl(SemRole::TextBox, BR),
     ]);
     let p = plan(&d, ids[3], gorca_model::sem::SemRole::TextBox);
     assert!(p.is_none(), "{p:?}");
@@ -148,7 +148,7 @@ fn headings_and_list_items_are_never_labels() {
 
 #[test]
 fn only_a_text_entry_takes_a_label_from_below() {
-    let (d, ids) = doc(vec![ctl(Role::TextEntry, BR), text("Email address", BR)]);
+    let (d, ids) = doc(vec![ctl(SemRole::TextBox, BR), text("Email address", BR)]);
     let p = plan(&d, ids[1], gorca_model::sem::SemRole::TextBox).unwrap();
     assert!(p.cands.iter().any(|c| c.side == Side::Below));
     let rects = [r(10, 10, 200, 24), r(10, 40, 100, 18)];
@@ -161,7 +161,7 @@ fn only_a_text_entry_takes_a_label_from_below() {
 fn a_control_without_a_rectangle_gets_nothing() {
     let (d, ids) = doc(vec![
         text("Phone", BR),
-        ctl(Role::TextEntry, NodeFlags::NONE),
+        ctl(SemRole::TextBox, NodeFlags::NONE),
     ]);
     let p = plan(&d, ids[2], gorca_model::sem::SemRole::TextBox).unwrap();
     assert_eq!(choose(&p, &[None, r(0, 0, 40, 18)]), None);

@@ -95,7 +95,7 @@ interface types {
     parent-index: option<u16>,
     depth: u8,
     role: role-code,
-    /// The `flags` group bits plus the core's state registry bits (focused, selected, ...).
+    /// State bits of the observed view, as `host.states`.
     states: u64,
     /// Name in the view of the call's lane (ADR-0026 §2.3.2). Withheld without `read-names`.
     name: option<string>,

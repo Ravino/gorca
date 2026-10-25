@@ -25,7 +25,7 @@ use gorca_doc::web::{
     Cat, ChildSpec, DocNodeId, DocOp, DocWriter, NodeFlags, NodeSpec, PropsPatch, ReadUnit,
     SubtreeSpec, WebDoc, channel_from,
 };
-use gorca_model::Role;
+use gorca_model::sem::SemRole;
 
 #[derive(Clone, Debug)]
 struct Stat {
@@ -113,16 +113,16 @@ fn find_with(doc: &WebDoc, rng: &mut Rng, c: Cat) -> Option<DocNodeId> {
 fn make_paragraph(rng: &mut Rng, sig: u64) -> SubtreeSpec {
     let words = ["alpha", "beta", "gamma", "delta", "reader"];
     let t = |rng: &mut Rng| {
-        SubtreeSpec::leaf(NodeSpec::new(Role::StaticText).text(words[rng.below(words.len())]))
+        SubtreeSpec::leaf(NodeSpec::new(SemRole::StaticText).text(words[rng.below(words.len())]))
     };
     let link = SubtreeSpec::with_children(
-        NodeSpec::new(Role::Link).sig(sig),
+        NodeSpec::new(SemRole::Link).sig(sig),
         vec![SubtreeSpec::leaf(
-            NodeSpec::new(Role::StaticText).text("more"),
+            NodeSpec::new(SemRole::StaticText).text("more"),
         )],
     );
     SubtreeSpec::with_children(
-        NodeSpec::new(Role::Paragraph)
+        NodeSpec::new(SemRole::Paragraph)
             .flags(NodeFlags::BREAK_AFTER)
             .sig(sig),
         vec![t(rng), link, t(rng)],
@@ -164,7 +164,7 @@ fn make_batch(
             .map(|i| make_paragraph(rng, serial * 1000 + (k * 12 + i) as u64))
             .collect();
         let sub = SubtreeSpec::with_children(
-            NodeSpec::new(Role::Panel).flags(NodeFlags::BREAK_AFTER),
+            NodeSpec::new(SemRole::Generic).flags(NodeFlags::BREAK_AFTER),
             paras,
         );
         touched += sub.count();

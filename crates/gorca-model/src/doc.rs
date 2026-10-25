@@ -81,6 +81,9 @@ pub struct SrcNode {
     /// never in the core). `None` for synthetic nodes (text runs, placeholders) and for sources
     /// that do not normalise. Shared, never mutated: the document actor feeds it to the fusion.
     pub rec: Option<Arc<SrcRecord>>,
+    /// The model role of a node that has no record (a synthetic one: a text run is static text,
+    /// a placeholder is unknown). Ignored when `rec` is set.
+    pub synth_role: crate::SemRole,
 }
 
 impl SrcNode {
@@ -95,29 +98,30 @@ impl SrcNode {
             attrs: smallvec::SmallVec::default(),
             local: None,
             rec: None,
+            synth_role: crate::SemRole::Unknown,
         }
     }
 
     /// The model role of the node: the fused `entry`'s, else its source record's, else (a
-    /// synthetic node: a text run, a placeholder) the closest model role of the source role.
+    /// synthetic node: a text run is static text, a placeholder is unknown).
     pub fn model_role(&self, entry: Option<&crate::SemEntry>) -> crate::SemRole {
         match (entry, &self.rec) {
             (Some(e), _) => e.sem.role,
             (None, Some(r)) => r.sem.role,
-            (None, None) => crate::SemRole::from(self.role),
+            (None, None) => self.synth_role,
         }
+    }
+
+    /// The structural bits of the source's states (see [`crate::StructFlags`]): what the plugin
+    /// rows and navigation read of them.
+    pub fn struct_flags(&self) -> crate::StructFlags {
+        crate::node::struct_flags_of(self.states)
     }
 
     /// The source reported the node as focusable (structure, as `visible` is; the fused flag
     /// only exists for nodes whose states the source fetched).
     pub fn is_focusable(&self) -> bool {
         self.states.contains(StateSet::FOCUSABLE)
-    }
-
-    /// The source reported the node as invalid (an `invalid` state on any role, a form
-    /// container included, which the fused `invalid` group is only given for fields).
-    pub fn reports_invalid(&self) -> bool {
-        self.states.contains(StateSet::INVALID)
     }
 
     /// The source reported the node as visible (viewport-independent: `showing` is not asked).

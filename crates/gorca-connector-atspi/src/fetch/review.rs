@@ -79,7 +79,7 @@ type ExtentsAnswer = (usize, Result<(i32, i32, i32, i32), gorca_dbus::DbusError>
 pub(super) async fn add_bounds(cx: &CallCx, nodes: &mut [Arc<NodeSnapshot>], dl: Deadline) {
     let mut set: JoinSet<ExtentsAnswer> = JoinSet::new();
     for (i, s) in nodes.iter().take(MAX_BOUNDS_BATCH).enumerate() {
-        let Some(path) = cx.paths.get(s.key) else {
+        let Some(path) = cx.paths.get(s.key()) else {
             continue;
         };
         let caller = cx.caller.clone();
@@ -98,8 +98,8 @@ pub(super) async fn add_bounds(cx: &CallCx, nodes: &mut [Arc<NodeSnapshot>], dl:
             continue;
         };
         let node = Arc::make_mut(slot);
-        node.bounds = r.ok().and_then(|(x, y, w, h)| sane_rect(x, y, w, h));
-        node.have |= PropMask::BOUNDS;
+        node.set_bounds(r.ok().and_then(|(x, y, w, h)| sane_rect(x, y, w, h)));
+        node.set_have(node.have() | PropMask::BOUNDS);
     }
 }
 

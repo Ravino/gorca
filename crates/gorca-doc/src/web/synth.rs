@@ -3,7 +3,7 @@
 //! navigation landmark, regions of headings, paragraphs (text runs and links), lists, tables
 //! and forms, shaped like a long article page.
 
-use gorca_model::Role;
+use gorca_model::sem::SemRole;
 
 use super::cats::{NodeFlags, NodeSpec, SubtreeSpec};
 
@@ -52,7 +52,7 @@ fn sentence(rng: &mut Rng, words: usize) -> String {
 }
 
 fn text(rng: &mut Rng, n: usize) -> SubtreeSpec {
-    SubtreeSpec::leaf(NodeSpec::new(Role::StaticText).text(&sentence(rng, n)))
+    SubtreeSpec::leaf(NodeSpec::new(SemRole::StaticText).text(&sentence(rng, n)))
 }
 
 fn link(rng: &mut Rng, id: u64) -> SubtreeSpec {
@@ -62,9 +62,12 @@ fn link(rng: &mut Rng, id: u64) -> SubtreeSpec {
         flags = flags | NodeFlags::VISITED;
     }
     SubtreeSpec::with_children(
-        NodeSpec::new(Role::Link).flags(flags).name(&label).sig(id),
+        NodeSpec::new(SemRole::Link)
+            .flags(flags)
+            .name(&label)
+            .sig(id),
         vec![SubtreeSpec::leaf(
-            NodeSpec::new(Role::StaticText).text(&label),
+            NodeSpec::new(SemRole::StaticText).text(&label),
         )],
     )
 }
@@ -74,7 +77,7 @@ fn paragraph(rng: &mut Rng, id: u64) -> SubtreeSpec {
     let l = link(rng, id);
     let b = text(rng, 5);
     SubtreeSpec::with_children(
-        NodeSpec::new(Role::Paragraph)
+        NodeSpec::new(SemRole::Paragraph)
             .flags(NodeFlags::BREAK_AFTER)
             .sig(id),
         vec![a, l, b],
@@ -97,12 +100,15 @@ pub fn page(target: usize, seed: u64) -> SubtreeSpec {
     let items: Vec<SubtreeSpec> = (0..8)
         .map(|_| {
             id += 1;
-            SubtreeSpec::with_children(NodeSpec::new(Role::ListItem), vec![link(&mut rng, id)])
+            SubtreeSpec::with_children(NodeSpec::new(SemRole::ListItem), vec![link(&mut rng, id)])
         })
         .collect();
     let nav = SubtreeSpec::with_children(
-        NodeSpec::new(Role::Landmark).name("banner"),
-        vec![SubtreeSpec::with_children(NodeSpec::new(Role::List), items)],
+        NodeSpec::new(SemRole::Region).name("banner"),
+        vec![SubtreeSpec::with_children(
+            NodeSpec::new(SemRole::List),
+            items,
+        )],
     );
     push(&mut children, nav, &mut count);
 
@@ -115,7 +121,7 @@ pub fn page(target: usize, seed: u64) -> SubtreeSpec {
         let level = 1 + (section % 4) as u8;
         id += 1;
         body.push(SubtreeSpec::with_children(
-            NodeSpec::new(Role::Heading)
+            NodeSpec::new(SemRole::Heading)
                 .level(level)
                 .flags(NodeFlags::BREAK_AFTER)
                 .name("section")
@@ -131,12 +137,12 @@ pub fn page(target: usize, seed: u64) -> SubtreeSpec {
                 .map(|_| {
                     id += 1;
                     SubtreeSpec::with_children(
-                        NodeSpec::new(Role::ListItem).flags(NodeFlags::BREAK_AFTER),
+                        NodeSpec::new(SemRole::ListItem).flags(NodeFlags::BREAK_AFTER),
                         vec![link(&mut rng, id)],
                     )
                 })
                 .collect();
-            body.push(SubtreeSpec::with_children(NodeSpec::new(Role::List), li));
+            body.push(SubtreeSpec::with_children(NodeSpec::new(SemRole::List), li));
         }
         if section.is_multiple_of(7) {
             let rows: Vec<SubtreeSpec> = (0..4)
@@ -144,31 +150,34 @@ pub fn page(target: usize, seed: u64) -> SubtreeSpec {
                     let cells: Vec<SubtreeSpec> = (0..3)
                         .map(|_| {
                             SubtreeSpec::with_children(
-                                NodeSpec::new(Role::Cell),
+                                NodeSpec::new(SemRole::Cell),
                                 vec![text(&mut rng, 2)],
                             )
                         })
                         .collect();
                     SubtreeSpec::with_children(
-                        NodeSpec::new(Role::Row).flags(NodeFlags::BREAK_AFTER),
+                        NodeSpec::new(SemRole::Row).flags(NodeFlags::BREAK_AFTER),
                         cells,
                     )
                 })
                 .collect();
-            body.push(SubtreeSpec::with_children(NodeSpec::new(Role::Table), rows));
+            body.push(SubtreeSpec::with_children(
+                NodeSpec::new(SemRole::Table),
+                rows,
+            ));
         }
         if section.is_multiple_of(5) {
             body.push(SubtreeSpec::with_children(
-                NodeSpec::new(Role::Panel).flags(NodeFlags::BREAK_AFTER),
+                NodeSpec::new(SemRole::Generic).flags(NodeFlags::BREAK_AFTER),
                 vec![
-                    SubtreeSpec::leaf(NodeSpec::new(Role::TextEntry).name("query")),
-                    SubtreeSpec::leaf(NodeSpec::new(Role::CheckBox).name("exact")),
-                    SubtreeSpec::leaf(NodeSpec::new(Role::Button).name("go")),
+                    SubtreeSpec::leaf(NodeSpec::new(SemRole::TextBox).name("query")),
+                    SubtreeSpec::leaf(NodeSpec::new(SemRole::Checkbox).name("exact")),
+                    SubtreeSpec::leaf(NodeSpec::new(SemRole::Button).name("go")),
                 ],
             ));
         }
         let region = SubtreeSpec::with_children(
-            NodeSpec::new(Role::Landmark)
+            NodeSpec::new(SemRole::Region)
                 .flags(NodeFlags::REGION)
                 .name("section")
                 .sig(section),
@@ -178,10 +187,10 @@ pub fn page(target: usize, seed: u64) -> SubtreeSpec {
         main.push(region);
     }
     children.push(SubtreeSpec::with_children(
-        NodeSpec::new(Role::Landmark).name("main"),
+        NodeSpec::new(SemRole::Region).name("main"),
         main,
     ));
-    SubtreeSpec::with_children(NodeSpec::new(Role::Document).name("page"), children)
+    SubtreeSpec::with_children(NodeSpec::new(SemRole::Document).name("page"), children)
 }
 
 #[cfg(test)]

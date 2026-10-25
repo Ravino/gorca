@@ -18,11 +18,11 @@ pub fn is_sensitive(role: Role) -> bool {
     matches!(role, Role::PasswordEntry)
 }
 
-/// Is a node with this native role and (when it has one) fused entry a secret field? The native
-/// role and the fused role are two signals; a sink that asks only one leaks when the other
-/// disagrees (an engine reporting a password over a text-box token).
-pub fn is_secret_node(role: Role, entry: Option<&crate::SemEntry>) -> bool {
-    is_sensitive(role) || entry.is_some_and(entry_is_secret)
+/// Is this node a secret field? Same question as [`NodeSnapshot::is_sensitive`]: the source's
+/// native mark, the fused entry and the source record are three signals; a sink that asks only
+/// one leaks when the other disagrees (an engine reporting a password over a text-box token).
+pub fn is_secret_node(snap: &NodeSnapshot) -> bool {
+    snap.is_sensitive()
 }
 
 /// Does a fused entry say its node is a secret field: the fused role, or the source's mark?
@@ -36,8 +36,9 @@ impl NodeSnapshot {
     /// lane, an extension or the clipboard: the native role, the fused entry and the source record
     /// are asked, any one of them says it is a password.
     pub fn is_sensitive(&self) -> bool {
-        is_secret_node(self.role, self.sem.entry.as_deref())
-            || self.sem.rec.as_ref().is_some_and(|r| {
+        self.native_secret()
+            || self.sem().entry.as_deref().is_some_and(entry_is_secret)
+            || self.sem().rec.as_ref().is_some_and(|r| {
                 r.sem.role == crate::sem::SemRole::PasswordBox
                     || r.sem.flags.contains(crate::sem::SemFlags::SECRET)
             })

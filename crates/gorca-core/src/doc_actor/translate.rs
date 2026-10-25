@@ -1093,6 +1093,7 @@ mod tests {
             attrs: smallvec::SmallVec::default(),
             local: Some(LocalId(id + 1000)),
             rec: None,
+            synth_role: gorca_model::testing::sem_role(role),
         }
     }
 

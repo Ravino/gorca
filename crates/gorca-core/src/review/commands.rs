@@ -543,7 +543,7 @@ impl Reader {
             let Lookup::Hit(v) = self.dir.view(cur) else {
                 break;
             };
-            let Some(parent) = v.snap.parent else { break };
+            let Some(parent) = v.snap.parent() else { break };
             if let Some(p) = anchor_at_node(m, parent) {
                 return Some(p);
             }
@@ -560,7 +560,7 @@ impl Reader {
                 return Some(p);
             }
             if let Lookup::Hit(v) = self.dir.view(n)
-                && let gorca_model::ChildList::Known(kids) = &v.snap.children
+                && let gorca_model::ChildList::Known(kids) = &v.snap.children()
             {
                 stack.extend(kids.iter().rev().copied());
             }
@@ -749,7 +749,7 @@ impl Reader {
                 Lookup::Hit(v) => v,
                 Lookup::Miss | Lookup::Gone => return Err(NavOp::Ancestry { node: nav }),
             };
-            let parent_menubar = v.snap.parent.is_some_and(
+            let parent_menubar = v.snap.parent().is_some_and(
                 |p| matches!(self.dir.view(p), Lookup::Hit(pv) if entry_of(&pv.snap).sem.role == SemRole::Menubar),
             );
             let app_root = is_app_root(&v.snap);
@@ -758,10 +758,10 @@ impl Reader {
                 return Ok(if app_root { top_below_app } else { cur });
             }
             top_below_app = cur;
-            match v.snap.parent {
-                Some(p) if v.snap.have.contains(PropMask::PARENT) => cur = p,
+            match v.snap.parent() {
+                Some(p) if v.snap.have().contains(PropMask::PARENT) => cur = p,
                 Some(_) | None => {
-                    return if v.snap.have.contains(PropMask::PARENT) {
+                    return if v.snap.have().contains(PropMask::PARENT) {
                         Ok(cur)
                     } else {
                         Err(NavOp::Ancestry { node: nav })
@@ -1759,7 +1759,7 @@ impl Reader {
             {
                 return Some(k);
             }
-            if let gorca_model::ChildList::Known(kids) = &v.snap.children {
+            if let gorca_model::ChildList::Known(kids) = &v.snap.children() {
                 queue.extend(kids.iter().copied());
             }
         }
@@ -1776,7 +1776,7 @@ impl Reader {
             {
                 parts.push(n.to_owned());
             }
-            let mut stack: Vec<NodeKey> = match &v.snap.children {
+            let mut stack: Vec<NodeKey> = match &v.snap.children() {
                 gorca_model::ChildList::Known(k) => k.iter().rev().copied().collect(),
                 gorca_model::ChildList::Count(_) | gorca_model::ChildList::Unknown => Vec::new(),
             };
@@ -1793,12 +1793,11 @@ impl Reader {
                     continue;
                 }
                 let t = zone::flat_text(&c.snap);
-                let leaf =
-                    !matches!(&c.snap.children, gorca_model::ChildList::Known(k) if !k.is_empty());
+                let leaf = !matches!(&c.snap.children(), gorca_model::ChildList::Known(k) if !k.is_empty());
                 if leaf && !t.is_empty() {
                     parts.push(t);
                 }
-                if let gorca_model::ChildList::Known(kids) = &c.snap.children {
+                if let gorca_model::ChildList::Known(kids) = &c.snap.children() {
                     stack.extend(kids.iter().rev().copied());
                 }
             }

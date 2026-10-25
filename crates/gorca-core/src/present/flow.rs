@@ -148,7 +148,7 @@ pub fn focus_need(n: &NodeSnapshot, lazy_attrs: bool) -> PropMask {
     if caps.is_known() && !(caps.has_value() || caps.has_text()) {
         need.remove(PropMask::VALUE);
     }
-    if n.name.as_deref().is_none_or(str::is_empty) {
+    if n.name().as_deref().is_none_or(str::is_empty) {
         need |= PropMask::RELATIONS;
     }
     // A field's help or error text is spoken after its value: asked for only once the role is
@@ -245,8 +245,8 @@ impl Reader {
         let (Some((prev, prev_at)), Some((cur, cur_at))) = (self.menu_prev, self.last_focus) else {
             return false;
         };
-        if cur != snap.key
-            || prev.app != snap.key.app
+        if cur != snap.key()
+            || prev.app != snap.key().app
             || cur_at.saturating_duration_since(prev_at) >= MENU_START_WINDOW
         {
             return false;
@@ -271,18 +271,18 @@ impl Reader {
         let folded = self
             .menu_lead_snap
             .take()
-            .filter(|(item, _)| *item == snap.key)
+            .filter(|(item, _)| *item == snap.key())
             .map(|(_, m)| m);
         if role_of(snap) != SemRole::MenuItem {
             return None;
         }
         let (is_bar, name) = if let Some(m) = folded {
-            (role_of(&m) == SemRole::Menubar, m.name.clone()?)
+            (role_of(&m) == SemRole::Menubar, m.name().clone()?)
         } else {
             let from = self.presented.as_ref().map(|p| p.node);
-            self.web_menu_entered(snap.key, from)?
+            self.web_menu_entered(snap.key(), from)?
         };
-        Some(self.menu_lead_segments(snap.key, is_bar, name, id, epoch))
+        Some(self.menu_lead_segments(snap.key(), is_bar, name, id, epoch))
     }
 
     /// A web menu item the document mirror does not know yet (a menu the page has just inserted)
@@ -290,19 +290,19 @@ impl Reader {
     fn menu_wait_for_mirror(&mut self, snap: &NodeSnapshot, fx: &mut ReaderEffects) -> bool {
         if role_of(snap) != SemRole::MenuItem
             || self.selection_node.is_some()
-            || self.menu_waited == Some(snap.key)
+            || self.menu_waited == Some(snap.key())
             || self.menu_lead_snap.is_some()
             || !self.snap_is_web(snap)
-            || self.web_knows(snap.key)
+            || self.web_knows(snap.key())
         {
             return false;
         }
-        self.menu_waited = Some(snap.key);
+        self.menu_waited = Some(snap.key());
         let until = self.now + crate::focus::FOCUS_FLAP_DELAY;
         let epoch = self.epoch.current();
         self.apply_focus(
             FocusMsg::FocusChanged {
-                node: snap.key,
+                node: snap.key(),
                 epoch,
                 until,
             },
@@ -517,7 +517,7 @@ impl Reader {
         match self.dir.view(node) {
             gorca_model::Lookup::Hit(v) => {
                 let need = focus_need(&v.snap, self.lazy_attrs);
-                let missing = need & !v.snap.have;
+                let missing = need & !v.snap.have();
                 let stale = v.stale & need;
                 let outcome = if missing.is_empty() && stale.is_empty() {
                     DemandOutcome::Hit
@@ -610,14 +610,14 @@ impl Reader {
         self.speak_focus(&v.snap, source, true, fx);
         // Only a request issued strictly after the focus began can have confirmed the content.
         let confirmed_after_trigger =
-            v.snap.confirmed_seq > self.focus_seq && v.stale.is_empty() && !v.aged;
+            v.snap.confirmed_seq() > self.focus_seq && v.stale.is_empty() && !v.aged;
         // A fresh snapshot that did not earn the protection (a prefetched window carries no
         // `FOCUSED` state) is still re-read: only the re-read can earn it (review F-1, path 4).
-        let unearned = self.selection_node != Some(v.snap.key)
+        let unearned = self.selection_node != Some(v.snap.key())
             && self
                 .focused_app
                 .as_ref()
-                .is_some_and(|f| !f.protects(v.snap.key.app));
+                .is_some_and(|f| !f.protects(v.snap.key().app));
         if revalidate && (!confirmed_after_trigger || unearned) {
             self.counters.revalidations += 1;
             if matches!(
@@ -627,7 +627,7 @@ impl Reader {
                 self.counters.revalidations_list_row += 1;
             }
             fx.push(Self::fetch_effect(
-                v.snap.key,
+                v.snap.key(),
                 focus_need(&v.snap, self.lazy_attrs),
                 self.epoch.current(),
                 FetchKind::Revalidate,
@@ -640,7 +640,7 @@ impl Reader {
     fn with_entry_name(&self, snap: &mut NodeSnapshot, name: &Arc<str>) {
         let mut e = (*self.fused_entry(snap)).clone();
         e.name = Some(Arc::clone(name));
-        snap.sem.entry = Some(Arc::new(e));
+        snap.sem_mut().entry = Some(Arc::new(e));
     }
 
     /// Step `Presented` for the snapshot's node and, if that produced the `Speak` effect, build
@@ -663,13 +663,13 @@ impl Reader {
         if self.menu_start_redirect(snap, fx) || self.menu_wait_for_mirror(snap, fx) {
             return;
         }
-        tracing::debug!(node = ?snap.key, states = ?snap.state_names(), ?source, from_cache, "focus presented");
-        let (next, effect) = self.focus.step(FocusMsg::Presented { node: snap.key });
+        tracing::debug!(node = ?snap.key(), states = ?snap.state_names(), ?source, from_cache, "focus presented");
+        let (next, effect) = self.focus.step(FocusMsg::Presented { node: snap.key() });
         self.focus = next;
         match effect {
             Some(FocusEffect::Speak { epoch, .. }) => {
                 let id = self.utt_id();
-                let ctx = if self.selection_node == Some(snap.key) {
+                let ctx = if self.selection_node == Some(snap.key()) {
                     PresentContext::SelectedItem
                 } else {
                     PresentContext::Focus
@@ -710,7 +710,7 @@ impl Reader {
                 };
                 self.log_presentation(&u, &logged, source, None);
                 self.presented = Some(Presented {
-                    node: snap.key,
+                    node: snap.key(),
                     snap: Arc::clone(snap),
                     utt: id,
                     epoch,
@@ -719,29 +719,29 @@ impl Reader {
                 });
                 if silent {
                     // The policy says nothing for this node; the bookkeeping above stands.
-                } else if self.web_suppress_focus(snap.key) {
+                } else if self.web_suppress_focus(snap.key()) {
                 } else if hold {
                     self.window_hold(u, fx);
                 } else {
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                     self.web_label_arm(snap, fx);
                 }
-                fx.push(ReaderEffect::FocusSettled { node: snap.key });
+                fx.push(ReaderEffect::FocusSettled { node: snap.key() });
                 self.name_retry_arm(snap, epoch, fx);
-                if self.selection_node != Some(snap.key) {
+                if self.selection_node != Some(snap.key()) {
                     self.text_track(snap, fx);
                 }
                 // Protection from eviction is earned only here: the focus passed the state
                 // machine, was presented, and the fetched node itself shows `FOCUSED`. A focus
                 // event alone, from any application, proves nothing.
-                if self.selection_node == Some(snap.key) {
+                if self.selection_node == Some(snap.key()) {
                     // A selected item in a switcher: not real focus, so the protection of the
                     // application that does hold focus stays as it is.
                 } else if let Some(f) = &self.focused_app {
                     let st = snap.struct_state();
                     if st.contains(StructFlags::FOCUSED) && !st.is_defunct() {
-                        f.publish(snap.key.app);
-                    } else if from_cache && f.protects(snap.key.app) {
+                        f.publish(snap.key().app);
+                    } else if from_cache && f.protects(snap.key().app) {
                         // Served from the cache inside the application that already owns the
                         // protection: the re-read that follows decides (a prefetched sibling
                         // never shows `FOCUSED`, and demoting for one round trip drops the
@@ -752,10 +752,10 @@ impl Reader {
                         f.demote();
                     }
                 }
-                if self.reconfirm == Reconfirm::Pending(snap.key)
-                    && self.protection_unearned(snap.key)
+                if self.reconfirm == Reconfirm::Pending(snap.key())
+                    && self.protection_unearned(snap.key())
                 {
-                    self.ask_state(snap.key, fx);
+                    self.ask_state(snap.key(), fx);
                 }
             }
             Some(
@@ -889,13 +889,13 @@ impl Reader {
     /// that need a name and only if the speech was not silenced by policy).
     fn name_retry_arm(&mut self, snap: &Arc<NodeSnapshot>, epoch: Epoch, fx: &mut ReaderEffects) {
         let nameless = name_is_blank(spoken_name(snap));
-        if !nameless || !needs_name(role_of(snap)) || self.name_retried == Some(snap.key) {
+        if !nameless || !needs_name(role_of(snap)) || self.name_retried == Some(snap.key()) {
             return;
         }
-        self.name_retried = Some(snap.key);
+        self.name_retried = Some(snap.key());
         let due = self.now + NAME_RETRY_DELAY;
         self.name_retry = Some(NameRetry {
-            node: snap.key,
+            node: snap.key(),
             epoch,
             due: Some(due),
         });
@@ -936,14 +936,14 @@ impl Reader {
         if new.struct_state().is_defunct() {
             return;
         }
-        let Some(name) = new.name.as_deref().filter(|n| !name_is_blank(Some(n))) else {
+        let Some(name) = new.name().as_deref().filter(|n| !name_is_blank(Some(n))) else {
             return;
         };
         if !name_is_blank(spoken_name(&p.snap)) {
             return;
         }
         let mut merged = (*p.snap).clone();
-        merged.name = Some(name.into());
+        merged.set_name(Some(name.into()));
         self.with_entry_name(&mut merged, &Arc::from(name));
         let merged = Arc::new(merged);
         let Some(mut u) = self.build_change(&p.snap, &merged, p.ctx, self.epoch.current(), None)
@@ -972,12 +972,12 @@ impl Reader {
             return;
         }
         let Some(b) = self.web.as_mut() else { return };
-        let Some((doc, node)) = b.join.get(snap.key) else {
+        let Some((doc, node)) = b.join.get(snap.key()) else {
             return;
         };
         b.label_req = b.label_req.wrapping_add(1);
         let req = b.label_req;
-        b.label_pending = Some((req, snap.key));
+        b.label_pending = Some((req, snap.key()));
         fx.push(ReaderEffect::Web(crate::WebEffect::Label {
             doc,
             node,
@@ -1120,7 +1120,7 @@ impl Reader {
         if role_of(&p.snap) == SemRole::DocumentWeb
             && let Ok(new) = &r.result
             && !new.struct_state().is_defunct()
-            && p.snap.name == new.name
+            && p.snap.name() == new.name()
         {
             let after = self.with_entry_after(&p.snap, new);
             if self
@@ -1222,7 +1222,7 @@ impl Reader {
             let soon = self.last_focus.is_some_and(|(n, at)| {
                 n == node && self.now.saturating_duration_since(at) < NAME_FOLLOW_WINDOW
             });
-            let eligible = name_is_blank(p.snap.name.as_deref())
+            let eligible = name_is_blank(p.snap.name().as_deref())
                 || self
                     .web
                     .as_ref()

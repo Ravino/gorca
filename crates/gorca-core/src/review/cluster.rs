@@ -161,7 +161,7 @@ fn object_zone(n: &BuildNode, surface: Option<Rect>) -> Option<Zone> {
     let s = &*n.snap;
     let entry = entry_of(s);
     // A single-line entry: the label, the role and what is typed.
-    let typed: Option<Arc<str>> = if is_entry(&entry) && s.value.is_none() && n.lines.is_some() {
+    let typed: Option<Arc<str>> = if is_entry(&entry) && s.value().is_none() && n.lines.is_some() {
         let typed = n
             .lines
             .as_deref()
@@ -173,7 +173,7 @@ fn object_zone(n: &BuildNode, surface: Option<Rect>) -> Option<Zone> {
             })
             .unwrap_or_default();
         (!typed.is_empty()).then(|| Arc::from(typed))
-    } else if let Some(Value::Text(t)) = &s.value {
+    } else if let Some(Value::Text(t)) = &s.value() {
         Some(Arc::clone(t))
     } else {
         None
@@ -183,10 +183,10 @@ fn object_zone(n: &BuildNode, surface: Option<Rect>) -> Option<Zone> {
         return None;
     }
     Some(Zone {
-        node: s.key,
+        node: s.key(),
         kind: ZoneKind::Object,
         text: Arc::from(zone::join_tokens(&tokens)),
-        rect: placed(s.bounds, surface),
+        rect: placed(s.bounds(), surface),
         name: entry.name.clone().filter(|n| !n.is_empty()),
         label_like: label_role(entry.sem.role),
     })
@@ -213,7 +213,7 @@ fn text_zones(n: &BuildNode, surface: Option<Rect>) -> Vec<Zone> {
     let Some(lines) = n.lines.as_deref() else {
         return Vec::new();
     };
-    let node_rect = placed(s.bounds, surface);
+    let node_rect = placed(s.bounds(), surface);
     let mut out = Vec::new();
     for line in lines {
         let rect = line
@@ -230,7 +230,7 @@ fn text_zones(n: &BuildNode, surface: Option<Rect>) -> Vec<Zone> {
                 continue;
             }
             out.push(Zone {
-                node: s.key,
+                node: s.key(),
                 kind: ZoneKind::Text {
                     src: start..start.saturating_add(len),
                 },
@@ -527,7 +527,7 @@ pub fn build_line_model(input: &BuildInput, limits: &ReviewLimits) -> LineModel 
     let surface_rect = input
         .nodes
         .first()
-        .and_then(|n| n.snap.bounds)
+        .and_then(|n| n.snap.bounds())
         .and_then(sane_rect);
     let mut zones = collect_zones(input, surface_rect);
     let mut completeness = input
@@ -605,14 +605,14 @@ pub fn build_line_model(input: &BuildInput, limits: &ReviewLimits) -> LineModel 
             .push(u32::try_from(i).unwrap_or(u32::MAX));
     }
     let by_key: HashMap<NodeKey, &BuildNode> =
-        input.nodes.iter().map(|n| (n.snap.key, n)).collect();
+        input.nodes.iter().map(|n| (n.snap.key(), n)).collect();
     let mut checks: Vec<NodeCheck> = by_node
         .keys()
         .filter_map(|k| {
             by_key.get(k).map(|n| NodeCheck {
                 node: *k,
                 hash: snapshot_hash(&n.snap),
-                rect: n.snap.bounds,
+                rect: n.snap.bounds(),
             })
         })
         .collect();
@@ -620,7 +620,7 @@ pub fn build_line_model(input: &BuildInput, limits: &ReviewLimits) -> LineModel 
     let texts: HashMap<NodeKey, Arc<[TextLine]>> = input
         .nodes
         .iter()
-        .filter_map(|n| n.lines.as_ref().map(|l| (n.snap.key, Arc::clone(l))))
+        .filter_map(|n| n.lines.as_ref().map(|l| (n.snap.key(), Arc::clone(l))))
         .collect();
     LineModel {
         id: next_model_id(),
@@ -635,7 +635,7 @@ pub fn build_line_model(input: &BuildInput, limits: &ReviewLimits) -> LineModel 
         built_rev: input.built_rev,
         built_at: input.built_at,
         completeness,
-        clip: clip_of(input.nodes.first().and_then(|n| n.snap.bounds)),
+        clip: clip_of(input.nodes.first().and_then(|n| n.snap.bounds())),
         focus_line: None,
     }
 }
@@ -647,9 +647,9 @@ mod tests {
     use gorca_model::{Ifaces, PropMask, Role, StateSet};
 
     fn bn(mut s: NodeSnapshot, depth: u16, r: Option<Rect>) -> BuildNode {
-        s.bounds = r;
+        s.set_bounds(r);
         if r.is_some() {
-            s.have |= PropMask::BOUNDS;
+            s.set_have(s.have() | PropMask::BOUNDS);
         }
         BuildNode {
             snap: Arc::new(s),
@@ -677,7 +677,7 @@ mod tests {
 
     fn btn(n: u64, name: &str) -> NodeSnapshot {
         let mut s = snap(n, Role::Button, name, Some(1), &[]);
-        s.states |= StateSet::FOCUSABLE;
+        s.set_test_states(s.test_states() | StateSet::FOCUSABLE);
         s
     }
 
@@ -737,7 +737,7 @@ mod tests {
     #[test]
     fn a_wrapped_label_keeps_its_source_order_even_with_inconsistent_extents() {
         let mut label = snap(2, Role::Label, "", Some(1), &[]);
-        label.interfaces = Ifaces::TEXT;
+        label.set_caps(gorca_model::NodeCaps::new(Ifaces::TEXT));
         let mut n = bn(label, 1, r(0, 0, 300, 90));
         let line = |a: u32, b: u32, t: &str, y: i32| TextLine {
             range: a..b,
@@ -763,7 +763,7 @@ mod tests {
     #[test]
     fn embedded_object_characters_split_a_text_line_into_zones() {
         let mut label = snap(2, Role::Label, "", Some(1), &[]);
-        label.interfaces = Ifaces::TEXT;
+        label.set_caps(gorca_model::NodeCaps::new(Ifaces::TEXT));
         let mut n = bn(label, 1, r(0, 0, 300, 20));
         n.lines = Some(Arc::from(vec![TextLine {
             range: 0..9,
@@ -832,7 +832,7 @@ mod tests {
     #[test]
     fn a_control_absorbs_its_label_and_a_container_names_itself_first() {
         let mut lbl = snap(3, Role::Label, "OK", Some(2), &[]);
-        lbl.interfaces = Ifaces::TEXT;
+        lbl.set_caps(gorca_model::NodeCaps::new(Ifaces::TEXT));
         let mut label_node = bn(lbl, 2, r(4, 4, 30, 20));
         label_node.lines = Some(Arc::from(vec![TextLine {
             range: 0..2,
@@ -840,7 +840,9 @@ mod tests {
             rect: r(4, 4, 30, 20),
         }]));
         let mut b = btn(2, "OK");
-        b.children = gorca_model::ChildList::Known([key(3)].into_iter().collect());
+        b.set_children(gorca_model::ChildList::Known(
+            [key(3)].into_iter().collect(),
+        ));
         let list = snap(4, Role::List, "Folders", Some(1), &[5]);
         let item = bn(
             snap(5, Role::ListItem, "Inbox", Some(4), &[]),
@@ -861,8 +863,8 @@ mod tests {
     #[test]
     fn an_entry_says_its_name_its_role_and_what_is_typed() {
         let mut e = snap(2, Role::TextEntry, "Search", Some(1), &[]);
-        e.interfaces = Ifaces::TEXT;
-        e.states |= StateSet::FOCUSABLE | StateSet::EDITABLE;
+        e.set_caps(gorca_model::NodeCaps::new(Ifaces::TEXT));
+        e.set_test_states(e.test_states() | StateSet::FOCUSABLE | StateSet::EDITABLE);
         let mut n = bn(e, 1, r(0, 0, 200, 20));
         n.lines = Some(Arc::from(vec![TextLine {
             range: 0..5,
@@ -940,7 +942,7 @@ mod tests {
                 };
                 let mut s = btn(2 + u64::try_from(i).unwrap_or(0), &format!("n{i}"));
                 if next() % 5 == 0 {
-                    s.name = None;
+                    s.set_name(None);
                 }
                 nodes.push(bn(s, 1, rect));
             }

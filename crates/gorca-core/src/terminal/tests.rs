@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 
 use gorca_input_api::{KeyClass, KeyEvent, KeyIntent, Modifiers, PressKind, static_keycode};
 use gorca_model::{
-    AppId, ChildList, ConnectorId, Epoch, Freshness, Ifaces, LocalId, NodeKey, NodeSnapshot, Prio,
-    PropMask, Role, StateSet, TextDelta, TextWindowFill,
+    AppId, ConnectorId, Epoch, Freshness, LocalId, NodeKey, NodeSnapshot, Prio, PropMask, Role,
+    StateSet, TextDelta, TextWindowFill,
 };
 use gorca_rt::EpochCell;
 
@@ -64,25 +64,13 @@ fn node() -> NodeKey {
 
 fn term_snap() -> Arc<NodeSnapshot> {
     Arc::new(
-        NodeSnapshot {
-            key: node(),
-            role: Role::Terminal,
-            states: StateSet::FOCUSED | StateSet::SHOWING | StateSet::VISIBLE,
-            name: Some(Arc::from("Terminal")),
-            description: None,
-            value: None,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        }
-        .with_test_record(),
+        NodeSnapshot::new(node(), Freshness::Fresh { at: Instant::now() })
+            .with_name(Some(Arc::from("Terminal")))
+            .with_have(PropMask::PRESENT)
+            .with_test_source(
+                Role::Terminal,
+                StateSet::FOCUSED | StateSet::SHOWING | StateSet::VISIBLE,
+            ),
     )
 }
 
@@ -903,7 +891,7 @@ impl Rig {
     fn state_reply(&mut self, focused: bool) -> ReaderEffects {
         let mut s = (*term_snap()).clone();
         if !focused {
-            s.states = StateSet::SHOWING | StateSet::VISIBLE;
+            s.set_test_states(StateSet::SHOWING | StateSet::VISIBLE);
         }
         self.msg(ReaderMsg::Reply(crate::QueryReply {
             node: node(),
@@ -995,9 +983,9 @@ fn state_reply_at(
     name: Option<&str>,
 ) -> ReaderEffects {
     let mut s = (*term_snap()).clone();
-    s.states = states;
+    s.set_test_states(states);
     if let Some(n) = name {
-        s.name = Some(Arc::from(n));
+        s.set_name(Some(Arc::from(n)));
     }
     g.msg(ReaderMsg::Reply(crate::QueryReply {
         node: node(),

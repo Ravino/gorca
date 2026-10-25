@@ -259,7 +259,7 @@ fn json_str(out: &mut String, s: &str) {
 
 fn format_record(out: &mut String, r: &PresentRecord, labels: &dyn NodeLabel, key: &RedactKey) {
     let n = &*r.snap;
-    let (bus, path) = labels.label(n.key).unwrap_or_default();
+    let (bus, path) = labels.label(n.key()).unwrap_or_default();
     let _ = write!(
         out,
         "{{\"t_ns\":{},\"utt_id\":{},\"epoch\":{},\"app_bus\":",
@@ -271,9 +271,9 @@ fn format_record(out: &mut String, r: &PresentRecord, labels: &dyn NodeLabel, ke
     let _ = write!(
         out,
         ",\"key\":\"{}:{}:{:016x}\",\"source\":\"{}\",\"role\":\"{}\",\"states\":[",
-        n.key.app.connector.0,
-        n.key.app.serial,
-        n.key.local.0,
+        n.key().app.connector.0,
+        n.key().app.serial,
+        n.key().local.0,
         r.source.as_str(),
         n.role_log_name()
     );
@@ -292,12 +292,12 @@ fn format_record(out: &mut String, r: &PresentRecord, labels: &dyn NodeLabel, ke
         }
     };
     out.push_str("],\"name\":");
-    match n.name.as_deref() {
+    match n.name().as_deref() {
         Some(name) if !name.is_empty() => text(out, name),
         Some(_) | None => out.push_str("null"),
     }
     out.push_str(",\"value\":");
-    match &n.value {
+    match &n.value() {
         // A number on a password field would still be its content.
         Some(Value::Range { current, .. }) if secret && current.is_finite() => {
             json_str(out, &key.tag(&current.to_string()));
@@ -322,10 +322,7 @@ fn format_record(out: &mut String, r: &PresentRecord, labels: &dyn NodeLabel, ke
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
     use super::*;
-    use gorca_model::{
-        AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, PropMask, Relations,
-        Role, StateSet,
-    };
+    use gorca_model::{AppId, ConnectorId, Freshness, LocalId, PropMask, Role, StateSet};
     use std::time::Instant;
 
     struct Open(Arc<(Mutex<bool>, std::sync::Condvar)>);
@@ -361,30 +358,22 @@ mod tests {
     }
 
     fn snap(local: u64, name: Option<&str>, value: Option<Value>) -> Arc<NodeSnapshot> {
-        Arc::new(NodeSnapshot {
-            key: NodeKey {
-                app: AppId {
-                    connector: ConnectorId(1),
-                    serial: 4,
+        Arc::new(
+            NodeSnapshot::new(
+                NodeKey {
+                    app: AppId {
+                        connector: ConnectorId(1),
+                        serial: 4,
+                    },
+                    local: LocalId(local),
                 },
-                local: LocalId(local),
-            },
-            role: Role::CheckBox,
-            states: StateSet::CHECKED | StateSet::FOCUSED,
-            name: name.map(Arc::from),
-            description: None,
-            value,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: AttrMap::default(),
-            relations: Relations::default(),
-            bounds: None,
-            have: PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        })
+                Freshness::Fresh { at: Instant::now() },
+            )
+            .with_name(name.map(Arc::from))
+            .with_value(value)
+            .with_have(PropMask::PRESENT)
+            .with_source(Role::CheckBox, StateSet::CHECKED | StateSet::FOCUSED),
+        )
     }
 
     fn rec(s: Arc<NodeSnapshot>, source: PresentSource, refines: Option<u64>) -> PresentRecord {
@@ -484,7 +473,7 @@ mod tests {
 
     fn password(name: &str, text: &str) -> Arc<NodeSnapshot> {
         let mut s = (*snap(5, Some(name), Some(Value::Text(Arc::from(text))))).clone();
-        s.role = Role::PasswordEntry;
+        s.set_test_role(Role::PasswordEntry);
         Arc::new(s)
     }
 
@@ -504,15 +493,15 @@ mod tests {
             ))
             .clone()
             .with_test_record();
-            s.role = Role::TextEntry;
+            s.set_test_role(Role::TextEntry);
             if via_entry {
                 let mut e = gorca_model::SemEntry::default();
                 e.sem.role = SemRole::PasswordBox;
-                s.sem.entry = Some(Arc::new(e));
+                s.sem_mut().entry = Some(Arc::new(e));
             } else {
-                let mut r = (**s.sem.rec.as_ref().unwrap()).clone();
+                let mut r = (**s.sem().rec.as_ref().unwrap()).clone();
                 r.sem.role = SemRole::PasswordBox;
-                s.sem.rec = Some(Arc::new(r));
+                s.sem_mut().rec = Some(Arc::new(r));
             }
             log.record(rec(Arc::new(s), PresentSource::Hit, None));
             drop(log);

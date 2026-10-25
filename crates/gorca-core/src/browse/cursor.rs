@@ -473,7 +473,7 @@ mod tests {
     use std::sync::Arc;
 
     use gorca_doc::web::{DocOp, NodeFlags, NodeSpec, SubtreeSpec};
-    use gorca_model::Role;
+    use gorca_model::sem::SemRole;
 
     use super::*;
 
@@ -485,14 +485,14 @@ mod tests {
             .split('\n')
             .enumerate()
             .map(|(i, line)| {
-                let mut n = NodeSpec::new(Role::StaticText).text(line);
+                let mut n = NodeSpec::new(SemRole::StaticText).text(line);
                 if i > 0 {
                     n = n.flags(NodeFlags::BREAK_BEFORE);
                 }
                 SubtreeSpec::leaf(n)
             })
             .collect();
-        let spec = SubtreeSpec::with_children(NodeSpec::new(Role::DocumentWeb), kids);
+        let spec = SubtreeSpec::with_children(NodeSpec::new(SemRole::DocumentWeb), kids);
         assert!(
             d.apply(&DocOp::InsertSubtree {
                 parent: None,

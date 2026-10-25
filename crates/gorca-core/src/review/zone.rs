@@ -39,10 +39,10 @@ fn opts() -> RenderOpts<'static> {
 /// The review IR of `entry`. `contents` is what a text field holds (text-layer data: the entry
 /// has no value for it); a password's contents are never spoken.
 fn review_ir(entry: &SemEntry, snap: &NodeSnapshot, contents: Option<&str>) -> PresIr {
-    let mut ir = compose(entry, snap.key, Reason::Review, ctx()).unwrap_or_else(|_| {
+    let mut ir = compose(entry, snap.key(), Reason::Review, ctx()).unwrap_or_else(|_| {
         PresIr::new(
             Reason::Review,
-            snap.key,
+            snap.key(),
             entry.sem_rev,
             smallvec::SmallVec::new(),
         )
@@ -104,7 +104,7 @@ pub fn object_text(snap: &NodeSnapshot, contents: Option<&str>) -> String {
 /// The zone text of a node as flat review reads it where no text-layer reading is at hand: the
 /// contents of a field are the snapshot's value.
 pub fn flat_text(snap: &NodeSnapshot) -> String {
-    let contents = match &snap.value {
+    let contents = match &snap.value() {
         Some(gorca_model::Value::Text(t)) => Some(&**t),
         Some(gorca_model::Value::Range { .. }) | None => None,
     };
@@ -125,8 +125,7 @@ pub fn role_word(snap: &NodeSnapshot, web: bool) -> &'static str {
 mod tests {
     use gorca_model::sem::{SemRole, Semantics};
     use gorca_model::{
-        AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSem, PropMask,
-        Role, StateSet,
+        AppId, ConnectorId, Freshness, LocalId, NodeKey, NodeSem, PropMask, Role, StateSet,
     };
 
     use super::*;
@@ -141,33 +140,23 @@ mod tests {
             name: (!name.is_empty()).then(|| Arc::from(name)),
             ..SemEntry::default()
         };
-        NodeSnapshot {
-            key: NodeKey {
+        NodeSnapshot::new(
+            NodeKey {
                 app: AppId {
                     connector: ConnectorId(1),
                     serial: 1,
                 },
                 local: LocalId(1),
             },
-            role: Role::Unknown,
-            states: StateSet::empty(),
-            name: None,
-            description: None,
-            value: None,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Defunct,
-            sem: NodeSem {
-                rec: None,
-                entry: Some(Arc::new(entry)),
-            },
-        }
+            Freshness::Defunct,
+        )
+        .with_name(None)
+        .with_have(PropMask::PRESENT)
+        .with_sem(NodeSem {
+            rec: None,
+            entry: Some(Arc::new(entry)),
+        })
+        .with_source(Role::Unknown, StateSet::empty())
     }
 
     #[test]
@@ -189,7 +178,7 @@ mod tests {
     #[test]
     fn a_toolkit_password_entry_is_never_read_even_when_the_fused_role_is_a_text_box() {
         let mut pw = snap(SemRole::TextBox, "Password");
-        pw.role = gorca_model::Role::PasswordEntry;
+        pw.set_test_role(gorca_model::Role::PasswordEntry);
         assert!(!object_text(&pw, Some("hunter2")).contains("hunter2"));
     }
 

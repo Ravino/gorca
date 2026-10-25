@@ -156,14 +156,14 @@ fn dropped(
 }
 
 pub(crate) fn describe(s: &NodeSnapshot) -> String {
-    let name: String = s.name.as_deref().unwrap_or("").chars().take(30).collect();
-    format!("{:?} {name:?}", s.role)
+    let name: String = s.name().as_deref().unwrap_or("").chars().take(30).collect();
+    format!("{:?} {name:?}", s.test_role())
 }
 
 /// Why a node has no fused entry. A text leaf is merged into its parent's content name and is
 /// never a focus target; any other role without an entry is a defect the gate must not hide.
 pub(crate) fn no_entry_reason(s: &NodeSnapshot) -> &'static str {
-    if matches!(s.role, Role::StaticText | Role::Label) {
+    if matches!(s.test_role(), Role::StaticText | Role::Label) {
         "static-leaf-no-entry"
     } else {
         "no-fused-entry"
@@ -205,7 +205,7 @@ fn arrival_order(snaps: &[Arc<NodeSnapshot>], seed: u64) -> Vec<usize> {
     let mut queues: Vec<std::collections::VecDeque<usize>> = Vec::new();
     let mut slot: BTreeMap<Option<gorca_model::NodeKey>, usize> = BTreeMap::new();
     for (i, s) in snaps.iter().enumerate() {
-        let q = *slot.entry(s.parent).or_insert_with(|| {
+        let q = *slot.entry(s.parent()).or_insert_with(|| {
             queues.push(std::collections::VecDeque::new());
             queues.len() - 1
         });
@@ -250,24 +250,25 @@ pub(crate) fn fuse(
 }
 
 fn is_web(s: &NodeSnapshot) -> bool {
-    s.attrs
-        .iter()
-        .any(|(k, _)| *k == gorca_doc_source_api::web_attrs::TAG)
+    s.sem().rec.as_ref().is_some_and(|r| !r.tag.is_empty())
 }
 
 /// Whether each node is web content: it carries the engine's DOM tag, is a web document, or has a
 /// web ancestor. Chromium exports no tag on its text leaves, so the tag alone would call them
 /// native and drop them. The page is in document order (parents first).
 pub(crate) fn web_flags(snaps: &[Arc<NodeSnapshot>]) -> Vec<bool> {
-    let index: BTreeMap<gorca_model::NodeKey, usize> =
-        snaps.iter().enumerate().map(|(i, s)| (s.key, i)).collect();
+    let index: BTreeMap<gorca_model::NodeKey, usize> = snaps
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (s.key(), i))
+        .collect();
     let mut out = vec![false; snaps.len()];
     for (i, s) in snaps.iter().enumerate() {
         let parent_web = s
-            .parent
+            .parent()
             .and_then(|p| index.get(&p))
             .is_some_and(|&j| j < i && out[j]);
-        out[i] = is_web(s) || s.role == Role::DocumentWeb || parent_web;
+        out[i] = is_web(s) || s.test_role() == Role::DocumentWeb || parent_web;
     }
     out
 }
@@ -327,7 +328,7 @@ fn focus_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
                 drops.add(kind_mismatch_reason(web_run), || describe(s));
                 continue;
             }
-            let Some(entry) = s.sem.entry.as_ref() else {
+            let Some(entry) = s.sem().entry.as_ref() else {
                 drops.add(no_entry_reason(s), || describe(s));
                 continue;
             };
@@ -340,7 +341,7 @@ fn focus_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
                 hedge_inferred: false,
                 lang: run.lang,
             };
-            let new = match compose(entry, s.key, Reason::Focus, ctx) {
+            let new = match compose(entry, s.key(), Reason::Focus, ctx) {
                 Ok(ir) => join(
                     render(&ir, render_opts(run, web_run))
                         .iter()
@@ -350,7 +351,7 @@ fn focus_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
             };
             out.push(Record {
                 corpus: label.clone(),
-                node: s.key.local.0,
+                node: s.key().local.0,
                 case: "focus".to_owned(),
                 surface,
                 dropped: None,
@@ -530,7 +531,7 @@ fn compare_change(
     run: &Run,
     out: &mut Vec<Record>,
 ) {
-    let (Some(oe), Some(ne)) = (o.sem.entry.as_ref(), n.sem.entry.as_ref()) else {
+    let (Some(oe), Some(ne)) = (o.sem().entry.as_ref(), n.sem().entry.as_ref()) else {
         return;
     };
     let ctx = ComposeCtx {
@@ -541,11 +542,11 @@ fn compare_change(
         hedge_inferred: false,
         lang: run.lang,
     };
-    let ir = compose_change(oe, ne, n.key, ctx);
+    let ir = compose_change(oe, ne, n.key(), ctx);
     let tokens = render(&ir, render_opts(run, false));
     out.push(Record {
         corpus: label.to_owned(),
-        node: n.key.local.0,
+        node: n.key().local.0,
         case: case.to_owned(),
         surface: if web_run { "change-web" } else { "change" },
         dropped: None,
@@ -633,7 +634,7 @@ fn change_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
                     drops.add(kind_mismatch_reason(web_run), || describe(n));
                     continue;
                 }
-                if o.sem.entry.is_none() || n.sem.entry.is_none() {
+                if o.sem().entry.is_none() || n.sem().entry.is_none() {
                     drops.add(no_entry_reason(n), || describe(n));
                     continue;
                 }
@@ -648,16 +649,16 @@ fn change_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
 fn spoken_facts_differ(o: &NodeSnapshot, n: &NodeSnapshot) -> bool {
     let value_key = |s: &NodeSnapshot| {
         (
-            format!("{:?}", s.value),
-            s.sem
+            format!("{:?}", s.value()),
+            s.sem()
                 .entry
                 .as_ref()
                 .and_then(|e| e.sem.text.as_ref())
                 .and_then(|t| t.value_text.clone()),
         )
     };
-    !((o.states ^ n.states) & !StateSet::FOCUSED).is_empty()
-        || o.name != n.name
+    !((o.test_states() ^ n.test_states()) & !StateSet::FOCUSED).is_empty()
+        || o.name() != n.name()
         || value_key(o) != value_key(n)
 }
 
@@ -775,7 +776,7 @@ fn real_change_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
         let mut compared = 0u64;
         for (oi, ni) in pairs {
             let (o, n) = (&old[oi], &new[ni]);
-            if n.name.as_deref().is_some_and(|x| x.starts_with("do:")) {
+            if n.name().as_deref().is_some_and(|x| x.starts_with("do:")) {
                 drops.add("trigger-button", || describe(n));
                 continue;
             }
@@ -786,7 +787,7 @@ fn real_change_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
                 drops.add(kind_mismatch_reason(web_run), || describe(n));
                 continue;
             }
-            if o.sem.entry.is_none() || n.sem.entry.is_none() {
+            if o.sem().entry.is_none() || n.sem().entry.is_none() {
                 drops.add(no_entry_reason(n), || describe(n));
                 continue;
             }
@@ -861,21 +862,21 @@ fn page_source(fused: &[Arc<NodeSnapshot>]) -> rr::PageSource {
     let mut kids: std::collections::HashMap<gorca_model::NodeKey, Vec<gorca_model::NodeKey>> =
         std::collections::HashMap::new();
     for s in fused {
-        if let Some(p) = s.parent {
-            kids.entry(p).or_default().push(s.key);
+        if let Some(p) = s.parent() {
+            kids.entry(p).or_default().push(s.key());
         }
     }
     let mut map = std::collections::HashMap::new();
     for s in fused {
         let mut c = (**s).clone();
-        c.children = gorca_model::ChildList::Known(
-            kids.remove(&s.key)
+        c.set_children(gorca_model::ChildList::Known(
+            kids.remove(&s.key())
                 .unwrap_or_default()
                 .into_iter()
                 .collect(),
-        );
-        c.have |= gorca_model::PropMask::CHILDREN | gorca_model::PropMask::PARENT;
-        map.insert(s.key, Arc::new(c));
+        ));
+        c.set_have(c.have() | gorca_model::PropMask::CHILDREN | gorca_model::PropMask::PARENT);
+        map.insert(s.key(), Arc::new(c));
     }
     rr::PageSource(map)
 }
@@ -924,7 +925,7 @@ fn review_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
         let mut push = |s: &NodeSnapshot, case: &str, new: String| {
             out.push(Record {
                 corpus: label.clone(),
-                node: s.key.local.0,
+                node: s.key().local.0,
                 case: case.to_owned(),
                 surface,
                 dropped: None,
@@ -936,7 +937,7 @@ fn review_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
                 drops.add(kind_mismatch_reason(web_run), || describe(s));
                 continue;
             }
-            if s.sem.entry.is_none() {
+            if s.sem().entry.is_none() {
                 drops.add(no_entry_reason(s), || describe(s));
                 continue;
             }
@@ -947,11 +948,11 @@ fn review_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
                 "zone",
                 tokens_text(&rr::zone_tokens(s, web_run, None, rr::actionable(s))),
             );
-            if s.name.as_deref().is_none_or(|n| n.trim().is_empty()) {
+            if s.name().as_deref().is_none_or(|n| n.trim().is_empty()) {
                 push(s, "noname", format!("Role:{}", rr::role_word(s, web_run)));
             }
             push(s, "class", class_text(rr::class_of_snapshot(s, false)));
-            if let Some(e) = s.sem.entry.as_ref() {
+            if let Some(e) = s.sem().entry.as_ref() {
                 // What the surface walk of a model build does with the node: asks the app for
                 // its text lines, treats it as another surface.
                 push(
@@ -996,7 +997,7 @@ fn review_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
             if web_run {
                 push(s, "class-web", class_text(rr::class_of_snapshot(s, true)));
             }
-            push(s, "walk", walk_text(&src, s.key));
+            push(s, "walk", walk_text(&src, s.key()));
         }
         drops.flush(&label, "flat", surface, out);
         if compared == 0 {

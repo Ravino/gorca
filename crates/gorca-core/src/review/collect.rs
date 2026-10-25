@@ -245,14 +245,14 @@ impl<S: NavSource> Ctx<'_, S> {
         // `static` that holds children is an inline element the parent only points to with a
         // U+FFFC (a `<time>`, a `<span>`): its text is not in the parent and it stays.
         if text_parent
-            && s.have.contains(PropMask::ROLE)
+            && s.have().contains(PropMask::ROLE)
             && entry_of(s).sem.role == SemRole::StaticText
-            && (matches!(&s.children, ChildList::Count(0))
-                || matches!(&s.children, ChildList::Known(k) if k.is_empty()))
+            && (matches!(&s.children(), ChildList::Count(0))
+                || matches!(&s.children(), ChildList::Known(k) if k.is_empty()))
         {
             return;
         }
-        if !s.have.contains(NEED) || v.stale.intersects(NEED) {
+        if !s.have().contains(NEED) || v.stale.intersects(NEED) {
             match parent {
                 Some(p) => self.node_misses.entry(p).or_default().push(k),
                 None => self.direct.push(Miss::Node(k)),
@@ -262,8 +262,8 @@ impl<S: NavSource> Ctx<'_, S> {
         let role = entry_of(s).sem.role;
         let web = match (web, role) {
             (Web::Outside, SemRole::DocumentWeb) => Web::Inside(
-                (s.have.contains(PropMask::BOUNDS) && !v.stale.contains(PropMask::BOUNDS))
-                    .then_some(s.bounds)
+                (s.have().contains(PropMask::BOUNDS) && !v.stale.contains(PropMask::BOUNDS))
+                    .then_some(s.bounds())
                     .flatten(),
             ),
             (w, _) => w,
@@ -279,8 +279,8 @@ impl<S: NavSource> Ctx<'_, S> {
             && role != SemRole::DocumentWeb
             && class_of_snapshot(s, false) == PresClass::Unavailable
         {
-            let known = s.have.contains(PropMask::BOUNDS) && !v.stale.contains(PropMask::BOUNDS);
-            match (doc, s.bounds) {
+            let known = s.have().contains(PropMask::BOUNDS) && !v.stale.contains(PropMask::BOUNDS);
+            match (doc, s.bounds()) {
                 (Some(d), Some(b)) if known => {
                     if !overlaps(d, b) {
                         return;
@@ -303,7 +303,8 @@ impl<S: NavSource> Ctx<'_, S> {
         if k != self.surface && is_surface_role(role) {
             return;
         }
-        let lacks_bounds = !s.have.contains(PropMask::BOUNDS) || v.stale.contains(PropMask::BOUNDS);
+        let lacks_bounds =
+            !s.have().contains(PropMask::BOUNDS) || v.stale.contains(PropMask::BOUNDS);
         let wants_bounds = depth == 0
             || class_of_snapshot(s, in_web) == PresClass::Content
             || s.struct_state().contains(StructFlags::FOCUSABLE)
@@ -323,7 +324,7 @@ impl<S: NavSource> Ctx<'_, S> {
         });
         let _ = idx;
         let stale_children = v.stale.contains(PropMask::CHILDREN);
-        match &s.children {
+        match &s.children() {
             ChildList::Known(list) if !stale_children => {
                 let text_parent = self.skip_repeats && wants_lines(s);
                 for c in list {
@@ -416,8 +417,8 @@ pub(crate) mod testsrc {
     use std::time::Instant;
 
     use gorca_model::{
-        AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, Lookup, NodeKey,
-        NodeSnapshot, NodeView, PropMask, Rect, Relations, Role, StateSet,
+        AppId, ChildList, ConnectorId, Freshness, LocalId, Lookup, NodeKey, NodeSnapshot, NodeView,
+        PropMask, Rect, Role, StateSet,
     };
 
     use super::super::objnav::NavSource;
@@ -444,31 +445,18 @@ pub(crate) mod testsrc {
     }
 
     pub fn snap(n: u64, role: Role, name: &str, parent: Option<u64>, kids: &[u64]) -> NodeSnapshot {
-        NodeSnapshot {
-            key: key(n),
-            role,
-            states: StateSet::SHOWING | StateSet::VISIBLE,
-            name: (!name.is_empty()).then(|| Arc::from(name)),
-            description: None,
-            value: None,
-            parent: parent.map(key),
-            children: ChildList::Known(kids.iter().map(|k| key(*k)).collect()),
-            interfaces: Ifaces::empty(),
-            attrs: AttrMap::default(),
-            relations: Relations::default(),
-            bounds: None,
-            have: PropMask::PRESENT | PropMask::CHILDREN | PropMask::PARENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        }
-        .with_test_record()
+        NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+            .with_name((!name.is_empty()).then(|| Arc::from(name)))
+            .with_parent(parent.map(key))
+            .with_children(ChildList::Known(kids.iter().map(|k| key(*k)).collect()))
+            .with_have(PropMask::PRESENT | PropMask::CHILDREN | PropMask::PARENT)
+            .with_test_source(role, StateSet::SHOWING | StateSet::VISIBLE)
     }
 
     impl MapSrc {
         pub fn put(&mut self, s: NodeSnapshot) {
             self.nodes.insert(
-                s.key,
+                s.key(),
                 Lookup::Hit(NodeView {
                     snap: Arc::new(s),
                     stale: PropMask::empty(),
@@ -478,8 +466,8 @@ pub(crate) mod testsrc {
         }
 
         pub fn put_at(&mut self, mut s: NodeSnapshot, r: Rect) {
-            s.bounds = Some(r);
-            s.have |= PropMask::BOUNDS;
+            s.set_bounds(Some(r));
+            s.set_have(s.have() | PropMask::BOUNDS);
             self.put(s);
         }
     }
@@ -506,12 +494,12 @@ mod tests {
         assert!(!wants_lines(&button));
         // A claim of Text: the filler is asked too; a widget never is.
         for s in [&mut label, &mut panel, &mut button] {
-            s.interfaces = Ifaces::TEXT;
+            s.set_caps(gorca_model::NodeCaps::new(Ifaces::TEXT));
         }
         assert!(wants_lines(&label) && wants_lines(&panel));
         assert!(!wants_lines(&button));
         // A claim without Text: nothing is asked.
-        label.interfaces = Ifaces::ACTION;
+        label.set_caps(gorca_model::NodeCaps::new(Ifaces::ACTION));
         assert!(!wants_lines(&label));
     }
 
@@ -537,8 +525,8 @@ mod tests {
         m.put_at(snap(1, Role::Window, "W", None, &[2, 3, 4]), r(0, 0));
         m.put_at(snap(2, Role::Button, "OK", Some(1), &[]), r(0, 0));
         let mut hidden = snap(3, Role::Panel, "", Some(1), &[5]);
-        hidden.states = StateSet::empty();
-        hidden.have |= PropMask::STATES;
+        hidden.set_test_states(StateSet::empty());
+        hidden.set_have(hidden.have() | PropMask::STATES);
         m.put(hidden);
         m.put(snap(5, Role::Button, "Never", Some(3), &[]));
         m.put_at(
@@ -546,7 +534,7 @@ mod tests {
             r(0, 0),
         );
         let c = collect(&m, key(1), ReviewLimits::default());
-        let names: Vec<_> = c.nodes.iter().map(|n| n.snap.key.local.0).collect();
+        let names: Vec<_> = c.nodes.iter().map(|n| n.snap.key().local.0).collect();
         assert_eq!(names, [1, 2]);
         assert!(c.misses.is_empty(), "{:?}", c.misses);
     }
@@ -575,8 +563,8 @@ mod tests {
     #[test]
     fn a_web_documents_visible_only_nodes_are_kept_and_other_toolkits_are_not() {
         let visible_only = |mut s: NodeSnapshot| {
-            s.states = StateSet::VISIBLE;
-            s.have |= PropMask::STATES;
+            s.set_test_states(StateSet::VISIBLE);
+            s.set_have(s.have() | PropMask::STATES);
             s
         };
         let mut m = MapSrc::default();
@@ -602,7 +590,7 @@ mod tests {
         );
         m.put_at(snap(6, Role::Button, "Never", Some(5), &[]), r(0, 40));
         let c = collect(&m, key(1), ReviewLimits::default());
-        let ids: Vec<_> = c.nodes.iter().map(|n| n.snap.key.local.0).collect();
+        let ids: Vec<_> = c.nodes.iter().map(|n| n.snap.key().local.0).collect();
         assert_eq!(ids, [1, 2, 3, 4]);
     }
 
@@ -611,8 +599,8 @@ mod tests {
     #[test]
     fn a_long_scrolled_page_reaches_its_on_screen_content() {
         let visible_only = |mut s: NodeSnapshot| {
-            s.states = StateSet::VISIBLE;
-            s.have |= PropMask::STATES;
+            s.set_test_states(StateSet::VISIBLE);
+            s.set_have(s.have() | PropMask::STATES);
             s
         };
         let page = Rect {
@@ -646,7 +634,7 @@ mod tests {
         );
         let c = collect(&m, key(1), ReviewLimits::default());
         assert!(c.truncated.is_none(), "{:?}", c.truncated);
-        assert!(c.nodes.iter().any(|n| n.snap.key.local.0 == 9));
+        assert!(c.nodes.iter().any(|n| n.snap.key().local.0 == 9));
         assert_eq!(c.nodes.len(), 3, "window, document, heading");
         assert_eq!(c.text_clips.get(&key(9)), Some(&page));
     }
@@ -674,12 +662,12 @@ mod tests {
     #[test]
     fn a_blink_shaped_page_skips_repeating_static_leaves_and_off_screen_nodes() {
         let visible_only = |mut s: NodeSnapshot| {
-            s.states = StateSet::VISIBLE;
-            s.have |= PropMask::STATES;
+            s.set_test_states(StateSet::VISIBLE);
+            s.set_have(s.have() | PropMask::STATES);
             s
         };
         let text = |mut s: NodeSnapshot| {
-            s.interfaces = Ifaces::TEXT;
+            s.set_caps(gorca_model::NodeCaps::new(Ifaces::TEXT));
             s
         };
         let page = Rect {
@@ -733,7 +721,7 @@ mod tests {
             row(300),
         );
         let ids =
-            |c: &Collected| -> Vec<u64> { c.nodes.iter().map(|n| n.snap.key.local.0).collect() };
+            |c: &Collected| -> Vec<u64> { c.nodes.iter().map(|n| n.snap.key().local.0).collect() };
         let plain = collect(&m, key(1), ReviewLimits::default());
         assert_eq!(ids(&plain), [1, 2, 3, 4, 9, 10, 5, 6, 8]);
         let row_on = collect_with(&m, key(1), ReviewLimits::default(), true);

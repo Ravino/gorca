@@ -260,6 +260,7 @@ mod tests {
             attrs: SmallVec::default(),
             local: None,
             rec: None,
+            synth_role: gorca_model::SemRole::Unknown,
         }
     }
 

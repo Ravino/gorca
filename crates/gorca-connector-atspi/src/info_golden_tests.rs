@@ -103,7 +103,7 @@ fn esc(s: &str) -> String {
 /// Why a node has no fused entry. A text leaf is merged into its parent's content name; any
 /// other role without an entry is a defect the replay must not hide.
 fn no_entry_reason(s: &NodeSnapshot) -> &'static str {
-    if matches!(s.role, Role::StaticText | Role::Label) {
+    if matches!(s.test_role(), Role::StaticText | Role::Label) {
         "static-leaf-no-entry"
     } else {
         "no-fused-entry"
@@ -136,7 +136,7 @@ fn arrival_order(snaps: &[Arc<NodeSnapshot>], seed: u64) -> Vec<usize> {
     let mut queues: Vec<std::collections::VecDeque<usize>> = Vec::new();
     let mut slot: BTreeMap<Option<gorca_model::NodeKey>, usize> = BTreeMap::new();
     for (i, s) in snaps.iter().enumerate() {
-        let q = *slot.entry(s.parent).or_insert_with(|| {
+        let q = *slot.entry(s.parent()).or_insert_with(|| {
             queues.push(std::collections::VecDeque::new());
             queues.len() - 1
         });
@@ -181,23 +181,24 @@ fn fuse(
 }
 
 fn is_web(s: &NodeSnapshot) -> bool {
-    s.attrs
-        .iter()
-        .any(|(k, _)| *k == gorca_doc_source_api::web_attrs::TAG)
+    s.sem().rec.as_ref().is_some_and(|r| !r.tag.is_empty())
 }
 
 /// Whether each node is web content: it carries the engine's DOM tag, is a web document, or has a
 /// web ancestor. The page is in document order (parents first).
 fn web_flags(snaps: &[Arc<NodeSnapshot>]) -> Vec<bool> {
-    let index: BTreeMap<gorca_model::NodeKey, usize> =
-        snaps.iter().enumerate().map(|(i, s)| (s.key, i)).collect();
+    let index: BTreeMap<gorca_model::NodeKey, usize> = snaps
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (s.key(), i))
+        .collect();
     let mut out = vec![false; snaps.len()];
     for (i, s) in snaps.iter().enumerate() {
         let parent_web = s
-            .parent
+            .parent()
             .and_then(|p| index.get(&p))
             .is_some_and(|&j| j < i && out[j]);
-        out[i] = is_web(s) || s.role == Role::DocumentWeb || parent_web;
+        out[i] = is_web(s) || s.test_role() == Role::DocumentWeb || parent_web;
     }
     out
 }
@@ -220,11 +221,14 @@ fn records(family: &Family, run: &Run, out: &mut Vec<Record>, drops: &mut DropCo
         };
         let fused = fuse(tables, &label, &snaps, run.seed);
         let webs = web_flags(&fused);
-        let index: BTreeMap<gorca_model::NodeKey, usize> =
-            fused.iter().enumerate().map(|(i, s)| (s.key, i)).collect();
+        let index: BTreeMap<gorca_model::NodeKey, usize> = fused
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.key(), i))
+            .collect();
         let mut seen = 0u64;
         for (i, s) in fused.iter().enumerate() {
-            if s.sem.entry.is_none() {
+            if s.sem().entry.is_none() {
                 *drops.entry(no_entry_reason(s)).or_default() += 1;
                 continue;
             }
@@ -232,7 +236,7 @@ fn records(family: &Family, run: &Run, out: &mut Vec<Record>, drops: &mut DropCo
             // The ancestry as the mirror holds it: leaf first, up to the known parent.
             let mut chain: Vec<Arc<NodeSnapshot>> = vec![Arc::clone(s)];
             let mut chain_web = vec![webs[i]];
-            let mut cur = s.parent;
+            let mut cur = s.parent();
             while let Some(p) = cur {
                 if chain.len() >= MAX_DEPTH {
                     break;
@@ -240,9 +244,9 @@ fn records(family: &Family, run: &Run, out: &mut Vec<Record>, drops: &mut DropCo
                 let Some(&j) = index.get(&p) else { break };
                 chain.push(Arc::clone(&fused[j]));
                 chain_web.push(webs[j]);
-                cur = fused[j].parent;
+                cur = fused[j].parent();
             }
-            if chain.iter().any(|n| n.sem.entry.is_none()) {
+            if chain.iter().any(|n| n.sem().entry.is_none()) {
                 *drops.entry("ancestor-no-entry").or_default() += 1;
                 continue;
             }
@@ -256,7 +260,7 @@ fn records(family: &Family, run: &Run, out: &mut Vec<Record>, drops: &mut DropCo
                     gorca_core::describe_where_am_i(&chain, repeat, brief, run.lang, &chain_web);
                 out.push(Record {
                     corpus: label.clone(),
-                    node: s.key.local.0,
+                    node: s.key().local.0,
                     case,
                     surface: "whereami",
                     new: parts.join(" | "),

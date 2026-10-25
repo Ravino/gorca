@@ -2371,8 +2371,6 @@ firefox/m8-forms	4	node	Role:link | Said:First link
 firefox/m8-forms	4	node-from	Role:link | Said:First link
 firefox/m8-forms	6	node	Said:Profile form | Role:form | Said:Account
 firefox/m8-forms	6	node-from	Said:Account
-firefox/m8-forms	7	node	Said:Profile form | Role:form | Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:invalid entry | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here
-firefox/m8-forms	7	node-from	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:invalid entry | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here
 firefox/m8-forms	14	node	Said:Full name | Role:edit | Said:Ada
 firefox/m8-forms	14	node-from	Said:Full name | Role:edit | Said:Ada
 firefox/m8-forms	20	node	Said:Secret | Role:password edit
@@ -2700,8 +2698,6 @@ firefox/m8-quicknav	132	node	Role:table with 2 columns and 3 rows | Said:Fruit t
 firefox/m8-quicknav	132	node-from	Said:Fruit table
 firefox/m8-quicknav	150	node	Role:table with 2 columns and 2 rows | Said:Veg table
 firefox/m8-quicknav	150	node-from	Said:Veg table
-firefox/m8-quicknav	178	node	Said:misspeled
-firefox/m8-quicknav	178	node-from	Said:misspeled
 firefox/m8-quicknav	181	node	Said:Invalid field | Role:edit | State:invalid entry | Said:bad
 firefox/m8-quicknav	181	node-from	Said:Invalid field | Role:edit | State:invalid entry | Said:bad
 firefox/m8-quicknav	189	node	Said:Volume slider | Role:slider

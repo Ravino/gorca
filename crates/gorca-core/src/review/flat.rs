@@ -507,35 +507,35 @@ mod tests {
     fn model() -> LineModel {
         // Two lines: "Save as" (label text, two words) and "OK" button beside "Cancel" button.
         let mut win = snap(1, Role::Window, "W", None, &[2, 3, 4]);
-        win.bounds = Some(Rect {
+        win.set_bounds(Some(Rect {
             x: 0,
             y: 0,
             w: 400,
             h: 300,
-        });
-        win.have |= PropMask::BOUNDS;
+        }));
+        win.set_have(win.have() | PropMask::BOUNDS);
         let mut label = snap(2, Role::Label, "Save as", Some(1), &[]);
-        label.bounds = Some(Rect {
+        label.set_bounds(Some(Rect {
             x: 0,
             y: 0,
             w: 80,
             h: 20,
-        });
-        label.interfaces = gorca_model::Ifaces::TEXT;
+        }));
+        label.set_caps(gorca_model::NodeCaps::new(gorca_model::Ifaces::TEXT));
         let mut ok = snap(3, Role::Button, "OK", Some(1), &[]);
-        ok.bounds = Some(Rect {
+        ok.set_bounds(Some(Rect {
             x: 0,
             y: 40,
             w: 40,
             h: 20,
-        });
+        }));
         let mut cancel = snap(4, Role::Button, "Cancel", Some(1), &[]);
-        cancel.bounds = Some(Rect {
+        cancel.set_bounds(Some(Rect {
             x: 60,
             y: 41,
             w: 60,
             h: 20,
-        });
+        }));
         let node = |s, depth, lines| BuildNode {
             snap: Arc::new(s),
             web: false,

@@ -31,37 +31,24 @@ pub fn log_states(n: &NodeSnapshot) -> SmallVec<[&'static str; 8]> {
 mod tests {
     use super::*;
     use gorca_model::StateSet;
-    use gorca_model::{
-        AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, PropMask,
-        Relations, Role,
-    };
+    use gorca_model::{AppId, ConnectorId, Freshness, LocalId, NodeKey, PropMask, Role};
     use std::time::Instant;
 
     fn snap(name: &str, states: StateSet, value: Option<Value>) -> NodeSnapshot {
-        NodeSnapshot {
-            key: NodeKey {
+        NodeSnapshot::new(
+            NodeKey {
                 app: AppId {
                     connector: ConnectorId(1),
                     serial: 1,
                 },
                 local: LocalId(1),
             },
-            role: Role::CheckBox,
-            states,
-            name: Some(Arc::from(name)),
-            description: None,
-            value,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: AttrMap::default(),
-            relations: Relations::default(),
-            bounds: None,
-            have: PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        }
+            Freshness::Fresh { at: Instant::now() },
+        )
+        .with_name(Some(Arc::from(name)))
+        .with_value(value)
+        .with_have(PropMask::PRESENT)
+        .with_source(Role::CheckBox, states)
     }
 
     #[test]

@@ -13,8 +13,8 @@ use gorca_mirror::fill::{
 };
 use gorca_mirror::{ApplyOrigin, FillLimits, MirrorHandle, MirrorWriter, mirror_for};
 use gorca_model::{
-    AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeEvent, NodeKey,
-    NodeSnapshot, PropMask, Relations, Role, SnapshotBatch, StateSet,
+    AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeEvent, NodeKey, NodeSnapshot,
+    PropMask, Role, SnapshotBatch, StateSet,
 };
 use gorca_rt::BudgetClass;
 
@@ -90,33 +90,25 @@ impl Model {
         if count {
             have |= PropMask::CHILDREN;
         }
-        Arc::new(NodeSnapshot {
-            key: key(i),
-            role: n.role,
-            states: StateSet::empty(),
-            name: Some(Arc::from(format!("n{i}"))),
-            description: None,
-            value: None,
-            parent: if parent { n.parent.map(key) } else { None },
-            children: if count {
-                ChildList::Count(u32::try_from(n.children.len()).unwrap())
-            } else {
-                ChildList::Unknown
-            },
-            // A dump row knows its interfaces (no Value, no Text): its VALUE is not needed.
-            interfaces: if have.contains(PropMask::DESCRIPTION) {
-                Ifaces::ACTION
-            } else {
-                Ifaces::empty()
-            },
-            attrs: AttrMap::default(),
-            relations: Relations::default(),
-            bounds: None,
-            have,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        })
+        Arc::new(
+            NodeSnapshot::new(key(i), Freshness::Fresh { at: Instant::now() })
+                .with_name(Some(Arc::from(format!("n{i}"))))
+                .with_parent(if parent { n.parent.map(key) } else { None })
+                .with_children(if count {
+                    ChildList::Count(u32::try_from(n.children.len()).unwrap())
+                } else {
+                    ChildList::Unknown
+                })
+                .with_have(have)
+                .with_caps(gorca_model::NodeCaps::new(
+                    if have.contains(PropMask::DESCRIPTION) {
+                        Ifaces::ACTION
+                    } else {
+                        Ifaces::empty()
+                    },
+                ))
+                .with_source(n.role, StateSet::empty()),
+        )
     }
 
     fn serve(&self, op: &FillOp) -> FillReply {

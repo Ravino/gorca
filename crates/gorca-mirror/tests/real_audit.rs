@@ -13,8 +13,8 @@ use gorca_mirror::{
     ApplyOrigin, FillLimits, MirrorHandle, MirrorRead, MirrorWriter, RemovalCause, mirror_for,
 };
 use gorca_model::{
-    AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, Lookup, NodeEvent, NodeKey,
-    NodeSnapshot, PropMask, Relations, Role, SnapshotBatch, StateSet,
+    AppId, ConnectorId, Freshness, LocalId, Lookup, NodeEvent, NodeKey, NodeSnapshot, PropMask,
+    Role, SnapshotBatch, StateSet,
 };
 use gorca_testkit::b1::audit::{
     self, ANode, AStats, AView, ApplyOutcome, Health, Key, MirrorAdapter, Origin, PInput, PRequest,
@@ -42,24 +42,13 @@ fn nk(k: Key) -> NodeKey {
 }
 
 fn snap(n: &ANode) -> Arc<NodeSnapshot> {
-    Arc::new(NodeSnapshot {
-        key: nk(n.key),
-        role: Role::Button,
-        states: StateSet::empty(),
-        name: Some(Arc::from(n.name.as_str())),
-        description: None,
-        value: None,
-        parent: n.parent.map(nk),
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
-        attrs: AttrMap::default(),
-        relations: Relations::default(),
-        bounds: None,
-        have: PropMask::from_bits_truncate(n.have),
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    })
+    Arc::new(
+        NodeSnapshot::new(nk(n.key), Freshness::Fresh { at: Instant::now() })
+            .with_name(Some(Arc::from(n.name.as_str())))
+            .with_parent(n.parent.map(nk))
+            .with_have(PropMask::from_bits_truncate(n.have))
+            .with_source(Role::Button, StateSet::empty()),
+    )
 }
 
 impl MirrorAdapter for Real {
@@ -110,9 +99,9 @@ impl MirrorAdapter for Real {
     fn view(&self, k: Key) -> AView {
         match self.r.view(nk(k)) {
             Lookup::Hit(v) => AView::Hit {
-                name: v.snap.name.as_deref().unwrap_or("").to_owned(),
+                name: v.snap.name().as_deref().unwrap_or("").to_owned(),
                 stale: v.stale.bits(),
-                have: v.snap.have.bits(),
+                have: v.snap.have().bits(),
             },
             Lookup::Miss => AView::Miss,
             Lookup::Gone => AView::Gone,

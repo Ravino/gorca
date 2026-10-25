@@ -3,10 +3,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use gorca_model::{
-    AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeSnapshot, PropMask, Relations,
-    Role, StateSet,
-};
+use gorca_model::{ConnectorId, Freshness, LocalId, NodeSnapshot, PropMask, Role, StateSet};
 
 use super::*;
 use crate::fill::NullPolicy;
@@ -27,24 +24,12 @@ fn key(n: u64) -> NodeKey {
 }
 
 fn node(n: u64) -> Arc<NodeSnapshot> {
-    Arc::new(NodeSnapshot {
-        key: key(n),
-        role: Role::Button,
-        states: StateSet::empty(),
-        name: Some(Arc::from("n")),
-        description: None,
-        value: None,
-        parent: None,
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
-        attrs: AttrMap::default(),
-        relations: Relations::default(),
-        bounds: None,
-        have: PropMask::PRESENT,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    })
+    Arc::new(
+        NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+            .with_name(Some(Arc::from("n")))
+            .with_have(PropMask::PRESENT)
+            .with_source(Role::Button, StateSet::empty()),
+    )
 }
 
 /// Emits the queued effects on any input except `Reply`, and records every reply result.

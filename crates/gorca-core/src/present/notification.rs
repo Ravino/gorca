@@ -309,7 +309,7 @@ impl Reader {
         let Some(snap) = info.snap.as_ref() else {
             return;
         };
-        if !self.policy_active(snap.key.app) {
+        if !self.policy_active(snap.key().app) {
             return;
         }
         let node = crate::ext::ExtNode::new(snap, self.fused_entry(snap));
@@ -320,7 +320,7 @@ impl Reader {
             .filter(|_| !node.is_secret());
         let mut view = PolicyView::of(PolicyMoment::Value, &node);
         view.name = label.or(view.name);
-        let PolicyVerdict::Say(segs) = self.decide_policy(snap.key.app, &view) else {
+        let PolicyVerdict::Say(segs) = self.decide_policy(snap.key().app, &view) else {
             return;
         };
         let text: String = segs.iter().map(|s| &*s.text).collect::<Vec<_>>().join(",");
@@ -335,7 +335,7 @@ impl Reader {
         self.notice.last_level = Some((h, now));
         let id = self.utt_id();
         let u = super::window::follow_up(segs, id, self.epoch.current());
-        self.notice_speak(snap.key.app, u, fx);
+        self.notice_speak(snap.key().app, u, fx);
     }
 
     /// The application answered a notice read.
@@ -343,7 +343,7 @@ impl Reader {
         let Some(snap) = info.snap.as_ref() else {
             return;
         };
-        if !self.reads_as_notice(snap.key.app, snap) {
+        if !self.reads_as_notice(snap.key().app, snap) {
             return;
         }
         // Only the role word: an empty notification says nothing worth speaking.

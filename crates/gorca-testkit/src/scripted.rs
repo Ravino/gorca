@@ -14,8 +14,8 @@ use gorca_connector_api::{
     ConnectorError, ScopeKey,
 };
 use gorca_model::{
-    AppId, AppInfo, AppLifecycle, ChildList, ConnectorKind, Freshness, Ifaces, LocalId, NodeEvent,
-    NodeKey, NodeSnapshot, Role, StateSet, Value,
+    AppId, AppInfo, AppLifecycle, ConnectorKind, Freshness, LocalId, NodeEvent, NodeKey,
+    NodeSnapshot, Role, StateSet, Value,
 };
 use gorca_rt::{BoxFuture, BudgetClass, Deadline, TaskSet, mpsc};
 use tokio::sync::Notify;
@@ -150,25 +150,11 @@ impl ScriptedConnector {
 
 fn snapshot(key: NodeKey, n: &ScriptedNode) -> Arc<NodeSnapshot> {
     Arc::new(
-        NodeSnapshot {
-            key,
-            role: n.role,
-            states: n.states,
-            name: n.name.as_deref().map(Arc::from),
-            description: None,
-            value: n.value.clone(),
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: gorca_model::PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        }
-        .with_test_record(),
+        NodeSnapshot::new(key, Freshness::Fresh { at: Instant::now() })
+            .with_name(n.name.as_deref().map(Arc::from))
+            .with_value(n.value.clone())
+            .with_have(gorca_model::PropMask::PRESENT)
+            .with_test_source(n.role, n.states),
     )
 }
 

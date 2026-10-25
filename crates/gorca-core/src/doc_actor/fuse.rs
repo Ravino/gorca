@@ -141,7 +141,7 @@ fn row_of(n: &SrcNode) -> Row {
     match &n.rec {
         Some(rec) => Row {
             role: rec.sem.role.code(),
-            states: n.states.bits(),
+            states: crate::plugin_port::state_bits(rec.sem.flags, n.struct_flags()),
             name: rec.name.clone(),
             // What is typed into a secret field is not for a plugin to see or to count.
             text: (!rec_is_secret(rec)).then(|| n.text.clone()).flatten(),
@@ -154,7 +154,10 @@ fn row_of(n: &SrcNode) -> Row {
         // A synthetic node (a text run): the text is its content.
         None => Row {
             role: SemRole::StaticText.code(),
-            states: n.states.bits(),
+            states: crate::plugin_port::state_bits(
+                gorca_model::sem::SemFlags::empty(),
+                n.struct_flags(),
+            ),
             name: n.text.clone(),
             text: n.text.clone(),
             ..Row::default()
@@ -762,6 +765,7 @@ mod tests {
             attrs: AttrMap::default(),
             local: None,
             rec: Some(rec(role, name)),
+            synth_role: gorca_model::testing::sem_role(Role::Unknown),
         }
     }
 

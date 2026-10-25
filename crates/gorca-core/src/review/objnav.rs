@@ -307,7 +307,7 @@ impl<'a, S: NavSource> Walk<'a, S> {
             Lookup::Miss => self.miss(NavOp::Node { node: k }),
             Lookup::Hit(v) => {
                 let critical_missing =
-                    !v.snap.have.contains(CRITICAL) || v.stale.intersects(CRITICAL);
+                    !v.snap.have().contains(CRITICAL) || v.stale.intersects(CRITICAL);
                 if critical_missing {
                     return self.miss(NavOp::Node { node: k });
                 }
@@ -329,22 +329,22 @@ impl<'a, S: NavSource> Walk<'a, S> {
 
     /// The known children of `r`, or the miss that learns them.
     fn children(&mut self, r: &Read) -> R<Vec<NodeKey>> {
-        let stale_children = match self.src.view(r.snap.key) {
+        let stale_children = match self.src.view(r.snap.key()) {
             Lookup::Hit(v) => v.stale.contains(PropMask::CHILDREN),
             Lookup::Miss | Lookup::Gone => false,
         };
-        match &r.snap.children {
+        match &r.snap.children() {
             ChildList::Known(list) if !stale_children => Ok(list.to_vec()),
             ChildList::Count(0) if !stale_children => Ok(Vec::new()),
             ChildList::Known(_) | ChildList::Count(_) | ChildList::Unknown => {
                 if self.lenient {
                     // A stale list is better than none: it is only a degraded step.
-                    match &r.snap.children {
+                    match &r.snap.children() {
                         ChildList::Known(list) => Ok(list.to_vec()),
                         ChildList::Count(_) | ChildList::Unknown => Ok(Vec::new()),
                     }
                 } else {
-                    Err(Stop::Miss(NavOp::Children { node: r.snap.key }))
+                    Err(Stop::Miss(NavOp::Children { node: r.snap.key() }))
                 }
             }
         }
@@ -356,13 +356,13 @@ impl<'a, S: NavSource> Walk<'a, S> {
             // Never above the application root (ADR-0006 5.2).
             return Ok(None);
         }
-        match r.snap.parent {
-            Some(p) if r.snap.have.contains(PropMask::PARENT) || self.lenient => Ok(Some(p)),
+        match r.snap.parent() {
+            Some(p) if r.snap.have().contains(PropMask::PARENT) || self.lenient => Ok(Some(p)),
             Some(_) | None => {
-                if r.snap.have.contains(PropMask::PARENT) || self.lenient {
+                if r.snap.have().contains(PropMask::PARENT) || self.lenient {
                     Ok(None)
                 } else {
-                    Err(Stop::Miss(NavOp::Ancestry { node: r.snap.key }))
+                    Err(Stop::Miss(NavOp::Ancestry { node: r.snap.key() }))
                 }
             }
         }
@@ -509,7 +509,7 @@ impl<'a, S: NavSource> Walk<'a, S> {
             }
             // Climb through a layout parent; a content parent ends the search.
             if self.simple && self.class_of(&pr) == PresClass::Layout {
-                cur = pr.snap.key;
+                cur = pr.snap.key();
             } else {
                 return Ok(None);
             }
@@ -770,42 +770,31 @@ mod entry_tests {
     #[test]
     fn the_structural_state_reads_only_the_structural_bits() {
         use gorca_model::{
-            AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeSem, NodeSnapshot,
-            PropMask, Role, StateSet,
+            AppId, ConnectorId, Freshness, LocalId, NodeSnapshot, PropMask, Role, StateSet,
         };
-        let mut snap = NodeSnapshot {
-            key: NodeKey {
+        let mut snap = NodeSnapshot::new(
+            NodeKey {
                 app: AppId {
                     connector: ConnectorId(1),
                     serial: 1,
                 },
                 local: LocalId(1),
             },
-            role: Role::Button,
-            states: StateSet::empty(),
-            name: Some(Arc::from("OK")),
-            description: None,
-            value: None,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: PropMask::NAME | PropMask::ROLE,
-            confirmed_seq: 0,
-            fresh: Freshness::Defunct,
-            sem: NodeSem::NONE,
-        };
+            Freshness::Defunct,
+        )
+        .with_name(Some(Arc::from("OK")))
+        .with_have(PropMask::NAME | PropMask::ROLE)
+        .with_source(Role::Button, StateSet::empty());
         assert!(!snap.struct_state().is_known(), "states were never fetched");
         // With the states read, the structural bits decide, and nothing spoken leaks in.
-        snap.have |= PropMask::STATES;
-        snap.states =
-            StateSet::SHOWING | StateSet::VISIBLE | StateSet::CHECKED | StateSet::DISABLED;
+        snap.set_have(snap.have() | PropMask::STATES);
+        snap.set_test_states(
+            StateSet::SHOWING | StateSet::VISIBLE | StateSet::CHECKED | StateSet::DISABLED,
+        );
         let s = snap.struct_state();
         assert!(s.is_known());
         assert_eq!(s.flags(), ON);
-        snap.states |= StateSet::DEFUNCT;
+        snap.set_test_states(snap.test_states() | StateSet::DEFUNCT);
         assert!(snap.struct_state().is_defunct());
     }
 
@@ -820,12 +809,12 @@ mod entry_tests {
         let mut e = (*entry_of(&widget)).clone();
         e.sem.role = SemRole::Application;
         e.sem.flags |= SemFlags::ROLE_AUTHORED;
-        widget.sem.entry = Some(Arc::new(e));
+        widget.sem_mut().entry = Some(Arc::new(e));
         let leaf = snap(3, Role::Button, "Play", Some(2), &[]);
         let page = PageSource(
             [win, widget, leaf]
                 .into_iter()
-                .map(|s| (s.key, Arc::new(s)))
+                .map(|s| (s.key(), Arc::new(s)))
                 .collect(),
         );
         let up = step(
@@ -860,7 +849,7 @@ mod entry_tests {
         assert!(!is_app_root(&embedded));
         // A snapshot that never carried its parent cannot be taken for the root.
         let mut unfetched = root.clone();
-        unfetched.have.remove(PropMask::PARENT);
+        unfetched.set_have(unfetched.have() - PropMask::PARENT);
         assert!(!is_app_root(&unfetched));
         assert!(!is_app_root(&snap(3, Role::Window, "W", None, &[])));
     }

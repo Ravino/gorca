@@ -1271,6 +1271,7 @@ mod tests {
             attrs,
             local: None,
             rec: None,
+            synth_role: gorca_model::SemRole::Unknown,
         }
     }
 

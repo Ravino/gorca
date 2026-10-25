@@ -75,7 +75,7 @@ fn verdicts_pass_suppress_and_rewrite() {
         }
         // Events outside the WIT subset are never offered.
         let doc = NodeEvent::DocumentEvent {
-            node: snap(app(1), 1, Role::Button, None).key,
+            node: snap(app(1), 1, Role::Button, None).key(),
             kind: gorca_model::DocKind::LoadComplete,
         };
         assert_eq!(ae.on_event(&doc), ExtVerdict::Pass);
