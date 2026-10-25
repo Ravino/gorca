@@ -49,10 +49,6 @@ mod statemodel;
 mod terminal;
 mod text;
 
-pub use app_actor::agree::{
-    DEVIATIONS, Deviation, Mismatch, Report as AgreementReport, agreement_counters,
-    check as check_agreement, legacy_family,
-};
 pub use app_actor::fuse::{FuseStats, FuseStatsView, fuse_snapshots, writes_of};
 pub use app_actor::{
     AppActor, AppRoute, FILL_QUEUE, FillMsg, ReaderLinks, TextLink, WebLink, health_view,
@@ -76,9 +72,6 @@ pub use commands::{
     set_explain_text, tab_grabs,
 };
 pub use directory::{MirrorDirectory, Owner};
-pub use doc_actor::agree::{
-    AgreementStats, Aspect, set_log_names as set_agreement_log_names, stats as agreement_stats,
-};
 pub use doc_actor::{
     DocActorSpec, DocCounters, DocCtl, DocDirectory, DocHandle, DocNotice, SelOutcome, WebJoin,
     prepare as prepare_doc_actor,

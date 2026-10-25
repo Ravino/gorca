@@ -18,7 +18,7 @@ use gorca_model::sem::SemEntry;
 use gorca_model::{DocNodeId, LocalId, Role, SrcNodeId};
 
 use super::cats::{
-    Cat, NodeFlags, NodeMeta, NodeSpec, RANKED, RANKED_N, SubtreeSpec, cats_of, ranked_index,
+    Cat, NodeData, NodeFlags, NodeSpec, RANKED, RANKED_N, SubtreeSpec, cats_of, ranked_index,
 };
 use super::error::DocError;
 
@@ -45,7 +45,7 @@ pub(crate) struct Slot {
     sig: u64,
     name: Option<Arc<str>>,
     text: Option<Arc<str>>,
-    meta: Option<Arc<NodeMeta>>,
+    data: Option<Arc<NodeData>>,
     own_scal: u32,
     own_nl: u32,
 }
@@ -74,25 +74,25 @@ pub struct NodeView<'a> {
     pub sig: u64,
     pub name: Option<&'a str>,
     pub text: Option<&'a str>,
-    pub meta: Option<&'a NodeMeta>,
+    pub data: Option<&'a NodeData>,
 }
 
 impl<'a> NodeView<'a> {
     /// The contents of a field (a text entry's text, a slider's reading), borrowed.
     pub fn field_value(&self) -> Option<&'a gorca_model::Value> {
-        self.meta.and_then(|m| m.value.as_ref())
+        self.data.and_then(|m| m.value.as_ref())
     }
 
     /// The fused semantics, borrowed from the document (no clone).
     pub fn sem_ref(&self) -> Option<&'a gorca_model::SemEntry> {
-        self.meta.and_then(|m| m.sem.as_deref())
+        self.data.and_then(|m| m.sem.as_deref())
     }
 }
 
 impl NodeView<'_> {
     /// The fused semantics the document actor attached to the node (ADR-0022 SM-8).
     pub fn sem(&self) -> Option<std::sync::Arc<gorca_model::SemEntry>> {
-        self.meta?.sem.clone()
+        self.data?.sem.clone()
     }
 }
 
@@ -277,7 +277,7 @@ impl WebDoc {
             sig: spec.sig,
             name: spec.name.clone(),
             text: spec.text.clone(),
-            meta: spec.meta.clone(),
+            data: spec.data.clone(),
             own_scal,
             own_nl,
         };
@@ -337,7 +337,7 @@ impl WebDoc {
         sl.gen_ = sl.gen_.wrapping_add(1);
         sl.text = None;
         sl.name = None;
-        sl.meta = None;
+        sl.data = None;
         self.free.push(s);
     }
 
@@ -354,7 +354,7 @@ impl WebDoc {
             sig: sl.sig,
             name: sl.name.as_deref(),
             text: sl.text.as_deref(),
-            meta: sl.meta.as_deref(),
+            data: sl.data.as_deref(),
         })
     }
 
@@ -362,18 +362,18 @@ impl WebDoc {
     /// the batch). `None` for a node not fused yet, a synthetic node and a stale id. This is the
     /// way a reader gets a presentation fact of a mirror node.
     pub fn sem_of(&self, id: DocNodeId) -> Option<&SemEntry> {
-        self.node(id)?.meta?.sem.as_deref()
+        self.node(id)?.data?.sem.as_deref()
     }
 
     /// The transport key of the node's object (identity, not a presentation fact): `Some` for a
     /// node an app can be addressed at, `None` for a text run and a stale id.
     pub fn local_of(&self, id: DocNodeId) -> Option<LocalId> {
-        self.node(id)?.meta?.local
+        self.node(id)?.data?.local
     }
 
     /// The source's own id of the node (identity: the key a source action is addressed by).
     pub fn src_of(&self, id: DocNodeId) -> Option<SrcNodeId> {
-        self.node(id)?.meta?.src
+        self.node(id)?.data?.src
     }
 
     pub fn parent(&self, id: DocNodeId) -> Option<DocNodeId> {
@@ -981,8 +981,8 @@ impl WebDoc {
         if let Some(n) = &patch.name {
             sl.name.clone_from(n);
         }
-        if let Some(m) = &patch.meta {
-            sl.meta.clone_from(m);
+        if let Some(m) = &patch.data {
+            sl.data.clone_from(m);
         }
         let cats = cats_of(sl.role, sl.level, sl.flags);
         let (scal, nl) = contribution(sl.text.as_deref(), sl.flags);

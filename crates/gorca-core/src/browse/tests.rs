@@ -1762,6 +1762,9 @@ fn quick_navigation_finds_articles_and_frames_and_names_them() {
     r.focus(1002);
     let mut article = block(src(20, Role::Paragraph, None));
     article.attrs.push((web_attrs::TAG, Arc::from("article")));
+    article
+        .attrs
+        .push((web_attrs::XML_ROLES, Arc::from("article")));
     let mut frame = block(src(30, Role::DocumentWeb, None));
     frame.name = Some(Arc::from("Ad frame"));
     r.tr.apply(
@@ -3767,7 +3770,7 @@ fn place_cursor(r: &mut Rig, src_id: u64) {
             d.preorder()
                 .find(|n| {
                     d.node(*n)
-                        .and_then(|v| v.meta)
+                        .and_then(|v| v.data)
                         .is_some_and(|m| m.src == Some(SrcNodeId(src_id)))
                 })
                 .unwrap()

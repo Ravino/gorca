@@ -1,16 +1,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Legacy agreement on the recorded A2 corpus (M22a-C1b, ADR-0022 section 2.11): every recorded
-//! node goes through the connector's decoder (legacy fields + source record), the app actor's
-//! real fusion writer and the agreement check. The number of disagreements outside the documented
-//! deviations must be zero; the deviations themselves are listed (and counted) here.
+//! The recorded A2 corpus as a test rig (M22a-C1b, ADR-0022 section 2.11): every recorded node
+//! goes through the connector's decoder (the snapshot fields + the source record), ready for the
+//! app actor's real fusion writer. The golden tests of the presenters replay these pages.
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use gorca_model::{AppId, ConnectorId, LocalId, NodeKey, NodeSnapshot, PropMask, WebEngine};
+use gorca_model::{AppId, ConnectorId, LocalId, NodeKey, NodeSnapshot, PropMask};
 
 use crate::decode::{RawNode, keep_attrs, keep_sem_attrs, snapshot};
 
@@ -161,12 +159,6 @@ pub(crate) fn page_meta(engine: &str, name: &str) -> Option<(Vec<NodeMeta>, Vec<
     Some((metas, unreadable))
 }
 
-const ENGINES: [(&str, WebEngine, &str); 3] = [
-    ("firefox", WebEngine::Gecko, ""),
-    ("chromium", WebEngine::Blink, ""),
-    ("gtk4", WebEngine::None, "GTK"),
-];
-
 pub(crate) fn pages_of(engine: &str) -> Vec<String> {
     let mut v: Vec<String> = std::fs::read_dir(root().join(engine))
         .map(|d| {
@@ -182,72 +174,4 @@ pub(crate) fn pages_of(engine: &str) -> Vec<String> {
         .unwrap_or_default();
     v.sort();
     v
-}
-
-/// `(checked, deviated, mismatches)` over the whole corpus, with the mismatches grouped.
-fn run_corpus() -> (u64, BTreeMap<String, u64>, BTreeMap<String, Vec<String>>) {
-    let mut checked = 0;
-    let mut deviated: BTreeMap<String, u64> = BTreeMap::new();
-    let mut bad: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for (engine, web, toolkit) in ENGINES {
-        let tables = crate::sem_profile::tables_for(toolkit, "app", web);
-        for name in pages_of(engine) {
-            let Some(snaps) = page(engine, &name) else {
-                continue;
-            };
-            let fused = gorca_core::fuse_snapshots(tables, &snaps);
-            for (orig, got) in snaps.iter().zip(&fused) {
-                let (Some(rec), Some(entry)) = (orig.sem.rec.as_ref(), got.sem.entry.as_ref())
-                else {
-                    bad.entry(format!("{engine}/{name}: node without entry"))
-                        .or_default()
-                        .push(format!("{:?}", orig.key));
-                    continue;
-                };
-                let rep = gorca_core::check_agreement(got, rec, entry);
-                checked += rep.checked;
-                for (g, id) in rep.deviated {
-                    *deviated.entry(format!("{id} ({})", g.name())).or_default() += 1;
-                }
-                for m in rep.mismatches {
-                    bad.entry(format!(
-                        "{engine}: {} legacy={} fused={}",
-                        m.group.name(),
-                        m.legacy.split(' ').next().unwrap_or(""),
-                        m.fused.split(' ').next().unwrap_or("")
-                    ))
-                    .or_default()
-                    .push(format!(
-                        "{name}#{} role={:?} raw={}",
-                        orig.key.local.0, orig.role, rec.raw_role
-                    ));
-                }
-            }
-        }
-    }
-    (checked, deviated, bad)
-}
-
-#[test]
-fn the_corpus_agrees_with_the_legacy_normaliser_outside_the_documented_deviations() {
-    let (checked, deviated, bad) = run_corpus();
-    assert!(checked > 5000, "the corpus was not read ({checked} checks)");
-    if !bad.is_empty() {
-        let msg: Vec<String> = bad
-            .iter()
-            .map(|(k, v)| format!("{k}: {} nodes, e.g. {:?}", v.len(), &v[..v.len().min(3)]))
-            .collect();
-        let msg = msg.join("\n");
-        panic!("{} kinds of disagreement:\n{msg}", bad.len());
-    }
-    // A deviation row that no recorded node needs any more is dead weight: delete it.
-    for d in gorca_core::DEVIATIONS {
-        assert!(
-            deviated.keys().any(|k| k.starts_with(d.id)),
-            "deviation {} has no witness in the corpus ({})",
-            d.id,
-            d.reason
-        );
-    }
-    eprintln!("legacy agreement: {checked} checks, deviations {deviated:?}");
 }

@@ -34,8 +34,6 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 
 [features]
-# Run the legacy-agreement check (ADR-0022 2.11) in release builds too: the CI e2e build.
-legacy-agree = []
 # Segments carry a message id and an origin id (ADR-0022 2.5): tests and the explain trace.
 seg-origin = ["gorca-model/seg-origin"]
 

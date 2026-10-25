@@ -6,7 +6,7 @@
 //! source crate, never here); this stage mirrors the source's tree into a [`gorca_fuse::Ivm`],
 //! feeds every record as the `atspi` primary's registers, and answers "what is the fused entry
 //! of this source node". The translator asks it while it builds the mirror, so the entry
-//! (`Arc<SemEntry>`) is part of the node's [`gorca_doc::web::NodeMeta`] when the batch is
+//! (`Arc<SemEntry>`) is part of the node's [`gorca_doc::web::NodeData`] when the batch is
 //! published: fusion lands in the left-right back copy, never after the swap.
 //!
 //! # Timeline

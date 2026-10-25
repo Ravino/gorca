@@ -96,7 +96,7 @@ impl Reader {
     }
 
     /// An extension command: queued to the host's worker, never run here (the Reader must not
-    /// wait for an extension). The answer arrives as `BackgroundMsg::ExtSpeech`.
+    /// wait for an extension). The answer arrives as `BackgroundMsg::ExtSay`.
     fn run_ext_command(&mut self, cmd: CmdId) {
         let Some(spec) = crate::ExtCommands::installed().and_then(|e| e.get(cmd)) else {
             return;

@@ -19,8 +19,6 @@ mod window;
 
 pub use echo::{key_echo, key_echo_is_action, key_echo_spoken, key_echo_text, message};
 pub(crate) use flow::name_is_blank;
-#[cfg(test)]
-pub(crate) use flow::needs_name;
 pub use flow::{
     FOCUS_FIELDS, FOCUS_FIELDS_LAZY, FocusBackoff, NameRetry, Presented, RAPID_FOCUS,
     REFINE_WINDOW, STORM_HOLD, focus_fields_for, focus_need,

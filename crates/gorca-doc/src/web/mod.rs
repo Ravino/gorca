@@ -29,7 +29,7 @@ pub mod space;
 pub mod synth;
 pub mod table;
 
-pub use cats::{Cat, NodeFlags, NodeMeta, NodeSpec, PropsPatch, RANKED, SubtreeSpec, cats_of};
+pub use cats::{Cat, NodeData, NodeFlags, NodeSpec, PropsPatch, RANKED, SubtreeSpec, cats_of};
 pub use doc::{Children, NodeView, Preorder, WebDoc};
 pub use error::DocError;
 pub use flat::{ReadUnit, word_range_in};

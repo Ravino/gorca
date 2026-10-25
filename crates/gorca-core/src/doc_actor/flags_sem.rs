@@ -9,9 +9,6 @@
 //! the DOM tag of the source record (a typed field, not an attribute). Nothing here reads
 //! `SrcNode::attrs`.
 
-// Used by the replay of the gate until the translator switches to it.
-#![allow(dead_code)]
-
 use gorca_doc::web::NodeFlags;
 use gorca_model::sem::{Invalid, SemFlags, SemRole, Semantics};
 use gorca_model::{Role, SrcNode, StateSet};

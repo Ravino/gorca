@@ -13,11 +13,8 @@
 //! directory entry goes, the Reader is told (`Gone`). The hub creates a new document when the
 //! user's focus or the browser says there is one.
 
-pub mod agree;
 #[cfg(test)]
 pub(crate) mod agree_tests;
-#[cfg(test)]
-mod flags_gate_tests;
 pub mod flags_sem;
 pub mod fuse;
 #[cfg(test)]
@@ -579,7 +576,7 @@ impl Actor {
         self.writer
             .doc()
             .node(id)
-            .and_then(|v| v.meta)
+            .and_then(|v| v.data)
             .and_then(|m| m.src)
     }
 
@@ -1104,19 +1101,14 @@ async fn run(
     }
     // Retire: no key may outlive its document.
     if let Some(f) = &a.fuse {
-        // The CI counter of the dual-carry period (process-wide totals, see `agree`).
-        let agree = agree::stats();
         tracing::info!(
             target: "gorca_phase",
-            phase = "agree",
+            phase = "fuse",
             doc = doc.0,
             profile = f.profile_name(),
             nodes = f.len(),
             empty = f.is_empty(),
             stats = ?f.stats(),
-            checked = agree.checked,
-            disagreements = agree.total(),
-            by_aspect = ?agree.mismatched,
             "document fusion stage retired"
         );
     }
@@ -1167,15 +1159,15 @@ fn spawn_label(
     let planned = a.read.with(|d| {
         let v = d.node(node)?;
         // Orca does not infer for a control whose role the author set (`has_role_from_aria`).
-        if v.meta.is_some_and(|m| {
-            m.attrs
-                .iter()
-                .any(|(k, t)| *k == gorca_doc_source_api::web_attrs::XML_ROLES && !t.is_empty())
+        if v.sem_ref().is_some_and(|e| {
+            e.sem
+                .flags
+                .contains(gorca_model::sem::SemFlags::ROLE_AUTHORED)
         }) {
             return None;
         }
         let plan = label::plan(d, node, role)?;
-        let src_of = |n| d.node(n).and_then(|v| v.meta).and_then(|m| m.src);
+        let src_of = |n| d.node(n).and_then(|v| v.data).and_then(|m| m.src);
         let srcs = plan
             .probes()
             .into_iter()
@@ -1288,7 +1280,7 @@ fn spawn_action(
         }
     };
     let src_of = |d: &gorca_doc::web::WebDoc, n: DocNodeId| {
-        d.node(n).and_then(|v| v.meta).and_then(|m| m.src)
+        d.node(n).and_then(|v| v.data).and_then(|m| m.src)
     };
     let src = a.read.with(|d| {
         if matches!(

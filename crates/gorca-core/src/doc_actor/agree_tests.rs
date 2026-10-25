@@ -1,9 +1,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The CI gate of the dual-carry period on the recorded A2 corpus (Firefox and Chromium pages,
-//! including the M8 pages): every recorded node goes through the source's real normalisation and
-//! engine tables, the fusion stage and the translator's legacy flag derivation, and the two
-//! views must agree outside [`super::agree::DEVIATIONS`].
+//! The recorded A2 corpus (Firefox and Chromium pages, including the M8 pages) as a test rig:
+//! every recorded node goes through the source's real normalisation and engine tables, the fusion
+//! stage and the translator, and the documents the actor builds from them are what the browse
+//! and live-region tests read.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -15,10 +15,8 @@ use gorca_doc_source_atspi::wire::AttrInterner;
 use gorca_doc_source_atspi::{WebQuirks, roles};
 use gorca_model::{AppInfo, ConnectorKind, DocDelta, Role, SrcNode, SrcNodeId, WebEngine};
 
-use super::agree::{Aspect, compare, deviation};
 use super::fuse::{FuseStage, SemLookup};
-use super::live::props_of;
-use super::translate::{Translator, derive_flags};
+use super::translate::Translator;
 
 struct Rec {
     /// The first 400 scalars of the Text interface (`GetText`), when the node has one.
@@ -162,8 +160,6 @@ fn info(engine: WebEngine, name: &str) -> AppInfo {
 
 /// One recorded page, normalised and fused the way the document actor does it.
 pub(crate) struct Built {
-    recs: Vec<Rec>,
-    pub(crate) nodes: Vec<SrcNode>,
     pub(crate) stage: FuseStage,
     batch: Vec<DocDelta>,
 }
@@ -299,12 +295,7 @@ pub(crate) fn build(
     while stage.pending() > 0 {
         stage.step();
     }
-    Ok(Built {
-        recs,
-        nodes,
-        stage,
-        batch,
-    })
+    Ok(Built { stage, batch })
 }
 
 /// The recorded Text interface of every node, as the document source would read it (`GetText`).
@@ -380,85 +371,6 @@ pub(crate) fn recorded_doc(
     Some(w.doc().clone())
 }
 
-/// Compare one recorded page: the nodes compared and the disagreements found.
-fn run_page(
-    engine: WebEngine,
-    app: &str,
-    legacy: WebQuirks,
-    page: &str,
-    dir: &str,
-) -> (usize, Vec<(Aspect, String)>) {
-    let Built {
-        nodes,
-        stage,
-        batch,
-        ..
-    } = match build(engine, app, legacy, page, dir, false, 0) {
-        Ok(b) => b,
-        Err(e) => return (0, vec![(Aspect::Role, e)]),
-    };
-    let mut bad_live: Vec<(Aspect, String)> = Vec::new();
-    // The same batch through the translator: every node is checked against its entry while the
-    // mirror is built (a debug build asserts), then the tracker's region parse is checked.
-    {
-        let (mut w, _read) = gorca_doc::web::channel(1);
-        let mut t = Translator::new();
-        // The translator checks every node (a debug assertion): the first one stops the pass,
-        // the per-node report below says which ones.
-        let applied = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            t.apply_fused(&mut w, batch.clone(), &stage, &[]).is_ok()
-        }));
-        if !matches!(applied, Ok(true)) {
-            eprintln!("{page}: the translator pass stopped at a disagreement or an error");
-        }
-        let doc = w.doc();
-        for id in doc.preorder() {
-            if let Some(v) = doc.node(id) {
-                // A debug build asserts on a disagreement: catch it to say where it was.
-                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| props_of(&v)));
-                if let Err(e) = r {
-                    let msg = e
-                        .downcast_ref::<String>()
-                        .cloned()
-                        .or_else(|| e.downcast_ref::<&str>().map(|s| (*s).to_owned()))
-                        .unwrap_or_default();
-                    bad_live.push((
-                        Aspect::LiveProps,
-                        format!(
-                            "{page} node {:?} {}: {msg}",
-                            v.meta.and_then(|m| m.src),
-                            v.name.unwrap_or("")
-                        ),
-                    ));
-                }
-            }
-        }
-    }
-    let mut bad = bad_live;
-    for n in &nodes {
-        let Some(e) = stage.sem(n.id) else { continue };
-        let (flags, level) = derive_flags(n, false);
-        for a in compare(n, flags, level, &e) {
-            bad.push((
-                a,
-                format!(
-                    "{page} #{}: {:?} legacy name {:?} fused {:?} role {}",
-                    n.id.0 - 1,
-                    n.role,
-                    n.name
-                        .as_deref()
-                        .map(|s| s.chars().take(30).collect::<String>()),
-                    e.name
-                        .as_deref()
-                        .map(|s| s.chars().take(30).collect::<String>()),
-                    e.sem.role.name()
-                ),
-            ));
-        }
-    }
-    (nodes.len(), bad)
-}
-
 #[test]
 fn a_recorded_page_builds_a_document_with_text_and_entries() {
     let doc = recorded_doc(
@@ -474,7 +386,7 @@ fn a_recorded_page_builds_a_document_with_text_and_entries() {
     let with_sem = doc
         .preorder()
         .filter_map(|id| doc.node(id))
-        .filter(|v| v.meta.is_some_and(|m| m.sem.is_some()))
+        .filter(|v| v.data.is_some_and(|m| m.sem.is_some()))
         .count();
     assert!(with_sem > 20, "{with_sem}");
     for k in 0..doc.line_count().min(40) {
@@ -489,240 +401,6 @@ fn a_recorded_page_builds_a_document_with_text_and_entries() {
                 .collect::<Vec<_>>()
         );
     }
-}
-
-#[test]
-fn the_legacy_and_fused_views_agree_on_the_recorded_pages() {
-    let mut total = 0usize;
-    let mut report: Vec<String> = Vec::new();
-    let mut by_aspect: BTreeMap<&'static str, usize> = BTreeMap::new();
-    for (dir, engine, app, legacy) in [
-        ("firefox", WebEngine::Gecko, "Firefox", WebQuirks::GECKO),
-        ("chromium", WebEngine::Blink, "Chromium", WebQuirks::BLINK),
-    ] {
-        for page in pages(dir) {
-            let (n, bad) = run_page(engine, app, legacy, &page, dir);
-            total += n;
-            for (a, line) in bad {
-                if deviation(a) {
-                    continue;
-                }
-                *by_aspect.entry(a.label()).or_default() += 1;
-                report.push(format!("[{dir}] {} {line}", a.label()));
-            }
-        }
-    }
-    assert!(total > 500, "the corpus was not found or is tiny: {total}");
-    eprintln!("legacy agreement: {total} nodes, disagreements by aspect {by_aspect:?}");
-    for l in report.iter().take(80) {
-        eprintln!("  {l}");
-    }
-    assert!(report.is_empty(), "{} disagreements", report.len());
-}
-
-// ---- C3: the fused entry replaces `subtree_label` (X1) -----------------------------------------
-
-/// The retired `subtree_label` of `browse/commands.rs`, kept here as the oracle of the parity
-/// test: the visible text of a node's subtree as a one-line label (whitespace collapsed, icon
-/// glyphs dropped, capped), or `None` when it holds none.
-fn legacy_subtree_label(d: &gorca_doc::web::WebDoc, id: gorca_model::DocNodeId) -> Option<String> {
-    const CAP: u32 = 160;
-    let (a, b) = d.subtree_text_range(id)?;
-    if a >= b {
-        return None;
-    }
-    let mut raw = String::new();
-    d.read_text(a, b.min(a.saturating_add(CAP)), &mut raw);
-    let raw: String = raw
-        .chars()
-        .filter(|c| {
-            !gorca_model::text::is_icon_glyph(*c) && !gorca_model::text::is_object_marker(*c)
-        })
-        .collect();
-    let label = raw.split_whitespace().collect::<Vec<_>>().join(" ");
-    (!crate::present::name_is_blank(Some(&label))).then_some(label)
-}
-
-/// The CSS list markers the engine puts in front of a list item's name.
-const MARKERS: [&str; 10] = ["• ", "◦ ", "▪ ", "■ ", "□ ", "– ", "● ", "○ ", "‣ ", "⁃ "];
-
-#[derive(Default, Debug)]
-struct Parity {
-    /// Controls the legacy overlay would have named from the page text.
-    legacy_fills: usize,
-    /// ... of which the entry gives the same name.
-    same: usize,
-    /// ... of which the entry's name differs only by what the text normalisation does.
-    same_after_normalising: usize,
-    different: Vec<String>,
-    /// The legacy overlay found text, the entry no name.
-    lost: Vec<String>,
-    /// The entry names a control the legacy overlay left nameless.
-    gained: usize,
-    /// List and tree items whose engine name carries a marker.
-    marked: usize,
-    marker_stripped: usize,
-}
-
-fn collapse(s: &str) -> String {
-    s.chars()
-        .filter(|c| {
-            !gorca_model::text::is_icon_glyph(*c) && !gorca_model::text::is_object_marker(*c)
-        })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn parity_of_page(
-    engine: WebEngine,
-    app: &str,
-    legacy: WebQuirks,
-    page: &str,
-    dir: &str,
-    out: &mut Parity,
-) {
-    let Ok(Built {
-        recs,
-        nodes,
-        stage,
-        batch,
-    }) = build(engine, app, legacy, page, dir, false, 0)
-    else {
-        return;
-    };
-    let (mut w, _read) = gorca_doc::web::channel(1);
-    let mut t = Translator::new();
-    if t.apply_fused(&mut w, batch, &stage, &[]).is_err() {
-        return;
-    }
-    let doc = w.doc();
-    let mut by_src: BTreeMap<u64, gorca_model::DocNodeId> = BTreeMap::new();
-    for id in doc.preorder() {
-        if let Some(src) = doc.node(id).and_then(|v| v.meta).and_then(|m| m.src) {
-            by_src.insert(src.0, id);
-        }
-    }
-    for (i, r) in recs.iter().enumerate() {
-        let Some(id) = by_src.get(&(i as u64 + 1)).copied() else {
-            continue;
-        };
-        let role = roles::map_role(r.role);
-        let node = &nodes[i];
-        let Some(entry) = stage.sem(node.id) else {
-            continue;
-        };
-        let snap_name = (!r.name.is_empty()).then(|| Arc::<str>::from(r.name.as_str()));
-        let snap = fake_snapshot(role, snap_name.clone());
-        let _ = &snap;
-        let fused = entry.name.clone();
-        // The list marker.
-        if matches!(role, Role::ListItem | Role::TreeItem)
-            && let Some(n) = snap_name.as_deref()
-            && MARKERS.iter().any(|m| n.starts_with(m))
-        {
-            out.marked += 1;
-            if fused
-                .as_deref()
-                .is_some_and(|f| !f.starts_with(['•', '◦', '▪', '■', '□', '–', '●', '○', '‣', '⁃']))
-            {
-                out.marker_stripped += 1;
-            }
-        }
-        let blank = crate::present::name_is_blank(snap_name.as_deref());
-        if !(blank && crate::present::needs_name(role) && role != Role::ComboBox) {
-            continue;
-        }
-        let old = legacy_subtree_label(doc, id);
-        let new = entry
-            .name
-            .as_deref()
-            .filter(|n| !crate::present::name_is_blank(Some(n)))
-            .map(str::to_owned);
-        match (old, new) {
-            (None, None) => {}
-            (None, Some(_)) => out.gained += 1,
-            (Some(o), None) => out.lost.push(format!("{page} #{i} {role:?}: legacy {o:?}")),
-            (Some(o), Some(n)) => {
-                out.legacy_fills += 1;
-                if o == n {
-                    out.same += 1;
-                } else if collapse(&o) == collapse(&n) {
-                    out.same_after_normalising += 1;
-                } else {
-                    out.different
-                        .push(format!("{page} #{i} {role:?}: legacy {o:?} fused {n:?}"));
-                }
-            }
-        }
-    }
-}
-
-fn fake_snapshot(role: Role, name: Option<Arc<str>>) -> gorca_model::NodeSnapshot {
-    use gorca_model::{
-        AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSem, PropMask,
-    };
-    gorca_model::NodeSnapshot {
-        key: NodeKey {
-            app: AppId {
-                connector: ConnectorId(1),
-                serial: 1,
-            },
-            local: LocalId(1),
-        },
-        role,
-        states: gorca_model::StateSet::empty(),
-        name,
-        description: None,
-        value: None,
-        parent: None,
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
-        attrs: gorca_model::AttrMap::default(),
-        relations: gorca_model::Relations::default(),
-        bounds: None,
-        have: PropMask::PRESENT,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh {
-            at: std::time::Instant::now(),
-        },
-        sem: NodeSem::NONE,
-    }
-}
-
-#[test]
-fn the_fused_entry_names_the_controls_subtree_label_used_to_name() {
-    let mut p = Parity::default();
-    for (dir, engine, app, legacy) in [
-        ("firefox", WebEngine::Gecko, "Firefox", WebQuirks::GECKO),
-        ("chromium", WebEngine::Blink, "Chromium", WebQuirks::BLINK),
-    ] {
-        for page in pages(dir) {
-            parity_of_page(engine, app, legacy, &page, dir, &mut p);
-        }
-    }
-    eprintln!(
-        "overlay parity: legacy fills {} same {} same-after-normalising {} different {} lost {} gained {}; markers {} stripped {}",
-        p.legacy_fills,
-        p.same,
-        p.same_after_normalising,
-        p.different.len(),
-        p.lost.len(),
-        p.gained,
-        p.marked,
-        p.marker_stripped
-    );
-    for l in p.different.iter().chain(p.lost.iter()).take(60) {
-        eprintln!("  {l}");
-    }
-    assert!(p.marked > 0, "the corpus has marked list items");
-    assert_eq!(
-        p.marked, p.marker_stripped,
-        "every marker is stripped by the entry"
-    );
-    assert!(p.lost.is_empty(), "{:?}", p.lost);
-    assert!(p.different.is_empty(), "{:?}", p.different);
 }
 
 // ---- synthetic controls: the cases the recorded pages never hit -----------------------------------
@@ -814,13 +492,9 @@ fn syn_add(
     lists.push((parent, ids));
 }
 
-/// Build `control` (nameless, role `sem`) with `kids`, fuse it, and give back the legacy label and
-/// what the overlay would take from the entry.
-fn synthetic(
-    sem: gorca_model::sem::SemRole,
-    legacy_role: Role,
-    kids: Vec<Kid>,
-) -> (Option<String>, Option<String>) {
+/// Build `control` (nameless, role `sem`) with `kids`, fuse it, and give back the one-line label
+/// the presenter takes from the entry.
+fn synthetic(sem: gorca_model::sem::SemRole, legacy_role: Role, kids: Vec<Kid>) -> Option<String> {
     let mut next = 3u64;
     let mut nodes: Vec<SrcNode> = Vec::new();
     let mut lists: Vec<(u64, Vec<u64>)> = Vec::new();
@@ -833,9 +507,7 @@ fn synthetic(
     nodes.push(syn_node(2, legacy_role, Some(syn_rec(sem, None)), None));
     lists.push((1, vec![2]));
     syn_add(2, kids, &mut next, &mut nodes, &mut lists);
-    let Some(setup) = fuse_setup(&info(WebEngine::Gecko, "Firefox")) else {
-        return (None, None);
-    };
+    let setup = fuse_setup(&info(WebEngine::Gecko, "Firefox"))?;
     let mut stage = FuseStage::new(setup);
     let mut batch = vec![
         DocDelta::Reset {
@@ -861,22 +533,20 @@ fn synthetic(
     let doc = w.doc();
     let id = doc
         .preorder()
-        .find(|id| doc.node(*id).and_then(|v| v.meta).and_then(|m| m.src) == Some(SrcNodeId(2)))
+        .find(|id| doc.node(*id).and_then(|v| v.data).and_then(|m| m.src) == Some(SrcNodeId(2)))
         .expect("the control is in the mirror");
-    let old = legacy_subtree_label(doc, id);
+    let _ = (doc, id);
     let entry = stage.sem(SrcNodeId(2)).expect("fused");
-    let _ = legacy_role;
-    let new = entry
+    entry
         .name
         .as_deref()
-        .and_then(gorca_present::one_line_label);
-    (old, new)
+        .and_then(gorca_present::one_line_label)
 }
 
 type Case = (&'static str, SemRole, Role, Vec<Kid>, Option<&'static str>);
 
 #[test]
-fn a_nameless_control_is_named_from_its_content_as_subtree_label_did() {
+fn a_nameless_control_is_named_from_its_content() {
     use gorca_model::sem::SemRole as S;
     let cases: Vec<Case> = vec![
         (
@@ -924,16 +594,15 @@ fn a_nameless_control_is_named_from_its_content_as_subtree_label_did() {
         ("no content", S::Button, Role::Button, vec![], None),
     ];
     for (what, sem, role, kids, want) in cases {
-        let (old, new) = synthetic(sem, role, kids);
-        assert_eq!(old.as_deref(), want, "{what}: the retired label");
+        let new = synthetic(sem, role, kids);
         assert_eq!(new.as_deref(), want, "{what}: the fused entry");
     }
 }
 
 #[test]
-fn a_long_content_name_is_cut_like_the_old_label() {
+fn a_long_content_name_is_cut_to_the_label_cap() {
     use gorca_model::sem::SemRole as S;
-    let (old, new) = synthetic(
+    let new = synthetic(
         S::Button,
         Role::Button,
         vec![Kid::Run(
@@ -942,22 +611,20 @@ fn a_long_content_name_is_cut_like_the_old_label() {
              exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat",
         )],
     );
-    let (old, new) = (old.unwrap(), new.unwrap());
+    let new = new.unwrap();
     assert!(new.chars().count() <= 160);
-    // The old label cut the raw text at 160 characters, the new one cuts the cleaned label there.
-    assert!(new.starts_with(old.trim_end()) || old.starts_with(new.trim_end()));
+    assert!(new.starts_with("Lorem ipsum dolor sit amet"));
 }
 
 /// S3 looks through nameless containers (accname 2F): text inside a wrapper names the control.
 #[test]
 fn a_nameless_wrapper_does_not_hide_its_text_from_the_content_name() {
     use gorca_model::sem::SemRole as S;
-    let (old, new) = synthetic(
+    let new = synthetic(
         S::Button,
         Role::Button,
         vec![Kid::Wrap(vec![Kid::Run("Save")])],
     );
-    assert_eq!(old.as_deref(), Some("Save"));
     assert_eq!(new.as_deref(), Some("Save"));
 }
 

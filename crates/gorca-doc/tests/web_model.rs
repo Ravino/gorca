@@ -341,7 +341,7 @@ impl Harness {
                         flags: Some(spec.flags),
                         sig: Some(spec.sig),
                         name: None,
-                        meta: None,
+                        data: None,
                     };
                     self.exec(
                         &DocOp::SetProps {

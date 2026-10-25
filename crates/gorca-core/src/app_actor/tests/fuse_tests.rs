@@ -94,7 +94,6 @@ fn drain(r: &mut Rig) {
 #[test]
 fn a_record_is_fused_and_its_entry_replaces_the_record_on_the_mirror_snapshot() {
     let mut r = rig(IngressConfig::default());
-    r.actor.set_strict_agreement(true);
     push(&mut r, vec![snap_of(1, None, "OK")]);
     drain(&mut r);
     let s = r.read.get(key(1)).hit().unwrap();
@@ -106,8 +105,6 @@ fn a_record_is_fused_and_its_entry_replaces_the_record_on_the_mirror_snapshot() 
     assert_eq!(e.sem.check, Check::NotCheckable);
     let st = r.actor.fuse_stats();
     assert_eq!((st.queued, st.applied, st.attached), (1, 1, 1));
-    assert_eq!(st.agree_mismatch, 0);
-    assert!(st.agree_checked >= 4, "{st:?}");
 }
 
 #[test]
@@ -120,32 +117,6 @@ fn a_snapshot_without_a_record_is_left_alone() {
     let got = r.read.get(key(1)).hit().unwrap();
     assert!(got.sem.rec.is_none() && got.sem.entry.is_none());
     assert_eq!(r.actor.fuse_stats().queued, 0);
-}
-
-#[test]
-fn a_legacy_disagreement_is_counted_and_logged_not_fatal_unless_strict() {
-    let mut r = rig(IngressConfig::default());
-    let mut s = (*snap_of(1, None, "OK")).clone();
-    // The legacy name says something else than the record does.
-    s.name = Some(Arc::from("Cancel"));
-    push(&mut r, vec![Arc::new(s)]);
-    drain(&mut r);
-    let st = r.actor.fuse_stats();
-    assert_eq!(st.agree_mismatch, 1, "{st:?}");
-    // The entry still fuses what the source said.
-    let e = r.read.get(key(1)).hit().unwrap().sem.entry.clone().unwrap();
-    assert_eq!(e.name.as_deref(), Some("OK"));
-}
-
-#[test]
-#[should_panic(expected = "legacy agreement broken")]
-fn strict_mode_makes_a_disagreement_a_failure() {
-    let mut r = rig(IngressConfig::default());
-    r.actor.set_strict_agreement(true);
-    let mut s = (*snap_of(1, None, "OK")).clone();
-    s.name = Some(Arc::from("Cancel"));
-    push(&mut r, vec![Arc::new(s)]);
-    drain(&mut r);
 }
 
 #[test]

@@ -156,9 +156,13 @@ pub enum BackgroundMsg {
     Notice { info: crate::present::WindowInfo },
     /// A background event was dropped for this app; its mirror may be stale.
     ResyncNeeded(AppId),
-    /// Speech from an extension (a command's answer, a rewrite verdict, an "extension disabled"
-    /// notice). `interrupt` answers a key the user pressed.
-    ExtSpeech { text: Arc<str>, interrupt: bool },
+    /// Words from an extension (a command's answer, a rewrite verdict, an "extension disabled"
+    /// notice) as the IR they render from (`Reason::Ext`). `interrupt` answers a key the user
+    /// pressed.
+    ExtSay {
+        ir: Box<gorca_present::PresIr>,
+        interrupt: bool,
+    },
     /// The answer to `info.battery`: `None` when the power source did not answer in time.
     Battery {
         info: Option<crate::quick::PowerInfo>,
@@ -764,14 +768,8 @@ impl Reader {
                 BackgroundMsg::ResyncNeeded(_) => {
                     // TBD: live-region policy lives in gorca-doc; resync scheduling in the app actor.
                 }
-                BackgroundMsg::ExtSpeech { text, interrupt } => {
-                    // A message reference of an extension's catalog is said in the UI language.
-                    let text = gorca_i18n::ext::resolve(&text, gorca_i18n::language());
-                    if interrupt {
-                        self.say(&text, &mut fx);
-                    } else {
-                        self.announce(&text, &mut fx);
-                    }
+                BackgroundMsg::ExtSay { ir, interrupt } => {
+                    self.say_ext_ir(&ir, interrupt, &mut fx);
                 }
             },
             ReaderMsg::Mode(m) => self.on_mode(m, &mut fx),

@@ -29,7 +29,7 @@ use gorca_model::{NodeSnapshot, Role, StateSet, WebEngine};
 use gorca_present::{ComposeCtx, Reason, RenderOpts, ReportFlags, compose, compose_change, render};
 
 use crate::decode::RawNode;
-use crate::legacy_agreement_tests::{NodeMeta, page, page_meta, page_with, pages_of, root};
+use crate::recorded_corpus_tests::{NodeMeta, page, page_meta, page_with, pages_of, root};
 
 /// A corpus family: directory under `tests/fixtures/sem`, toolkit name for the profile tables,
 /// and the web engine (`None` for native applications).

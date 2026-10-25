@@ -13,9 +13,8 @@ use gorca_connector_api::BackendError;
 use gorca_input_api::{KeyClass, KeyEvent, KeyIntent, Modifiers, PressKind};
 use gorca_mirror::{ApplyOrigin, MirrorRead, MirrorWriter, RemovalCause, mirror};
 use gorca_model::{
-    AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LazyText, LocalId, NodeKey,
-    NodeSnapshot, PropMask, Rect, Relations, Role, SnapshotBatch, StateSet, TextDelta,
-    TextWindowFill,
+    AppId, ChildList, ConnectorId, Freshness, Ifaces, LazyText, LocalId, NodeKey, NodeSnapshot,
+    PropMask, Rect, Relations, Role, SnapshotBatch, StateSet, TextDelta, TextWindowFill,
 };
 use gorca_rt::EpochCell;
 
@@ -329,7 +328,7 @@ impl Sim {
                     .collect(),
             ),
             interfaces: Ifaces::empty(),
-            attrs: AttrMap::default(),
+            attrs: smallvec::SmallVec::default(),
             relations: Relations::default(),
             bounds: rect,
             have,
@@ -679,8 +678,11 @@ impl Sim {
     }
 
     pub fn ext_speech(&mut self, interrupt: bool) {
-        self.handle(ReaderMsg::Background(BackgroundMsg::ExtSpeech {
-            text: Arc::from("extension says"),
+        self.handle(ReaderMsg::Background(BackgroundMsg::ExtSay {
+            ir: Box::new(crate::ext::ext_words_ir(
+                [(gorca_model::SegmentKind::Said, "extension says")],
+                crate::ext::VIA_EXT_SAY,
+            )),
             interrupt,
         }));
     }

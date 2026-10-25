@@ -21,9 +21,9 @@
 //! 4. prints the table and writes `bench/results/cutover/<surface>-<date>.md`, never overwriting
 //!    an older report (a failing report is evidence and stays).
 //!
-//! `cargo xtask cutover --check` (also run by `cargo xtask legacy`) is the CI hook: once no
-//! `xtask/legacy.allow` row names the slice that switches a surface, a passing, tracked report
-//! made on an ancestor of `HEAD` must exist for that surface.
+//! `cargo xtask cutover --check` (also run by `cargo xtask legacy`) is the CI hook: every surface
+//! is cut over (the legacy presentation APIs are banned outright, rule 12), so a passing, tracked
+//! report made on an ancestor of `HEAD` must exist for each of them.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -38,8 +38,6 @@ use crate::legacyrule::Date;
 /// One surface of the cut-over plan (docs/reports/m22b1-plan.md).
 pub struct Surface {
     pub name: &'static str,
-    /// The `legacy.allow` slice column that deletes this surface's legacy path.
-    pub slice: &'static str,
     /// The `gorca-present` path and the replay exist.
     pub ready: bool,
     /// The package whose test binary holds the replay (empty: the replay was deleted with the
@@ -75,7 +73,6 @@ const NOTICE_FAMILIES: &[&str] = &["gtk4", "firefox", "chromium", "gnome-shell"]
 pub const SURFACES: &[Surface] = &[
     Surface {
         name: "focus",
-        slice: "M22b1-5",
         ready: true,
         package: "",
         test: "",
@@ -83,7 +80,6 @@ pub const SURFACES: &[Surface] = &[
     },
     Surface {
         name: "change",
-        slice: "M22b1-5",
         ready: true,
         package: "",
         test: "",
@@ -91,7 +87,6 @@ pub const SURFACES: &[Surface] = &[
     },
     Surface {
         name: "browse",
-        slice: "M22b2",
         ready: true,
         package: "",
         test: "",
@@ -99,7 +94,6 @@ pub const SURFACES: &[Surface] = &[
     },
     Surface {
         name: "quicknav",
-        slice: "M22b2",
         ready: true,
         package: "",
         test: "",
@@ -107,7 +101,6 @@ pub const SURFACES: &[Surface] = &[
     },
     Surface {
         name: "review",
-        slice: "M22b3",
         ready: true,
         package: "",
         test: "",
@@ -115,7 +108,6 @@ pub const SURFACES: &[Surface] = &[
     },
     Surface {
         name: "window",
-        slice: "M22b4",
         ready: true,
         package: "",
         test: "",
@@ -123,7 +115,6 @@ pub const SURFACES: &[Surface] = &[
     },
     Surface {
         name: "notification",
-        slice: "M22b4",
         ready: true,
         package: "",
         test: "",
@@ -131,7 +122,6 @@ pub const SURFACES: &[Surface] = &[
     },
     Surface {
         name: "whereami",
-        slice: "M22b4",
         ready: true,
         package: "",
         test: "",
@@ -139,15 +129,13 @@ pub const SURFACES: &[Surface] = &[
     },
     Surface {
         name: "docflags",
-        slice: "M22b4",
         ready: true,
-        package: "gorca-core",
-        test: "doc_actor::flags_gate_tests::flags_emit",
+        package: "",
+        test: "",
         families: WEB_FAMILIES,
     },
     Surface {
         name: "explain",
-        slice: "M22b4",
         ready: true,
         package: "gorca-connector-atspi",
         test: "explain_gate_tests::explain_emit",
@@ -1124,7 +1112,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<bool> {
         "usage: cargo xtask cutover <surface> [--seed N] | --check   (surfaces: focus, change, browse, quicknav, review, window, notification, whereami, docflags, explain)",
     )?;
     if first == "--check" {
-        return check();
+        return Ok(check());
     }
     let surface = surface_of(&first)?;
     let mut seed = DEFAULT_SEED;
@@ -1165,9 +1153,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<bool> {
         let p = write_report(&root, &vs, &meta, "")?;
         print!("{}", table(&vs));
         eprintln!(
-            "cutover {}: FAIL, no gorca-present path yet ({}); report {}",
+            "cutover {}: FAIL, no gorca-present path yet; report {}",
             surface.name,
-            surface.slice,
             p.display()
         );
         return Ok(false);
@@ -1290,28 +1277,24 @@ pub fn parse_report(file: &str, text: &str) -> Option<ReportMeta> {
     })
 }
 
-/// The slices that still have a `legacy.allow` row; a surface whose slice has none is cut over.
-/// `tracked` says whether git tracks a report and `ancestor` whether a rev is an ancestor of HEAD.
+/// Every surface is cut over: each needs a passing report. `tracked` says whether git tracks a
+/// report and `ancestor` whether a rev is an ancestor of HEAD.
 pub fn judge_reports(
-    live_slices: &BTreeSet<String>,
     reports: &[ReportMeta],
     tracked: &dyn Fn(&str) -> bool,
     ancestor: &dyn Fn(&str) -> bool,
 ) -> Vec<String> {
     let mut out = Vec::new();
     for s in SURFACES {
-        if live_slices.contains(s.slice) {
-            continue;
-        }
         let ok = reports
             .iter()
             .any(|r| r.surface == s.name && r.pass && tracked(&r.file) && ancestor(&r.rev));
         if !ok {
             out.push(format!(
-                "cut-over: no legacy.allow row names {} any more, so surface `{}` is cut over, but \
-                 {REPORT_DIR}/ has no committed PASS report made on an ancestor of HEAD; run \
-                 `cargo xtask cutover {}` before the cut-over commit and commit the report",
-                s.slice, s.name, s.name
+                "cut-over: surface `{}` is cut over, but {REPORT_DIR}/ has no committed PASS report \
+                 made on an ancestor of HEAD; run `cargo xtask cutover {}` before the cut-over \
+                 commit and commit the report",
+                s.name, s.name
             ));
         }
     }
@@ -1319,7 +1302,7 @@ pub fn judge_reports(
 }
 
 /// Rule 12's extension: violations as one line each (empty when the hook is satisfied).
-pub fn check_reports(root: &Path, live_slices: &BTreeSet<String>) -> Vec<String> {
+pub fn check_reports(root: &Path) -> Vec<String> {
     let dir = root.join(REPORT_DIR);
     let mut reports = Vec::new();
     if let Ok(rd) = std::fs::read_dir(&dir) {
@@ -1345,24 +1328,19 @@ pub fn check_reports(root: &Path, live_slices: &BTreeSet<String>) -> Vec<String>
             .status()
             .is_ok_and(|s| s.success())
     };
-    judge_reports(live_slices, &reports, &tracked, &ancestor)
+    judge_reports(&reports, &tracked, &ancestor)
 }
 
-fn check() -> Result<bool> {
+fn check() -> bool {
     let root = repo_root();
-    let text = std::fs::read_to_string(root.join("xtask/legacy.allow")).unwrap_or_default();
-    let live: BTreeSet<String> = crate::legacyrule::parse_allow(&text)?
-        .into_iter()
-        .map(|a| a.slice)
-        .collect();
-    let problems = check_reports(&root, &live);
+    let problems = check_reports(&root);
     for p in &problems {
         eprintln!("rule 12: {p}");
     }
     if problems.is_empty() {
         println!("cutover check: ok (no cut-over surface lacks a passing gate report)");
     }
-    Ok(problems.is_empty())
+    problems.is_empty()
 }
 
 #[cfg(test)]
@@ -1817,43 +1795,18 @@ mod tests {
     }
 
     #[test]
-    fn a_cut_over_surface_needs_a_committed_passing_report_on_this_history() {
-        let live: BTreeSet<String> = ["M22b4"].map(String::from).into();
+    fn a_surface_needs_a_committed_passing_report_on_this_history() {
         let yes = |_: &str| true;
-        // M22b1-5, M22b2 and M22b3 have no rows left: focus, change, browse, quicknav and review
-        // are cut over.
-        assert_eq!(judge_reports(&live, &[], &yes, &yes).len(), 5);
-        let all = ["focus", "change", "browse", "quicknav", "review"];
-        let ok: Vec<ReportMeta> = all.iter().map(|s| meta(s, true, "a")).collect();
-        assert!(judge_reports(&live, &ok, &yes, &yes).is_empty());
+        let n = SURFACES.len();
+        assert_eq!(judge_reports(&[], &yes, &yes).len(), n);
+        let ok: Vec<ReportMeta> = SURFACES.iter().map(|s| meta(s.name, true, "a")).collect();
+        assert!(judge_reports(&ok, &yes, &yes).is_empty());
         let mut failing = ok.clone();
-        failing[4] = meta("review", false, "a");
-        assert_eq!(judge_reports(&live, &failing, &yes, &yes).len(), 1);
+        failing[4] = meta(SURFACES[4].name, false, "a");
+        assert_eq!(judge_reports(&failing, &yes, &yes).len(), 1);
         let untracked = |_: &str| false;
-        assert_eq!(judge_reports(&live, &ok, &untracked, &yes).len(), 5);
+        assert_eq!(judge_reports(&ok, &untracked, &yes).len(), n);
         let foreign = |_: &str| false;
-        assert_eq!(judge_reports(&live, &ok, &yes, &foreign).len(), 5);
-    }
-
-    #[test]
-    fn surfaces_whose_slice_still_has_rows_need_no_report() {
-        let live: BTreeSet<String> = ["M22b1-5", "M22b2", "M22b3", "M22b4"]
-            .map(String::from)
-            .into();
-        let no = |_: &str| false;
-        assert!(judge_reports(&live, &[], &no, &no).is_empty());
-    }
-
-    #[test]
-    fn every_surface_has_a_slice_that_legacy_allow_knows() {
-        let text = std::fs::read_to_string(repo_root().join("xtask/legacy.allow")).expect("allow");
-        for s in SURFACES {
-            // `M22b1-5` (focus, change), `M22b2` (browse, quicknav) and `M22b3` (review) are cut
-            // over: their rows are deleted with the legacy path.
-            if matches!(s.slice, "M22b1-5" | "M22b2" | "M22b3") {
-                continue;
-            }
-            assert!(text.contains(s.slice), "{} names slice {}", s.name, s.slice);
-        }
+        assert_eq!(judge_reports(&ok, &yes, &foreign).len(), n);
     }
 }

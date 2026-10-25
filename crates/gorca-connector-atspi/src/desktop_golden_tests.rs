@@ -26,7 +26,7 @@ use std::sync::Arc;
 use gorca_model::{NodeSnapshot, Role, WebEngine};
 use gorca_present::{ComposeCtx, Reason, RenderOpts, ReportFlags, compose, compose_notice, render};
 
-use crate::legacy_agreement_tests::{page, pages_of, root};
+use crate::recorded_corpus_tests::{page, pages_of, root};
 
 /// A corpus family: directory under `tests/fixtures/sem`, toolkit name for the profile tables,
 /// and the web engine (`None` for native applications).
