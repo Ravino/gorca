@@ -166,6 +166,10 @@ pub struct Turn {
     pub deadline_ns: u64,
     /// False when the writer already waited for this keypress path or flaps: send only.
     pub wait: bool,
+    /// What admitting one reply costs the writer after the wait. The wait ends at
+    /// `deadline_ns - per_reply_ns * (replies in + 1)`: the more waited jobs have answered, the
+    /// earlier the writer must stop for the turn to stay inside `D`. 0: a fixed deadline.
+    pub per_reply_ns: u64,
 }
 
 impl Turn {
@@ -183,6 +187,16 @@ impl Turn {
             deadline_ns: (t0_ns + u64::try_from(D_INTERACTIVE.as_nanos()).unwrap_or(300_000))
                 .saturating_sub(reserve_ns),
             wait,
+            per_reply_ns: 0,
+        }
+    }
+
+    /// As [`Turn::clamped`] with a per-reply admission cost: see [`Turn::per_reply_ns`].
+    #[must_use]
+    pub fn adaptive(t0_ns: u64, wait: bool, fuse_ns: u64, per_reply_ns: u64) -> Self {
+        Self {
+            per_reply_ns,
+            ..Self::clamped(t0_ns, wait, fuse_ns)
         }
     }
 }

@@ -59,14 +59,13 @@ const PREWAKE_SPIN: Duration = Duration::from_millis(8);
 const PREWAKE_EVERY_NS: u64 = 20_000_000;
 /// Reserved inside `D` for fusing after the wait, on top of admitting the replies (ADR section
 /// 2.4.7.3: default 8 us).
-const FUSE_RESERVE: Duration = Duration::from_micros(8);
+const FUSE_RESERVE: Duration = Duration::from_micros(24);
 /// Prior for the cost unit of admitting replies after the wait, until a turn has measured it.
 /// Admitting `n` replies costs about `unit * (n + 1)`: a fixed part about as large as one reply
 /// (measured: 1 reply 12 us, 10 replies 60-90 us).
 const ADMIT_UNIT_PRIOR_NS: u64 = 5_000;
-/// The reserve never exceeds this, whatever the smoothed cost says (the wait keeps at least
-/// `D` minus this for the snapshot and the plugins).
-const RESERVE_CAP_NS: u64 = 100_000;
+/// The cost unit never exceeds this, whatever the recent peak says.
+const UNIT_CAP_NS: u64 = 12_000;
 
 /// Which policy schedules the interactive handoff (`[plugins] scheduler`, ADR-0026 section
 /// 2.4.7.12, C-4).
@@ -844,6 +843,12 @@ struct PlanInfo {
     /// `CLOCK_MONOTONIC` ns at which the plan was made (the send follows within tens of
     /// microseconds; diagnostics only, the observation uses the actor's own hand-off stamp).
     sent_ns: u64,
+    /// Trace: turn start, the absolute clamp of the wait, the reserve, the turn number.
+    t0_ns: u64,
+    clamp_ns: u64,
+    reserve_us: u32,
+    spent_us: u32,
+    turn_seq: u64,
 }
 
 struct JobInfo {
@@ -877,6 +882,9 @@ struct PluginScope {
     sps: Option<Arc<Sps>>,
     /// Where the scheduler's input log goes when the scope closes.
     sched_log: Option<PathBuf>,
+    /// Trace only: the number of the SPS turn and when its wait ended.
+    turn_seq: u64,
+    last_end_ns: u64,
     /// Cost unit of admitting replies after the wait, ns: admitting `n` costs about
     /// `unit * (n + 1)`. Tracks the recent peak (the reserve of the wait covers the tail).
     admit_unit_ns: u64,
@@ -941,6 +949,8 @@ impl PluginScope {
             skew: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             sps,
             sched_log: None,
+            turn_seq: 0,
+            last_end_ns: 0,
             admit_unit_ns: ADMIT_UNIT_PRIOR_NS,
         }
     }
@@ -1047,29 +1057,14 @@ impl PluginScope {
             .iter()
             .filter(|t| t.pid < 32)
             .fold(0u32, |m, t| m | (1 << t.pid));
-        // What follows the wait inside the same turn: fusing, and admitting every reply that
-        // arrived in time. The wait leaves room for it, or the writer's delay exceeds `D`.
-        // Replies of jobs that are not waited for are admitted in a later turn, so only the
-        // waited ones cost anything here: an upper bound of that set is every plugin that is not
-        // busy or a refinement, with third parties counted as one (they get a 100 us hold, and
-        // only when their deadline fits it).
-        let eligible = |t: &&Triggered| {
-            !t.busy
-                && self
-                    .plugins
-                    .get(t.pid)
-                    .is_some_and(|p| p.priority != Priority::Refinement)
-        };
-        let third = |t: &&Triggered| {
-            self.plugins
-                .get(t.pid)
-                .is_some_and(|p| p.meta.tier == PluginTier::Untrusted)
-        };
-        let candidates = trig.iter().filter(eligible).filter(|t| !third(t)).count()
-            + usize::from(trig.iter().filter(eligible).any(|t| third(&t)));
-        let reserve_ns = (u64::try_from(FUSE_RESERVE.as_nanos()).unwrap_or(8_000)
-            + self.admit_unit_ns * (u64::try_from(candidates).unwrap_or(0) + 1))
-            .min(RESERVE_CAP_NS);
+        // What follows the wait inside the same turn: fusing, and admitting every reply that is
+        // in by then (`unit * (n + 1)`). The planned window assumes the best case, one reply; the
+        // runner stops the wait earlier by one unit for every further reply that comes in, so the
+        // turn stays inside `D` however many answer. (A reserve for every candidate instead
+        // shrank the window by the cost of replies that then never arrived in it.)
+        let fuse_ns = u64::try_from(FUSE_RESERVE.as_nanos()).unwrap_or(8_000);
+        let unit_ns = self.admit_unit_ns.min(UNIT_CAP_NS);
+        let reserve_ns = fuse_ns + unit_ns * 2;
         let plan = {
             let mut s = lock(&sps.sched);
             let plan = s.plan_with(
@@ -1084,6 +1079,7 @@ impl PluginScope {
             s.end_key(mask);
             plan
         };
+        self.turn_seq += 1;
         let mut slots: Vec<Option<Job>> = jobs.into_iter().map(Some).collect();
         let mut planned: Vec<PlannedJob> = Vec::with_capacity(slots.len());
         let kappa = KAPPA_PROVISIONAL;
@@ -1128,6 +1124,11 @@ impl PluginScope {
                     a,
                     waited: hold.is_some(),
                     sent_ns: now,
+                    t0_ns,
+                    clamp_ns: t0_ns + 300_000 - reserve_ns,
+                    reserve_us: u32::try_from(reserve_ns / 1000).unwrap_or(u32::MAX),
+                    spent_us,
+                    turn_seq: self.turn_seq,
                 });
             }
             planned.push(PlannedJob { job: d, hold });
@@ -1136,9 +1137,10 @@ impl PluginScope {
             return Handoff::default();
         }
         let sink: Arc<dyn ReplySink> = Arc::clone(&self.sink) as Arc<dyn ReplySink>;
-        let turn = Turn::clamped(t0_ns, wait, reserve_ns);
+        let turn = Turn::adaptive(t0_ns, wait, fuse_ns, unit_ns);
         let before_send = gorca_core::plugin_port::now_ns();
         let h = self.runner.interactive_planned(&turn, planned, &sink);
+        self.last_end_ns = gorca_core::plugin_port::now_ns();
         if tracing::enabled!(tracing::Level::DEBUG) {
             let end = gorca_core::plugin_port::now_ns();
             tracing::debug!(
@@ -1571,6 +1573,7 @@ impl PluginScope {
         }
         // What the replies taught the scheduler: start latency (hot or cold), guest time,
         // response time against the hold, usefulness (ADR-0026 section 2.4.7.6).
+        let (turn_now, last_end) = (self.turn_seq, self.last_end_ns);
         if let (Some(sps), false) = (&self.sps, observed.is_empty()) {
             let mut s = lock(&sps.sched);
             for (plugin, plan, t, exec_us, useful) in observed {
@@ -1583,7 +1586,18 @@ impl PluginScope {
                     pickup_to_reply_us = t.at_ns.saturating_sub(t.picked_ns) / 1000,
                     resp_us = t.at_ns.saturating_sub(plan.sent_ns) / 1000,
                     hold_us = plan.a.hold_us,
+                    deadline_us = plan.a.deadline_us,
                     waited = plan.waited,
+                    reserve_us = plan.reserve_us,
+                    spent_us = plan.spent_us,
+                    arrive_rel_t0_us = t.at_ns.saturating_sub(plan.t0_ns) / 1000,
+                    clamp_rel_t0_us = plan.clamp_ns.saturating_sub(plan.t0_ns) / 1000,
+                    wait_ended_rel_t0_us = if plan.turn_seq == turn_now {
+                        last_end.saturating_sub(plan.t0_ns) / 1000
+                    } else {
+                        0
+                    },
+                    sent_rel_t0_us = t.sent_ns.saturating_sub(plan.t0_ns) / 1000,
                     "sps reply"
                 );
                 s.observe(&Observation {

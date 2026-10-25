@@ -49,6 +49,7 @@ fn rust_equals_the_reference_on_the_recorded_log() {
     }
     let p = Params {
         reference_negative_bucket: true,
+        reference_prewake_ignores_exclusion: true,
         ..Params::default()
     };
     let mut s = Scheduler::new(&plugins, p);

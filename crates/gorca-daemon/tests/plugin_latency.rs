@@ -399,9 +399,10 @@ fn writer_delay_with_ten_plugins_against_none() {
         .fold(1.0, f64::min);
     let st = bridge.stats();
     eprintln!(
-        "per turn: wait {:.1} us, admit {:.1} us",
+        "per turn: wait {:.1} us, admit {:.1} us (of which poll {:.1} us)",
         st.handoff_waited_ns as f64 / 1e3 / TRIALS as f64,
-        st.handoff_drain_ns as f64 / 1e3 / TRIALS as f64
+        st.handoff_drain_ns as f64 / 1e3 / TRIALS as f64,
+        st.handoff_poll_ns as f64 / 1e3 / TRIALS as f64
     );
     let gov = std::fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor")
         .unwrap_or_default()

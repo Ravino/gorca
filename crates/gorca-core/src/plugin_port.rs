@@ -468,6 +468,8 @@ pub struct BridgeStats {
     pub handoff_waited_ns: u64,
     /// Nanoseconds spent admitting the replies after the wait, summed.
     pub handoff_drain_ns: u64,
+    /// Of which taking the replies from the runner (`poll`), ns.
+    pub handoff_poll_ns: u64,
 }
 
 struct LiveToken {
@@ -943,8 +945,10 @@ impl PluginBridge {
     fn drain_with(&mut self, waited_only: bool) -> bool {
         let mut replies = std::mem::take(&mut self.replies);
         replies.clear();
+        let t = now_ns();
         if waited_only {
             self.runner.poll_waited(&mut replies);
+            self.stats.handoff_poll_ns += now_ns().saturating_sub(t);
         } else {
             self.runner.poll(&mut replies);
         }

@@ -240,6 +240,9 @@ pub struct Params {
     /// there and charges it). Only the cross-language replay sets this; the product never does:
     /// an empty bucket means K = 0 (section 2.4.7.3).
     pub reference_negative_bucket: bool,
+    /// Reproduce the reference's key-down, which does not skip plugins excluded from the wait
+    /// set (ADR section 2.4.7.3 says it should; the product does). Only the replay sets this.
+    pub reference_prewake_ignores_exclusion: bool,
 }
 
 impl Default for Params {
@@ -267,6 +270,7 @@ impl Default for Params {
             cap_fuel_us: 200,
             kappa: 21_739,
             reference_negative_bucket: false,
+            reference_prewake_ignores_exclusion: false,
         }
     }
 }
@@ -836,7 +840,9 @@ impl Scheduler {
         let mut n = 0;
         let mut load = 0i64;
         for (pid, st) in self.plugins.iter().enumerate() {
-            if !st.label.spin_eligible() {
+            if !st.label.spin_eligible()
+                || (st.excluded > 0 && !self.p.reference_prewake_ignores_exclusion)
+            {
                 continue;
             }
             let a = st.act[ctx];

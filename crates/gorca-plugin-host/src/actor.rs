@@ -783,7 +783,10 @@ impl ActorRunner {
         }
         let mut abs = [0u64; 16];
         for i in 0..n_w {
-            abs[i] = t_sent.saturating_add(hold_ns[i]).min(turn.deadline_ns);
+            // Best case for the admission that follows: a single reply.
+            abs[i] = t_sent
+                .saturating_add(hold_ns[i])
+                .min(turn.deadline_ns.saturating_sub(turn.per_reply_ns));
         }
         let mut released = 0u32;
         let mut woke_late = 0u64;
@@ -791,11 +794,20 @@ impl ActorRunner {
             let spin_end = start + ns(self.core.cfg.spin);
             let tail = ns(self.core.cfg.tail);
             loop {
-                let pending = want & !gate.got(tag) & !released;
+                let got = gate.got(tag);
+                let pending = want & !got & !released;
                 if pending == 0 {
                     break;
                 }
                 let now = monotonic_ns();
+                // Every reply in costs `per_reply_ns` to admit after the wait, inside `D`.
+                let cut = turn
+                    .deadline_ns
+                    .saturating_sub(turn.per_reply_ns * (u64::from((got & want).count_ones()) + 1));
+                if turn.per_reply_ns > 0 && now >= cut {
+                    woke_late = woke_late.max(now - cut);
+                    break;
+                }
                 let mut next = u64::MAX;
                 for (i, a) in abs.iter().enumerate().take(n_w) {
                     if pending & (1 << i) == 0 {
@@ -811,6 +823,16 @@ impl ActorRunner {
                 if next == u64::MAX {
                     continue;
                 }
+                // A reply that comes in while parked does not wake the writer (only the last
+                // one does) but moves the cut earlier: park no longer than the earliest cut.
+                let lowest_cut = turn
+                    .deadline_ns
+                    .saturating_sub(turn.per_reply_ns * (n_w as u64 + 1));
+                let next = if turn.per_reply_ns > 0 {
+                    next.min(lowest_cut.max(now))
+                } else {
+                    next
+                };
                 if now < spin_end || now + tail + 5_000 >= next {
                     std::hint::spin_loop();
                     continue;

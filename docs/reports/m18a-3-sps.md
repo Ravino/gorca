@@ -6,11 +6,14 @@ reference `tools/research/plugin_sched/sps.py`. Raw runs: `docs/reports/m18a-3-s
 
 ## 1. Verdict
 
-SPS is built, tested and wired, **off by default**: `[plugins] scheduler = "labels"` (the interim policy)
-stays the default, `"sps"` is opt-in. On this host the C-4 gate does not pass: SPS cuts the writer's
-tail and the CPU, but the facts that make the first utterance fall from about 70 % to about 0 for
-ten identical heavy plugins. Nothing was installed on the system; DP-1 is untouched (a documented,
-default-off hook point exists, section 5).
+SPS is built, tested and wired, **off by default**: `[plugins] scheduler = "labels"` stays the
+default, `"sps"` is opt-in. A first measurement showed about 0 % facts at the first utterance; the
+diagnosis (section 4) found one implementation flaw (a reserve for replies that then never came,
+fixed) and four assumptions of the model that real timings break. After the fix the per-plugin
+share at the first utterance is about 0.40-0.48 for ten comparable first-party plugins (0.66-0.78 for
+the one first-party plugin among third-party copies), against about 0.93 for LABELS; "all ten in
+time" is still about 0. C-4 does not pass on this host. Nothing was installed on the system; DP-1 is
+untouched (a documented, default-off hook point exists, section 5).
 
 ## 2. What was built
 
@@ -44,97 +47,119 @@ instead of a CAS cold queue; scheduler state behind a mutex the key hook only `t
 | SPS-8 | the same job content in and out of the wait set (daemon test with two scopes, one refused a wait by the governor). |
 | SPS-9 | bucket bound shown by an accounting test (60 s, held key, every worker spinning its whole window). **Not done:** per-pool-thread `CLOCK_THREAD_CPUTIME_ID` over 60 s; the numbers below are whole-process CPU including the bench harness. |
 
-## 4. Measurements
+## 4. Diagnosis of the near-zero first-utterance share, and the fix
 
-Bench: `crates/gorca-daemon/tests/plugin_latency.rs` (PX-6): the writer turn of one focus change with
-the real Telegram plugin plus nine copies of the same component (all ten match the same node and
-all ten trigger on every key), 400 trials, release build, plugins off as the control. "First
-utterance" counts a fact only if it is in the plan's output at the end of the bounded wait.
+### 4.1 Per-turn trace (first-party fixture, 200 ms, `GORCA_BENCH_LOG=1`; excerpt `10-trace-excerpt-before-fix-3-turns.txt`)
 
-**Conditions.** Host 16 cores, Debian 13 RT kernel, governor `powersave`, default idle states
-(C2 127 us, C3 1048 us), no DP-1 lease. **The host was never quiet**: other agents were building;
-`load1` was 2.4-11 in the final runs and 13-26 in the "before" runs (a quiet run needs
-`load1 < 4`). Every run carries its `load1`. The test's own "quiet" assertion therefore did not
-apply and several runs ended with the gate assertion failing (exit 101); those numbers are kept.
-Two matrices overlapped by my mistake (a background job kept running); that file is kept and
-labelled `01-POLLUTED-...` and is not used.
+Times relative to the turn start `t0`, a typical turn:
 
-"Third" = the nine copies are sideloaded third parties (the realistic case: one hot place, 100 us
-hold, never waited for when their deadline is clipped by that cap). "First" = the nine copies are
-pinned and installed as first-party plugins (the C-4 fixture reading where no tier cap applies).
-Key spacing 24 ms is 41 keys/s (stress; the CPU bucket cannot serve ten workers per key at that
-rate); 200 ms is 5 keys/s (navigation).
+| step | us |
+|---|---|
+| snapshot done, plan starts | 36-60 |
+| plan and job build done, jobs sent | 62-105 |
+| hot worker: pick-up | 0-1 after the send |
+| hot worker: guest call (wall) | 80-100 (the model assumed 45) |
+| hot worker: reply posted | 130-170 after the send, i.e. **165-250 after `t0`** |
+| cold worker (pre-wake did not cover it): pick-up | **100-170 after the send** (C-state exit) |
+| cold worker: reply posted | **280-345 after `t0`** |
+| clamp of the wait (`t0 + D - reserve`) | **200** (reserve 100 us) |
+| the writer's wait ended | 200 |
 
-### 4.1 Before (main `bd4a841f`, nothing of this slice), third-party copies, 24 ms
+Answers to the questions asked:
+* *hold = 0 (cold estimators, prior)?* No: every job had `hold = deadline` (140-164 us, clipped to the
+  window), `waited = true`, and the writer waited.
+* *optimal-stopping cap rejecting?* No: `t*` equalled the window; lambda is tiny.
+* *pre-wake not reaching the worker?* It worked: 6 of 10 workers started hot (`cold=false`, start
+  0-1 us); the other four were cold by the K = 6 cap and started 100-170 us late.
+* *reply in time but admitted later?* Not in this version: the replies that were in were admitted.
+  (The deferral of unwaited replies is a separate, intended change.)
+* ***The reserve ate the budget.*** The reserve was `8 us + unit x (candidates + 1)`, 100 us (its
+  cap) for ten candidates, so the wait ended at 200 us; the hot replies arrive at 165-250. But
+  only 1-3 replies were then in, so the writer had reserved 100 us for admitting ten replies that
+  did not come: a **self-defeating reserve** (implementation flaw). Fixed: the wait now ends at
+  `D - fuse - unit x (replies in + 1)`, recomputed as replies arrive (`Turn::per_reply_ns`), so the
+  turn stays inside `D` however many answer and the window is not shrunk for replies that never come.
+  The plan's own window assumes the best case, one reply.
 
-| run | load1 | turn p99 (us) | facts at first utterance: all / weakest plugin | process CPU (% of a core) |
-|---|---|---|---|---|
-| base1 | 13.2 | 6069 | 0.340 / 0.505 | 179 |
-| base2 | 26.3 | 5490 | 0.357 / 0.570 | 186 |
-| base3 | 21.3 | 669 | 0.725 / 0.935 | 287 |
+### 4.2 The same timings through `sps.py` (`tools/research/plugin_sched/replay_measured.py`, output `11-sps-py-with-measured-timings.txt`)
 
-(The orchestrator's quiet-host figures for M18a-2: p99 434 us, 71 % / 93 %. Base3 matches them.)
+`sim.py` with its constants replaced by the measured ones (all metrics are the model's per-plugin
+share, comparable to the mean of the bench's `per_plugin` list; the bench's "all ten in time" is a
+much stricter number the model does not report):
 
-### 4.2 After: final matrix (`06-FINAL-matrix-unit-times-n-plus-1.txt`), `labels` and `sps` interleaved on the same binary
+| inputs | LABELS | SPS |
+|---|---|---|
+| model defaults (snap 6 us, fuse 8 us, exec median 45, cold median 70) | 1.000 | 0.996 |
+| ten plugins always triggered, model timings | 1.000 | 0.998 |
+| + measured pre-send 75 us, reserve 63 us, exec x2.8, cold median 120 | 0.766 | **0.495** |
+| same but reserve 8 us | 1.000 | 0.705 |
 
-Medians of two runs per row; the `labels` rows are this branch's interim policy, the policy that was
-measured in 4.1 (same pre-wake, same countdown semantics, one wake call instead of one per worker).
+So the Python model **also drops to 0.5-0.7 on the measured timings**: it is not an implementation
+bug, it is four assumptions that do not hold on this host: (1) snapshot + job build + send is 6 us in
+the model, 50-105 us here; (2) the reserve after the wait is 8 us, the real cost of admitting replies
+is `unit x (n + 1)` with a unit of 5-7 us, 60-90 us for ten; (3) a call takes 45 us in the model, 80-100
+us of wall time here with ten running at once, plus 25-40 us of host work after the guest returns
+(`pickup_to_reply - exec` in the trace); (4) the model's parked start has a median of 70 us with a
+light tail; the measured one is 100-170 us for a good part of the cold workers. The model's SPS also
+loses to its own LABELS once these are in (0.705 against 1.0 at reserve 8): LABELS wakes all ten
+workers and spends the CPU, SPS wakes K.
 
-| config | load1 | writer turn p99 (us) | facts all / weakest plugin | process CPU (% core) |
-|---|---|---|---|---|
-| labels, first-party copies, 5 keys/s | 6.0 | 443 | 0.754 / 0.944 | 47.8 |
-| **sps**, first-party copies, 5 keys/s | 3.5 | **273** | 0.002 / 0.011 | **20.1** |
-| labels, third-party copies, 5 keys/s | 5.7 | 1671 | 0.693 / 0.894 | 47.0 |
-| **sps**, third-party copies, 5 keys/s | 4.9 | **294** | 0.000 / 0.000 (Telegram alone: 0.47 / 0.59) | **13.8** |
-| labels, first-party copies, 41 keys/s | 9.5 | 5050 | 0.457 / 0.750 | 243.7 |
-| sps, first-party copies, 41 keys/s | 9.9 | 476 | 0.002 / 0.019 | 35.6 |
-| labels, third-party copies, 41 keys/s | 9.7 | 4511 | 0.625 / 0.893 | 279.9 |
-| sps, third-party copies, 41 keys/s | 9.7 | 1182 | 0.000 / 0.000 (Telegram alone: 0.54 / 0.73) | 32.6 |
-| sps K_max = 10, first-party copies, 5 keys/s | 4.4 | 296 | 0.007 / 0.052 | 24.6 |
+### 4.3 Conditions of the matrix after the fix
 
-Every plugin's fact arrives within 15 ms in all runs (`min_eventually_within_15ms` 0.995-1.000):
-what SPS gives up is the first utterance, not the fact.
+Host 16 cores, governor `powersave`, default idle states, no DP-1 lease. `load1` 1.4-7.5 (the run
+waited up to 90 s per run for `load1 < 4`; half the runs started above it). Key spacing 24 ms = 41
+keys/s, 200 ms = 5 keys/s. "First": nine copies pinned as first-party; "third": sideloaded
+third-party copies (one hot place, 100 us hold, never waited for when clipped by that cap). Reserve
+before the wait: `fuse` 24 us (it covers `take_ops` and apply in the bench) plus the adaptive part.
 
-Earlier variants of the same code, kept for the record (`03`..`05`): with the constant 8 us reserve
-the SPS turn p50 was 350 us for ten plugins and p99 450-650 us (PF-8 not held: admitting ten replies
-costs 60-90 us after the wait); with the reserve proportional to the replies (04, 05) the first
-utterance was the same ~0 and the p99 was within the gate only in the calmest runs.
+### 4.4 Results (`12-FINAL-matrix-adaptive-cut.txt`), medians of two runs, `labels` and `sps` interleaved on one binary
 
-### 4.3 What the numbers say
+| config | load1 | writer turn p99 (us) | all ten in time | per-plugin share (mean) | process CPU (% core) |
+|---|---|---|---|---|---|
+| labels, first, 5 keys/s | 4.3 | 594 | 0.68 | 0.93 | 47.9 |
+| **sps**, first, 5 keys/s | 3.5 | 420 | 0.00 | **0.40** | **20.1** |
+| sps, first, K_max 10, 5 keys/s | 4.6 | 3073 (one run 5678) | 0.01 | **0.48** | 24.4 |
+| labels, third, 5 keys/s | 3.1 | 1387 | 0.67 | 0.92 | 47.2 |
+| **sps**, third, 5 keys/s | 5.6 | 588 | 0.00 | Telegram alone 0.66 | **13.8** |
+| labels, first, 41 keys/s | 4.9 | 1844 | 0.66 | 0.94 | 286.7 |
+| sps, first, 41 keys/s | 3.8 | 438 | 0.00 | 0.18 | 36.6 |
+| labels, third, 41 keys/s | 4.9 | 515 | 0.70 | 0.94 | 289.4 |
+| sps, third, 41 keys/s | 4.1 | 301 | 0.00 | Telegram alone 0.78 | 36.6 |
 
-* **Tail and CPU.** At the navigation rate and `load1 < 8` the SPS turn p99 is 273-296 us against
-  443-1671 us for LABELS (gate 310 us). The process uses 14-20 % of a core against 47 %; at the stress
-  rate 36 % against 244-280 %. Outliers of milliseconds appear in both policies whenever `load1` is
-  above about 8 (the writer thread is descheduled); SPS has fewer because it waits less.
-* **Facts at the first utterance fall to about zero** when ten comparable plugins trigger together.
-  The causes, from the per-reply log (`GORCA_BENCH_LOG=1`, whose own cost distorts absolute
-  numbers): the writer spends 50-60 us before the send (snapshot 20-40, plan and job build 15-25);
-  a guest call takes 100-200 us of wall time on this loaded host (the simulation assumed 45 us); admitting the replies
-  after the wait costs about `6.5 us x (n + 1)`, which the reserve must leave inside `D`; so the
-  window from the send is about 90-150 us, and a hold that long cannot cover a call that long. LABELS
-  ignores the reserve (its turn p50 is 350 us, i.e. it breaks the 0.3 ms budget by itself) and wins
-  the facts by overrunning. With one first-party plugin and nine third-party copies SPS still
-  delivers 47-73 % of the first-party facts in time, against about 97 % for LABELS.
-* **Third parties** are capped as designed: one hot place, 100 us hold, never waited for when the
-  deadline is clipped by the cap, so their share at the first utterance is 0 by construction (L-2);
-  they arrive as refinements.
-* **K_max.** Raising K_max from 6 to 10 changes the weakest-plugin share from 0.01 to 0.05; the pre-wake
-  budget is not what limits the first utterance here. At 41 keys/s the bucket allows about one worker
-  per key.
+For comparison, the first version of this slice (before the fix, same fixture, 5 keys/s): per-plugin
+mean 0.17, all ten 0.00; and with the constant 8 us reserve of the first runs, 0.2-0.7 per plugin and a
+turn p50 of 350 us (the budget was overrun). Raw files `00`..`12`; the `labels` rows measure the
+interim policy on this branch (one wake call instead of one per worker, otherwise the code that was
+measured in `00`).
 
-### 4.4 C-4 gate (section 2.4.7.12)
+Before (main `bd4a841f`, third-party copies, 24 ms, `load1` 13-26): turn p99 669-6069 us, all ten
+0.34-0.73, weakest plugin 0.51-0.94, CPU 179-287 %.
+
+### 4.5 What remains
+
+* The per-plugin share is capped by physics here: the writer spends 50-105 us before the send, a
+  call takes 80-100 us of wall time with ten at once and 25-40 us more before its reply is posted,
+  and admitting replies costs 5-7 us each (admission is half in `poll`: the conversion of effects,
+  slot events, observations; half in the core). A 200 us window from the send fits a hot call only
+  just; cold workers (100-170 us start) do not fit at all.
+* Cheaper admission is the lever that is left in the code (the reserve is ~25 % of the budget at ten
+  plugins); it is a follow-up, not done.
+* The turn p99 of SPS (300-590 us at `load1 < 6`) is no longer below LABELS everywhere: the wait now
+  uses the whole window, so host jitter lands on the p99. At 41 keys/s on the third-party fixture it
+  is 301 us against 515.
+
+### 4.6 C-4 gate (section 2.4.7.12)
 
 | Criterion | Result |
 |---|---|
-| (1) facts at first utterance >= 99 % overall, >= 97 % per plugin, within 0.5 points of LABELS | **fails** (about 0 against 69-75 %) |
-| (2) scheduling CPU <= 1/4 of LABELS | passes at 41 keys/s (0.12-0.15), **fails** at 5 keys/s (0.29-0.42, total process CPU) |
+| (1) facts at first utterance >= 99 % overall, >= 97 % per plugin, within 0.5 points of LABELS | **fails** (all-ten 0.00 against 0.66-0.70; per-plugin 0.18-0.48 against 0.93) |
+| (2) scheduling CPU <= 1/4 of LABELS | passes at 41 keys/s (0.13); **fails** at 5 keys/s (0.29-0.42 of total process CPU) |
 | (3) oracle adversary: stall p50 within 10 us of honest | holds in the pure harness (third party); not run on the integrated runtime |
-| (4) stall p99 <= 0.31 ms and not more than 60 us above LABELS | below LABELS in every pair; **<= 0.31 ms only at 5 keys/s and `load1 < 8`** (273-296 us) |
+| (4) stall p99 <= 0.31 ms and not more than 60 us above LABELS | **not met** (300-590 us; above LABELS in two of nine pairs) |
 | (5) SPS-1..SPS-9 | pass, with the not-done items in section 3 |
 
-By the ADR's rule (1) failing means LABELS stays the shipped policy and the crate stays as a replay
-tool; the config key lets the owner run SPS meanwhile. The result needs a rerun on a quiet host
-(`load1 < 4`) before it is final.
+By the ADR's rule LABELS stays the shipped policy. The result needs a rerun on a quiet host
+(`load1 < 4` throughout) before it is final.
 
 ## 5. DP-1
 

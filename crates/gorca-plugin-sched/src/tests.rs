@@ -1083,3 +1083,18 @@ fn a_larger_reserve_shortens_the_window_and_every_hold_and_replays() {
             == 3
     );
 }
+
+#[test]
+fn key_down_skips_a_plugin_excluded_from_the_wait_set() {
+    let mut s = Scheduler::new(&[(Label::Interactive, Tier::First)], Params::default());
+    let mut b = SpinBucket::standard();
+    assert!(s.on_key_down(KeyClass::Nav, 1_000_000, &mut b).threads >= 1);
+    s.plugins[0].excluded = 5;
+    assert_eq!(
+        s.on_key_down(KeyClass::Nav, 1_100_000, &mut b).threads,
+        0,
+        "an excluded plugin is not pre-woken (section 2.4.7.3)"
+    );
+    s.plugins[0].excluded = 0;
+    assert!(s.on_key_down(KeyClass::Nav, 20_000_000, &mut b).threads >= 1);
+}

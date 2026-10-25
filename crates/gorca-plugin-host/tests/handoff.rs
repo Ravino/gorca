@@ -165,6 +165,7 @@ fn the_wait_ends_at_the_longest_hold_of_the_jobs_still_unanswered() {
     let turn = Turn {
         deadline_ns: t0 + 1_000_000_000,
         wait: true,
+        per_reply_ns: 0,
     };
     let out = r.interactive_planned(
         &turn,
@@ -192,6 +193,7 @@ fn a_job_without_a_hold_is_dispatched_but_never_waited_for() {
     let turn = Turn {
         deadline_ns: t0 + 1_000_000_000,
         wait: true,
+        per_reply_ns: 0,
     };
     let out = r.interactive_planned(
         &turn,
@@ -217,6 +219,7 @@ fn the_turn_deadline_clamps_every_hold() {
     let turn = Turn {
         deadline_ns: t0 + 3_000_000,
         wait: true,
+        per_reply_ns: 0,
     };
     let out = r.interactive_planned(
         &turn,
@@ -237,6 +240,7 @@ fn a_turn_that_may_not_wait_returns_at_once() {
     let turn = Turn {
         deadline_ns: monotonic_ns() + 1_000_000_000,
         wait: false,
+        per_reply_ns: 0,
     };
     let out = r.interactive_planned(
         &turn,
@@ -261,6 +265,7 @@ fn replies_report_hot_and_cold_starts_and_arming_makes_a_worker_hot() {
     let turn = Turn {
         deadline_ns: monotonic_ns() + 50_000_000,
         wait: true,
+        per_reply_ns: 0,
     };
     let out = r.interactive_planned(
         &turn,
@@ -287,6 +292,7 @@ fn replies_report_hot_and_cold_starts_and_arming_makes_a_worker_hot() {
         &Turn {
             deadline_ns: monotonic_ns() + 50_000_000,
             wait: true,
+            per_reply_ns: 0,
         },
         vec![planned(0, 3, Some(Duration::from_millis(30)))],
         &sink(&mb),
@@ -321,6 +327,7 @@ fn one_batched_wake_serves_every_parked_worker() {
             &Turn {
                 deadline_ns: monotonic_ns() + 50_000_000,
                 wait: true,
+                per_reply_ns: 0,
             },
             jobs,
             &sink(&mb),
@@ -336,5 +343,32 @@ fn one_batched_wake_serves_every_parked_worker() {
         mb.wait_n(rounds * n, Duration::from_secs(5)).len(),
         rounds * n
     );
+    r.shutdown();
+}
+
+#[test]
+fn every_reply_that_is_in_moves_the_end_of_the_wait_earlier() {
+    // Two jobs answer at once, one takes 60 ms. Deadline 100 ms away, 30 ms to admit a reply:
+    // with two in, the wait must end at 100 - 3 x 30 = 10 ms, not at the deadline.
+    let mut r = runner(&[Duration::ZERO, Duration::ZERO, Duration::from_millis(60)]);
+    let mb = Arc::new(Mailbox::default());
+    let t0 = monotonic_ns();
+    let turn = Turn {
+        deadline_ns: t0 + 100_000_000,
+        wait: true,
+        per_reply_ns: 30_000_000,
+    };
+    let out = r.interactive_planned(
+        &turn,
+        vec![
+            planned(0, 1, Some(Duration::from_secs(1))),
+            planned(1, 2, Some(Duration::from_secs(1))),
+            planned(2, 3, Some(Duration::from_secs(1))),
+        ],
+        &sink(&mb),
+    );
+    assert_eq!(out.arrived, 2, "{out:?}");
+    assert!(out.waited >= Duration::from_millis(5), "{out:?}");
+    assert!(out.waited < Duration::from_millis(40), "{out:?}");
     r.shutdown();
 }

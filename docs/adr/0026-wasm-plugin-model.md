@@ -1219,9 +1219,9 @@ report). Where the implementation differs from §2.4.7:
    both touch it, behind a `Mutex` the hub only `try_lock`s (a contended key-down does nothing and is
    counted). The CPU token bucket is one per process, held by the hub and passed in.
 5. *`sps.py` quirks not copied*: with an empty bucket the product gives K = 0 (the reference computes a
-   negative K and refunds the bucket; the replay test sets `reference_negative_bucket`); key-down
-   follows `sps.py` and does not skip excluded plugins (§2.4.7.3 says it should; an excluded plugin
-   is only barred from the wait set); a key that caused no focus change teaches `alpha ~ 0` at the
+   negative K and refunds the bucket; the replay test sets `reference_negative_bucket` and
+   `reference_prewake_ignores_exclusion`, because `sps.py` also pre-wakes excluded plugins, which
+   §2.4.7.3 forbids and the product does not do); a key that caused no focus change teaches `alpha ~ 0` at the
    next key-down (the reference calls `observe_context` itself).
 6. *`KeyClass` comes from the keysym only* (`EditArrow` is never produced: the input layer does not
    know that the caret is in a text field); usefulness `u` is "emitted a fact" (L-4 first form, the
@@ -1229,12 +1229,14 @@ report). Where the implementation differs from §2.4.7:
    absent class is `Unlabelled`; at most 32 plugins per scope are tracked.
 7. *DP-1 is not decided and nothing was installed*: `IdleStateHook` is a documented, default-off hook
    point that `Prewake` calls when a key-down arms a worker; no implementation ships.
-8. *The fuse reserve is measured, not a constant 8 us.* Admitting the replies after the wait is the
-   largest part of "fuse": about `unit * (n + 1)` with a unit of 6-7 us on the dev host (one reply
-   12 us, ten replies 60-90 us). `ScopeRunner::turn_done` reports the cost of each interactive drain;
-   the reserve of the next plan and of the absolute clamp is `8 us + unit * (waited candidates + 1)`,
-   `unit` the recent peak (rises at once, decays 1/16 per turn), capped at 100 us. With a constant
-   8 us the p50 of the writer turn was 350 us for ten plugins, i.e. PF-8 did not hold.
+8. *The reserve after the wait is measured and follows the replies.* Admitting the replies is the
+   largest part of "fuse": about `unit * (n + 1)` with a unit of 5-7 us on the dev host (one reply
+   12 us, ten replies 60-90 us). `ScopeRunner::turn_done` reports the cost of each interactive drain
+   (`unit` = recent peak of cost / (n + 1), capped at 12 us). The wait ends at
+   `t0 + D - fuse - unit * (replies in + 1)`, recomputed as replies arrive (`Turn::per_reply_ns`);
+   the plan's window assumes one reply. A reserve for every candidate, tried first, shrank the
+   window by the cost of replies that then did not arrive (a self-defeating reserve: the
+   first-utterance share fell to ~0). `fuse` itself is 24 us (take_ops and apply in the bench), not 8.
 9. *Replies of jobs nobody waited for are admitted in a later turn* (`ScopeRunner::poll_waited`;
    the writer is woken again for them), so a refinement or third-party fact never spends the
    writer's budget. Under `labels` everything that arrived is admitted, as before.
