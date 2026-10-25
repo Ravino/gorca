@@ -396,7 +396,15 @@ def shell(rig):
     # Alt+Tab held: the switcher shows, its selected entry is the other window.
     rig.step("shell", "focus: Alt+Tab switcher", lambda: (rig.key(ALT, True), time.sleep(0.05), rig.tap(TAB)),
              expect=("button",), longest=6)
-    rig.step("shell", "focus: release Alt", lambda: rig.key(ALT, False), longest=6)
+    rig.step("shell", "window: release Alt activates a window (title leads)",
+             lambda: rig.key(ALT, False), expect=("Probe Window One",), longest=6)
+    # A desktop notification: the Shell shows a banner (an alert node), read as a notice (M22b4).
+    rig.step("shell", "notification: banner is read (role, summary, body)",
+             lambda: rig.sess.call("org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+                                   "org.freedesktop.Notifications", "Notify",
+                                   ("p1-e2e", 0, "dialog-information", "Build finished",
+                                    "All 12 tests passed", [], {}, 8000), "(susssasa{sv}i)"),
+             expect=("Build finished",), longest=8)
     # Quick settings: Super+S opens it, Tab walks its controls.
     rig.step("shell", "open quick settings (Super+S)", lambda: rig.tap(META, S), longest=6)
     rig.tab_to("shell", "focus: first button", "button", ("button",))

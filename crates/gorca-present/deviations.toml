@@ -554,3 +554,16 @@ surface = "review-web"
 epoch = "m22b3"
 reason = "The engine reports label and static text as two roles; the model has one StaticText, and a nameless one is called text."
 until = "2026-11-28"
+
+id = "role-word-improved"
+surface = "window"
+epoch = "m22b4"
+reason = "An ARIA alertdialog is a dialog on every engine. The legacy role mapping gave Blink an alert role for it, so its window lead-in said alert; the fused role is AlertDialog and says dialog, like Gecko."
+until = "2026-12-12"
+
+[[deviation]]
+id = "role-word-improved"
+surface = "notification"
+epoch = "m22b4"
+reason = "An ARIA alertdialog is a dialog on every engine (see the window row)."
+until = "2026-12-12"

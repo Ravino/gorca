@@ -18,13 +18,9 @@
 //! Nothing here names an application (ADR-0008 WE-1); what Shell-specific policy needs lives in
 //! the `ext-gnome-shell` extension.
 
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use gorca_model::{
-    AppId, Epoch, NodeKey, NodeSnapshot, Politeness, Prio, Role, Segment, SegmentKind, UttId,
-    Utterance,
-};
+use gorca_model::{AppId, Epoch, NodeKey, Politeness, Prio, Role, SegmentKind, UttId, Utterance};
 use smallvec::SmallVec;
 
 use super::fair::{Fair, Kind};
@@ -107,30 +103,6 @@ pub fn announcement_utterance(
 /// connector maps both to `Alert`).
 pub fn is_notice_role(role: Role) -> bool {
     matches!(role, Role::Alert)
-}
-
-/// What a notice says: the role word, the name, the description, then the static text inside.
-/// Pieces equal to an earlier piece are dropped (a banner's name is often its title label).
-pub fn notice_segments(snap: &NodeSnapshot, texts: &[Arc<str>]) -> SmallVec<[Segment; 6]> {
-    let mut out: SmallVec<[Segment; 6]> = SmallVec::new();
-    out.push(seg(snap.role.spoken(), SegmentKind::Role));
-    let add = |out: &mut SmallVec<[Segment; 6]>, text: &str| {
-        let t = text.trim();
-        if t.is_empty() || out.iter().skip(1).any(|s| s.text.trim() == t) {
-            return;
-        }
-        out.push(seg(t, SegmentKind::Text));
-    };
-    if let Some(n) = &snap.name {
-        add(&mut out, n);
-    }
-    if let Some(d) = &snap.description {
-        add(&mut out, d);
-    }
-    for t in texts {
-        add(&mut out, t);
-    }
-    out
 }
 
 /// What the Reader remembers about notices: the per-owner budgets (`fair`) and counters.
@@ -374,11 +346,10 @@ impl Reader {
         if !self.reads_as_notice(snap.key.app, snap.role) {
             return;
         }
-        let segs = notice_segments(snap, &info.texts);
         // Only the role word: an empty notification says nothing worth speaking.
-        if segs.len() < 2 {
+        let Some(segs) = self.notice_words(snap, &info.texts) else {
             return;
-        }
+        };
         let id = self.utt_id();
         let mut u = super::window::follow_up(segs, id, self.epoch.current());
         // A banner is a message the user has not asked for and may miss: it outlives the next
@@ -392,6 +363,7 @@ impl Reader {
 #[cfg(test)]
 #[allow(clippy::wildcard_enum_match_arm)]
 mod tests {
+    use std::sync::Arc;
     /// The bursts of `fair` (reads, speech, activations per second) and its window.
     const NOTICE_RATE_MAX: usize = 8;
     const NOTICE_SPEAK_MAX: usize = 3;

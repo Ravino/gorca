@@ -1,0 +1,66 @@
+chromium/aria-props	46	bare	notification	Role:уведомление
+chromium/aria-props	46	lines	notification	Role:уведомление | Text:First line | Text:Second line
+chromium/aria-props	52	bare	notification	Role:уведомление
+chromium/aria-props	52	lines	notification	Role:уведомление | Text:First line | Text:Second line
+chromium/aria-props	75	bare	notification	Role:диалог | Text:Modal
+chromium/aria-props	75	lines	notification	Role:диалог | Text:Modal | Text:First line | Text:Second line
+chromium/aria-props	131	bare	notification	Role:уведомление
+chromium/aria-props	131	lines	notification	Role:уведомление | Text:First line | Text:Second line
+chromium/composite	76	bare	notification	Role:диалог | Text:Add Delivery Address | Text:Fill the form
+chromium/composite	76	lines	notification	Role:диалог | Text:Add Delivery Address | Text:Fill the form | Text:First line | Text:Second line
+chromium/composite	82	bare	notification	Role:диалог | Text:Confirm delete | Text:Really delete?
+chromium/composite	82	lines	notification	Role:диалог | Text:Confirm delete | Text:Really delete? | Text:First line | Text:Second line
+chromium/composite	86	bare	notification	Role:диалог | Text:Native dialog
+chromium/composite	86	lines	notification	Role:диалог | Text:Native dialog | Text:First line | Text:Second line
+chromium/errors	29	bare	notification	Role:уведомление
+chromium/errors	29	lines	notification	Role:уведомление | Text:First line | Text:Second line
+chromium/m8-flat	3	bare	notification	Role:диалог | Text:Cookie consent
+chromium/m8-flat	3	lines	notification	Role:диалог | Text:Cookie consent | Text:First line | Text:Second line
+chromium/widgets	67	bare	notification	Role:уведомление
+chromium/widgets	67	lines	notification	Role:уведомление | Text:First line | Text:Second line
+firefox/aria-props	24	bare	notification	Role:уведомление
+firefox/aria-props	24	lines	notification	Role:уведомление | Text:First line | Text:Second line
+firefox/aria-props	27	bare	notification	Role:уведомление
+firefox/aria-props	27	lines	notification	Role:уведомление | Text:First line | Text:Second line
+firefox/aria-props	42	bare	notification	Role:диалог | Text:Modal
+firefox/aria-props	42	lines	notification	Role:диалог | Text:Modal | Text:First line | Text:Second line
+firefox/aria-props	80	bare	notification	Role:уведомление
+firefox/aria-props	80	lines	notification	Role:уведомление | Text:First line | Text:Second line
+firefox/composite	56	bare	notification	Role:диалог | Text:Add Delivery Address | Text:Fill the form
+firefox/composite	56	lines	notification	Role:диалог | Text:Add Delivery Address | Text:Fill the form | Text:First line | Text:Second line
+firefox/composite	60	bare	notification	Role:диалог | Text:Confirm delete | Text:Really delete?
+firefox/composite	60	lines	notification	Role:диалог | Text:Confirm delete | Text:Really delete? | Text:First line | Text:Second line
+firefox/composite	63	bare	notification	Role:диалог | Text:Native dialog
+firefox/composite	63	lines	notification	Role:диалог | Text:Native dialog | Text:First line | Text:Second line
+firefox/errors	19	bare	notification	Role:уведомление
+firefox/errors	19	lines	notification	Role:уведомление | Text:First line | Text:Second line
+firefox/m8-flat	2	bare	notification	Role:диалог | Text:Cookie consent
+firefox/m8-flat	2	lines	notification	Role:диалог | Text:Cookie consent | Text:First line | Text:Second line
+firefox/widgets	59	bare	notification	Role:уведомление
+firefox/widgets	59	lines	notification	Role:уведомление | Text:First line | Text:Second line
+gnome-shell/a11y-switcher	55	bare	notification	Role:диалог
+gnome-shell/a11y-switcher	55	lines	notification	Role:диалог | Text:First line | Text:Second line
+gnome-shell/end-session-dialog	43	bare	notification	Role:уведомление
+gnome-shell/end-session-dialog	43	lines	notification	Role:уведомление | Text:First line | Text:Second line
+gnome-shell/end-session-dialog	66	bare	notification	Role:диалог
+gnome-shell/end-session-dialog	66	lines	notification	Role:диалог | Text:First line | Text:Second line
+gnome-shell/notification-banner	43	bare	notification	Role:уведомление
+gnome-shell/notification-banner	43	lines	notification	Role:уведомление | Text:First line | Text:Second line
+gnome-shell/notification-list	67	bare	notification	Role:уведомление
+gnome-shell/notification-list	67	lines	notification	Role:уведомление | Text:First line | Text:Second line
+gnome-shell/notification-list	93	bare	notification	Role:уведомление
+gnome-shell/notification-list	93	lines	notification	Role:уведомление | Text:First line | Text:Second line
+gnome-shell/notification-list	118	bare	notification	Role:уведомление
+gnome-shell/notification-list	118	lines	notification	Role:уведомление | Text:First line | Text:Second line
+gnome-shell/notification-list	143	bare	notification	Role:уведомление
+gnome-shell/notification-list	143	lines	notification	Role:уведомление | Text:First line | Text:Second line
+gnome-shell/notification-urgent	43	bare	notification	Role:уведомление
+gnome-shell/notification-urgent	43	lines	notification	Role:уведомление | Text:First line | Text:Second line
+gnome-shell/osd	43	bare	notification	Role:уведомление
+gnome-shell/osd	43	lines	notification	Role:уведомление | Text:First line | Text:Second line
+gnome-shell/window-switcher	55	bare	notification	Role:диалог
+gnome-shell/window-switcher	55	lines	notification	Role:диалог | Text:First line | Text:Second line
+gtk4/accprops	61	bare	notification	Role:уведомление | Text:Label role-alert | Text:fx:role-alert
+gtk4/accprops	61	lines	notification	Role:уведомление | Text:Label role-alert | Text:fx:role-alert | Text:First line | Text:Second line
+gtk4/accprops	71	bare	notification	Role:диалог | Text:Label role-dialog | Text:fx:role-dialog
+gtk4/accprops	71	lines	notification	Role:диалог | Text:Label role-dialog | Text:fx:role-dialog | Text:First line | Text:Second line

@@ -29,6 +29,8 @@
 
 mod connector;
 mod decode;
+#[cfg(test)]
+mod desktop_golden_tests;
 mod doc_source;
 mod enablement;
 mod events;

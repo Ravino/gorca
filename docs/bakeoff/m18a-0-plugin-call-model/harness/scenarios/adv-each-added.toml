@@ -1,6 +1,8 @@
 name = "adv-each-added"
 kind = "focus"
 desc = "adversaries added cumulatively; each stage is its own result directory"
+watchdog_s = 2400
+
 [[stage]]
 name = "a1"
 adv = ["a1"]

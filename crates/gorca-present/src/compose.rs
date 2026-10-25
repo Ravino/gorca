@@ -240,6 +240,8 @@ pub fn compose(
         Reason::Focus if ctx.web => Ok(crate::web::web_focus(entry, node, ctx)),
         Reason::Focus => Ok(native_focus(entry, node, ctx)),
         Reason::Review => Ok(crate::zone::review(entry, node, ctx)),
+        Reason::Window => Ok(crate::desktop::compose_window(entry, node, ctx)),
+        Reason::Notice => Ok(crate::desktop::compose_notice(entry, node, ctx, &[])),
         Reason::FocusAncestor
         | Reason::BrowseLine { .. }
         | Reason::QuickNav
