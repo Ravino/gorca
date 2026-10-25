@@ -28,3 +28,4 @@ pub mod package;
 pub mod slot;
 pub mod trust;
 pub mod view;
+pub mod wasi;

@@ -61,6 +61,7 @@ impl Loaded {
     pub fn new(engine: &Engine, component: &Component) -> wasmtime::Result<Self> {
         let mut linker = Linker::<HostState>::new(engine);
         RulesHost::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s)?;
+        crate::wasi::add(&mut linker, component, engine)?;
         linker.define_unknown_imports_as_traps(component)?;
         let pre = RulesHostPre::new(linker.instantiate_pre(component)?)?;
         Ok(Self {
@@ -81,9 +82,21 @@ pub struct DirtyNode {
     pub cause: u8,
 }
 
+/// The read set R of a call (ADR-0026 section 2.6.1): every node the batch named or an import
+/// returned or verified.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReadSet {
+    /// Host-side indices, deduplicated, at most `MAX_READ_SET`.
+    pub nodes: Vec<u32>,
+    /// More were touched than fit: the token falls back to the scope-wide stamp.
+    pub overflow: bool,
+}
+
 /// A successful call.
 #[derive(Debug)]
 pub struct CallDone {
+    /// The read set of the call.
+    pub reads: ReadSet,
     /// Buffered effects, to be admitted by the writer.
     pub effects: Vec<Effect>,
     /// Wall time of the guest call.
@@ -217,8 +230,12 @@ impl PluginInstance {
             })
             .collect();
         self.store.data_mut().counters.scope_denied += scope_denied;
+        for d in batch {
+            self.store.data_mut().note_read(d.index);
+        }
         if dirty.is_empty() {
             return Ok(CallDone {
+                reads: ReadSet::default(),
                 effects: Vec::new(),
                 exec: Duration::ZERO,
                 fuel_used: 0,
@@ -250,6 +267,10 @@ impl PluginInstance {
                     });
                 }
                 Ok(CallDone {
+                    reads: ReadSet {
+                        nodes: std::mem::take(&mut st.reads),
+                        overflow: st.reads_overflow,
+                    },
                     effects: std::mem::take(&mut st.effects),
                     exec,
                     fuel_used,

@@ -106,6 +106,8 @@ pub const WATCHDOG_FACTOR: u32 = 4;
 /// a fresh key (review F-3).
 pub const FORGERY_BUDGET: u32 = 256;
 
+/// Largest read set a token records before it falls back to the scope-wide stamp (ADR-0026 2.6.1).
+pub const MAX_READ_SET: usize = 256;
 /// Facts per call (B-6).
 pub const MAX_FACTS_PER_CALL: usize = 256;
 /// Other effects per call (B-6).
