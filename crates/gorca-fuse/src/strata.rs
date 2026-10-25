@@ -17,7 +17,7 @@ use std::sync::Arc;
 use gorca_model::fact::SourceId;
 use gorca_model::sem::{
     Avail, Check, Current, Expand, GROUP_COUNT, Group, GroupMask, Invalid, NameFrom, Orientation,
-    Popup, Press, ProvCode, Select, SemEntry, SemFlags, SemRole, Sort,
+    Popup, Press, ProvCode, Select, SemEntry, SemFlags, SemRole, Sort, TrustTier,
 };
 
 use crate::explain::{Conflict, NoTrace, ObsCand, PatchTrail, Tracer};
@@ -820,6 +820,11 @@ impl Fused {
 #[derive(Debug, Default)]
 pub struct Scratch {
     hits: Vec<PatchHit>,
+    /// Computed S1 patches of the node being fused (ADR-0026 section 2.6: a plugin's
+    /// `facts.assert(layer = patch)`), each with the taint its tier gives it (PF-5). The engine
+    /// fills this before the call; they rank after the declarative hits.
+    pub seed: Vec<(PatchHit, TrustTier)>,
+    taints: Vec<TrustTier>,
 }
 
 /// The value a group takes when nothing set it. The role default is profile data; everything else
@@ -910,6 +915,12 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
     // S1 patch: the first (highest-ranked) hit of a group wins; selectors read S0 only.
     scratch.hits.clear();
     patches.hits(node, nb, &mut scratch.hits);
+    scratch.taints.clear();
+    scratch.taints.resize(scratch.hits.len(), TrustTier::T0Core);
+    for (h, t) in scratch.seed.drain(..) {
+        scratch.hits.push(h);
+        scratch.taints.push(t);
+    }
     let mut patched = GroupMask::EMPTY;
     if T::ON {
         for h in scratch.hits.iter().filter(|h| h.write.is_none()) {
@@ -924,7 +935,7 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
             );
         }
     }
-    for h in &scratch.hits {
+    for (h, &taint) in scratch.hits.iter().zip(&scratch.taints) {
         let Some(w) = &h.write else { continue };
         let g = h.group;
         let first = !patched.has(g);
@@ -932,7 +943,10 @@ pub fn fuse_node_with<P: PatchSource, T: Tracer>(
             patched = patched.with(g);
             eff[ix(g)] = w.slot();
             layer[ix(g)] = Layer::Patch;
-            info[ix(g)] = Info::plain(ProvCode::Patch);
+            info[ix(g)] = Info {
+                tier: taint,
+                ..Info::plain(ProvCode::Patch)
+            };
         }
         if T::ON {
             tr.patch(

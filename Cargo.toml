@@ -48,6 +48,7 @@ gorca-core = { path = "crates/gorca-core" }
 gorca-braille-brlapi = { path = "crates/gorca-braille-brlapi" }
 gorca-ext-api = { path = "crates/gorca-ext-api" }
 gorca-ext-host = { path = "crates/gorca-ext-host" }
+gorca-plugin-host = { path = "crates/gorca-plugin-host" }
 ext-vte = { path = "extensions/ext-vte" }
 gorca-testkit = { path = "crates/gorca-testkit" }
 gorca-bench-b2 = { path = "crates/gorca-bench-b2" }

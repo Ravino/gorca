@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::host::Effect;
-use crate::instance::{CallDone, CallFault, DirtyNode, Loaded, PluginInstance};
+use crate::instance::{CallDone, CallFault, DirtyNode, Loaded, PluginInstance, ReadSet};
 use crate::limits::FuelGrant;
 use crate::slot::{Event, FaultKind, JobId};
 use crate::trust::{Perms, TrustTier};
@@ -58,6 +58,8 @@ pub enum PluginReply {
         slot_epoch: u64,
         /// Buffered effects; the writer admits them (taint and token are host-side).
         effects: Vec<Effect>,
+        /// The read set R of the call, for the revision token (section 2.6.1).
+        reads: ReadSet,
         /// Guest wall time.
         exec: Duration,
         /// Mailbox delay.
@@ -274,6 +276,7 @@ impl Exec for PluginExec {
         };
         match inst.derive(job.interactive, job.epoch, &job.nodes, &job.view, job.grant) {
             Ok(CallDone {
+                reads,
                 effects,
                 exec,
                 fuel_used,
@@ -283,6 +286,7 @@ impl Exec for PluginExec {
                 job: job.job,
                 slot_epoch: job.slot_epoch,
                 effects,
+                reads,
                 exec,
                 queued,
                 fuel_used,

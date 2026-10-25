@@ -226,6 +226,8 @@ pub struct AppActor {
     /// The registers and the fusion engine of this app (M22a-C1b), fed from the source records
     /// of the snapshots this actor applies to its mirror.
     fuse: fuse::FuseWriter,
+    /// The plugin runtime (M18a); `None` when plugins are off.
+    plugin_service: Option<Arc<dyn crate::plugin_port::PluginService>>,
 }
 
 /// `showing` events forwarded per [`SHOWING_WINDOW`]: a banner is one event, an overview maps
@@ -301,7 +303,15 @@ impl AppActor {
             ext: None,
             app_ext: None,
             fuse: fuse::FuseWriter::new(None),
+            plugin_service: None,
         }
+    }
+
+    /// Give the fusion writer of this app the plugin runtime (M18a, ADR-0026 K1).
+    #[must_use]
+    pub fn with_plugins(mut self, svc: Arc<dyn crate::plugin_port::PluginService>) -> Self {
+        self.plugin_service = Some(svc);
+        self
     }
 
     /// Offer this app's events to the extensions that match it (`on-event`).
@@ -837,6 +847,20 @@ impl AppActor {
                     }
                     self.profile = AppProfile::for_app(&info);
                     self.fuse.set_tables(info.sem_tables);
+                    if let Some(svc) = &self.plugin_service {
+                        let (app, verified) =
+                            crate::plugin_port::scope_identity(&info.app_name, info.exe.as_ref());
+                        self.fuse.set_plugins(
+                            Arc::clone(svc),
+                            crate::plugin_port::ScopeSpec {
+                                app,
+                                url: None,
+                                engine: 0,
+                                verified: verified || info.verified_shell,
+                                doc: false,
+                            },
+                        );
+                    }
                     if let Some(src) = &self.ext {
                         self.app_ext = src.attach(self.app, &info);
                     }

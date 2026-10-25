@@ -37,7 +37,11 @@ use gorca_fuse::{
 use gorca_model::fact::{Basis, SourceId};
 use gorca_model::sem::{Group, SemEntry, SemRole, SrcRecord};
 use gorca_model::sem::{SourceClass, TrustTier};
-use gorca_model::{DocDelta, SrcNode, SrcNodeId};
+use gorca_model::{DocDelta, DocHint, SrcNode, SrcNodeId};
+
+use crate::plugin_port::{
+    FactOp, PluginBridge, PluginService, PluginSources, Row, ScopeSpec, Tree, now_ns,
+};
 
 /// Work one run of the engine may do before the actor goes back to its queues.
 const BATCH_BUDGET: Duration = Duration::from_millis(2);
@@ -88,6 +92,71 @@ pub struct FuseStage {
     stats: FuseStats,
     /// Sequence of the inferred-label facts (newest wins per node).
     label_seq: u64,
+    /// The plugin port of this document (M18a), when plugins are enabled.
+    plugins: Option<DocPlugins>,
+}
+
+/// The document's plugin scope: what opens it, and the open bridge with its engine sources.
+struct DocPlugins {
+    service: Arc<dyn PluginService>,
+    app: Arc<str>,
+    engine: u16,
+    verified: bool,
+    open: Option<(PluginBridge, PluginSources)>,
+    /// The rows of a document whose scope is waiting for its URL (the URL arrives after the first
+    /// block, never before it): replayed into the bridge when the scope opens, so the plugins
+    /// derive what is already there. Empty unless some plugin matches on URLs.
+    waiting: HashMap<u32, Row>,
+}
+
+impl std::fmt::Debug for DocPlugins {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DocPlugins")
+            .field("app", &self.app)
+            .field("open", &self.open.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
+/// The engine's structure as the plugin snapshot reads it (S0 structure only, PF-2).
+struct IvmTree<'a>(&'a Ivm<QuirkSet, NoPatches>);
+
+impl Tree for IvmTree<'_> {
+    fn parent(&self, n: u32) -> Option<u32> {
+        self.0.parent(NodeIdx(n)).map(|p| p.0)
+    }
+    fn children(&self, n: u32) -> Vec<u32> {
+        self.0.children(NodeIdx(n)).iter().map(|c| c.0).collect()
+    }
+}
+
+/// The S0 row of a source node: the primary's observed values and neutral attributes, never a
+/// fused entry (PF-2).
+fn row_of(n: &SrcNode) -> Row {
+    match &n.rec {
+        Some(rec) => Row {
+            role: rec.sem.role.code(),
+            states: n.states.bits(),
+            name: rec.name.clone(),
+            // What is typed into a secret field is not for a plugin to see or to count.
+            text: (!Row::is_secret_role(rec.sem.role))
+                .then(|| n.text.clone())
+                .flatten(),
+            tag: (!rec.tag.is_empty()).then(|| Arc::from(rec.tag.as_str())),
+            class: rec.class.clone(),
+            aria_role: rec.aria_role.clone(),
+            dom_id: rec.dom_id.clone(),
+            secret: Row::is_secret_role(rec.sem.role),
+        },
+        // A synthetic node (a text run): the text is its content.
+        None => Row {
+            role: SemRole::StaticText.code(),
+            states: n.states.bits(),
+            name: n.text.clone(),
+            text: n.text.clone(),
+            ..Row::default()
+        },
+    }
 }
 
 /// The fact source of layout-inferred labels (C3b, ADR-0024 S4): the lowest-trust stratum, so the
@@ -138,7 +207,94 @@ impl FuseStage {
             batches: 0,
             stats: FuseStats::default(),
             label_seq: 0,
+            plugins: None,
         }
+    }
+
+    /// Enable plugins for this document: `app` is the core's application identity. The scope
+    /// opens when the document's URL is known (or at once when no loaded manifest has a URL
+    /// glob).
+    #[must_use]
+    pub fn with_plugins(
+        mut self,
+        service: Arc<dyn PluginService>,
+        app: Arc<str>,
+        engine: u16,
+        verified: bool,
+    ) -> FuseStage {
+        self.plugins = Some(DocPlugins {
+            service,
+            app,
+            engine,
+            verified,
+            open: None,
+            waiting: HashMap::new(),
+        });
+        self
+    }
+
+    /// Open (or re-open) the plugin scope for `url`. A scope that is already open stays: a
+    /// route change inside a document never swaps the plugin set (ADR-0026 gap, M18a-5).
+    fn open_plugins(&mut self, url: Option<&Arc<str>>) {
+        let Some(pl) = self.plugins.as_mut() else {
+            return;
+        };
+        if pl.open.is_some() {
+            return;
+        }
+        let scope = ScopeSpec {
+            app: Arc::clone(&pl.app),
+            url: if pl.service.wants_url() {
+                url.cloned()
+            } else {
+                None
+            },
+            engine: pl.engine,
+            verified: pl.verified,
+            doc: true,
+        };
+        if pl.service.wants_url() && scope.url.is_none() {
+            return;
+        }
+        let Some(runner) = pl.service.open(&scope, Arc::new(|| {})) else {
+            return;
+        };
+        let metas = runner.plugins().to_vec();
+        let mut bridge = PluginBridge::new(runner, pl.service.governor(), scope);
+        // A scope that opens late (the URL came after the first block) learns what is there.
+        let mut rows: Vec<(u32, Row)> = pl.waiting.drain().collect();
+        rows.sort_by_key(|(k, _)| *k);
+        for (k, row) in rows {
+            bridge.upsert(k, row);
+        }
+        let sources = PluginSources::register(&mut self.ivm, &metas);
+        pl.open = Some((bridge, sources));
+    }
+
+    fn bridge(&mut self) -> Option<&mut PluginBridge> {
+        self.plugins
+            .as_mut()
+            .and_then(|p| p.open.as_mut())
+            .map(|(b, _)| b)
+    }
+
+    /// Apply the bridge's fact operations to the engine.
+    fn apply_plugin_ops(&mut self) {
+        let Some((bridge, sources)) = self.plugins.as_mut().and_then(|p| p.open.as_mut()) else {
+            return;
+        };
+        let ops: Vec<FactOp> = bridge.take_ops();
+        if !ops.is_empty() {
+            sources.apply(&mut self.ivm, ops);
+        }
+    }
+
+    /// Plugin work is waiting (dirty nodes to send, replies outstanding).
+    fn plugin_work(&self) -> bool {
+        self.plugins
+            .as_ref()
+            .and_then(|p| p.open.as_ref())
+            .is_some_and(|(b, _)| b.has_work())
     }
 
     pub fn stats(&self) -> FuseStats {
@@ -165,6 +321,11 @@ impl FuseStage {
     }
 
     fn reset(&mut self) {
+        // A new document: the scope closes (its actors stop) and opens again on the new URL.
+        if let Some(p) = self.plugins.as_mut() {
+            p.waiting.clear();
+            p.open = None;
+        }
         self.ivm = engine(&self.setup);
         self.ids.clear();
         self.src_of.clear();
@@ -223,6 +384,12 @@ impl FuseStage {
             return;
         }
         for x in all {
+            if let Some(pl) = self.plugins.as_mut() {
+                pl.waiting.remove(&x.0);
+            }
+            if let Some(b) = self.bridge() {
+                b.remove(x.0);
+            }
             self.release(x);
         }
     }
@@ -259,6 +426,17 @@ impl FuseStage {
 
     fn upsert(&mut self, n: &SrcNode, seq: u64) {
         let Some(ix) = self.alloc(n.id) else { return };
+        if let Some(pl) = self.plugins.as_mut() {
+            match pl.open.as_mut() {
+                Some((b, _)) => {
+                    b.upsert(ix.0, row_of(n));
+                }
+                None if pl.service.wants_url() => {
+                    pl.waiting.insert(ix.0, row_of(n));
+                }
+                None => {}
+            }
+        }
         if let Some(rec) = &n.rec {
             self.write(ix, rec, seq, true);
             return;
@@ -287,6 +465,11 @@ impl FuseStage {
             self.stats.errors += 1;
             return;
         }
+        if before != kids
+            && let Some(b) = self.bridge()
+        {
+            b.touch(p.0);
+        }
         detached.extend(before.into_iter().filter(|c| self.ivm.parent(*c).is_none()));
     }
 
@@ -308,6 +491,18 @@ impl FuseStage {
         if let Some(root) = reset_root {
             self.reset();
             self.root = Some(root);
+        }
+        if self.plugins.is_some() {
+            let mut url: Option<Arc<str>> = None;
+            for d in batch {
+                if let DocDelta::Hint(DocHint::RouteChanged { url: u }) = d {
+                    url = Some(Arc::clone(u));
+                }
+            }
+            self.open_plugins(url.as_ref());
+            if let Some(b) = self.bridge() {
+                b.begin_turn();
+            }
         }
         for d in batch {
             if let DocDelta::Upsert(nodes) = d {
@@ -353,7 +548,16 @@ impl FuseStage {
                 }
             }
         }
+        self.plugin_background();
         self.run()
+    }
+
+    /// Send the dirty watched nodes to their plugins (no wait) and apply what has arrived.
+    fn plugin_background(&mut self) {
+        if let Some((bridge, _)) = self.plugins.as_mut().and_then(|p| p.open.as_mut()) {
+            bridge.background(&IvmTree(&self.ivm));
+        }
+        self.apply_plugin_ops();
     }
 
     /// Write a record the app actor fetched for a node of this document (a focus fetch of a web
@@ -364,6 +568,7 @@ impl FuseStage {
         rec: &SrcRecord,
         issued_at: u64,
     ) -> Option<Vec<SrcNodeId>> {
+        let t0 = now_ns();
         let n = self.ids.get(&src).copied()?;
         self.stats.applies += 1;
         // The focus chain (the fetched node and its ancestors, nearest first) fuses first.
@@ -378,6 +583,13 @@ impl FuseStage {
         }
         self.ivm.set_focus_chain(&chain);
         self.write(n, rec, 2 * issued_at + 1, false);
+        if let Some((bridge, _)) = self.plugins.as_mut().and_then(|p| p.open.as_mut()) {
+            // The start of this writer turn: the bounded wait is measured from here.
+            bridge.begin_turn();
+            let ids: Vec<u32> = chain.iter().map(|c| c.0).collect();
+            bridge.interactive(&ids, &IvmTree(&self.ivm), t0);
+        }
+        self.apply_plugin_ops();
         Some(self.run())
     }
 
@@ -414,11 +626,17 @@ impl FuseStage {
 
     /// Fusions still owed after a budgeted run (dirty nodes and background dependents).
     pub fn pending(&self) -> usize {
-        self.ivm.pending()
+        self.ivm.pending() + usize::from(self.plugin_work())
     }
 
     /// Continue the fusion the last run left (one more budget); returns the entries that changed.
     pub fn step(&mut self) -> Vec<SrcNodeId> {
+        // Late replies of the plugin actors are admitted here, in this writer's own turn
+        // (refinements after the first utterance, LB-4).
+        if let Some(b) = self.bridge() {
+            b.begin_turn();
+        }
+        self.plugin_background();
         self.run()
     }
 
@@ -1021,5 +1239,145 @@ mod tests {
             let limit = std::time::Duration::from_millis(2);
             assert!(t_chat < limit && t_deep < limit && t_nested < limit);
         }
+    }
+
+    // ---- plugins (M18a) -----------------------------------------------------------------
+
+    use crate::plugin_port::testing::{svc, svc_with};
+
+    fn with_class(mut n: SrcNode, class: &str) -> SrcNode {
+        let mut r = n.rec.as_deref().cloned().unwrap_or_default();
+        r.class = Some(Arc::from(class));
+        n.rec = Some(Arc::new(r));
+        n
+    }
+
+    fn hint(url: &str) -> DocDelta {
+        DocDelta::Hint(DocHint::RouteChanged {
+            url: Arc::from(url),
+        })
+    }
+
+    fn chat_doc(child_text: &str) -> Vec<DocDelta> {
+        vec![
+            DocDelta::Upsert(vec![
+                node(1, SemRole::DocumentWeb, None),
+                with_class(node(2, SemRole::Button, Some("AL Alice 15:00")), "watch"),
+                node(3, SemRole::StaticText, Some(child_text)),
+            ]),
+            kids(1, &[2]),
+            kids(2, &[3]),
+        ]
+    }
+
+    #[test]
+    fn a_plugin_patch_is_in_the_first_published_entry_and_follows_a_real_change_only() {
+        let (service, jobs) = svc(false);
+        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
+        let mut batch = vec![reset(1)];
+        batch.extend(chat_doc("Alice"));
+        s.apply(&batch);
+        // S1 beat the observed name, in the same publish as the observation.
+        assert_eq!(name_of(&s, 2).as_deref(), Some("Alice!"));
+        assert_eq!(*jobs.lock().unwrap(), 1);
+        // Unrelated churn does not call the plugin again (PF-4).
+        s.apply(&[DocDelta::Upsert(vec![node(1, SemRole::DocumentWeb, None)])]);
+        assert_eq!(*jobs.lock().unwrap(), 1);
+        // The child the call read changed: one more call, new value.
+        s.apply(&[DocDelta::Upsert(vec![node(
+            3,
+            SemRole::StaticText,
+            Some("Bob"),
+        )])]);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("Bob!"));
+        assert_eq!(*jobs.lock().unwrap(), 2);
+        // The same row again is not a change.
+        s.apply(&[DocDelta::Upsert(vec![node(
+            3,
+            SemRole::StaticText,
+            Some("Bob"),
+        )])]);
+        assert_eq!(*jobs.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn a_scope_that_needs_a_url_stays_closed_until_the_document_reports_one() {
+        let (service, jobs) = svc(true);
+        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
+        let mut batch = vec![reset(1)];
+        batch.extend(chat_doc("Alice"));
+        s.apply(&batch);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("AL Alice 15:00"));
+        assert_eq!(*jobs.lock().unwrap(), 0);
+        // A new document with a URL opens it.
+        let mut batch = vec![reset(1), hint("https://web.telegram.org/a/")];
+        batch.extend(chat_doc("Alice"));
+        s.apply(&batch);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("Alice!"));
+    }
+
+    #[test]
+    fn a_removed_node_and_a_new_document_leave_no_patch_behind() {
+        let (service, _) = svc(false);
+        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
+        let mut batch = vec![reset(1)];
+        batch.extend(chat_doc("Alice"));
+        s.apply(&batch);
+        s.apply(&[DocDelta::Children {
+            parent: SrcNodeId(1),
+            children: smallvec::SmallVec::new(),
+        }]);
+        assert!(s.sem(SrcNodeId(2)).is_none());
+        s.apply(&[
+            reset(9),
+            DocDelta::Upsert(vec![node(9, SemRole::DocumentWeb, None)]),
+        ]);
+        assert_eq!(s.len(), 1);
+    }
+
+    #[test]
+    fn a_url_that_arrives_after_the_first_block_activates_the_plugin_for_what_is_there() {
+        let (service, jobs) = svc(true);
+        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
+        // The first block is published at once, without the URL: nothing is patched.
+        let mut batch = vec![reset(1)];
+        batch.extend(chat_doc("Alice"));
+        s.apply(&batch);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("AL Alice 15:00"));
+        assert_eq!(*jobs.lock().unwrap(), 0);
+        // The hint comes as a batch of its own; the plugin then derives the nodes already in the
+        // document and its facts are a refinement of the entry.
+        let changed = s.apply(&[hint("https://web.telegram.org/a/")]);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("Alice!"));
+        assert!(changed.contains(&SrcNodeId(2)), "{changed:?}");
+        assert_eq!(*jobs.lock().unwrap(), 1);
+        // A removed node leaves nothing waiting for a scope that never opens.
+        let (service, _) = svc(true);
+        let mut s2 = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
+        s2.apply(&batch);
+        s2.apply(&[DocDelta::Children {
+            parent: SrcNodeId(1),
+            children: smallvec::SmallVec::new(),
+        }]);
+        s2.apply(&[hint("https://web.telegram.org/a/")]);
+        assert!(s2.sem(SrcNodeId(2)).is_none());
+    }
+
+    #[test]
+    fn an_unverified_document_gets_no_url_scoped_plugin() {
+        // The service refuses an unverified scope; the stage then runs exactly as without.
+        let (service, jobs) = svc_with(true, true);
+        let mut s =
+            FuseStage::new(setup()).with_plugins(service, Arc::from("web.telegram.org"), 1, false);
+        let mut batch = vec![reset(1), hint("https://web.telegram.org/a/")];
+        batch.extend(chat_doc("Alice"));
+        s.apply(&batch);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("AL Alice 15:00"));
+        assert_eq!(*jobs.lock().unwrap(), 0);
+        // The same page from a verified peer is served.
+        let (service, _) = svc_with(true, true);
+        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
+        s.apply(&batch);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("Alice!"));
     }
 }

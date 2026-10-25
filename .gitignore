@@ -19,3 +19,6 @@ tests/web/b6/virt/dist/
 
 # M8 generated pages (tests/web/m8/gen_m8.py)
 tests/web/m8/pages/generated/
+
+# built first-party plugins (tools/build-plugins.sh)
+plugins/dist/

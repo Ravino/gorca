@@ -232,7 +232,13 @@ const fn tri_state_word(class: Class) -> Option<M> {
 /// [`FieldFlags::SECRET`] and goes through [`PresIr::redacted`] before any sink that must not see it.
 #[must_use]
 pub fn is_secret_entry(entry: &SemEntry) -> bool {
-    entry.sem.role == SemRole::PasswordBox
+    is_secret_role(entry.sem.role)
+}
+
+/// The same rule for a bare fused role (plugin rows and source records are not entries yet).
+#[must_use]
+pub fn is_secret_role(role: SemRole) -> bool {
+    role == SemRole::PasswordBox
 }
 
 /// Compose the IR of `entry` for `reason`.

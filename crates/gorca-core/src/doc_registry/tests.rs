@@ -36,6 +36,7 @@ fn info() -> AppInfo {
         connector_kind: ConnectorKind::Fake,
         verified_shell: false,
         dump_complete: false,
+        exe: None,
         text_unit: gorca_model::TextUnit::Utf16Bom,
         text_insert_slack: 0,
         edit_quirks: gorca_model::EditQuirks::default(),
@@ -101,6 +102,7 @@ fn rig(factory: FakeDocFactory) -> Rig {
         profiles: Arc::new(gorca_config::profiles::ProfileCell::new(
             gorca_config::profiles::initial_snapshot(),
         )),
+        plugins: None,
     };
     let task = tokio::spawn(run_hub(cfg, rx, shutdown.clone()));
     Rig {

@@ -28,7 +28,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gorca_model::fact::{BindGen, SourceId};
-use gorca_model::sem::{BindQuality, Group, GroupMask, SemEntry};
+use gorca_model::sem::{BindQuality, Group, GroupMask, SemEntry, TrustTier};
 
 use crate::epoch::{Epochs, silences, sticky};
 use crate::explain::NoTrace;
@@ -40,8 +40,8 @@ use crate::side::{
     SideTable, SourceInfo, SourceState,
 };
 use crate::strata::{
-    ChildView, Neighbours, PatchSource, Quirks, S0Node, S0View, Scratch, changed_vs, delta_of,
-    fuse_node_with, s0_into, s0_with,
+    ChildView, Neighbours, PatchHit, PatchSource, Quirks, S0Node, S0View, Scratch, changed_vs,
+    delta_of, fuse_node_with, s0_into, s0_with,
 };
 use crate::value::{Seq, Slot, Write};
 
@@ -417,10 +417,21 @@ pub struct Ivm<Q: Quirks, P: PatchSource> {
     background: VecDeque<NodeIdx>,
     in_background: HashSet<NodeIdx>,
     scratch: Scratch,
+    /// Computed S1 patches by node (a plugin's `facts.assert(layer = patch)`), ranked by
+    /// `(taint tier, source name, group)` (PF-6: never by arrival order).
+    computed: HashMap<NodeIdx, Vec<Computed>>,
     /// Reused S0 buffer: one allocation for the engine instead of one per fusion.
     s0_buf: S0Node,
     /// Nodes whose registers changed in this batch: trimmed to exact capacity at its end.
     shrink_list: Vec<NodeIdx>,
+}
+
+/// One computed S1 patch of a node: the value, the plugin that computed it and its taint.
+#[derive(Clone, Debug)]
+struct Computed {
+    source: Arc<str>,
+    taint: TrustTier,
+    hit: PatchHit,
 }
 
 fn slot(n: NodeIdx) -> usize {
@@ -626,6 +637,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
             background: VecDeque::new(),
             in_background: HashSet::new(),
             scratch: Scratch::default(),
+            computed: HashMap::new(),
             s0_buf: S0Node::default(),
             shrink_list: Vec::new(),
         }
@@ -1039,6 +1051,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 });
             }
             self.dirty.remove(n);
+            self.computed.remove(&n);
             self.relations.forget(n);
             self.focus.retain(|x| *x != n);
             self.visible.retain(|x| *x != n);
@@ -1776,6 +1789,110 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
         self.epochs.global()
     }
 
+    /// Set (or replace) the computed S1 patch `source` makes to `group` of `node` (a plugin's
+    /// `facts.assert(layer = patch)`, ADR-0026 section 2.6). The source never writes S0 (PF-3):
+    /// this is a patch, ranked after declarative patches, `(taint, source, group)` among
+    /// computed ones, and `taint` is the tier the value inherits (PF-5). Returns true when the
+    /// node's patch set changed (the node is then re-fused).
+    pub fn set_computed(
+        &mut self,
+        node: NodeIdx,
+        source: &Arc<str>,
+        write: Write,
+        taint: TrustTier,
+    ) -> bool {
+        if node_of(&self.nodes, node).is_none() {
+            return false;
+        }
+        let group = write.group();
+        let list = self.computed.entry(node).or_default();
+        let same = |c: &Computed| c.source == *source && c.hit.group == group;
+        if let Some(c) = list.iter_mut().find(|c| same(c)) {
+            if c.hit.write.as_ref() == Some(&write) && c.taint == taint {
+                return false;
+            }
+            c.hit.shown = write.slot();
+            c.hit.write = Some(write);
+            c.taint = taint;
+        } else {
+            list.push(Computed {
+                source: Arc::clone(source),
+                taint,
+                hit: PatchHit {
+                    group,
+                    shown: write.slot(),
+                    write: Some(write),
+                    spec: u32::MAX,
+                    ext: Arc::clone(source),
+                    rule: Arc::from("computed"),
+                },
+            });
+        }
+        list.sort_by(|a, b| {
+            a.taint
+                .code()
+                .cmp(&b.taint.code())
+                .then_with(|| a.source.cmp(&b.source))
+                .then_with(|| a.hit.group.code().cmp(&b.hit.group.code()))
+        });
+        self.mark_dirty(node);
+        true
+    }
+
+    /// Remove the computed patch `source` makes to `group` of `node` (a retract, or a stale
+    /// token). Returns true when there was one.
+    pub fn retract_computed(&mut self, node: NodeIdx, source: &str, group: Group) -> bool {
+        let Some(list) = self.computed.get_mut(&node) else {
+            return false;
+        };
+        let before = list.len();
+        list.retain(|c| !(&*c.source == source && c.hit.group == group));
+        let changed = list.len() != before;
+        if list.is_empty() {
+            self.computed.remove(&node);
+        }
+        if changed {
+            self.mark_dirty(node);
+        }
+        changed
+    }
+
+    /// Remove every computed patch of `source` (a plugin that was quarantined, disabled or
+    /// unloaded: its masked contribution leaves the model). Returns the nodes re-fused.
+    pub fn clear_computed_source(&mut self, source: &str) -> Vec<NodeIdx> {
+        let mut touched: Vec<NodeIdx> = Vec::new();
+        self.computed.retain(|n, list| {
+            let before = list.len();
+            list.retain(|c| &*c.source != source);
+            if list.len() != before {
+                touched.push(*n);
+            }
+            !list.is_empty()
+        });
+        touched.sort_unstable();
+        for n in &touched {
+            self.mark_dirty(*n);
+        }
+        touched
+    }
+
+    /// Number of computed patches held (diagnostics, tests).
+    pub fn computed_len(&self) -> usize {
+        self.computed.values().map(Vec::len).sum()
+    }
+
+    /// The computed patches of `node` as `(source, group)` pairs (tests, `explain`).
+    pub fn computed_of(&self, node: NodeIdx) -> Vec<(Arc<str>, Group)> {
+        self.computed
+            .get(&node)
+            .map(|l| {
+                l.iter()
+                    .map(|c| (Arc::clone(&c.source), c.hit.group))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Mutable access to the patch source; call [`Ivm::bump_global`] after changing it.
     pub fn patches_mut(&mut self) -> &mut P {
         &mut self.patches
@@ -1985,6 +2102,16 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 &mut buf,
             );
             let nodes = &self.nodes;
+            self.scratch.seed.clear();
+            if let Some(list) = self.computed.get(&x) {
+                self.scratch
+                    .seed
+                    .extend(list.iter().map(|c| (c.hit.clone(), c.taint)));
+            }
+            let recoled = self
+                .computed
+                .get(&x)
+                .is_some_and(|l| l.iter().any(|c| c.hit.group == Group::Role));
             let fused = alive.then(|| {
                 let reads = self.patches.reads();
                 // The children views are built only when something can read them: a selector
@@ -1998,6 +2125,7 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                     .unwrap_or(self.profile.default_role);
                 let needs_children = reads.children.0 != 0
                     || self.patches.writes().has(Group::Role)
+                    || recoled
                     || self.profile.rules.content_named.has(role);
                 let cap = self.profile.limits.max_children.max(1);
                 let depth = if self.profile.rules.content_named.has(role) {
@@ -2312,6 +2440,14 @@ impl<Q: Quirks, P: PatchSource> Ivm<Q, P> {
                 children: &vs,
                 more_children: more,
             };
+            if let Some(list) = u32::try_from(i)
+                .ok()
+                .and_then(|i| self.computed.get(&NodeIdx(i)))
+            {
+                scratch
+                    .seed
+                    .extend(list.iter().map(|c| (c.hit.clone(), c.taint)));
+            }
             let fused = fuse_node_with(
                 &self.profile,
                 &nd.regs,

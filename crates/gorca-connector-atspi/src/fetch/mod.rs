@@ -277,6 +277,7 @@ impl AppServer {
         let mut shell_rx = self.shell_rx.clone();
         let mut known: Option<(String, String)> = None;
         let mut settle_ms = 0u32;
+        let mut exe: Option<String> = None;
         if !verified && let Some(rx) = &shell_rx {
             verified = is_the_shell(*rx.borrow(), self.identity);
         }
@@ -298,7 +299,11 @@ impl AppServer {
                     // toolkit or name): the reader and the policies know it exists.
                     let (toolkit, app_name) = found.unwrap_or_default();
                     settle_ms = settle_window_ms(&toolkit, &app_name, self.identity).await;
-                    announce_info(&port, &toolkit, &app_name, verified, settle_ms);
+                    exe = match self.identity {
+                        Some((pid, start)) => crate::proc::exe_of_async(pid, start).await,
+                        None => None,
+                    };
+                    announce_info(&port, &toolkit, &app_name, exe.as_deref(), verified, settle_ms);
                     self.caller.set_text_screen_coords(
                         Toolkit::classify(&toolkit, &app_name).text_extents_use_screen_coords(),
                     );
@@ -333,7 +338,7 @@ impl AppServer {
                         // Announce again: the profile, the dump eligibility and the protection
                         // follow the verified identity.
                         if let Some((t, n)) = &known {
-                            announce_info(&port, t, n, true, settle_ms);
+                            announce_info(&port, t, n, exe.as_deref(), true, settle_ms);
                         }
                     }
                 }
@@ -399,6 +404,7 @@ fn announce_info(
     port: &AppPort,
     toolkit: &str,
     app_name: &str,
+    exe: Option<&str>,
     verified_shell: bool,
     settle_ms: u32,
 ) {
@@ -413,6 +419,7 @@ fn announce_info(
         // Shell is the only toolkit whose dump P-9 verified complete; the flag follows the
         // verified identity, never `app_name` (B-1 2.2).
         dump_complete: verified_shell,
+        exe: exe.map(|e| Arc::from(clip(e, 64))),
         text_unit: class.text_unit(),
         text_insert_slack: class.text_insert_slack(),
         edit_quirks: class.edit_quirks(),

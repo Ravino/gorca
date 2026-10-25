@@ -27,4 +27,6 @@ pub mod mac;
 pub mod package;
 pub mod slot;
 pub mod trust;
+pub mod urlmatch;
 pub mod view;
+pub mod wasi;

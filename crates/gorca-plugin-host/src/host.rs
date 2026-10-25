@@ -14,7 +14,7 @@ use wasmtime::Result;
 use crate::handles::{HandleError, HandleMinter};
 use crate::limits::{
     Cap, FORGERY_BUDGET, FuelGrant, MAX_EFFECT_TEXT_PER_CALL, MAX_FACTS_PER_CALL,
-    MAX_FORGED_PER_CALL, MAX_OTHER_EFFECTS_PER_CALL, PluginLimiter, WATCHDOG_EVERY,
+    MAX_FORGED_PER_CALL, MAX_OTHER_EFFECTS_PER_CALL, MAX_READ_SET, PluginLimiter, WATCHDOG_EVERY,
     WATCHDOG_FACTOR, check_len, cost,
 };
 use crate::trust::{Perms, TrustTier, tier_may_enter};
@@ -59,6 +59,11 @@ use bindings::gorca::ext::{
     actions, diag, facts, model, output, requests, settings, timers, types,
 };
 
+/// Longest catalog key of a message fact, most arguments, longest argument name.
+const MSG_ID_MAX: usize = 64;
+const MSG_ARGS_MAX: usize = 8;
+const MSG_ARG_NAME_MAX: usize = 32;
+
 /// A fact value, reduced to what admission needs (positions, grids and areas are not kept in
 /// this slice).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,6 +80,14 @@ pub enum Value {
     Text(String),
     /// Boolean.
     Truth(bool),
+    /// A message of the plugin's catalog with its arguments, resolved by the writer's side
+    /// when the fact is admitted.
+    Msg {
+        /// Catalog key.
+        id: String,
+        /// Named arguments.
+        args: Vec<(String, String)>,
+    },
     /// A structured value not yet decoded.
     Other,
 }
@@ -186,9 +199,20 @@ pub struct HostState {
     pub kill: Option<Kill>,
     /// Fuel the imports charged since the last return to the guest (applied by the call hook).
     pub pending_fuel: u64,
+    /// Nodes this call read or was handed (batch, verified handles, minted results): the read
+    /// set R of the revision token (ADR-0026 section 2.6.1). Capped; beyond the cap the token
+    /// falls back to the scope-wide stamp (more false rejects, never a false accept).
+    pub reads: Vec<u32>,
+    /// More than [`MAX_READ_SET`] distinct nodes were touched.
+    pub reads_overflow: bool,
+    /// The deterministic WASI random stream (restarts every call; see `wasi`).
+    pub stream: crate::wasi::Stream,
     host_left: u64,
     imports: u32,
     call_start: Instant,
+    /// Thread CPU time at the start of the call: the watchdog counts CPU time, so a plugin
+    /// thread the host descheduled is not a misbehaving plugin (the ext host learned this).
+    cpu_start: Duration,
     call_limit: Duration,
     forged_lifetime: u32,
     facts: usize,
@@ -227,9 +251,13 @@ impl HostState {
             tier,
             kill: None,
             pending_fuel: 0,
+            reads: Vec::new(),
+            reads_overflow: false,
+            stream: crate::wasi::Stream::default(),
             host_left: 0,
             imports: 0,
             call_start: Instant::now(),
+            cpu_start: Duration::ZERO,
             call_limit: Duration::ZERO,
             forged_lifetime: 0,
             facts: 0,
@@ -244,10 +272,14 @@ impl HostState {
         self.view = view;
         self.kill = None;
         self.pending_fuel = 0;
+        self.reads.clear();
+        self.reads_overflow = false;
+        self.stream.restart();
         self.host_left = grant.units;
         self.imports = 0;
         self.call_start = Instant::now();
-        self.call_limit = grant.time * WATCHDOG_FACTOR;
+        self.cpu_start = gorca_rt::sched::thread_cpu_time();
+        self.call_limit = grant.wall * WATCHDOG_FACTOR;
         self.effects.clear();
         self.malformed = false;
         self.facts = 0;
@@ -255,6 +287,23 @@ impl HostState {
         self.text_bytes = 0;
         self.forged_in_call = 0;
         self.limiter.begin_call();
+    }
+
+    /// Record `index` in the read set (deduplicated, capped).
+    pub fn note_read(&mut self, index: u32) {
+        if self.reads_overflow || self.reads.contains(&index) {
+            return;
+        }
+        if self.reads.len() >= MAX_READ_SET {
+            self.reads_overflow = true;
+        } else {
+            self.reads.push(index);
+        }
+    }
+
+    /// Charge a WASI import like any other host call (units of the host-work meter).
+    pub(crate) fn charge_wasi(&mut self, units: u64) -> Result<()> {
+        self.charge(units)
     }
 
     /// Account host work without refusing it (used where the API cannot fail); the next
@@ -277,7 +326,11 @@ impl HostState {
             self.meter(units);
             self.imports = self.imports.wrapping_add(1);
             if self.imports.is_multiple_of(WATCHDOG_EVERY)
-                && self.call_start.elapsed() > self.call_limit
+                && (gorca_rt::sched::thread_cpu_time().saturating_sub(self.cpu_start)
+                    > self.call_limit
+                    // Wall backstop, far above the CPU limit: imports never block, so a call
+                    // this slow in wall time is stuck, not descheduled.
+                    || self.call_start.elapsed() > self.call_limit * 50)
             {
                 self.kill = Some(Kill::Watchdog);
             }
@@ -325,6 +378,7 @@ impl HostState {
                 if self.scope_refused(v.index) {
                     return None;
                 }
+                self.note_read(v.index);
                 Some(v.index)
             }
             Err(e) => {
@@ -351,9 +405,9 @@ impl HostState {
         if index >= (1 << 24) || self.scope_refused(index) {
             return None;
         }
-        self.view
-            .generation(index)
-            .map(|g| self.minter.mint(index, g))
+        let g = self.view.generation(index)?;
+        self.note_read(index);
+        Some(self.minter.mint(index, g))
     }
 
     fn cap(&mut self, cap: Cap, len: usize) -> bool {
@@ -405,15 +459,16 @@ impl types::Host for HostState {}
 impl model::Host for HostState {
     fn app(&mut self) -> Result<types::AppInfo> {
         self.charge(cost::BASE)?;
+        let s = self.view.scope();
         Ok(types::AppInfo {
-            name: String::new(),
-            engine: 0,
-            verified: false,
+            name: s.name,
+            engine: s.engine,
+            verified: s.verified,
         })
     }
     fn doc_url(&mut self) -> Result<Option<String>> {
         self.charge(cost::BASE)?;
-        Ok(None)
+        Ok(self.view.scope().url)
     }
     fn focus(&mut self) -> Result<Option<u64>> {
         self.charge(cost::BASE)?;
@@ -466,10 +521,63 @@ impl model::Host for HostState {
         let kids = self.view.children(i, max);
         Ok(kids.into_iter().filter_map(|c| self.mint(c)).collect())
     }
-    fn subtree(&mut self, root: u64, _d: u8, _m: u16) -> Result<Vec<types::ViewNode>> {
+    fn subtree(&mut self, root: u64, d: u8, m: u16) -> Result<Vec<types::ViewNode>> {
         self.charge(cost::BASE)?;
-        let _ = self.node(root);
-        Ok(Vec::new())
+        let max_depth = d.min(8);
+        let max_nodes = usize::from(m).min(256);
+        self.charge(max_nodes as u64 * cost::PER_CHILD)?;
+        let Some(r) = self.node(root) else {
+            return Ok(Vec::new());
+        };
+        let names = self.grants.contains(Perms::READ_NAMES);
+        let texts = self.grants.contains(Perms::READ_TEXT);
+        // Breadth first from the root: (index, position of the parent in `out`, depth).
+        let mut queue: std::collections::VecDeque<(u32, Option<u16>, u8)> =
+            std::collections::VecDeque::new();
+        queue.push_back((r, None, 0));
+        let mut out: Vec<types::ViewNode> = Vec::new();
+        while let Some((i, parent_pos, depth)) = queue.pop_front() {
+            if out.len() >= max_nodes {
+                break;
+            }
+            if self.scope_refused(i) {
+                continue;
+            }
+            let Some(handle) = self.mint(i) else { continue };
+            let kids = if depth < max_depth {
+                self.view.children(i, 256)
+            } else {
+                Vec::new()
+            };
+            let name = if names { self.view.name(i) } else { None };
+            let text = if texts {
+                self.view
+                    .text(i, 0, u32::try_from(Cap::Text.bytes()).unwrap_or(u32::MAX))
+            } else {
+                None
+            };
+            let bytes = name.as_ref().map_or(0, String::len) + text.as_ref().map_or(0, String::len);
+            self.meter(bytes as u64 * cost::PER_TEXT_BYTE + cost::HANDLE_CHECK);
+            let pos = u16::try_from(out.len()).unwrap_or(u16::MAX);
+            out.push(types::ViewNode {
+                node: handle,
+                parent_index: parent_pos,
+                depth,
+                role: self.view.role(i).unwrap_or(0),
+                states: self.view.states(i),
+                name,
+                text,
+                child_count: u32::try_from(kids.len()).unwrap_or(u32::MAX),
+            });
+            for k in kids {
+                queue.push_back((k, Some(pos), depth.saturating_add(1)));
+            }
+            if self.kill.is_some() {
+                break;
+            }
+        }
+        self.charge(0)?;
+        Ok(out)
     }
     fn text(&mut self, n: u64, start: u32, len: u32) -> Result<Option<String>> {
         self.charge(cost::BASE)?;
@@ -525,6 +633,13 @@ fn value_of(v: &types::PropValue) -> (Value, usize) {
         types::PropValue::Bits(b) => (Value::Bits(*b), 0),
         types::PropValue::Number(n) => (Value::Number(*n), 0),
         types::PropValue::Text(t) => (Value::Text(t.clone()), t.len()),
+        types::PropValue::Message(m) => (
+            Value::Msg {
+                id: m.id.clone(),
+                args: m.args.clone(),
+            },
+            m.id.len() + m.args.iter().map(|(k, v)| k.len() + v.len()).sum::<usize>(),
+        ),
         types::PropValue::Truth(b) => (Value::Truth(*b), 0),
         types::PropValue::Position(_) | types::PropValue::Grid(_) | types::PropValue::Area(_) => {
             (Value::Other, 0)
@@ -549,6 +664,18 @@ impl facts::Host for HostState {
             && !self.cap(Cap::Text, t.len())
         {
             return Ok(());
+        }
+        if let types::PropValue::Message(m) = &value {
+            let ok = m.id.len() <= MSG_ID_MAX
+                && m.args.len() <= MSG_ARGS_MAX
+                && m.args
+                    .iter()
+                    .all(|(k, v)| k.len() <= MSG_ARG_NAME_MAX && v.len() <= Cap::Text.bytes());
+            if !ok {
+                self.counters.oversize += 1;
+                self.malformed = true;
+                return Ok(());
+            }
         }
         let Some(target) = self.target(&target) else {
             return Ok(());

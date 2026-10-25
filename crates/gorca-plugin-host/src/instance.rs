@@ -56,11 +56,27 @@ impl std::fmt::Debug for Loaded {
 }
 
 impl Loaded {
+    /// Compile (through the verified cache when there is one), link and pre-instantiate the
+    /// component in `wasm`, whose sha256 is `sha256`. Blocking: call it off the async executor.
+    pub fn from_package(
+        engine: &Engine,
+        cache: Option<&crate::cache::CwasmCache>,
+        wasm: &[u8],
+        sha256: &[u8; 32],
+    ) -> Result<Self, String> {
+        let component = match cache {
+            Some(c) => c.load(engine, wasm, sha256).map_err(|e| e.to_string())?,
+            None => Component::new(engine, wasm).map_err(|e| e.to_string())?,
+        };
+        Self::new(engine, &component).map_err(|e| e.to_string())
+    }
+
     /// Link the host imports and pre-instantiate. Imports outside the WIT world (the WASI the
     /// Rust standard library pulls in) trap on use: a plugin has no ambient capability.
     pub fn new(engine: &Engine, component: &Component) -> wasmtime::Result<Self> {
         let mut linker = Linker::<HostState>::new(engine);
         RulesHost::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s)?;
+        crate::wasi::add(&mut linker, component, engine)?;
         linker.define_unknown_imports_as_traps(component)?;
         let pre = RulesHostPre::new(linker.instantiate_pre(component)?)?;
         Ok(Self {
@@ -81,9 +97,21 @@ pub struct DirtyNode {
     pub cause: u8,
 }
 
+/// The read set R of a call (ADR-0026 section 2.6.1): every node the batch named or an import
+/// returned or verified.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReadSet {
+    /// Host-side indices, deduplicated, at most `MAX_READ_SET`.
+    pub nodes: Vec<u32>,
+    /// More were touched than fit: the token falls back to the scope-wide stamp.
+    pub overflow: bool,
+}
+
 /// A successful call.
 #[derive(Debug)]
 pub struct CallDone {
+    /// The read set of the call.
+    pub reads: ReadSet,
     /// Buffered effects, to be admitted by the writer.
     pub effects: Vec<Effect>,
     /// Wall time of the guest call.
@@ -217,8 +245,12 @@ impl PluginInstance {
             })
             .collect();
         self.store.data_mut().counters.scope_denied += scope_denied;
+        for d in batch {
+            self.store.data_mut().note_read(d.index);
+        }
         if dirty.is_empty() {
             return Ok(CallDone {
+                reads: ReadSet::default(),
                 effects: Vec::new(),
                 exec: Duration::ZERO,
                 fuel_used: 0,
@@ -233,11 +265,15 @@ impl PluginInstance {
             });
         }
         let t0 = Instant::now();
+        let cpu0 = gorca_rt::sched::thread_cpu_time();
         let r = self
             .bindings
             .gorca_ext_rules()
             .call_derive(&mut self.store, ctx, &dirty);
         let exec = t0.elapsed();
+        // The overrun rule counts CPU time of the plugin thread: a call the host descheduled for
+        // a while is not an overrun (it would strike healthy plugins on a loaded desktop).
+        let cpu = gorca_rt::sched::thread_cpu_time().saturating_sub(cpu0);
         let left = self.store.get_fuel().unwrap_or(0);
         let fuel_used = grant.units.saturating_sub(left);
         match r {
@@ -250,10 +286,14 @@ impl PluginInstance {
                     });
                 }
                 Ok(CallDone {
+                    reads: ReadSet {
+                        nodes: std::mem::take(&mut st.reads),
+                        overflow: st.reads_overflow,
+                    },
                     effects: std::mem::take(&mut st.effects),
                     exec,
                     fuel_used,
-                    wall_overrun: grant.is_wall_overrun(exec),
+                    wall_overrun: grant.is_wall_overrun(cpu),
                 })
             }
             Err(e) => Err(CallFault {

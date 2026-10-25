@@ -375,6 +375,18 @@ pub async fn startup_backend(path: &Path) -> Option<gorca_config::Backend> {
     )
 }
 
+/// `[plugins] enabled` from the settings file, read once at startup (the plugin runtime is built
+/// then). A missing or unreadable file is "off".
+pub async fn startup_plugins_enabled(path: &Path) -> bool {
+    let Ok(Some(text)) = read_file(path).await else {
+        return false;
+    };
+    gorca_config::load(Some(&text), &Presets::builtin())
+        .settings
+        .plugins
+        .enabled
+}
+
 struct State {
     facts: PlatformFacts,
     /// Hash of the text of the last load (of the empty string for a missing file).

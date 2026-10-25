@@ -38,6 +38,7 @@ mod ext;
 mod focus;
 mod health;
 mod mode;
+pub mod plugin_port;
 mod present;
 mod quick;
 mod reader;

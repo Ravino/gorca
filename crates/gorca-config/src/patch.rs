@@ -167,6 +167,7 @@ pub fn get_value(s: &Settings, key: KeyId) -> Value {
         ("speech", "punctuation") => Value::Str(s.speech.punctuation.name().to_owned()),
         ("speech", "caps") => names(s.speech.caps.names()),
         ("speech", "caps_pitch_change") => Value::Int(i64::from(s.speech.caps_pitch_change)),
+        ("plugins", "enabled") => Value::Bool(s.plugins.enabled),
         ("mouse", "enabled") => Value::Bool(s.mouse.enabled),
         ("mouse", "item_click") => Value::Str(s.mouse.item_click.name().to_owned()),
         ("mouse", "if_covered") => Value::Str(s.mouse.if_covered.name().to_owned()),
@@ -256,6 +257,7 @@ pub fn set_value(s: &mut Settings, key: KeyId, v: &Value) -> bool {
         ("speech", "punctuation") => put!(s.speech.punctuation, text(v).and_then(Punct::parse)),
         ("speech", "caps") => put!(s.speech.caps, list(v).and_then(caps_of)),
         ("speech", "caps_pitch_change") => put!(s.speech.caps_pitch_change, int_u8(v)),
+        ("plugins", "enabled") => put!(s.plugins.enabled, boolean(v)),
         ("mouse", "enabled") => put!(s.mouse.enabled, boolean(v)),
         ("mouse", "item_click") => put!(s.mouse.item_click, text(v).and_then(ItemClick::parse)),
         ("mouse", "if_covered") => {

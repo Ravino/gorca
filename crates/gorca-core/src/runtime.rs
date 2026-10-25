@@ -286,6 +286,8 @@ struct WebShared {
     hub: HubTx,
     factory: Option<Arc<dyn DocSourceFactory>>,
     counters: Arc<DocCounters>,
+    /// The plugin runtime (M18a); `None` when plugins are off.
+    plugins: Option<Arc<dyn crate::plugin_port::PluginService>>,
 }
 
 impl std::fmt::Debug for Shared {
@@ -352,6 +354,7 @@ impl Core {
                     hub,
                     factory: None,
                     counters: Arc::new(DocCounters::default()),
+                    plugins: None,
                 },
                 text_dropped: Arc::new(AtomicU64::new(0)),
                 lazy_attrs,
@@ -412,6 +415,16 @@ impl Core {
     pub fn with_web(mut self, factory: Arc<dyn DocSourceFactory>) -> Self {
         if let Some(sh) = Arc::get_mut(&mut self.shared) {
             sh.web.factory = Some(factory);
+        }
+        self
+    }
+
+    /// Hand the plugin runtime to the fusion writers (document actors): plugins add facts to
+    /// the fused model through the fact-source path (ADR-0026). Call before [`Core::run`].
+    #[must_use]
+    pub fn with_plugins(mut self, service: Arc<dyn crate::plugin_port::PluginService>) -> Self {
+        if let Some(sh) = Arc::get_mut(&mut self.shared) {
+            sh.web.plugins = Some(service);
         }
         self
     }
@@ -595,6 +608,7 @@ impl Core {
                 notices: shared.senders.docs.clone(),
                 counters: Arc::clone(&shared.web.counters),
                 profiles: Arc::clone(&shared.profiles),
+                plugins: shared.web.plugins.clone(),
             };
             tasks.spawn("doc-registry", run_hub(cfg, rx, tasks.token()));
         }
@@ -748,6 +762,10 @@ fn spawn_app_actor(
             tx: shared.senders.text.clone(),
             dropped: Arc::clone(&shared.text_dropped),
         });
+    let actor = match &shared.web.plugins {
+        Some(svc) => actor.with_plugins(Arc::clone(svc)),
+        None => actor,
+    };
     let actor = match &shared.ext {
         Some(src) => actor.with_ext(Arc::clone(src)),
         None => actor,

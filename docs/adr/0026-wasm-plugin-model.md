@@ -1,6 +1,6 @@
 # ADR-0026: WASM plugin model on the fused semantic model (M18a)
 
-Status: **Proposed** (r6, 2026-10-25, SPS scheduling §2.4.7, DP-1 pending owner; r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
+Status: **Proposed** (r6, 2026-10-25, SPS scheduling §2.4.7, DP-1 pending owner; r5 implementation notes, 2026-10-25; r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
 r4 applies the r3 review (`docs/reports/adr-0026-review.md`, section r3): deadline from the turn start, timer slack,
 wait mechanism, one wait per keypress path, tighter benign gates. r3 follows the owner decision of 2026-10-24 (canonical actor model: plugins are actors, **B' is the design
 target**, §2.4.6, §5) and records QP-1..QP-5 as confirmed (§6).
@@ -997,6 +997,54 @@ it targets." T2 patches are first-party author intent, exempt like declarative r
 Reserved ids: every id in the compiled first-party list and the `gorca.` prefix. A T3 package using one
 is refused at install and at load. Store and signatures are ADR-0020 (Phase 4).
 
+**Application identity and the threat model (r5; normative for activation).**
+
+*Threat model.* A malicious process running as the same user can already present any accessibility
+tree it likes. If it impersonates Firefox, a plugin activates on the attacker's own content, and the
+attacker could have had that content spoken without any plugin. Identity verification therefore
+exists to stop **accidental misattribution and cheap spoofing**; it is **not a defence against a
+determined same-user adversary**, and nothing in the design relies on it being one. What a
+plugin must never gain from a spoofed identity is access to content of *another* application, which
+the scope rules (AC-2, one scope = one application or one document) already guarantee, and a higher
+trust tier than the package earned, which the pin list and the tier rules guarantee.
+
+*Evidence.* `app-info.name` and the matcher key are never the application's self-reported name. The
+connector establishes the **verified identity** of the bus peer (`AppInfo::exe`):
+1. the peer's pid from `org.freedesktop.DBus.GetConnectionCredentials`, re-checked against the process
+   start time before and after the reads (pids are reused);
+2. **native**: `/proc/<pid>/exe`, canonicalised, a live file (not `(deleted)`) under `/usr` or `/opt`
+   whose every path component is owned by root and not writable by anyone else (group-writable only
+   for group 0), the same file (device and inode) as the canonical path in gorca's own mount
+   namespace, and the process in gorca's mount namespace. The identity is the file name
+   (`firefox-esr`, `chromium`); it is trustworthy because only root could have put the file there. A
+   copy under `$HOME` or `/tmp`, a deleted binary and a process in a foreign mount namespace are
+   unverified whatever they are called;
+3. **snap**: only the AppArmor attribute `/proc/<pid>/attr/apparmor/current`, label
+   `snap.<name>.<app> (enforce)` (complain mode confines nothing), and an executable under
+   `/snap/<name>/` passing the inode check: identity `snap:<name>`;
+4. **flatpak**: `.flatpak-info` read through `/proc/<pid>/root` agrees with the systemd scope
+   (`app-flatpak-<id>-<n>.scope`), identity `flatpak:<app id>`. This evidence can be forged with a
+   user namespace, so a flatpak application is **sandboxed-unverified** (below). *TODO(portal):*
+   read the application id from the portal (`GetAppInfo`/`GetHostAppInfo`) to back it.
+
+Comparison with a manifest `[match] apps` entry is **case-sensitive**.
+
+*Consequence.* A scope whose identity is unverified (or sandboxed-unverified) is served **first-party
+plugins that are not URL-scoped only**; no third-party plugin and no URL-scoped plugin (a URL match
+reads page content) is activated for it. The decision is the plugin service's, taken when the scope
+opens; the core only carries `ScopeSpec.verified` (`plugin_port::scope_identity`).
+
+*URL patterns* (`[match] urls`) are matched structurally (`gorca-plugin-host::urlmatch`), never as
+flat strings: scheme (http and https only, exact), host (lower-cased, IDN as punycode; a wildcard is
+a leading `*.` that matches whole labels and never the bare suffix; `*` anywhere else in a host is a
+manifest error), port (the scheme default on both sides), path (`*` never crosses `?` or `#`); a
+pattern with no query or fragment ignores the URL's. Userinfo in a pattern is refused and a URL with
+userinfo never matches. `https://web.telegram.org*` and `https://web.telegram.org.evil.com/` are
+the cases this exists for.
+
+*Logging.* No text a plugin produced and no text the host hands a plugin reaches any log: facts log
+their kind and length, a plugin's `diag.log` line logs only its length (tests pin it).
+
 **System scopes (normative; review H-1).** Untrusted and trusted T3 plugins can never match, read,
 target, bind keys in or speak over these scopes; T2 plugins may (P-4 needs the Shell):
 
@@ -1104,6 +1152,82 @@ DP-1), 2f warm-instance retention (deferred). M18a-3..7 follow M18a-2d.
 | M18a-5 | R lane: `commands`, `output` (content utterances through render, T3 attribution), `actions` (AC-3/AC-4), `settings`, `timers`, `requests`/`reactor`, `site` world + `route-changed`; **P-3 telegram-web** A and K. **Gate: M22b1 + M22b2 + M22b3 merged** (browse, quick nav and review on `Semantics`; review M-5) | M8-TG/M8-TGL re-based on mock A and K pages; capability denial tests per permission and per KB rule (a T3 keymap binding `a` or `Enter` is refused) | PX-8 |
 | M18a-6 | `present-edit` (stable once `PresIr` frozen), spoken permission review, sideload path, manifest/package fuzzing | fuzz 0 host crashes (XP-7); e2e: enabling a T3 plugin speaks every requested permission with its reason and requires explicit confirmation; trust marking speaks the warning; declining leaves it off | XP-2 |
 | M18a-7 | P-4 gnome-shell port, `builtin_ext.rs` deleted, app-name lint | M4b Shell e2e unchanged | XP-1 |
+
+**Status of the slices (r5, 2026-10-25).** M18a-1 (runtime foundation) is merged. What this revision
+implements of M18a-2..M18a-5, for the document actor (K2) and the app actor (K1) alike:
+`[plugins] enabled` (default off), package discovery (first-party directory with the compiled-in
+pin list, `$XDG_DATA_HOME/gorca/plugins`), a per-scope plugin actor set with writer-owned slots,
+`[match]`/`[[watch]]` manifest tables, native watch prefilter, the revision token and the trigger
+rule (`gorca-core::plugin_port`), computed S1 patches in `FUSE` (`Ivm::set_computed`) and S4 facts
+through the side table, taint and stratum by tier, the deterministic WASI shim, the keypress-path
+wait governor, progressive filling, the first-party `telegram-web` plugin. Not implemented: the R
+lane (`commands`, `reactor`, `output`, `actions`, `timers`, `settings`), `present-edit`, `attach`
+and `removed` calls, `requests`, `matches`/`select`/`prop`/`anchor-of`/`prov` (stubs),
+`hide`/categories, MQ-3 progressive filling across plugins by EWMA of the p95 (a mean is used),
+spoken permission review and the trust UI, `route-changed`.
+
+**Gaps found while implementing (r5).**
+1. ADR-0024 lists a *Patch* source class, but the frozen `SourceClass` registry has none and the side
+   table consumes Secondary and Inferred only. Computed S1 patches live beside the side table
+   (`Ivm::set_computed`, ranked `(taint, plugin id, group)`, cleared per source on mask); they have no
+   anchors, TTL or epoch state of their own: validity is the writer's token, masking is
+   `clear_computed_source`.
+2. (Resolved in r5.1) Fact values were literals, so a plugin could not localise what it asserts.
+   `prop-value` gained `message(msg-ref)`: a key of the plugin's own catalog (`i18n/<lang>.msg` in its
+   package, namespace = plugin id, the core's catalog format and caps), resolved on the plugin's worker
+   thread right after the call, in the process language of that moment (an unknown key drops the
+   fact). A language change does not re-derive yet (the source epoch bump of a settings change is
+   M18a-5). The catalogs are not covered by the pin: the installed directory is root's.
+3. The ADR names no manifest schema for activation. Chosen: `[match] apps/urls` and `[[watch]]
+   {id, tag, class, aria-role}`, all native.
+4. Neutral attributes `class` and `aria-role` were not in `SrcRecord`; added (document source only).
+   The rows plugins read are built from the normalised record (after the normaliser, before S-1
+   quirks), an approximation of "S0 after quirks".
+5. The revision token collapses the six read classes into one stamp per node (more false rejects,
+   never a false accept).
+6. The wall-overrun rule and the host watchdog are defined against the grant. Under progressive
+   filling a crowded share (23 us of fuel for ten plugins) made every healthy 90 us call an overrun and
+   demoted the plugin for 60 s. `FuelGrant::wall` now carries the basis (the per-call cap for an
+   interactive share). Out of fuel on a crowded interactive share is not a strike and goes to the
+   background slice (section 2.4.2 step 4), as written, but the slot table had no cell for it.
+7. A busy actor must not be skipped (bake-off finding, `busy_skips = 72 594`): the writer sends the
+   newest job anyway, it displaces the queued one, and the displaced job's nodes are re-queued.
+   Section 2.5.4 "Call needed while busy = coalesce" is realised that way, not as a skip.
+8. One wait per keypress path is realised as a time window (2 ms) on a process-wide governor plus the
+   writer's own once-per-20-ms limit; the input layer has no keypress identity to key it on.
+9. The document URL was missing in the core. The document source reads it from
+   `Document.GetAttributes` (`DocURL` in Gecko, `URI` in Blink) and reports it as a `RouteChanged`
+   hint after every `Reset`; a route change inside a document does not re-scope yet.
+10. A role patch reached only the entry. The translator now derives the article category flag from the
+    fused role (and patches it when a later fact changes the role), and the state-change overlay no
+    longer takes back a name whose provenance is Patch or User (it spoke the raw name again).
+11. PF-1 is only **partly** enforced at run time: the environment is deterministic (fixed per-call
+    random stream, clocks read 0, no `now-ms`) and the snapshot is read-only, but instance linear memory
+    persists between `derive` calls, so a plugin can keep state and its output is not strictly a function
+    of the view. First-party S1 plugins must pass the differential test in CI; for a user-trusted third
+    party the instance must be reset per call, which is not built because no trust marking exists yet
+    (`TrustedThirdParty` cannot occur).
+12. (r5.1) Review M18a-2 fixes: (S-1) packages in `$XDG_DATA_HOME/gorca/plugins` are **refused**
+    (logged, first-party unaffected) until M18a-3 brings `system-scopes`, per-plugin enable and the
+    spoken warning; only tests can allow them (`PluginOptions::allow_sideloaded`, never an
+    environment variable). (S-2) A secret node is never watched, derived or given a fact: its row
+    carries no text, a node that turns secret loses its token and facts, and a reply naming one is
+    dropped. (C-1) A plugin in backoff is unmasked when the backoff has run out (the runner raises
+    `BackoffExpired`, the scope keeps the writer ticking meanwhile); a mask retracts the plugin's
+    facts. (P-1) The document URL is read only when a loaded plugin matches on URLs, beside the
+    first block fetch, which never waits for it: the block is published at once and the URL
+    follows as a later `RouteChanged` hint. A URL-scoped scope then opens late and replays the rows
+    already in the document, so its facts arrive as refinements.
+13. (r5.1) Latency. Keypress pre-wake: the keyboard pump calls `Prewake::key_down` (rate limited to
+    one per 20 ms, never blocking), which keeps every open scope's idle workers spinning for 8 ms,
+    so they run when the focus change brings the job. The writer spins for the whole bounded window
+    instead of parking (a parked thread wakes late from a deep idle state). A busy plugin, and a
+    plugin that declares `[plugin] priority = "refinement"`, is left out of the countdown (its job
+    goes to the background slot; facts arrive as refinements); the default is `interactive`.
+    Message facts are resolved on the worker, which took the writer's admission from ~100 us to
+    ~55 us per turn. Numbers: `docs/reports/2026-10-25-wasm-engineer-m18a-wire.md`.
+14. First-party status needs a pin list compiled into the daemon: `plugins/pins.txt` is regenerated by
+    `tools/build-plugins.sh` and must be committed with the plugin; the daemon is rebuilt after it.
 
 ### 2.10 Metrics to validate
 
@@ -1305,6 +1429,10 @@ the fact model or the placement decision.
 | R3-3 wait primitive | atomic countdown + futex (or `timerfd` via `AsyncFd`, measured); never `blocking_recv` or `tokio::time`; replies still via the mailbox; I-P8 updated |
 | R3-4 cascade | one bounded wait per keypress path (K1 and K2 share the first writer's deadline); flapping-focus cap of one interactive wait per N ms |
 | R3-5 gates | benign fixture: facts at first utterance >= 99 % overall and >= 97 % per plugin (PX-6 and the confirmation rule); 97/90 only for the adversarial mix; interactive jobs pre-empt background jobs; max is a quiet-host gate, loaded max reported |
+
+**r5 (2026-10-25)** — implementation notes of the first wiring of the runtime into the fusion writers
+(section 2.9 status and gaps, section 2.7 identity and threat model, URL matching, logging rule). No
+change to the fact model, the lanes or the call model; B' is as owner-decided.
 
 **r3 (2026-10-24)** — owner decisions of 2026-10-24 (`docs/decisions.md`). No change to the fact model;
 one runtime-placement change and one confirmation.

@@ -923,7 +923,7 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         assert_eq!(l.settings.mouse.item_click, crate::ItemClick::Pointer);
         assert_eq!(l.settings.mouse.if_covered, crate::IfCoveredPolicy::Click);
         assert!(!l.settings.mouse.announce_move);
-        assert_eq!(SETTINGS.len(), 48);
+        assert_eq!(SETTINGS.len(), 49);
     }
 
     #[test]

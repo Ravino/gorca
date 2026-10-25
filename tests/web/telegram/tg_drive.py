@@ -358,6 +358,71 @@ elif SCEN == "churn":
     step("up", UP)
     step("enter", ENTER, wait=2.0)
 
+elif SCEN == "dumprow":
+    # Print the a11y subtree of the first chat row and the first message with role, name and class.
+    time.sleep(2.0)
+
+    def dump(n, depth=0):
+        try:
+            attrs = n.get_attributes() or {}
+            print("  " * depth + f"{n.get_role_name()!r} name={(n.get_name() or '')[:40]!r} class={attrs.get('class')!r} tag={attrs.get('tag')!r} xml-roles={attrs.get('xml-roles')!r}", flush=True)
+            if depth < 8:
+                for j in range(n.get_child_count()):
+                    dump(n.get_child_at_index(j), depth + 1)
+        except Exception as e:
+            print("  " * depth + f"ERR {e}", flush=True)
+
+    row = walk(lambda n: n.get_role_name() in ("push button", "button", "link") and "Alice" in (n.get_name() or ""))
+    print("ROW", row.get_name() if row else None, flush=True)
+    if row:
+        dump(row)
+    msg = walk(lambda n: n.get_role_name() != "application" and (n.get_attributes() or {}).get("class", "").split()[:1] == ["Message"])
+    print("MESSAGE", bool(msg), flush=True)
+    if msg:
+        dump(msg)
+    doc = walk(lambda n: n.get_role_name() == "document web")
+    if doc:
+        try:
+            print("DOCURL", Atspi.Document.get_document_attributes(doc), flush=True)
+        except Exception as e:
+            print("DOCURL ERR", e, flush=True)
+
+elif SCEN == "plugin":
+    # M18a: the first-party telegram-web plugin on (TG_PLUGINS=on) or off (control). Chat rows: no
+    # avatar initials or doubled label, an "unread" word; Web A messages get a role.
+    on = os.environ.get("TG_PLUGINS", "off") == "on"
+    time.sleep(2.0)
+    said_all = []
+    for i in range(6):
+        said_all += step(f"down {i+1}", DOWN)
+    # Tab onto a row: the focus path (the plugin's interactive turn).
+    open_first = step("tab 1", TAB, wait=0.8) + step("tab 2", TAB, wait=0.8) + step("tab 3", TAB, wait=0.8)
+    said_all += open_first
+    # A row spoken from the observed name: "BO Bob 14:59 ok thanks" (A), "Bob Bob 14:59" (K).
+    raw = [s for s in said_all if re.search(r"\b[A-Z]{2} [A-Z][a-z]+ \d\d:\d\d|([A-Z][a-z]+) \1 \d\d:\d\d", s)]
+    # A row spoken from the plugin's name: "Bob, ok thanks, 14:59" or "Alice, 1 unread, see you soon, 15:00".
+    good = [s for s in said_all if re.search(r"[A-Z][a-z]+, ([0-9]+ unread, )?[a-z][^,]*, \d\d:\d\d", s)]
+    print("plugin rows said:", good[:3], "raw rows said:", raw[:3], flush=True)
+    if on:
+        verdict(bool(good), "plugin on: a chat row is named title, unread, preview, time", f"{len(good)} utterances")
+        verdict(not raw, "plugin on: no avatar initials or doubled label is spoken", f"{raw[:2]}")
+    else:
+        verdict(bool(raw) and not good, "plugin off (control): the observed row name is spoken", f"raw={len(raw)} good={len(good)}")
+    if os.environ.get("TG_PAGE") == "A":
+        open_first_chat()
+        step("esc 1", ESC, wait=1.0)
+        msg = []
+        for i in range(8):
+            msg += step(f"up {i+1}", UP)
+        # Quick navigation to the next article: the message rows are articles only through the plugin.
+        step("home", HOME)
+        art = []
+        for i in range(2):
+            art += step(f"next article {i+1}", L["a"])
+        print("article quick nav said:", art[:4], flush=True)
+        found = [s for s in art if re.search(r"article.*Message \d+", s)]
+        verdict(bool(found) == on, "Web A message rows are articles for quick navigation exactly when the plugin is on", f"found={len(found)} on={on}")
+
 elif SCEN == "typing":
     open_first_chat()
     n = spoken_len()
