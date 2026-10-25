@@ -1,0 +1,44 @@
+package gorca:ext@0.11.0;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+// DRAFT (paper only, ADR-0026 r7 §2.4.8). Not built, not linked. The implementing slice
+// (M18a-4w) moves this interface into the package directory, renames wit/gorca-ext-0.10/ to
+// wit/gorca-ext-0.11/, bumps every file to 0.11.0, adds `export warmup;` to `app-module` (and so
+// to `site`), moves the host's inline world in crates/gorca-plugin-host/src/host.rs to 0.11.0,
+// and ports every guest (plugins/telegram-web, the host test guest, fixtures) in the same change.
+// Owner rule (2026-10-25): no backward compatibility, no version negotiation, no 0.10 host path.
+
+/// Required export of every world that has an interactive export (ADR-0026 §2.4.8). A plugin
+/// with nothing to warm implements it with an empty body (the SDK's default).
+///
+/// Contract for the guest (normative):
+/// - No data. The call carries no node, no handle, no text, no key, no time, no epoch. Every
+///   import called during `warm` behaves as if the plugin had no permission for it: reads return
+///   `none` or empty, effects are denied and counted (ADR-0026 §2.5.4 "not faults"). There is no
+///   snapshot, so there is nothing to read.
+/// - Neutral. A `warm` call must not change the result of any later `derive`, `attach`,
+///   `removed` or command: run the plugin's hot code over its own canned input, touch its tables,
+///   exercise the allocator, then drop the result. First-party plugins prove it in CI with the
+///   warm-neutral differential test W-N1 (§2.4.8.6).
+/// - Idempotent and cheap. Two calls in a row do the same as one. The host caps fuel and wall
+///   time (TBD-W2); a trap, out-of-fuel or memory denial is a fault of the plugin (§2.4.8.5).
+/// - Not a timer. The host decides when and whether it runs; a plugin can neither request nor
+///   schedule one, and must not assume it runs at all.
+interface warmup {
+  /// Why the host warms. A registry code, not a closed enum, so that a later code is a registry
+  /// change rather than a type change. Unknown codes must be treated like `arm`.
+  ///   0 = preload: a fresh instance before its first real call (startup spare or scope attach),
+  ///       background budget.
+  ///   1 = arm: the scheduler armed this plugin's worker ahead of a likely job, interactive
+  ///       budget (short). Never sent to an untrusted third-party plugin.
+  type warm-kind = u8;
+
+  warm: func(kind: warm-kind);
+}
+
+/// Sketch of the 0.11 change to plugin.wit: `app-module` gains `export warmup;` next to `rules`,
+/// `commands` and `reactor`; `site` includes it. Shown here as a standalone world so this file
+/// parses on its own.
+world warm-required {
+  export warmup;
+}
