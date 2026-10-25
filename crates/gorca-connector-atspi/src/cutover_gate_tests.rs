@@ -343,9 +343,66 @@ struct Rules<'a> {
     facts: Facts,
     spelled: bool,
     words: &'a BTreeSet<String>,
+    /// The English word or phrase of the tables above to the catalog word of the run's language.
+    tr: &'a BTreeMap<String, String>,
+    /// The tail of the nameless answer (", no name") and the spelled space, in the run's language.
+    no_name: &'a str,
+    space: &'a str,
+}
+
+/// The English text of every plain role, state and ARIA message, to the same message in `lang`
+/// (lower case): the tables of the rules are written in English.
+fn translations(lang: gorca_present::Lang) -> BTreeMap<String, String> {
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let mut out = BTreeMap::new();
+    for id in gorca_i18n::MsgId::ALL {
+        let k = id.key();
+        if !(k.starts_with("role-")
+            || k.starts_with("state-")
+            || k.starts_with("aria-")
+            || k.starts_with("web-"))
+        {
+            continue;
+        }
+        let both = std::panic::catch_unwind(|| {
+            (
+                gorca_i18n::t_in(gorca_present::Lang::En, *id).to_lowercase(),
+                gorca_i18n::t_in(lang, *id).to_lowercase(),
+            )
+        });
+        if let Ok((en, local)) = both
+            && !en.is_empty()
+        {
+            out.entry(en).or_insert(local);
+        }
+    }
+    std::panic::set_hook(hook);
+    out
 }
 
 impl Rules<'_> {
+    /// An English table entry in the run's language (unchanged when the catalog has no such word).
+    fn t(&self, en: &str) -> String {
+        self.lookup(en).unwrap_or_else(|| en.to_owned())
+    }
+
+    /// The phrase as one catalog word, or as two catalog phrases side by side ("collapsed has
+    /// popup").
+    fn lookup(&self, en: &str) -> Option<String> {
+        if let Some(local) = self.tr.get(en) {
+            return Some(local.clone());
+        }
+        en.match_indices(' ').find_map(|(at, _)| {
+            let (a, b) = (&en[..at], &en[at + 1..]);
+            Some(format!("{} {}", self.lookup(a)?, self.lookup(b)?))
+        })
+    }
+
+    fn unworded(&self, w: &str) -> bool {
+        UNWORDED.iter().any(|u| self.t(u) == w)
+    }
+
     fn collapsed(s: &str) -> String {
         s.split_whitespace().collect::<Vec<_>>().join(" ")
     }
@@ -355,28 +412,28 @@ impl Rules<'_> {
     }
 
     /// The spelled name without the separators the spelling adds.
-    fn unspaced(s: &str) -> String {
+    fn unspaced(&self, s: &str) -> String {
         s.split_whitespace()
-            .filter(|w| *w != "space" && !w.chars().all(is_marker))
+            .filter(|w| *w != self.space && !w.chars().all(is_marker))
             .collect()
     }
 
     /// The row that explains why the legacy part `x` became the fused part `y`.
     fn pair(&self, x: &str, y: &str) -> Option<&'static str> {
-        if self.spelled && x.ends_with("no name") && !y.ends_with("no name") {
+        if self.spelled && x.ends_with(self.no_name) && !y.ends_with(self.no_name) {
             // A nameless node whose fused name is derived: the name is spelled.
             return Some("content-derived-name");
         }
-        let bare = |s: &str| s.strip_suffix(", no name").unwrap_or(s).to_owned();
+        let bare = |s: &str| s.strip_suffix(self.no_name).unwrap_or(s).to_owned();
         let (x, y) = (bare(x), bare(y));
-        if y.is_empty() && UNWORDED.contains(&x.as_str()) {
+        if y.is_empty() && self.unworded(&x) {
             return Some("role-not-in-table");
         }
         // A blank name (white space only) is no name.
-        if self.spelled && !x.is_empty() && Self::unspaced(&x).is_empty() {
+        if self.spelled && !x.is_empty() && self.unspaced(&x).is_empty() {
             return Some("name-whitespace");
         }
-        if Self::collapsed(&x) == y || (self.spelled && Self::unspaced(&x) == Self::unspaced(&y)) {
+        if Self::collapsed(&x) == y || (self.spelled && self.unspaced(&x) == self.unspaced(&y)) {
             return Some("name-whitespace");
         }
         if x != y && x.chars().zip(y.chars()).take_while(|(a, b)| a == b).count() >= 200 {
@@ -399,7 +456,7 @@ impl Rules<'_> {
         // The word the table has none for after a name ("Fig caption panel").
         if let Some((head, w)) = x.rsplit_once(' ')
             && head == y
-            && UNWORDED.contains(&w)
+            && self.unworded(w)
         {
             return Some("role-not-in-table");
         }
@@ -419,8 +476,10 @@ impl Rules<'_> {
             return Some("content-derived-name");
         }
         for (lw, nw) in WORD_PAIRS {
+            let (lw, nw) = (self.t(lw), self.t(nw));
             for a in [x.clone(), Self::collapsed(&x)] {
-                if let (Some(pa), Some(pb)) = (a.strip_suffix(lw), y.strip_suffix(nw))
+                if let (Some(pa), Some(pb)) =
+                    (a.strip_suffix(lw.as_str()), y.strip_suffix(nw.as_str()))
                     && pa == pb
                     && (pa.is_empty() || pa.ends_with(' '))
                 {
@@ -432,13 +491,14 @@ impl Rules<'_> {
         if self.facts.value_role && x.parse::<f64>().is_ok() {
             return Some("value-text-spoken");
         }
-        if let Some(base) = x.strip_suffix(" has popup")
+        if let Some(base) = x.strip_suffix(format!(" {}", self.t("has popup")).as_str())
             && base == y
         {
             return Some("state-not-applicable");
         }
         // A state word the model does not give the node, inside a part of states.
         for st in DROPPED_STATES {
+            let st = self.t(st);
             let ws: Vec<&str> = x.split(' ').collect();
             let sw: Vec<&str> = st.split(' ').collect();
             if let Some(at) = ws.windows(sw.len()).position(|w| w == sw.as_slice()) {
@@ -524,10 +584,11 @@ fn explain_parts(
         if rules.facts.avail_na {
             for k in 0..l.len() {
                 let ws: Vec<&str> = l[k].split(' ').collect();
-                if ws.contains(&"unavailable") {
+                let unavailable = rules.t("unavailable");
+                if ws.contains(&unavailable.as_str()) {
                     let rest = ws
                         .iter()
-                        .filter(|w| **w != "unavailable")
+                        .filter(|w| **w != unavailable)
                         .copied()
                         .collect::<Vec<_>>()
                         .join(" ");
@@ -601,7 +662,7 @@ fn explain_parts(
         }
         // A bare legacy role word the web table says nothing for (a generic container, a text
         // run): the ancestry skips it.
-        if let Some(a) = l.iter().position(|x| UNWORDED.contains(&x.as_str()))
+        if let Some(a) = l.iter().position(|x| rules.unworded(x))
             && allowed("role-not-in-table", &mut used)
         {
             l.remove(a);
@@ -609,7 +670,9 @@ fn explain_parts(
             continue;
         }
         // The state words of a role the model does not give them.
-        if let Some(a) = l.iter().position(|x| DROPPED_STATES.contains(&x.as_str()))
+        if let Some(a) = l
+            .iter()
+            .position(|x| DROPPED_STATES.iter().any(|d| rules.t(d) == *x))
             && allowed("state-not-applicable", &mut used)
         {
             l.remove(a);
@@ -630,6 +693,13 @@ const MAX_DEPTH: usize = 24;
 fn records(family: &Family, surface: &'static str, run: &Run, out: &mut Vec<Record>) {
     let dev = Deviations::builtin();
     let words = catalog_words(run.lang);
+    let tr = translations(run.lang);
+    let no_name = gorca_i18n::tf_in(
+        run.lang,
+        gorca_i18n::MsgId::InfoNoName,
+        &[("role", gorca_i18n::Arg::Str(""))],
+    );
+    let space = gorca_i18n::t_in(run.lang, gorca_i18n::MsgId::WordSpace).to_owned();
     let tables = crate::sem_profile::tables_for(family.toolkit, "app", family.web);
     for name in pages_of(family.dir) {
         let label = format!("{}/{name}", family.dir);
@@ -688,6 +758,9 @@ fn records(family: &Family, surface: &'static str, run: &Run, out: &mut Vec<Reco
                 let rules = Rules {
                     spelled: repeat == 3,
                     words: &words,
+                    tr: &tr,
+                    no_name: &no_name,
+                    space: &space,
                     facts: Facts {
                         avail_na: entry.sem.avail == gorca_model::sem::Avail::NotApplicable,
                         value_role: gorca_present::diff::VALUE_ROLES.contains(&entry.sem.role),
