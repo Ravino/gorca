@@ -315,6 +315,8 @@ pub trait PluginService: Send + Sync + std::fmt::Debug {
 /// unverified: the service refuses URL-scoped and third-party plugins for it.
 pub fn scope_identity(app_name: &Arc<str>, exe: Option<&Arc<str>>) -> (Arc<str>, bool) {
     match exe {
+        // A flatpak sandbox is named by its id but never verified: its evidence is forgeable.
+        Some(e) if e.starts_with("flatpak:") => (Arc::clone(e), false),
         Some(e) if !e.is_empty() => (Arc::clone(e), true),
         Some(_) | None => (Arc::clone(app_name), false),
     }

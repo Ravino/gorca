@@ -440,5 +440,8 @@ fn identity_is_the_executable_and_only_that_is_verified() {
     let (app, verified) = scope_identity(&name, Some(&Arc::from("firefox-esr")));
     assert_eq!((&*app, verified), ("firefox-esr", true));
     let (app, verified) = scope_identity(&name, Some(&Arc::from("flatpak:org.mozilla.firefox")));
-    assert_eq!((&*app, verified), ("flatpak:org.mozilla.firefox", true));
+    // A flatpak id names the application for first-party plugins but is never verified.
+    assert_eq!((&*app, verified), ("flatpak:org.mozilla.firefox", false));
+    let (app, verified) = scope_identity(&name, Some(&Arc::from("snap:chromium")));
+    assert_eq!((&*app, verified), ("snap:chromium", true));
 }
