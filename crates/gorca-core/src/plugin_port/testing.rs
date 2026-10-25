@@ -86,6 +86,8 @@ pub(crate) struct Svc {
     jobs: Arc<Mutex<u32>>,
     gov: Arc<Governor>,
     wants_url: bool,
+    /// Refuse an unverified scope (what the daemon's service does for URL-scoped plugins).
+    require_verified: bool,
 }
 
 impl PluginService for Svc {
@@ -94,9 +96,12 @@ impl PluginService for Svc {
     }
     fn open(
         &self,
-        _scope: &ScopeSpec,
+        scope: &ScopeSpec,
         _wake: Arc<dyn Fn() + Send + Sync>,
     ) -> Option<Box<dyn ScopeRunner>> {
+        if self.require_verified && !scope.verified {
+            return None;
+        }
         Some(Box::new(Echo {
             metas: vec![PluginMeta {
                 name: Arc::from("gorca.echo"),
@@ -112,14 +117,21 @@ impl PluginService for Svc {
 }
 
 pub(crate) fn svc(wants_url: bool) -> (Arc<dyn PluginService>, Arc<Mutex<u32>>) {
+    svc_with(wants_url, false)
+}
+
+pub(crate) fn svc_with(
+    wants_url: bool,
+    require_verified: bool,
+) -> (Arc<dyn PluginService>, Arc<Mutex<u32>>) {
     let jobs = Arc::new(Mutex::new(0));
     (
         Arc::new(Svc {
             jobs: Arc::clone(&jobs),
             gov: Arc::new(Governor::default()),
             wants_url,
+            require_verified,
         }),
         jobs,
     )
 }
-

@@ -306,6 +306,20 @@ pub trait PluginService: Send + Sync + std::fmt::Debug {
     fn governor(&self) -> Arc<Governor>;
 }
 
+/// The application identity a plugin scope is matched on, and whether it is verified.
+///
+/// `app_name` is what the application says about itself; anyone can claim any name. The
+/// identity is **verified** only when the connector established the executable of the bus peer
+/// from the bus credentials and `/proc` (`AppInfo::exe`), and then the executable's basename is
+/// the identity. Without it the self-reported name is used for display only and the scope is
+/// unverified: the service refuses URL-scoped and third-party plugins for it.
+pub fn scope_identity(app_name: &Arc<str>, exe: Option<&Arc<str>>) -> (Arc<str>, bool) {
+    match exe {
+        Some(e) if !e.is_empty() => (Arc::from(e.to_ascii_lowercase()), true),
+        Some(_) | None => (Arc::clone(app_name), false),
+    }
+}
+
 /// Monotonic nanoseconds (`CLOCK_MONOTONIC`), the clock of the wait deadline.
 pub fn now_ns() -> u64 {
     gorca_rt::process::monotonic_ns()

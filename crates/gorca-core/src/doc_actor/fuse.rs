@@ -101,6 +101,7 @@ struct DocPlugins {
     service: Arc<dyn PluginService>,
     app: Arc<str>,
     engine: u16,
+    verified: bool,
     open: Option<(PluginBridge, PluginSources)>,
 }
 
@@ -213,11 +214,13 @@ impl FuseStage {
         service: Arc<dyn PluginService>,
         app: Arc<str>,
         engine: u16,
+        verified: bool,
     ) -> FuseStage {
         self.plugins = Some(DocPlugins {
             service,
             app,
             engine,
+            verified,
             open: None,
         });
         self
@@ -236,7 +239,7 @@ impl FuseStage {
             app: Arc::clone(&pl.app),
             url: if pl.service.wants_url() { url.cloned() } else { None },
             engine: pl.engine,
-            verified: true,
+            verified: pl.verified,
         };
         if pl.service.wants_url() && scope.url.is_none() {
             return;
@@ -1210,7 +1213,7 @@ mod tests {
 
     // ---- plugins (M18a) -----------------------------------------------------------------
 
-    use crate::plugin_port::testing::svc;
+    use crate::plugin_port::testing::{svc, svc_with};
     use gorca_doc_source_api::web_attrs;
 
     fn with_class(mut n: SrcNode, class: &str) -> SrcNode {
@@ -1239,7 +1242,7 @@ mod tests {
     #[test]
     fn a_plugin_patch_is_in_the_first_published_entry_and_follows_a_real_change_only() {
         let (service, jobs) = svc(false);
-        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1);
+        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
         let mut batch = vec![reset(1)];
         batch.extend(chat_doc("Alice"));
         s.apply(&batch);
@@ -1261,7 +1264,7 @@ mod tests {
     #[test]
     fn a_scope_that_needs_a_url_stays_closed_until_the_document_reports_one() {
         let (service, jobs) = svc(true);
-        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1);
+        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
         let mut batch = vec![reset(1)];
         batch.extend(chat_doc("Alice"));
         s.apply(&batch);
@@ -1277,7 +1280,7 @@ mod tests {
     #[test]
     fn a_removed_node_and_a_new_document_leave_no_patch_behind() {
         let (service, _) = svc(false);
-        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1);
+        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
         let mut batch = vec![reset(1)];
         batch.extend(chat_doc("Alice"));
         s.apply(&batch);
@@ -1288,5 +1291,27 @@ mod tests {
         assert!(s.sem(SrcNodeId(2)).is_none());
         s.apply(&[reset(9), DocDelta::Upsert(vec![node(9, SemRole::DocumentWeb, None)])]);
         assert_eq!(s.len(), 1);
+    }
+
+    #[test]
+    fn an_unverified_document_gets_no_url_scoped_plugin() {
+        // The service refuses an unverified scope; the stage then runs exactly as without.
+        let (service, jobs) = svc_with(true, true);
+        let mut s = FuseStage::new(setup()).with_plugins(
+            service,
+            Arc::from("web.telegram.org"),
+            1,
+            false,
+        );
+        let mut batch = vec![reset(1), hint("https://web.telegram.org/a/")];
+        batch.extend(chat_doc("Alice"));
+        s.apply(&batch);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("AL Alice 15:00"));
+        assert_eq!(*jobs.lock().unwrap(), 0);
+        // The same page from a verified peer is served.
+        let (service, _) = svc_with(true, true);
+        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
+        s.apply(&batch);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("Alice!"));
     }
 }

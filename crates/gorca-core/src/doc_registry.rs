@@ -482,9 +482,12 @@ impl Hub {
             repair,
             plugins: self.cfg.plugins.as_ref().and_then(|svc| {
                 let a = self.apps.get(&app)?;
+                let (app, verified) =
+                    crate::plugin_port::scope_identity(&a.info.app_name, a.info.exe.as_ref());
                 Some(crate::doc_actor::DocPluginSpec {
                     service: Arc::clone(svc),
-                    app: Arc::clone(&a.info.app_name),
+                    app,
+                    verified,
                     engine: match a.info.web_engine {
                         gorca_model::WebEngine::None => 0,
                         gorca_model::WebEngine::Gecko => 1,

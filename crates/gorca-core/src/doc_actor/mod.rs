@@ -345,6 +345,8 @@ pub struct DocPluginSpec {
     pub app: Arc<str>,
     /// Engine registry code.
     pub engine: u16,
+    /// The identity was established from the peer's credentials ([`crate::plugin_port::scope_identity`]).
+    pub verified: bool,
 }
 
 /// Create the channels, register the document in the directory and return the actor future.
@@ -895,7 +897,7 @@ async fn run(
     } = spec;
     // The source hands over the fusion tables of its engine before it is attached.
     let fuse = source.fuse_setup().map(FuseStage::new).map(|f| match plugins {
-        Some(p) => f.with_plugins(p.service, p.app, p.engine),
+        Some(p) => f.with_plugins(p.service, p.app, p.engine, p.verified),
         None => f,
     });
     let (sink, mut deltas): (_, DeltaReceiver) = delta_channel(SINK_CAPACITY);

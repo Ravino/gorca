@@ -427,3 +427,16 @@ fn computed_ops_reach_the_engine_and_leave_with_the_mask() {
     ivm.run(Budget::UNLIMITED);
     assert_eq!(name(&ivm).as_deref(), Some("observed"));
 }
+
+#[test]
+fn identity_is_the_executable_and_only_that_is_verified() {
+    let name: Arc<str> = Arc::from("web.telegram.org");
+    // A self-reported name is never evidence.
+    let (app, verified) = scope_identity(&name, None);
+    assert_eq!((&*app, verified), ("web.telegram.org", false));
+    let (app, verified) = scope_identity(&name, Some(&Arc::from("")));
+    assert!(!verified && &*app == "web.telegram.org");
+    // With the executable from the bus credentials the identity is the executable.
+    let (app, verified) = scope_identity(&name, Some(&Arc::from("Firefox-ESR")));
+    assert_eq!((&*app, verified), ("firefox-esr", true));
+}

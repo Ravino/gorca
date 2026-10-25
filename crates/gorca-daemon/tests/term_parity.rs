@@ -82,6 +82,7 @@ fn term_info() -> AppInfo {
         connector_kind: ConnectorKind::Atspi,
         verified_shell: false,
         dump_complete: false,
+        exe: None,
         text_unit: TextUnit::Scalar,
         text_insert_slack: 0,
         edit_quirks: gorca_model::EditQuirks::default(),

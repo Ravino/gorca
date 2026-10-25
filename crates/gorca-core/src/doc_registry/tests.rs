@@ -36,6 +36,7 @@ fn info() -> AppInfo {
         connector_kind: ConnectorKind::Fake,
         verified_shell: false,
         dump_complete: false,
+        exe: None,
         text_unit: gorca_model::TextUnit::Utf16Bom,
         text_insert_slack: 0,
         edit_quirks: gorca_model::EditQuirks::default(),

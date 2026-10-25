@@ -79,6 +79,30 @@ pub fn read_proc_info(pid: u32) -> ProcInfo {
     info
 }
 
+/// The executable basename of process `pid`, only when the process is still the one that
+/// started at `start` (pids are reused). The evidence behind a verified application identity:
+/// read from `/proc/<pid>/exe`, which the process cannot forge, never from what the application
+/// reports about itself. A deleted binary (` (deleted)` suffix) still names its executable.
+pub fn exe_of(pid: u32, start: u64) -> Option<String> {
+    if read_proc_info(pid).start != Some(start) {
+        return None;
+    }
+    let target = std::fs::read_link(format!("/proc/{pid}/exe")).ok()?;
+    let name = target.file_name()?.to_str()?;
+    let name = name.strip_suffix(" (deleted)").unwrap_or(name);
+    // Re-check after the read: the pid may have been recycled in between.
+    (read_proc_info(pid).start == Some(start) && !name.is_empty()).then(|| name.to_owned())
+}
+
+/// [`exe_of`] off the async executor under a deadline.
+pub async fn exe_of_async(pid: u32, start: u64) -> Option<String> {
+    let job = tokio::task::spawn_blocking(move || exe_of(pid, start));
+    match tokio::time::timeout(std::time::Duration::from_millis(250), job).await {
+        Ok(Ok(e)) => e,
+        Ok(Err(_)) | Err(_) => None,
+    }
+}
+
 /// Kernel clock ticks per second in `/proc/<pid>/stat` times (`USER_HZ`: 100 on every Linux
 /// architecture gorca targets).
 const USER_HZ: u64 = 100;
@@ -135,6 +159,15 @@ mod tests {
     use super::*;
 
     const STAT: &str = "1234 (gnome-shell) S 1 1234 1234 0 -1 4194560 1000 0 0 0 10 5 0 0 20 0 12 0 98765 1000000 500 18446744073709551615 0 0 0 0 0 0 0 0 0 0 0 0 17 3 0 0 0 0 0";
+
+    #[test]
+    fn our_own_executable_is_found_while_a_wrong_start_time_finds_nothing() {
+        let me = std::process::id();
+        let start = read_proc_info(me).start.expect("own start time");
+        let exe = exe_of(me, start).expect("own exe");
+        assert!(!exe.is_empty());
+        assert_eq!(exe_of(me, start + 1), None, "a recycled pid is not the same process");
+    }
 
     #[test]
     fn the_age_of_a_process_follows_uptime_and_start_ticks() {
