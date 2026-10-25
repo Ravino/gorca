@@ -1384,7 +1384,7 @@ systemd user unit with `ProtectSystem=`, `PrivateTmp=`, `ProtectKernel*=` or `Pr
 in a private user namespace, where the kernel refuses `/proc/<pid>/exe`, `root` and `ns/*` of every
 process outside it; the shipped unit must keep those options (owner decision), so the reads are made by
 `gorca --identity-helper` (`gorca-identity.service`, no namespace, filtered syscalls, AF_UNIX only) and
-asked over `$XDG_RUNTIME_DIR/gorca/identity.sock` with `ID <pid> <start>` -> `OK <identity>` | `NO`. The
+asked over one persistent, pipelined connection to `$XDG_RUNTIME_DIR/gorca/identity.sock` (`ID <tag> <pid> <start>` -> `OK <tag> <identity>` | `NO <tag>`, answered concurrently, cached per `(pid, start)`, no request refused). The
 helper applies the checks above unchanged (same function), both ends verify the peer's systemd unit through
 `SO_PEERCRED` and `/proc/<pid>/cgroup`, and a missing or wrong helper yields *unverified*, never an
 in-sandbox guess (the readable cgroup scope, `cmdline`, `comm` and broker credentials do not prove the

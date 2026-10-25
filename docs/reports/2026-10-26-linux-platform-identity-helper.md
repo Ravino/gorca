@@ -55,8 +55,9 @@ itself into those cgroups is the same-user adversary the ADR does not cover.
 
 ## Protocol
 
-One line each way on a stream socket: `ID <pid> <start-ticks>\n` -> `OK <identity>\n` | `NO\n`. The helper
-checks the start time before and after its reads. The client never turns a missing helper into a weaker
+Tagged lines on a stream socket, pipelined, replies in any order: `ID <tag> <pid> <start-ticks>\n` ->
+`OK <tag> <identity>\n` | `NO <tag>\n` (a non-request line gets a bare `NO\n`). The helper checks the
+start time before and after its reads. The client never turns a missing helper into a weaker
 in-sandbox guess: no answer is unverified (`None`) and one `warn` is logged. Where gorca is **not** in a
 private user namespace (plain unit, tests, a terminal run) the client reads `/proc` itself as before; no
 IPC.
@@ -93,3 +94,37 @@ initial namespace as before, which is where it already worked.
 - Same-user cgroup moves defeat both peer checks (out of scope, ADR section 2.7).
 - `CapabilityBoundingSet=` could not be used in a user unit (218/CAPABILITIES).
 - Stale socket file remains after the helper stops; the next start replaces it, a client sees ECONNREFUSED.
+
+## Review round (IH-1..IH-3) and scaling requirement (2026-10-26)
+
+Design after review. The first version capped the helper at 8 connections and dropped the 9th; the owner's
+requirement is that the number of applications is unbounded and nothing is refused.
+
+* **One persistent connection, tagged pipelining** (`identity_client::Client`). A reader thread routes
+  replies to the callers waiting on them; a caller never blocks others. The helper reads each connection on
+  its own thread and queues requests (unbounded queue, memory-bounded) for 8 worker threads; replies are
+  tagged and unordered. Connections: up to 256 at once, a further one waits in `accept` (never dropped).
+* **Cache and de-duplication.** `(pid, start)` -> identity (verified or `None`), concurrent lookups of one
+  key share one wire request, 50 windows of one process cost one lookup. `forget(pid, start)` runs when the
+  application actor ends (pid reuse is also covered by the start time in the key). Failed lookups (helper
+  absent, timeout) are never cached. Bounded at 8192 finished entries.
+* **IH-1** no drop under load (above). **IH-2** `connect` has a deadline: `gorca_dbus::connect_unix_timeout`
+  (non-blocking connect, `EAGAIN` retried until the deadline), so a frozen helper no longer leaks a blocking
+  thread. **IH-3** transient errors (helper not bound yet, dropped exchange) are retried within the 200 ms
+  budget; the helper unit is `Type=notify` and sends `READY=1` after `bind`, so `gorca.service` (After=)
+  starts when the socket exists; and an application actor whose identity stayed unverified re-asks with
+  backoff 0.5/1/2/5/15 s (only when the helper is in use) and re-announces on success.
+* **Deployment path.** The owner's installed units are copies pointing at a release binary, so both units
+  must name the same binary: `GORCA_BIN=/path/to/gorca tools/install-dev.sh` writes both copies with
+  `ExecStart` rewritten (without it the units are symlinked and use `%h/.local/bin/gorca`).
+
+Measured (debug build, helper in the initial namespaces, client in a transient unit with the full sandbox):
+
+| Case | Result |
+|---|---|
+| 200 processes outside the sandbox, 64 caller threads, one connection | all 200 verified in 18-25 ms (unit test and `systemd-run` proof) |
+| the same 200 again (cache) | 80 microseconds in total |
+| Firefox via helper, full sandbox | `Some("firefox-esr")`, first 2.5 ms |
+| 50 concurrent lookups of one process | one answer, all equal |
+| Helper bound 30 ms late / backlog full / 9+ held connections (audit tests) | answered / returns at its deadline / answered |
+| `unshare` impostor, `$HOME` copy, wrong server unit, wrong client unit, helper down | `None` (as before) |

@@ -49,7 +49,11 @@ fn audit_a_request_beyond_the_connection_cap_waits_instead_of_being_dropped() {
     let got = ask(&socket, None, pid, start, T);
     let _ = c.kill();
     let _ = c.wait();
-    assert_eq!(got, Ok(Some("sleep".into())), "the ninth request was dropped");
+    assert_eq!(
+        got,
+        Ok(Some("sleep".into())),
+        "the ninth request was dropped"
+    );
 }
 
 /// IH-2: `ask` connects with a blocking `connect(2)` and only then sets its deadline. A helper

@@ -34,6 +34,14 @@ fn reap(mut c: Child) {
 const T: Duration = Duration::from_secs(2);
 const SHORT: Duration = Duration::from_millis(150);
 
+/// The helper itself (what `gorca --identity-helper` runs), for the live proof when the daemon
+/// binary is not at hand: `idtest --ignored live_helper_server`. Never returns.
+#[test]
+#[ignore = "runs the helper until killed; used by the transient-unit proof"]
+fn live_helper_server() {
+    run_helper().expect("helper");
+}
+
 /// Read-only live probe for `systemd-run --user` transient units with the full hardening
 /// (docs/reports/2026-10-26-linux-platform-identity-helper.md): resolves the identity of
 /// `GORCA_PROBE_PID` through the daemon's client exactly as the daemon does and prints the
@@ -52,6 +60,35 @@ fn live_helper_identity_probe() {
     let t = std::time::Instant::now();
     for _ in 0..100 {
         let _ = crate::identity_client::resolve(pid, start, Duration::from_millis(200));
+    }
+    if let Ok(list) = std::env::var("GORCA_PROBE_PIDS") {
+        // Processes started outside this unit (a unit's own children share its namespaces and
+        // are, rightly, unverified): the comma-separated pids are resolved from 64 threads.
+        let keys: Vec<(u32, u64)> = list
+            .split(',')
+            .filter_map(|p| p.parse::<u32>().ok())
+            .filter_map(|p| Some((p, crate::proc::read_proc_info(p).start?)))
+            .collect();
+        let n = keys.len();
+        let ok = std::sync::atomic::AtomicUsize::new(0);
+        let t = std::time::Instant::now();
+        std::thread::scope(|scope| {
+            for chunk in keys.chunks(n / 64 + 1) {
+                let ok = &ok;
+                scope.spawn(move || {
+                    for (pid, start) in chunk {
+                        if crate::identity_client::resolve(*pid, *start, T).is_some() {
+                            ok.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+                });
+            }
+        });
+        println!(
+            "PROBE burst {n} processes: {} verified in {:?}",
+            ok.load(std::sync::atomic::Ordering::Relaxed),
+            t.elapsed()
+        );
     }
     println!(
         "PROBE private-user-ns={} uses-helper={} identity={id:?} first={first:?} cached-mean-of-100={:?}",
@@ -79,9 +116,14 @@ fn requests_and_replies_round_trip_and_garbage_is_refused() {
         parse_reply("OK 3 firefox-esr\n"),
         Some((3, Some("firefox-esr".into())))
     );
-    assert_eq!(parse_reply("OK 3 my app\n"), Some((3, Some("my app".into()))));
+    assert_eq!(
+        parse_reply("OK 3 my app\n"),
+        Some((3, Some("my app".into())))
+    );
     assert_eq!(parse_reply("NO 9\n"), Some((9, None)));
-    for bad in ["OK 3 \n", "NO\n", "OK 3 x", "", "OKx\n", "OK x y\n", "NO x\n"] {
+    for bad in [
+        "OK 3 \n", "NO\n", "OK 3 x", "", "OKx\n", "OK x y\n", "NO x\n",
+    ] {
         assert_eq!(parse_reply(bad), None, "{bad:?}");
     }
     assert_eq!(format_reply(4, Some("a\nb")), "NO 4\n");
@@ -135,8 +177,11 @@ fn pipelined_requests_on_one_connection_are_answered_by_tag() {
     let mut reader = BufReader::new(conn.try_clone().expect("clone"));
     // Three requests in one write, then a line that is not a request.
     conn.write_all(
-        format!("ID 10 {pid} {start}\nID 11 {pid} {}\nID 12 {pid} {start}\ngarbage\n", start + 1)
-            .as_bytes(),
+        format!(
+            "ID 10 {pid} {start}\nID 11 {pid} {}\nID 12 {pid} {start}\ngarbage\n",
+            start + 1
+        )
+        .as_bytes(),
     )
     .expect("write");
     let mut got = Vec::new();
@@ -273,7 +318,10 @@ fn one_process_costs_one_lookup_and_forget_drops_it() {
                 scope.spawn(move || client.resolve(pid, start, T))
             })
             .collect();
-        handles.into_iter().map(|h| h.join().expect("join")).collect()
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("join"))
+            .collect()
     });
     assert!(answers.iter().all(|a| a.as_deref() == Some("sleep")));
     // Once the process is gone the cached answer is still served until it is forgotten.

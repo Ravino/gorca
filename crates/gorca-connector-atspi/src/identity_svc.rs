@@ -285,6 +285,7 @@ pub enum HelperError {
 /// Pause between attempts while the helper is not there yet or is momentarily busy.
 pub(crate) const RETRY: Duration = Duration::from_millis(10);
 
+#[cfg(test)]
 /// One-shot client (a fresh connection per call; the daemon uses [`crate::identity_client`]).
 /// Asks the helper at `socket` for the identity of `(pid, start)` within `timeout` in total. With
 /// `server_unit` the server must be in that systemd unit. `Ok(None)` is the helper's answer
@@ -311,6 +312,7 @@ pub fn ask(
     }
 }
 
+#[cfg(test)]
 fn ask_once(
     socket: &Path,
     server_unit: Option<&str>,
@@ -319,8 +321,8 @@ fn ask_once(
     timeout: Duration,
 ) -> Result<Option<String>, HelperError> {
     let end = std::time::Instant::now() + timeout;
-    let conn = gorca_dbus::connect_unix_timeout(socket, timeout)
-        .map_err(|_| HelperError::Unreachable)?;
+    let conn =
+        gorca_dbus::connect_unix_timeout(socket, timeout).map_err(|_| HelperError::Unreachable)?;
     if let Some(want) = server_unit
         && peer_unit(&conn).as_deref() != Some(want)
     {

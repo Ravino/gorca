@@ -137,7 +137,12 @@ impl Client {
         }
     }
 
-    fn lookup(&self, pid: u32, start: u64, timeout: Duration) -> Result<Option<String>, HelperError> {
+    fn lookup(
+        &self,
+        pid: u32,
+        start: u64,
+        timeout: Duration,
+    ) -> Result<Option<String>, HelperError> {
         if self.local {
             return Ok(verified_identity(pid, start));
         }
@@ -174,12 +179,11 @@ impl Client {
             lock(&conn.pending).remove(&tag);
             return Err(HelperError::Protocol);
         }
-        match rx.recv_timeout(end.saturating_duration_since(Instant::now())) {
-            Ok(v) => Ok(v),
-            Err(_) => {
-                lock(&conn.pending).remove(&tag);
-                Err(HelperError::Protocol)
-            }
+        if let Ok(v) = rx.recv_timeout(end.saturating_duration_since(Instant::now())) {
+            Ok(v)
+        } else {
+            lock(&conn.pending).remove(&tag);
+            Err(HelperError::Protocol)
         }
     }
 
@@ -192,8 +196,8 @@ impl Client {
             return Ok(Arc::clone(c));
         }
         let socket = self.socket.as_deref().ok_or(HelperError::Unreachable)?;
-        let stream = gorca_dbus::connect_unix_timeout(socket, left)
-            .map_err(|_| HelperError::Unreachable)?;
+        let stream =
+            gorca_dbus::connect_unix_timeout(socket, left).map_err(|_| HelperError::Unreachable)?;
         if let Some(want) = &self.server_unit
             && peer_unit(&stream).as_deref() != Some(want.as_str())
         {

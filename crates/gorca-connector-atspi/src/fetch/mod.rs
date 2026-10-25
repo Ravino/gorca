@@ -280,7 +280,7 @@ impl AppServer {
         let mut exe: Option<String> = None;
         // Identity re-resolution: the identity helper may not have been up yet when this
         // application was first seen; ask again with a bounded backoff (attempts so far).
-        let mut reidentify: Option<u32> = None;
+        let mut reidentify: Option<usize> = None;
         if !verified && let Some(rx) = &shell_rx {
             verified = is_the_shell(*rx.borrow(), self.identity);
         }
@@ -294,10 +294,7 @@ impl AppServer {
             let reidentify_due = async {
                 match reidentify {
                     Some(n) => {
-                        let ms = REIDENTIFY_BACKOFF_MS
-                            .get(n as usize)
-                            .copied()
-                            .unwrap_or(30_000);
+                        let ms = REIDENTIFY_BACKOFF_MS.get(n).copied().unwrap_or(30_000);
                         tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
                     }
                     None => std::future::pending().await,
@@ -318,7 +315,7 @@ impl AppServer {
                             announce_info(&port, t, n, exe.as_deref(), verified, settle_ms);
                         }
                     } else {
-                        reidentify = (attempt < REIDENTIFY_BACKOFF_MS.len() as u32).then_some(attempt);
+                        reidentify = (attempt < REIDENTIFY_BACKOFF_MS.len()).then_some(attempt);
                     }
                 }
                 Some(req) = requests.recv() => self.accept(req, &cx, &permits, &background, &mut inflight),

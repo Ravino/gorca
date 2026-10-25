@@ -99,7 +99,10 @@ pub fn connect_unix_timeout(
     // SAFETY: an all-zero `sockaddr_un` is a valid value; it is filled in below.
     let mut addr: libc::sockaddr_un = unsafe { std::mem::zeroed() };
     if bytes.is_empty() || bytes.len() >= addr.sun_path.len() || bytes.contains(&0) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "bad socket path"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "bad socket path",
+        ));
     }
     addr.sun_family = libc::sa_family_t::try_from(libc::AF_UNIX).unwrap_or(1);
     for (dst, src) in addr.sun_path.iter_mut().zip(bytes) {
