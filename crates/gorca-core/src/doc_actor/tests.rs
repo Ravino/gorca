@@ -125,6 +125,7 @@ fn rig_full(
         shutdown: shutdown.clone(),
         counters: Arc::clone(&counters),
         repair: policy,
+        plugins: None,
     });
     docs.insert(handle.clone());
     Rig {
@@ -380,6 +381,7 @@ async fn a_task_the_source_detached_stops_when_the_document_ends() {
         shutdown: shutdown.clone(),
         counters: Arc::new(DocCounters::default()),
         repair: super::repair::RepairPolicy::NONE,
+        plugins: None,
     });
     docs.insert(handle.clone());
     let task = tokio::spawn(fut);

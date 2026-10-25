@@ -101,6 +101,7 @@ fn rig(factory: FakeDocFactory) -> Rig {
         profiles: Arc::new(gorca_config::profiles::ProfileCell::new(
             gorca_config::profiles::initial_snapshot(),
         )),
+        plugins: None,
     };
     let task = tokio::spawn(run_hub(cfg, rx, shutdown.clone()));
     Rig {
