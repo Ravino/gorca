@@ -21,16 +21,16 @@ package gorca:ext@0.11.0;
 ///   exercise the allocator, then drop the result. First-party plugins prove it in CI with the
 ///   warm-neutral differential test W-N1 (§2.4.8.6).
 /// - Idempotent and cheap. Two calls in a row do the same as one. The host caps fuel and wall
-///   time (TBD-W2); a trap, out-of-fuel or memory denial is a fault of the plugin (§2.4.8.5).
-/// - Not a timer. The host decides when and whether it runs; a plugin can neither request nor
-///   schedule one, and must not assume it runs at all.
+///   time (ADR-0026 §2.4.8.4); a trap, out-of-fuel or memory denial is a fault of the plugin (§2.4.8.5).
+/// - A call contract, not a feature. Only the host's scheduler calls it, by its own internal policy
+///   (ADR-0026 §2.4.8.3); a plugin can neither request nor schedule one, and must not assume it
+///   runs at all.
 interface warmup {
   /// Why the host warms. A registry code, not a closed enum, so that a later code is a registry
-  /// change rather than a type change. Unknown codes must be treated like `arm`.
-  ///   0 = preload: a fresh instance before its first real call (startup spare or scope attach),
-  ///       background budget.
-  ///   1 = arm: the scheduler armed this plugin's worker ahead of a likely job, interactive
-  ///       budget (short). Never sent to an untrusted third-party plugin.
+  /// change rather than a type change. Unknown codes must be treated like `soon`.
+  ///   0 = load: a fresh instance before its first real call (startup residency or scope
+  ///       attach); 5 ms fuel, 50 ms wall, off the key path.
+  ///   1 = soon: the scheduler expects a call to this instance soon; 50 µs fuel, 200 µs wall.
   type warm-kind = u8;
 
   warm: func(kind: warm-kind);
