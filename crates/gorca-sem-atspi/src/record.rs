@@ -406,10 +406,8 @@ fn apply_attrs(
     if role == SemRole::Presentation && a.layout_guess == Some("true") {
         sem.flags |= SemFlags::LAYOUT_TABLE;
     }
-    if have_states {
-        if has_details(a) {
-            sem.flags |= SemFlags::HAS_DETAILS;
-        }
+    if have_states && has_details(a) {
+        sem.flags |= SemFlags::HAS_DETAILS;
     }
 }
 

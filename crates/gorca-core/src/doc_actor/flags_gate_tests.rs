@@ -94,6 +94,7 @@ fn dropped(corpus: &str, reason: &'static str, example: String) -> Record {
 /// The documented differences of the live-region properties (M22a-C2 agreement, kept as dated
 /// rows of `deviations.toml`): an `alertdialog` was an assertive atomic region for the legacy
 /// parse and is no live region in the model, and `status` is atomic by default in the model.
+#[allow(clippy::ref_option)]
 fn live_deviation(
     legacy: &Option<String>,
     new: &Option<String>,
