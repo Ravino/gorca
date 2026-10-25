@@ -316,3 +316,89 @@ surface = "notification"
 epoch = "m22b4"
 reason = "An ARIA alertdialog is a dialog on every engine (see the window row)."
 until = "2026-12-12"
+
+# ---- "where am I" (M22b4): the legacy answer used its own role words and state table ----------
+
+[[deviation]]
+id = "unavailable-static"
+surface = "whereami"
+epoch = "m22b4"
+reason = "The legacy answer said unavailable for any node whose AT-SPI state set lacked ENABLED, static GNOME Shell actors and labels included; the model says availability does not apply to them (SM-5), as in the focus rows."
+until = "2026-12-12"
+
+[[deviation]]
+id = "content-derived-name"
+surface = "whereami"
+epoch = "m22b4"
+reason = "The legacy answer spoke the bare role word of a node whose engine name is empty (a row, a tab, a list item, a button); the fused name is derived from its content or label (ProvCode::Derived), as in the focus rows."
+until = "2026-12-12"
+
+[[deviation]]
+id = "name-whitespace"
+surface = "whereami"
+epoch = "m22b4"
+reason = "The fused name is a one-line label: runs of white space the legacy name carried are collapsed."
+until = "2026-12-12"
+
+[[deviation]]
+id = "role-word-improved"
+surface = "whereami"
+epoch = "m22b4"
+reason = "One word table (gorca-present roles, NVDA words for web content) replaces Role::spoken: label/text, panel/grouping, tab list/tab control, tree view, tool bar, switch, list item, and the fused role where the legacy mapping had a coarser one."
+until = "2026-12-12"
+
+[[deviation]]
+id = "state-spoken"
+surface = "whereami"
+epoch = "m22b4"
+reason = "The answer says the off state of a check box, toggle button or similar (not checked, not pressed) like a focus on it does; the legacy table listed only the on states."
+until = "2026-12-12"
+
+[[deviation]]
+id = "state-not-applicable"
+surface = "whereami"
+epoch = "m22b4"
+reason = "The legacy table spoke has popup and pressed straight from the AT-SPI state set; the model keeps pressed for toggles only and expresses a popup as expanded or collapsed (or submenu), as in the focus rows."
+until = "2026-12-12"
+
+[[deviation]]
+id = "role-not-in-table"
+surface = "whereami"
+epoch = "m22b4"
+reason = "The web role table says nothing for a generic container or a text run, so the ancestry skips it where the legacy answer listed panel, text or label; a node that would say nothing at all still names its role."
+until = "2026-12-12"
+
+[[deviation]]
+id = "more-words"
+surface = "whereami"
+epoch = "m22b4"
+reason = "The answer says every role and state word a focus on the node says (busy, current, half checked, scroll bar, landmark, tooltip, off states); the legacy table had a short list of states and no words for these roles. Only catalog role, state and ARIA words are accepted as additions, never a name."
+until = "2026-12-12"
+
+[[deviation]]
+id = "marker-stripped-name"
+surface = "whereami"
+epoch = "m22b4"
+reason = "The fused name drops a list marker or bullet the legacy name carried (quirk row), as in the focus rows."
+until = "2026-12-12"
+
+[[deviation]]
+id = "value-text-spoken"
+surface = "whereami"
+epoch = "m22b4"
+reason = "The fused value text (aria-valuetext, the engine's text reading, a formatted number) is spoken where the legacy answer spoke the raw number."
+until = "2026-12-12"
+
+[[deviation]]
+id = "value-from-attrs"
+surface = "whereami"
+epoch = "m22b4"
+reason = "The fused value (aria-valuenow, a separator's position) is spoken where the legacy snapshot of the recorded fixture carries no Value interface."
+until = "2026-12-12"
+
+[[deviation]]
+id = "name-cap-differs"
+surface = "whereami"
+epoch = "m22b4"
+reason = "A name longer than the one-line label cap is cut by the fused label; the legacy answer carried the full name."
+until = "2026-12-12"

@@ -11,7 +11,7 @@ mod fair;
 mod flow;
 mod job;
 mod log;
-mod node;
+pub(crate) mod node;
 mod notification;
 mod utterance;
 mod window;

@@ -10,7 +10,7 @@ mod compile;
 mod diag;
 mod handlers;
 mod holds;
-mod info;
+pub(crate) mod info;
 mod keys;
 mod mode;
 mod mouse;

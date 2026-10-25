@@ -357,6 +357,54 @@ impl Reader {
     }
 }
 
+/// The words of one node of the ancestry answer from its fused `entry` (`Reason::WhereAmI`): what
+/// `compose` and `render` say for it, sorted by the kind of field they came from. `snap` is read
+/// for the contents of a field only (text-layer data the entry does not hold).
+pub(crate) fn words_of(
+    entry: &SemEntry,
+    snap: &NodeSnapshot,
+    cctx: ComposeCtx,
+    opts: RenderOpts<'_>,
+) -> crate::commands::info::Words {
+    use crate::commands::info::Words;
+    use gorca_present::FieldKind;
+    let mut w = Words::default();
+    if let Ok(ir) = compose(entry, snap.key, Reason::WhereAmI, cctx) {
+        for (kind, tok) in gorca_present::render_kinds(&ir, opts) {
+            let text = tok.text.as_str().to_owned();
+            match kind {
+                FieldKind::NAME | FieldKind::INFERRED_LABEL if w.name.is_none() => {
+                    w.name = Some(text);
+                }
+                FieldKind::ROLE => {
+                    if !w.role.is_empty() {
+                        w.role.push(' ');
+                    }
+                    w.role.push_str(&text);
+                }
+                FieldKind::STATE => w.states.push(text),
+                FieldKind::VALUE => w.values.push(text),
+                _ => {}
+            }
+        }
+    }
+    // The contents of a field are text-layer data: the entry holds none (as in a focus).
+    if w.values.is_empty()
+        && !matches!(entry.sem.role, gorca_model::sem::SemRole::PasswordBox)
+        && let Some(gorca_model::Value::Text(t)) = &snap.value
+        && !t.is_empty()
+    {
+        w.values.push(t.to_string());
+    }
+    w.description = entry
+        .sem
+        .text
+        .as_deref()
+        .and_then(|t| t.description.as_ref())
+        .map(ToString::to_string);
+    w
+}
+
 /// The groups a state-change read observes, laid over `e`: the check, press, expand, select,
 /// availability and invalid states, the value text, and the engine's own name when it gave one.
 fn overlay_observed(e: &mut SemEntry, rec: &gorca_model::sem::SrcRecord) {

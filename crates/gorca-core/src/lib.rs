@@ -122,3 +122,64 @@ pub use runtime::{
 };
 pub use terminal::{TermReads, raw_key};
 pub use text::{TextCounters, TextMsg, TextOp, TextReqId};
+
+/// The seam of the `whereami` cut-over gate (M22b4): the legacy and the fused "where am I" over a
+/// chain of snapshots, so the replay in `gorca-connector-atspi` can compare them. Deleted with the
+/// legacy half at the cut-over; the fused half stays as [`describe_where_am_i`].
+#[doc(hidden)]
+pub mod info_gate {
+    use std::sync::Arc;
+
+    use gorca_config::Verbosity;
+    use gorca_model::NodeSnapshot;
+
+    fn level_of(brief: bool) -> Verbosity {
+        if brief {
+            Verbosity::Brief
+        } else {
+            Verbosity::Normal
+        }
+    }
+
+    /// The legacy answer (role words and state table of the snapshots).
+    #[must_use]
+    pub fn legacy_where_am_i(chain: &[Arc<NodeSnapshot>], repeat: u8, brief: bool) -> Vec<String> {
+        crate::commands::info::where_am_i_parts(chain, repeat, level_of(brief))
+    }
+
+    /// The fused answer: every node of `chain` (leaf first) must carry its entry.
+    #[must_use]
+    pub fn fused_where_am_i(
+        chain: &[Arc<NodeSnapshot>],
+        repeat: u8,
+        brief: bool,
+        lang: gorca_i18n::Lang,
+        web: &[bool],
+    ) -> Vec<String> {
+        let words: Vec<_> = chain
+            .iter()
+            .zip(web)
+            .map(|(n, web)| {
+                let entry = n.sem.entry.clone().unwrap_or_default();
+                let ctx = gorca_present::ComposeCtx {
+                    flags: gorca_present::ReportFlags::default(),
+                    may_refine: false,
+                    web: *web,
+                    skip_selected: false,
+                    hedge_inferred: false,
+                    lang,
+                };
+                crate::present::node::words_of(
+                    &entry,
+                    n,
+                    ctx,
+                    gorca_present::RenderOpts {
+                        lang,
+                        ..gorca_present::RenderOpts::default()
+                    },
+                )
+            })
+            .collect();
+        crate::commands::info::where_am_i_fused_parts(chain, &words, repeat, level_of(brief))
+    }
+}
