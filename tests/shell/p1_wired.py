@@ -30,6 +30,7 @@ import probe_shell as P  # noqa: E402  (refuses to run outside a private session
 
 TAB, ENTER, SPACE, RIGHT, LEFT, ALT, CTRL, META, ESC, DOWN, S = 15, 28, 57, 106, 105, 56, 29, 125, 1, 108, 31
 HOME = 102
+INSERT = 110  # the screen reader key of the default keymap: Insert+Tab is where-am-I
 KEY_T, KEY_H, KEY_K = 20, 35, 37  # browse-mode quick navigation: table, heading, link
 
 
@@ -338,6 +339,8 @@ def gtk4(rig):
     rig.tab_to("gtk4", "focus: toggle button", "mute", ("mute", "toggle button", "not pressed"))
     rig.step("gtk4", "change: Space presses", lambda: rig.tap(SPACE), expect=("pressed",), forbid=("not pressed",))
     rig.tab_to("gtk4", "focus: check button", "subscribe", ("subscribe", "check box", "not checked"))
+    rig.step("gtk4", "info: where am I (Insert+Tab)", lambda: rig.tap(INSERT, TAB),
+             expect=("P1 Wired", "Subscribe", "check box"), longest=6)
     rig.step("gtk4", "change: Space checks", lambda: rig.tap(SPACE), expect=("checked",), forbid=("not checked",))
     rig.stop(p)
     return got
@@ -411,6 +414,8 @@ def shell(rig):
     rig.tab_to("shell", "focus: a toggle button", "toggle button", ("toggle button",), tries=14)
     rig.step("shell", "change: Space flips the toggle", lambda: rig.tap(SPACE), expect=("pressed",))
     rig.step("shell", "change: Space flips it back", lambda: rig.tap(SPACE), expect=("not pressed",))
+    rig.step("shell", "info: where am I (Insert+Tab)", lambda: rig.tap(INSERT, TAB),
+             expect=("Dark Style", "toggle button"), longest=6)
     rig.tap(ESC)
     rig.stop(p1)
     rig.stop(p2)
