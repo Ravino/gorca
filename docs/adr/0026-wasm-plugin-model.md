@@ -1,6 +1,6 @@
 # ADR-0026: WASM plugin model on the fused semantic model (M18a)
 
-Status: **Proposed** (r7.1 owner answers QW-1..QW-4 and the warm-hook model numbers folded into §2.4.8, 2026-10-25; r7 warm hook and startup preload §2.4.8, replaces the M18a-4 replay; DP-1 (b) approved by the owner, 2026-10-25; r6.1 SPS implemented behind `[plugins] scheduler`, default `labels`, 2026-10-25; r6, 2026-10-25, SPS scheduling §2.4.7, DP-1 pending owner; r5 implementation notes, 2026-10-25; r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
+Status: **Proposed** (r8 pointer to ADR-0028 virtual actions, 2026-10-26; r7.1 owner answers QW-1..QW-4 and the warm-hook model numbers folded into §2.4.8, 2026-10-25; r7 warm hook and startup preload §2.4.8, replaces the M18a-4 replay; DP-1 (b) approved by the owner, 2026-10-25; r6.1 SPS implemented behind `[plugins] scheduler`, default `labels`, 2026-10-25; r6, 2026-10-25, SPS scheduling §2.4.7, DP-1 pending owner; r5 implementation notes, 2026-10-25; r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
 r4 applies the r3 review (`docs/reports/adr-0026-review.md`, section r3): deadline from the turn start, timer slack,
 wait mechanism, one wait per keypress path, tighter benign gates. r3 follows the owner decision of 2026-10-24 (canonical actor model: plugins are actors, **B' is the design
 target**, §2.4.6, §5) and records QP-1..QP-5 as confirmed (§6).
@@ -1469,6 +1469,7 @@ cue files declared in the plugin's manifest theme only.
   plugin is in flight, or in a `reactor.deliver` of a request issued by that command in the same
   epoch. `derive`, timers and other deliveries can never act or change settings. Every action
   re-validates the target at apply time and the ADR-0024 §2.3.3 "act on what was spoken" check.
+- *Note r8 (2026-10-26): AC-4 and the `actions` row of §2.3 are superseded for 0.11 by ADR-0028 (virtual actions): `activate`, `focus` and `pointer-click` become `actions.perform(n, steps)` over the closed step set and the same executor as virtual actions; the `pointer` rules below carry over unchanged (T2 only, helper cap, AC-3, rate).*
 - **AC-4 Pointer**: `pointer-click` = gorca's ADR-0025 click on the node's centre through the helper.
   It requires all of: permission `pointer` (T2 only), the helper's allow-list `pointer` cap for gorca
   (AL-1), the user's pointer setting on, AC-3, ≤ 2 clicks/s. Plugins never talk to the helper.
@@ -1826,6 +1827,8 @@ WASM engineer (M18a-0 unless noted):
 - I-P7 Slot state transitions are exactly §2.5.4; every cell is tested.
 
 ## 8. Changelog
+
+**r8 (2026-10-26)** — pointer to ADR-0028 (virtual actions): plugins offer declarative actions through a new W-lane `vactions` import; the 0.10 `actions` interface is replaced in 0.11 by `perform` over the same closed step set (draft `wit/drafts/gorca-ext-0.11-vactions/`); new permissions `offer-actions` and `keys`. No other change.
 
 **r7.1 (2026-10-25)** — folds in the owner's answers QW-1..QW-4 and the numbers of
 `docs/reports/plugin-warm-hook-model.md`; §2.4.8 rewritten as one text. No change to the fact model, the
