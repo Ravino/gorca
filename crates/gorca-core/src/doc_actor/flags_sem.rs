@@ -78,9 +78,9 @@ pub fn flags_from_sem(
         f = f | NodeFlags::LAYOUT;
     }
     // A live region root of its own (an `aria-live` or a status or log), or a role that is a live
-    // region only to be quiet. An alert is implicitly live in the model but never carried this
-    // flag; it keeps its own category.
-    let own_live = sem.live.is_some_and(|l| l.root) && role != SemRole::Alert;
+    // region only to be quiet. A node the engine reports as an alert is a live region by its
+    // category already.
+    let own_live = sem.live.is_some_and(|l| l.root) && n.role != Role::Alert;
     if own_live
         || matches!(
             role,

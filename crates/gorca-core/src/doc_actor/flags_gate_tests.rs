@@ -135,9 +135,10 @@ fn records(family: &Family, seed: u64, out: &mut Vec<Record>) {
             let (lf, ll) = derive_flags(n, false);
             let (nf, nl) = flags_of(n, Some(&e), false);
             let (legacy, new) = (format!("{lf:?} level {ll}"), format!("{nf:?} level {nl}"));
-            // An alert keeps its own category: the model never marks it as a plain live region,
-            // the legacy parse did when the author wrote an explicit `aria-live` on it.
-            let dev = (e.sem.role == gorca_model::sem::SemRole::Alert
+            // A node the engine reports as an alert is a live region by its category already:
+            // it carries no separate LIVE flag, the legacy parse set one when the author wrote an
+            // explicit `aria-live` on it.
+            let dev = (n.role == gorca_model::Role::Alert
                 && lf != nf
                 && nf | NodeFlags::LIVE == lf
                 && ll == nl)
