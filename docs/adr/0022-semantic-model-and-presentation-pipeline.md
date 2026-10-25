@@ -804,3 +804,17 @@ and a fact that sets it on a node no source marked is ignored. Tests:
 `the_secret_mark_join_does_not_depend_on_the_order_of_writes` (`gorca-fuse`). No Newton connector
 exists in this tree; when one is added its record must set `SECRET` for a password role.
 
+* 2026-10-25 (security review): quick navigation to a password field no longer speaks the
+  mirror's text under it (Chromium "7 bullet", Firefox seven bullet glyphs): a secret node's
+  description is its name and role only, whatever text the source left under it. 2 records per
+  language in `quicknav.*.tsv`. The browse test uses plain text ("hunter2") under the field, so
+  it checks the redaction itself and not the source's masking.
+
+Audit of the part-2 diff (8c615c5c to the tip) for removed secret checks: the three
+`is_secret_node` calls in `browse/` became `node_is_secret` (role, entry mark, or role without an
+entry); `NodeSnapshot::is_sensitive`, `is_secret_node` and `is_secret_entry` gained the mark; the
+text layer still asks `is_sensitive`; every `Role::PasswordEntry` that left a role list is
+`SemRole::PasswordBox` in its replacement (text role, dialog-read skip, object marker, category
+`EDIT`, pointer class, description request, label planner), and no test fixture lost its password
+case.
+

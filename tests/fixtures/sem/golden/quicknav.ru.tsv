@@ -569,8 +569,8 @@ chromium/m8-forms	6	node	Said:Profile form | Role:форма | Said:Account
 chromium/m8-forms	6	node-from	Said:Account
 chromium/m8-forms	13	node	Said:Full name | Role:поле ввода | Said:Ada
 chromium/m8-forms	13	node-from	Said:Full name | Role:поле ввода | Said:Ada
-chromium/m8-forms	18	node	Said:Secret | Role:поле ввода пароля | Said:7 маркер
-chromium/m8-forms	18	node-from	Said:Secret | Role:поле ввода пароля | Said:7 маркер
+chromium/m8-forms	18	node	Said:Secret | Role:поле ввода пароля
+chromium/m8-forms	18	node-from	Said:Secret | Role:поле ввода пароля
 chromium/m8-forms	23	node	Said:Notes | Role:поле ввода | Said:Line one\nLine two
 chromium/m8-forms	23	node-from	Said:Notes | Role:поле ввода | Said:Line one\nLine two
 chromium/m8-forms	28	node	Said:Read only | Role:поле ввода | State:недоступно | State:только чтение | Said:fixed
@@ -2375,8 +2375,8 @@ firefox/m8-forms	7	node	Said:Profile form | Role:форма | Said:Account | Sai
 firefox/m8-forms	7	node-from	Said:Account | Said:Full name | Role:поле ввода | Said:Ada | Said:Secret | Role:поле ввода пароля | Said:●●●●●●● | Said:Notes | Role:поле ввода | Said:Line one\nLine two | Said:Read only | Role:поле ввода | State:только чтение | Said:fixed | Said:Disabled | Role:поле ввода | State:недоступно | Said:off | Said:Required | Role:поле ввода | State:обязательное | State:неверный ввод | State:пусто | Said:Help text for required | Said:Invalid | Role:поле ввода | State:неверный ввод | Said:bad | Said:Error text here
 firefox/m8-forms	14	node	Said:Full name | Role:поле ввода | Said:Ada
 firefox/m8-forms	14	node-from	Said:Full name | Role:поле ввода | Said:Ada
-firefox/m8-forms	20	node	Said:Secret | Role:поле ввода пароля | Said:●●●●●●●
-firefox/m8-forms	20	node-from	Said:Secret | Role:поле ввода пароля | Said:●●●●●●●
+firefox/m8-forms	20	node	Said:Secret | Role:поле ввода пароля
+firefox/m8-forms	20	node-from	Said:Secret | Role:поле ввода пароля
 firefox/m8-forms	26	node	Said:Notes | Role:поле ввода | Said:Line one\nLine two
 firefox/m8-forms	26	node-from	Said:Notes | Role:поле ввода | Said:Line one\nLine two
 firefox/m8-forms	32	node	Said:Read only | Role:поле ввода | State:только чтение | Said:fixed
