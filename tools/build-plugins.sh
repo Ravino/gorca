@@ -26,6 +26,9 @@ for n in "${names[@]}"; do
   mkdir -p "$dist/$id"
   cp "$tgt/wasm32-wasip2/release/${crate//-/_}.wasm" "$dist/$id/plugin.wasm"
   cp "$src/manifest.toml" "$dist/$id/manifest.toml"
+  # The message catalogs of the plugin's facts (not pinned: the installed directory is root's).
+  rm -rf "$dist/$id/i18n"
+  if [ -d "$src/i18n" ]; then cp -r "$src/i18n" "$dist/$id/i18n"; fi
   echo "built $id"
 done
 {

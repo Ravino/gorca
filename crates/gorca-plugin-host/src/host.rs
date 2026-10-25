@@ -59,6 +59,11 @@ use bindings::gorca::ext::{
     actions, diag, facts, model, output, requests, settings, timers, types,
 };
 
+/// Longest catalog key of a message fact, most arguments, longest argument name.
+const MSG_ID_MAX: usize = 64;
+const MSG_ARGS_MAX: usize = 8;
+const MSG_ARG_NAME_MAX: usize = 32;
+
 /// A fact value, reduced to what admission needs (positions, grids and areas are not kept in
 /// this slice).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,6 +80,14 @@ pub enum Value {
     Text(String),
     /// Boolean.
     Truth(bool),
+    /// A message of the plugin's catalog with its arguments, resolved by the writer's side
+    /// when the fact is admitted.
+    Msg {
+        /// Catalog key.
+        id: String,
+        /// Named arguments.
+        args: Vec<(String, String)>,
+    },
     /// A structured value not yet decoded.
     Other,
 }
@@ -620,6 +633,13 @@ fn value_of(v: &types::PropValue) -> (Value, usize) {
         types::PropValue::Bits(b) => (Value::Bits(*b), 0),
         types::PropValue::Number(n) => (Value::Number(*n), 0),
         types::PropValue::Text(t) => (Value::Text(t.clone()), t.len()),
+        types::PropValue::Message(m) => (
+            Value::Msg {
+                id: m.id.clone(),
+                args: m.args.clone(),
+            },
+            m.id.len() + m.args.iter().map(|(k, v)| k.len() + v.len()).sum::<usize>(),
+        ),
         types::PropValue::Truth(b) => (Value::Truth(*b), 0),
         types::PropValue::Position(_) | types::PropValue::Grid(_) | types::PropValue::Area(_) => {
             (Value::Other, 0)
@@ -644,6 +664,18 @@ impl facts::Host for HostState {
             && !self.cap(Cap::Text, t.len())
         {
             return Ok(());
+        }
+        if let types::PropValue::Message(m) = &value {
+            let ok = m.id.len() <= MSG_ID_MAX
+                && m.args.len() <= MSG_ARGS_MAX
+                && m.args
+                    .iter()
+                    .all(|(k, v)| k.len() <= MSG_ARG_NAME_MAX && v.len() <= Cap::Text.bytes());
+            if !ok {
+                self.counters.oversize += 1;
+                self.malformed = true;
+                return Ok(());
+            }
         }
         let Some(target) = self.target(&target) else {
             return Ok(());

@@ -71,6 +71,11 @@ interface types {
     area(rect),
     /// Evidence only (flags such as css-hidden).
     truth(bool),
+    /// Text groups, localised: a message of the plugin's own catalog (`i18n/<lang>.msg` in its
+    /// package), resolved by the host when the fact is admitted, in the UI language of that
+    /// moment. An id the catalog does not have drops the fact. `id` at most 64 bytes, at most 8
+    /// args, each name at most 32 and each value at most 1 KiB.
+    message(msg-ref),
   }
 
   /// Text a plugin wants spoken or shown: a message of its own catalog (ADR-0010) or a literal.

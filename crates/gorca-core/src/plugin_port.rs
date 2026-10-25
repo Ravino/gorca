@@ -448,12 +448,16 @@ pub struct BridgeStats {
     pub waited: u64,
     /// Interactive turns that were refused the wait.
     pub no_wait: u64,
+    /// Facts dropped because their node is a secret one (AC-1, SS-3).
+    pub secret_dropped: u64,
     /// Interactive jobs sent, and replies that had arrived when the bounded wait ended.
     pub handoff_asked: u64,
     /// See `handoff_asked`.
     pub handoff_arrived: u64,
     /// Nanoseconds spent in the bounded wait, summed.
     pub handoff_waited_ns: u64,
+    /// Nanoseconds spent admitting the replies after the wait, summed.
+    pub handoff_drain_ns: u64,
 }
 
 struct LiveToken {
@@ -584,9 +588,19 @@ impl PluginBridge {
         if self.rows[ix(node)].as_ref() == Some(&row) {
             return false;
         }
-        let matches = self.runner.watches(&row);
+        // A secret node (a password) is never watched and never derived (AC-1, SS-3): a re-derive
+        // on every keystroke would tell a plugin the length and rhythm of what is typed.
+        let secret = row.secret;
+        let matches = if secret {
+            Vec::new()
+        } else {
+            self.runner.watches(&row)
+        };
         self.rows[ix(node)] = Some(row);
         self.touch(node);
+        if secret {
+            self.forget_target(node);
+        }
         if matches.is_empty() {
             self.watched.remove(&node);
         } else {
@@ -602,6 +616,33 @@ impl PluginBridge {
             }
         }
         true
+    }
+
+    /// Drop every pending derivation and live fact whose target is `node` (it became secret).
+    fn forget_target(&mut self, node: u32) {
+        self.watched.remove(&node);
+        for p in &mut self.pending {
+            p.remove(&node);
+        }
+        self.inflight.retain(|(_, t), _| *t != node);
+        let own: Vec<(usize, u32)> = self
+            .live
+            .keys()
+            .filter(|(_, t)| *t == node)
+            .copied()
+            .collect();
+        for key in own {
+            if let Some(tok) = self.drop_token(key) {
+                for (n, group, patch) in tok.facts {
+                    self.ops.push(FactOp::Retract {
+                        node: n,
+                        plugin: key.0,
+                        group,
+                        patch,
+                    });
+                }
+            }
+        }
     }
 
     /// The structure below or above `node` changed (children list, parent): same effect on the
@@ -841,7 +882,10 @@ impl PluginBridge {
         self.stats.handoff_asked += u64::from(h.asked);
         self.stats.handoff_arrived += u64::from(h.arrived);
         self.stats.handoff_waited_ns += h.waited_ns;
-        self.drain()
+        let t = now_ns();
+        let any = self.drain();
+        self.stats.handoff_drain_ns += now_ns().saturating_sub(t);
+        any
     }
 
     /// Send up to [`MAX_BATCH`] dirty nodes per plugin as background jobs (no wait) and admit
@@ -916,7 +960,17 @@ impl PluginBridge {
                     .copied()
                     .collect();
                 for k in keys {
-                    self.drop_token(k);
+                    // The facts leave the model now: an unmask must not bring back stale ones.
+                    if let Some(tok) = self.drop_token(k) {
+                        for (node, group, patch) in tok.facts {
+                            self.ops.push(FactOp::Retract {
+                                node,
+                                plugin: r.plugin,
+                                group,
+                                patch,
+                            });
+                        }
+                    }
                 }
                 if let Some(p) = self.pending.get_mut(r.plugin) {
                     p.clear();
@@ -1018,6 +1072,15 @@ impl PluginBridge {
         for tgt in targets {
             let mut new_facts: Vec<(u32, Group, bool)> = Vec::new();
             for e in effects.iter().filter(|e| owned_by(e.node, *tgt, &reads)) {
+                if self
+                    .rows
+                    .get(ix(e.node))
+                    .and_then(Option::as_ref)
+                    .is_none_or(|r| r.secret)
+                {
+                    self.stats.secret_dropped += 1;
+                    continue;
+                }
                 let Some(GroupClass::Semantic(group)) = Some(GroupCode(e.group).classify()) else {
                     self.stats.unsupported += 1;
                     continue;

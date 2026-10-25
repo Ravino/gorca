@@ -659,6 +659,10 @@ pub async fn run_hub(cfg: HubCfg, mut rx: mpsc::Receiver<HubMsg>, shutdown: Canc
         shutdown: shutdown.clone(),
         pending: std::collections::VecDeque::new(),
     };
+    // Only a loaded plugin that matches on URLs makes the sources read them.
+    if hub.cfg.plugins.as_ref().is_some_and(|p| p.wants_url()) {
+        hub.cfg.factory.set_report_url(true);
+    }
     loop {
         let wake = hub.next_wake();
         let sleep = async {

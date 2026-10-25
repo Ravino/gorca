@@ -46,11 +46,17 @@ mod guest {
                 text,
             });
         }
-        if let Some(name) = chat_name(&cells, "unread") {
+        if let Some(name) = chat_name(&cells) {
+            // A message of the plugin's catalog (`i18n/*.msg`): the host resolves it in the
+            // UI language, so "unread" is not an English literal.
+            let msg = types::MsgRef {
+                id: name.key(),
+                args: name.args(),
+            };
             facts::assert(
                 facts::FactTarget::Node(n),
                 GROUP_NAME,
-                &types::PropValue::Text(name),
+                &types::PropValue::Message(msg),
                 facts::Layer::Patch,
                 900,
                 None,

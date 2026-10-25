@@ -362,7 +362,7 @@ pub async fn run_with_policy(
 /// The plugin runtime (ADR-0026, M18a): only when `[plugins] enabled` is set in the settings
 /// file. Packages load on a blocking thread; a failure leaves the daemon running without
 /// plugins.
-async fn wire_plugins(core: Core, opts: &Options) -> Core {
+async fn wire_plugins(core: Core, opts: &Options, prewake: Arc<plugins::Prewake>) -> Core {
     let enabled = match &opts.config_path {
         Some(p) => config_task::startup_plugins_enabled(p).await,
         None => false,
@@ -371,7 +371,9 @@ async fn wire_plugins(core: Core, opts: &Options) -> Core {
         return core;
     }
     let popts = opts.plugins.clone();
-    match tokio::task::spawn_blocking(move || plugins::PluginRuntime::load(&popts)).await {
+    match tokio::task::spawn_blocking(move || plugins::PluginRuntime::load_prewake(&popts, prewake))
+        .await
+    {
         Ok(rt) => {
             tracing::info!(plugins = ?rt.ids(), "plugin runtime ready");
             core.with_plugins(rt)
@@ -423,6 +425,9 @@ async fn run_inner(
     if let Some(p) = policy {
         core = core.with_fill_policy(p);
     }
+    // The plugin runtime's key-down hook: the keyboard pump arms it, the runtime registers its
+    // scopes with it (an empty hub costs one atomic read per key).
+    let prewake = Arc::new(plugins::Prewake::default());
     // Extensions first: their commands must be known before the settings are compiled.
     // The first-party extensions' message catalogs: registered up front from the embedded copies.
     // They are built-in namespaces: the files next to a WASM component never replace them.
@@ -492,6 +497,7 @@ async fn run_inner(
                 links,
                 grabs,
                 grab_control,
+                Arc::clone(&prewake),
             );
         });
         core
@@ -500,7 +506,7 @@ async fn run_inner(
     let atspi_state = AtspiState::default();
     let core = wire_sources::wire_sources(core);
     let core = wire::wire_present_log(core, &opts, &atspi_state);
-    let core = wire_plugins(core, &opts).await;
+    let core = wire_plugins(core, &opts, Arc::clone(&prewake)).await;
     let core = wire::wire_web(core, &opts, &atspi_state);
     if let Some(f) = on_ready {
         f(DaemonProbe::new(core.mirrors(), atspi_state.clone()));

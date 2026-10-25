@@ -134,7 +134,10 @@ fn row_of(n: &SrcNode) -> Row {
             role: rec.sem.role.code(),
             states: n.states.bits(),
             name: rec.name.clone(),
-            text: n.text.clone(),
+            // What is typed into a secret field is not for a plugin to see or to count.
+            text: (!Row::is_secret_role(rec.sem.role))
+                .then(|| n.text.clone())
+                .flatten(),
             tag: (!rec.tag.is_empty()).then(|| Arc::from(rec.tag.as_str())),
             class: rec.class.clone(),
             aria_role: rec.aria_role.clone(),

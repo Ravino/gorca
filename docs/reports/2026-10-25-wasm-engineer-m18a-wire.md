@@ -60,6 +60,30 @@ in `bench/results/plugins/px6-2026-10-25.txt` are kept (they show the defect: 0.
 The gate must be re-run on a quiet host (`sudo bench/b1/quiet-host.sh on`, release build, the user's
 approval); until then the PX-6 gate is open.
 
+## Latency options measured (M18a-2 review fixes), normal host idle states
+
+Same test (`plugin_latency.rs`, release, 10 plugins, 400 focus turns 24 ms apart), loadavg 10-12 on 16 cores,
+C2/C3 idle states enabled (the owner's configuration; `quiet-host.sh` not used). Rows are in
+`bench/results/plugins/px6-2026-10-25.txt`, `debug_log=false`, all `quiet_violated=true`.
+
+| Variant | turn p50 / p99 (us) | facts in time, overall / weakest | admit per turn |
+|---|---|---|---|
+| A baseline: parking writer, no pre-wake | 429 / 566 | 37 % / 62 % | 55 us |
+| B pre-wake on key-down, parking writer | 404 / 4821 (outliers) | 57 % / 80 % | |
+| E writer spins the window, no pre-wake | 333 / 426 | 5 % / 15 % | |
+| **C pre-wake + writer spins the window (shipped)** | **335 / 434** | **71 % / 93 %** | 60 us |
+| D = C + nine `refinement` plugins | 241 / 4338 (outliers) | real plugin 94 %, the nine are refinements by design | 53 us |
+
+Reading: the pre-wake is what lifts coverage (the workers are running when the job arrives); the spinning
+writer is what keeps the tail near D (a parked writer wakes late). Admission was ~100 us before the
+message facts were resolved on the worker thread. The rare 4-5 ms outliers (max in B, C, D) are the
+host scheduler preempting a busy-spinning thread on a loaded machine; they are in every variant that
+spins and do not appear in A or E at 400 trials only by luck of the draw. **Delta p99 is 428 us against the
+300 us gate and 71 % / 93 % against 99 % / 97 %: the gate is still open on this host**, every fact still
+arrives as a refinement (100 % within 15 ms). Priority `refinement` removes plugins from the countdown (p50
+drops to 241 us); it is the tool for anything heavier than a row name, and it does not change the first
+utterance of the plugin that matters.
+
 ## Gaps
 
 See ADR-0026 section 2.9 "Gaps found while implementing" (12 items). The ones that need an owner decision:

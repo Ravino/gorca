@@ -158,18 +158,39 @@ fn writer_delay_with_ten_plugins_against_none() {
         let m = std::fs::read_to_string(dist.join("gorca.telegram-web/manifest.toml"))
             .unwrap()
             .replace("gorca.telegram-web", &format!("example.dummy{i}"));
+        // GORCA_BENCH_REFINEMENT_DUMMIES: the nine copies never gate a turn.
+        let m = if std::env::var("GORCA_BENCH_REFINEMENT_DUMMIES").is_ok() {
+            m.replacen(
+                "world = \"site\"",
+                "world = \"site\"\npriority = \"refinement\"",
+                1,
+            )
+        } else {
+            m
+        };
         std::fs::write(d.join("manifest.toml"), m).unwrap();
         std::fs::copy(
             dist.join("gorca.telegram-web/plugin.wasm"),
             d.join("plugin.wasm"),
         )
         .unwrap();
+        let cat = d.join("i18n");
+        std::fs::create_dir_all(&cat).unwrap();
+        for f in ["en.msg", "ru.msg"] {
+            std::fs::copy(dist.join("gorca.telegram-web/i18n").join(f), cat.join(f)).unwrap();
+        }
     }
     let pins = parse_pins(&std::fs::read_to_string(root().join("plugins/pins.txt")).unwrap());
     let rt = PluginRuntime::load_with_pins(
         &PluginOptions {
             first_party_dir: Some(dist),
             user_dir: Some(user.path().to_path_buf()),
+            allow_sideloaded: true,
+            // GORCA_BENCH_SPIN_US=10 is the old parking writer; unset is the whole window.
+            writer_spin: std::env::var("GORCA_BENCH_SPIN_US")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .map(Duration::from_micros),
             ..PluginOptions::default()
         },
         &pins,
@@ -229,6 +250,7 @@ fn writer_delay_with_ten_plugins_against_none() {
         "every plugin derived the row once"
     );
 
+    let use_prewake = std::env::var("GORCA_BENCH_NO_PREWAKE").is_err();
     let mut on_ns: Vec<u64> = Vec::with_capacity(TRIALS);
     let mut off_ns: Vec<u64> = Vec::with_capacity(TRIALS);
     let mut in_time = [0usize; PLUGINS];
@@ -246,7 +268,12 @@ fn writer_delay_with_ten_plugins_against_none() {
         off.interactive(&[1, 0], &tree, t);
         let _ = off.take_ops();
         off_ns.push(now_ns() - t);
-        // Plugins on.
+        // Plugins on. The key reaches gorca a few milliseconds before the focus change it causes:
+        // the pre-wake (what the keyboard pump does) has the workers running by then.
+        if use_prewake {
+            rt.prewake().key_down();
+            std::thread::sleep(Duration::from_millis(3));
+        }
         bridge.begin_turn();
         bridge.upsert(11, row(&CHAT[11], Some(&text)));
         let t0 = now_ns();
@@ -317,10 +344,16 @@ fn writer_delay_with_ten_plugins_against_none() {
         .iter()
         .map(|c| *c as f64 / TRIALS as f64)
         .fold(1.0, f64::min);
+    let st = bridge.stats();
+    eprintln!(
+        "per turn: wait {:.1} us, admit {:.1} us",
+        st.handoff_waited_ns as f64 / 1e3 / TRIALS as f64,
+        st.handoff_drain_ns as f64 / 1e3 / TRIALS as f64
+    );
     let line = format!(
         "PX-6 plugins={PLUGINS} trials={TRIALS} on_us p50={:.1} p99={:.1} max={:.1} off_us p50={:.1} p99={:.1} \
          delta_p99_us={:.1} facts_at_first_utterance overall={:.3} min_plugin={:.3} per_plugin={:?} \
-         min_eventually_within_15ms={:.3} load1={load1:.1} cores={cores} release={release} debug_log={} quiet_violated={}",
+         min_eventually_within_15ms={:.3} load1={load1:.1} cores={cores} release={release} debug_log={} prewake={} spin_us={} refinement_dummies={} quiet_violated={}",
         pct(&on_ns, 0.5) as f64 / 1e3,
         pct(&on_ns, 0.99) as f64 / 1e3,
         *on_ns.last().unwrap() as f64 / 1e3,
@@ -332,6 +365,9 @@ fn writer_delay_with_ten_plugins_against_none() {
         per_plugin,
         min_refined,
         std::env::var("GORCA_BENCH_LOG").is_ok(),
+        use_prewake,
+        std::env::var("GORCA_BENCH_SPIN_US").unwrap_or_else(|_| "window".into()),
+        std::env::var("GORCA_BENCH_REFINEMENT_DUMMIES").is_ok(),
         !quiet,
     );
     eprintln!("{line}");

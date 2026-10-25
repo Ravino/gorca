@@ -48,6 +48,14 @@ fn runtime(extra: PluginOptions) -> Arc<PluginRuntime> {
     PluginRuntime::load_with_pins(&opts, &pins())
 }
 
+fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap() {
+        let e = e.unwrap();
+        std::fs::copy(e.path(), to.join(e.file_name())).unwrap();
+    }
+}
+
 fn scope(app: &str, url: &str, verified: bool) -> ScopeSpec {
     ScopeSpec {
         app: Arc::from(app),
@@ -390,9 +398,20 @@ fn a_tampered_first_party_package_is_refused_and_a_sideloaded_copy_is_hedged() {
         pkg.join("plugin.wasm"),
     )
     .unwrap();
+    copy_dir(&dist().join("gorca.telegram-web/i18n"), &pkg.join("i18n"));
+    // By default a sideloaded package is refused (no system-scopes yet): fail closed.
+    let refused = PluginRuntime::load_with_pins(
+        &PluginOptions {
+            user_dir: Some(user.path().to_path_buf()),
+            ..PluginOptions::default()
+        },
+        &pins(),
+    );
+    assert!(refused.ids().is_empty(), "third-party code must not load");
     let rt = PluginRuntime::load_with_pins(
         &PluginOptions {
             user_dir: Some(user.path().to_path_buf()),
+            allow_sideloaded: true,
             ..PluginOptions::default()
         },
         &pins(),
@@ -477,4 +496,45 @@ fn a_focus_on_an_underived_row_waits_at_most_the_deadline_and_the_facts_follow()
     }
     assert_eq!(names(&ops).len(), 1, "{ops:?}");
     let _ = Group::Name;
+}
+
+#[test]
+fn a_key_down_arms_every_open_scope_and_a_closed_one_is_forgotten() {
+    let rt = runtime(PluginOptions::default());
+    assert!(rt.prewake().is_empty());
+    let b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/", true),
+    )
+    .expect("scope");
+    assert_eq!(rt.prewake().len(), 1);
+    rt.prewake().key_down();
+    drop(b);
+    std::thread::sleep(Duration::from_millis(30));
+    // The next key (past the rate limit) prunes the handle of the scope that is gone.
+    rt.prewake().key_down();
+    assert!(rt.prewake().is_empty());
+}
+
+#[test]
+fn a_sideloaded_package_is_not_loaded_by_default() {
+    let user = tempfile::tempdir().unwrap();
+    let pkg = user.path().join("example.third");
+    std::fs::create_dir_all(&pkg).unwrap();
+    std::fs::write(
+        pkg.join("manifest.toml"),
+        "[plugin]\nid = \"example.third\"\n[match]\napps = [\"firefox-esr\"]\n",
+    )
+    .unwrap();
+    std::fs::write(pkg.join("plugin.wasm"), b"\0asm").unwrap();
+    let rt = PluginRuntime::load_with_pins(
+        &PluginOptions {
+            first_party_dir: Some(dist()),
+            user_dir: Some(user.path().to_path_buf()),
+            ..PluginOptions::default()
+        },
+        &pins(),
+    );
+    // First party keeps working; the user directory contributes nothing.
+    assert_eq!(rt.ids(), vec!["gorca.telegram-web".to_owned()]);
 }

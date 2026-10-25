@@ -66,7 +66,7 @@ pub struct Cell {
 
 /// The name of a chat row: title, unread count, preview and time, without the avatar's
 /// initials. `None` when the row has no title (nothing to improve).
-pub fn chat_name(cells: &[Cell], unread_word: &str) -> Option<String> {
+pub fn chat_name(cells: &[Cell]) -> Option<Name> {
     let t = table();
     let mut part_of_cell: Vec<Option<Part>> = Vec::with_capacity(cells.len());
     let mut texts: HashMap<Part, Vec<&str>> = HashMap::new();
@@ -131,21 +131,71 @@ pub fn chat_name(cells: &[Cell], unread_word: &str) -> Option<String> {
     if title.is_empty() {
         return None;
     }
-    let mut out = title;
-    let badge = join(Part::Badge);
-    if !badge.is_empty() {
-        out.push_str(", ");
-        out.push_str(&badge);
-        out.push(' ');
-        out.push_str(unread_word);
+    let unread = join(Part::Badge);
+    Some(Name {
+        title,
+        unread: (!unread.is_empty()).then_some(unread),
+        preview,
+        time,
+    })
+}
+
+/// The parts of a chat row's name. The words between them ("unread", the order, the commas) are
+/// the catalog's (`i18n/<lang>.msg`), so they follow the UI language.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Name {
+    /// The chat's title.
+    pub title: String,
+    /// The unread count as the page shows it.
+    pub unread: Option<String>,
+    /// The preview of the last message (empty: none).
+    pub preview: String,
+    /// The time of the last message (empty: none).
+    pub time: String,
+}
+
+impl Name {
+    /// The catalog key: `row-UPT`, one digit each for unread, preview and time present.
+    pub fn key(&self) -> String {
+        let d = |b: bool| if b { '1' } else { '0' };
+        format!(
+            "row-{}{}{}",
+            d(self.unread.is_some()),
+            d(!self.preview.is_empty()),
+            d(!self.time.is_empty())
+        )
     }
-    for s in [&preview, &time] {
-        if !s.is_empty() {
-            out.push_str(", ");
-            out.push_str(s);
+
+    /// The arguments of the message: `title`, `n`, `preview`, `time` (only the present ones).
+    pub fn args(&self) -> Vec<(String, String)> {
+        let mut v = vec![("title".to_owned(), self.title.clone())];
+        if let Some(n) = &self.unread {
+            v.push(("n".to_owned(), n.clone()));
         }
+        if !self.preview.is_empty() {
+            v.push(("preview".to_owned(), self.preview.clone()));
+        }
+        if !self.time.is_empty() {
+            v.push(("time".to_owned(), self.time.clone()));
+        }
+        v
     }
-    Some(out)
+
+    /// The English rendering (tests; the host renders the message from the catalog).
+    #[cfg(test)]
+    pub fn english(&self) -> String {
+        let mut out = self.title.clone();
+        if let Some(n) = &self.unread {
+            out.push_str(&format!(", {n} unread"));
+        }
+        for s in [&self.preview, &self.time] {
+            if !s.is_empty() {
+                out.push_str(", ");
+                out.push_str(s);
+            }
+        }
+        out
+    }
 }
 
 /// Split "Alice15:00see you soon" at the time: (title, time, preview). The title must not be
@@ -217,7 +267,7 @@ mod tests {
             cell(Some(12), "", "1"),
         ];
         assert_eq!(
-            chat_name(&cells, "unread").as_deref(),
+            chat_name(&cells).map(|n| n.english()).as_deref(),
             Some("Alice, 1 unread, see you soon, 15:00")
         );
     }
@@ -237,7 +287,7 @@ mod tests {
             cell(Some(8), "", "see you soon"),
         ];
         assert_eq!(
-            chat_name(&cells, "unread").as_deref(),
+            chat_name(&cells).map(|n| n.english()).as_deref(),
             Some("Alice, see you soon, 15:00")
         );
     }
@@ -256,7 +306,7 @@ mod tests {
             cell(Some(5), "", "see you soon"),
         ];
         assert_eq!(
-            chat_name(&a, "unread").as_deref(),
+            chat_name(&a).map(|n| n.english()).as_deref(),
             Some("Alice, see you soon, 15:00")
         );
         let k = vec![
@@ -273,7 +323,7 @@ mod tests {
             cell(Some(9), "", "3"),
         ];
         assert_eq!(
-            chat_name(&k, "unread").as_deref(),
+            chat_name(&k).map(|n| n.english()).as_deref(),
             Some("Alice, 3 unread, see you soon, 15:00")
         );
     }
@@ -290,7 +340,7 @@ mod tests {
             cell(Some(5), "", "1"),
         ];
         assert_eq!(
-            chat_name(&cells, "unread").as_deref(),
+            chat_name(&cells).map(|n| n.english()).as_deref(),
             Some("Alice, 1 unread, see you soon, 15:00")
         );
     }
@@ -303,12 +353,28 @@ mod tests {
             cell(Some(0), "", "Alice15:00see you soon"),
         ];
         assert_eq!(
-            chat_name(&cells, "unread").as_deref(),
+            chat_name(&cells).map(|n| n.english()).as_deref(),
             Some("Alice, see you soon, 15:00")
         );
         assert_eq!(split_merged("Carol14:58lunch at noon?"), Some(("Carol".into(), "14:58".into(), "lunch at noon?".into())));
         assert_eq!(split_merged("14:58 only time"), None);
         assert_eq!(split_merged("no time here"), None);
+    }
+
+    #[test]
+    fn the_catalog_key_follows_which_parts_are_present() {
+        let n = |u: Option<&str>, p: &str, t: &str| Name {
+            title: "Alice".into(),
+            unread: u.map(str::to_owned),
+            preview: p.into(),
+            time: t.into(),
+        };
+        assert_eq!(n(None, "", "").key(), "row-000");
+        assert_eq!(n(None, "hi", "15:00").key(), "row-011");
+        assert_eq!(n(Some("2"), "", "15:00").key(), "row-101");
+        assert_eq!(n(Some("2"), "hi", "15:00").key(), "row-111");
+        let names: Vec<String> = n(Some("2"), "hi", "15:00").args().into_iter().map(|a| a.0).collect();
+        assert_eq!(names, ["title", "n", "preview", "time"]);
     }
 
     #[test]
@@ -324,6 +390,6 @@ mod tests {
     #[test]
     fn a_row_without_a_title_is_left_alone() {
         let cells = vec![cell(None, "ListItem-button", ""), cell(Some(0), "", "x")];
-        assert_eq!(chat_name(&cells, "unread"), None);
+        assert_eq!(chat_name(&cells), None);
     }
 }

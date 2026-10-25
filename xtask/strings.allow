@@ -22,6 +22,8 @@ crates/gorca-core/src/statemodel/world.rs | *
 crates/gorca-daemon/src/cli.rs | *
 crates/gorca-daemon/src/main.rs | *
 crates/gorca-daemon/src/plugins.rs | plugin call
+crates/gorca-daemon/src/plugins.rs | third-party plugin packages are refused until system-scopes ships (ADR-0026 M18a-3); first-party plugins keep working
+crates/gorca-daemon/src/plugins.rs | plugin message not in its catalog
 crates/gorca-daemon/src/rtkit.rs | *
 crates/gorca-daemon/src/topology.rs | *
 crates/gorca-ext-host/src/manifest_file.rs | *
@@ -157,3 +159,4 @@ extensions/ext-vte/src/prompt.rs | [^:?\u{ff1a}\u{ff1f}]{0,60}[:?\u{ff1a}\u{ff1f
 crates/gorca-core/src/commands/keys.rs | modifier key
 crates/gorca-input-api/src/keys.rs | KP_Insert
 crates/gorca-core/src/runtime.rs | Core::with_pointer must run before anything clones the shared state
+crates/gorca-daemon/src/plugins.rs | plugin catalog has lines that do not parse

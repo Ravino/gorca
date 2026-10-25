@@ -413,7 +413,7 @@ fn masking_removes_the_plugins_facts_and_unmasking_rederives() {
     b.drain();
     assert!(matches!(
         b.take_ops().as_slice(),
-        [FactOp::Mask { plugin: 0 }]
+        [FactOp::Retract { .. }, FactOp::Mask { plugin: 0 }]
     ));
     assert_eq!(b.live_len(), 0);
     sh.lock().unwrap().replies.push(Reply {
@@ -511,4 +511,111 @@ fn identity_is_the_executable_and_only_that_is_verified() {
     assert_eq!((&*app, verified), ("flatpak:org.mozilla.firefox", false));
     let (app, verified) = scope_identity(&name, Some(&Arc::from("snap:chromium")));
     assert_eq!((&*app, verified), ("snap:chromium", true));
+}
+
+#[test]
+fn a_secret_node_is_never_watched_derived_or_given_a_fact() {
+    let (mut b, sh) = bridge(&[PluginTier::FirstParty]);
+    b.upsert(0, row("root", ""));
+    // A password field with a class the plugin watches: no watch, no job, however often it changes.
+    let mut pw = row("Password", "watch");
+    pw.secret = true;
+    b.upsert(1, pw.clone());
+    b.begin_turn();
+    pw.text = Some(Arc::from("abc"));
+    b.upsert(1, pw);
+    assert_eq!(b.pending_len(), 0, "a secret node is not dirty");
+    b.interactive(&[1], &tree(), 1_000_000);
+    b.background(&tree());
+    assert!(
+        sh.lock().unwrap().jobs.is_empty(),
+        "no job for a secret focus"
+    );
+
+    // A node that becomes secret after it was derived loses its fact and its token.
+    let (mut b, sh) = bridge(&[PluginTier::FirstParty]);
+    populate(&mut b);
+    b.background(&tree());
+    let t = sh.lock().unwrap().jobs[0].1.t;
+    sh.lock()
+        .unwrap()
+        .replies
+        .push(done(0, t, 1, vec![name_effect(1, "v", true)], vec![1]));
+    b.drain();
+    b.take_ops();
+    assert_eq!(b.live_len(), 1);
+    b.begin_turn();
+    let mut now_secret = row("chat", "watch");
+    now_secret.secret = true;
+    b.upsert(1, now_secret);
+    assert_eq!(b.live_len(), 0);
+    assert!(matches!(
+        b.take_ops().as_slice(),
+        [FactOp::Retract {
+            node: 1,
+            patch: true,
+            ..
+        }]
+    ));
+
+    // A reply naming a secret node is dropped whole.
+    let (mut b, sh) = bridge(&[PluginTier::FirstParty]);
+    populate(&mut b);
+    b.background(&tree());
+    let t = sh.lock().unwrap().jobs[0].1.t;
+    let mut pw = row("pw", "");
+    pw.secret = true;
+    b.upsert(3, pw);
+    // The call read node 3 before it turned secret; its fact about 3 must not be admitted.
+    sh.lock().unwrap().replies.push(done(
+        0,
+        t + 1,
+        1,
+        vec![name_effect(3, "leak", true), name_effect(1, "ok", true)],
+        vec![1, 3],
+    ));
+    b.drain();
+    let ops = b.take_ops();
+    assert!(
+        ops.iter()
+            .all(|o| !matches!(o, FactOp::Patch { node: 3, .. })),
+        "{ops:?}"
+    );
+    assert_eq!(b.stats().secret_dropped, 1);
+}
+
+#[test]
+fn masking_retracts_the_facts_so_an_unmask_cannot_bring_back_stale_ones() {
+    let (mut b, sh) = bridge(&[PluginTier::Untrusted]);
+    populate(&mut b);
+    b.background(&tree());
+    let t = sh.lock().unwrap().jobs[0].1.t;
+    sh.lock()
+        .unwrap()
+        .replies
+        .push(done(0, t, 1, vec![name_effect(1, "s4", false)], vec![1]));
+    b.drain();
+    assert_eq!(b.take_ops().len(), 1);
+    sh.lock().unwrap().replies.push(Reply {
+        plugin: 0,
+        t: 0,
+        targets: vec![],
+        body: ReplyBody::Masked,
+    });
+    b.drain();
+    let ops = b.take_ops();
+    assert!(
+        matches!(
+            ops.as_slice(),
+            [
+                FactOp::Retract {
+                    node: 1,
+                    patch: false,
+                    ..
+                },
+                FactOp::Mask { .. }
+            ]
+        ),
+        "{ops:?}"
+    );
 }

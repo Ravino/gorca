@@ -64,6 +64,11 @@ pub trait DocSourceFactory: Send + Sync + 'static {
         focus: NodeKey,
     ) -> BoxFuture<'static, Result<Option<NodeKey>, SourceError>>;
 
+    /// Ask the sources to read and report the document URL (a loaded plugin matches on URLs).
+    /// Off by default and never turned off again: with nothing to match, no source spends a
+    /// round trip on it.
+    fn set_report_url(&self, _on: bool) {}
+
     /// Create the source for the document rooted at `root`.
     fn create(
         &self,

@@ -62,6 +62,18 @@ pub enum World {
     Site,
 }
 
+/// What the writer may do about a plugin on a focus change (manifest `[plugin] priority`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Priority {
+    /// The writer may wait for it, up to the 0.3 ms bound: for work that is cheap enough to be
+    /// in the first utterance (the row names of a chat list).
+    #[default]
+    Interactive,
+    /// The writer never waits for it and it never gates a turn: its facts always arrive as
+    /// refinements. For anything heavier.
+    Refinement,
+}
+
 /// A validated manifest.
 #[derive(Debug, Clone)]
 pub struct Manifest {
@@ -75,6 +87,8 @@ pub struct Manifest {
     pub declared: Perms,
     /// Requested instance memory in MiB.
     pub memory_mib: u32,
+    /// `[plugin] priority`: whether the writer may wait for this plugin's facts.
+    pub priority: Priority,
     /// `[match] apps`: application identities (case-insensitive); empty = any application.
     pub apps: Vec<String>,
     /// `[match] urls`: document URL patterns (structured, see `urlmatch`); empty = no URL
@@ -203,6 +217,11 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, PackageError> {
             declared |= parse_perm(name)?;
         }
     }
+    let priority = match get("priority") {
+        None | Some("interactive") => Priority::Interactive,
+        Some("refinement") => Priority::Refinement,
+        Some(p) => return Err(PackageError::Manifest(format!("unknown priority `{p}`"))),
+    };
     let memory_mib = match plugin.get("memory-mib") {
         None => DEFAULT_MEMORY_MIB,
         Some(v) => v
@@ -223,6 +242,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, PackageError> {
         world,
         declared,
         memory_mib,
+        priority,
         apps,
         urls,
         watches,
@@ -411,6 +431,21 @@ mod tests {
     use std::fs;
 
     const M: &str = "[plugin]\nid = \"example.hello\"\nversion = \"1\"\n";
+
+    #[test]
+    fn priority_defaults_to_interactive_and_rejects_unknown_names() {
+        assert_eq!(
+            parse_manifest(M).expect("m").priority,
+            Priority::Interactive
+        );
+        let r = format!("{M}priority = \"refinement\"\n");
+        assert_eq!(
+            parse_manifest(&r).expect("m").priority,
+            Priority::Refinement
+        );
+        let bad = format!("{M}priority = \"urgent\"\n");
+        assert!(parse_manifest(&bad).is_err());
+    }
 
     #[test]
     fn match_and_watch_tables_parse() {

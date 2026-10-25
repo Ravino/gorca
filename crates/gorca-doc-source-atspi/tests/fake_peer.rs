@@ -54,6 +54,11 @@ struct Tree {
     next: u64,
     /// Objects `Action.DoAction` ran on, in order.
     acted: Vec<u64>,
+    /// The document URL `Document.GetAttributes` answers (and after how long).
+    doc_url: Option<String>,
+    doc_url_delay: Duration,
+    /// How often `Document.GetAttributes` was called.
+    doc_url_calls: u32,
 }
 
 type Shared = Arc<Mutex<Tree>>;
@@ -69,6 +74,26 @@ fn opath(id: u64) -> OwnedObjectPath {
 struct Acc {
     tree: Shared,
     id: u64,
+}
+
+struct Doc {
+    tree: Shared,
+}
+
+#[zbus::interface(name = "org.a11y.atspi.Document")]
+impl Doc {
+    async fn get_attributes(&self) -> HashMap<String, String> {
+        let (url, delay) = {
+            let mut t = self.tree.lock().unwrap();
+            t.doc_url_calls += 1;
+            (t.doc_url.clone(), t.doc_url_delay)
+        };
+        if !delay.is_zero() {
+            tokio::time::sleep(delay).await;
+        }
+        url.map(|u| HashMap::from([("DocURL".to_owned(), u)]))
+            .unwrap_or_default()
+    }
 }
 
 #[zbus::interface(name = "org.a11y.atspi.Accessible")]
@@ -228,6 +253,9 @@ impl Fake {
             nodes: HashMap::new(),
             next: 1,
             acted: Vec::new(),
+            doc_url: None,
+            doc_url_delay: Duration::ZERO,
+            doc_url_calls: 0,
         }));
         let mut servers = Vec::new();
         let mut clients = Vec::new();
@@ -290,6 +318,15 @@ impl Fake {
                 )
                 .await
                 .unwrap();
+            s.object_server()
+                .at(
+                    p.as_str(),
+                    Doc {
+                        tree: Arc::clone(&self.tree),
+                    },
+                )
+                .await
+                .unwrap();
         }
     }
 
@@ -300,6 +337,7 @@ impl Fake {
             let _ = s.object_server().remove::<Coll, _>(p.as_str()).await;
             let _ = s.object_server().remove::<Act, _>(p.as_str()).await;
             let _ = s.object_server().remove::<Txt, _>(p.as_str()).await;
+            let _ = s.object_server().remove::<Doc, _>(p.as_str()).await;
         }
     }
 
@@ -606,6 +644,17 @@ async fn start_source_with(
     use_dom_id: bool,
     first_nodes: usize,
 ) -> Harness {
+    start_source_full(fake, conn, doc, use_dom_id, first_nodes, false).await
+}
+
+async fn start_source_full(
+    fake: Fake,
+    conn: AppConn,
+    doc: u64,
+    use_dom_id: bool,
+    first_nodes: usize,
+    report_url: bool,
+) -> Harness {
     let (ev_tx, ev_rx) = mpsc::channel(1024);
     let cfg = SourceConfig {
         fetch: fast_opts(Split::Whole),
@@ -616,6 +665,7 @@ async fn start_source_with(
         },
         use_dom_id,
         first_nodes,
+        report_url,
         ..SourceConfig::default()
     };
     let (source, metrics) = AtspiDocSource::new(Arc::new(conn), path_of(doc), cfg, ev_rx);
@@ -2268,4 +2318,92 @@ async fn window_document_leaves_the_browsers_own_interface_alone() {
     fake.link(w.root, nameless);
     fake.link(nameless, np);
     assert_eq!(locate_window(&conn, &w, np).await, None);
+}
+
+// ---------------------------------------------------------------------------------------------
+// The document URL (plugin activation): never a cost when nothing asks for it
+
+/// Time from the start of the source to its `Reset`, and the deltas up to and including the
+/// next one (a possible `Hint`).
+async fn first_reset(h: &mut Harness) -> (Duration, Vec<DocDelta>) {
+    let t0 = Instant::now();
+    let mut out = Vec::new();
+    let mut at = None;
+    while let Ok(Some(d)) = tokio::time::timeout(Duration::from_secs(5), h.rx.deltas.recv()).await {
+        let is_reset = matches!(d, DocDelta::Reset { .. });
+        out.push(d);
+        if is_reset {
+            at = Some(t0.elapsed());
+        }
+        if at.is_some() && out.len() >= 2 {
+            break;
+        }
+    }
+    (at.expect("a Reset"), out)
+}
+
+#[tokio::test]
+async fn without_a_url_consumer_the_url_is_never_asked_for_and_the_first_block_is_not_delayed() {
+    let (fake, conn) = Fake::start(1).await;
+    let (doc, _ul, _lis) = fake.list(3).await;
+    {
+        let mut t = fake.tree.lock().unwrap();
+        t.doc_url = Some("https://example.org/".into());
+        // A hung engine: the answer would take a second.
+        t.doc_url_delay = Duration::from_secs(1);
+    }
+    let mut h = start_source_full(fake, conn, doc, true, 400, false).await;
+    let (took, deltas) = first_reset(&mut h).await;
+    assert!(
+        took < Duration::from_millis(500),
+        "first block after {took:?}"
+    );
+    assert!(
+        !deltas.iter().any(|d| matches!(d, DocDelta::Hint(_))),
+        "no URL hint without a consumer"
+    );
+    assert_eq!(
+        h.fake.tree.lock().unwrap().doc_url_calls,
+        0,
+        "Document.GetAttributes must not be called"
+    );
+    h.shutdown.cancel();
+}
+
+#[tokio::test]
+async fn a_wanted_url_is_read_beside_the_block_and_follows_the_reset() {
+    let (fake, conn) = Fake::start(1).await;
+    let (doc, _ul, _lis) = fake.list(3).await;
+    fake.tree.lock().unwrap().doc_url = Some("https://web.telegram.org/a/".into());
+    let mut h = start_source_full(fake, conn, doc, true, 400, true).await;
+    let (_took, deltas) = first_reset(&mut h).await;
+    let hint = deltas.iter().find_map(|d| match d {
+        DocDelta::Hint(gorca_model::DocHint::RouteChanged { url }) => Some(url.to_string()),
+        _ => None,
+    });
+    assert_eq!(hint.as_deref(), Some("https://web.telegram.org/a/"));
+    h.shutdown.cancel();
+}
+
+#[tokio::test]
+async fn a_slow_url_costs_the_first_block_at_most_the_grace() {
+    let (fake, conn) = Fake::start(1).await;
+    let (doc, _ul, _lis) = fake.list(3).await;
+    {
+        let mut t = fake.tree.lock().unwrap();
+        t.doc_url = Some("https://web.telegram.org/a/".into());
+        t.doc_url_delay = Duration::from_secs(1);
+    }
+    let mut h = start_source_full(fake, conn, doc, true, 400, true).await;
+    let (took, deltas) = first_reset(&mut h).await;
+    // The block fetch of this toy page takes a few ms; the URL adds at most the grace.
+    assert!(
+        took < gorca_doc_source_atspi::source::URL_GRACE + Duration::from_millis(400),
+        "first block after {took:?}"
+    );
+    assert!(
+        !deltas.iter().any(|d| matches!(d, DocDelta::Hint(_))),
+        "a URL that did not come in time is not reported"
+    );
+    h.shutdown.cancel();
 }
