@@ -437,6 +437,8 @@ fn identity_is_the_executable_and_only_that_is_verified() {
     let (app, verified) = scope_identity(&name, Some(&Arc::from("")));
     assert!(!verified && &*app == "web.telegram.org");
     // With the executable from the bus credentials the identity is the executable.
-    let (app, verified) = scope_identity(&name, Some(&Arc::from("Firefox-ESR")));
+    let (app, verified) = scope_identity(&name, Some(&Arc::from("firefox-esr")));
     assert_eq!((&*app, verified), ("firefox-esr", true));
+    let (app, verified) = scope_identity(&name, Some(&Arc::from("flatpak:org.mozilla.firefox")));
+    assert_eq!((&*app, verified), ("flatpak:org.mozilla.firefox", true));
 }

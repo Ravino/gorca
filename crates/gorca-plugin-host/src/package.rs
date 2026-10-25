@@ -123,7 +123,7 @@ impl Manifest {
     /// True when `app` (and, when URL globs are declared, `url`) satisfy `[match]`.
     #[must_use]
     pub fn matches_scope(&self, app: &str, url: Option<&str>) -> bool {
-        let app_ok = self.apps.is_empty() || self.apps.iter().any(|a| a.eq_ignore_ascii_case(app));
+        let app_ok = self.apps.is_empty() || self.apps.iter().any(|a| a == app);
         let url_ok =
             self.urls.is_empty() || url.is_some_and(|u| self.urls.iter().any(|g| g.matches(u)));
         app_ok && url_ok
@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn match_and_watch_tables_parse() {
         let t = format!(
-            "{M}[match]\napps = [\"Firefox\"]\nurls = [\"https://web.telegram.org/a/*\"]\n\
+            "{M}[match]\napps = [\"firefox\"]\nurls = [\"https://web.telegram.org/a/*\"]\n\
              [[watch]]\nid = 1\nclass = \"Message\"\n[[watch]]\nid = 2\ntag = \"a\"\nclass = \"chat\"\n"
         );
         let m = parse_manifest(&t).expect("manifest");

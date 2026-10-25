@@ -189,11 +189,11 @@ pub struct AppInfo {
     /// (same process group and start time as the verified compositor shell process). Never
     /// derived from `app_name` or `toolkit`, which the application reports about itself.
     pub verified_shell: bool,
-    /// Basename of the executable of the bus peer, read by the connector from the bus
-    /// credentials (`GetConnectionCredentials` pid, then `/proc/<pid>/exe`, re-checked against
-    /// the process start time). `None` when it could not be established. This is the evidence
-    /// behind a verified application identity: `app_name` is what the application says about
-    /// itself and is never evidence (ADR-0026 scope activation).
+    /// The **verified** identity of the bus peer, established by the connector from the bus
+    /// credentials and `/proc` (never from `app_name`, which the application says about itself):
+    /// the file name of an executable in a root-owned system tree (`firefox-esr`), or
+    /// `flatpak:<app id>`, or `snap:<name>`. `None` when it could not be verified (a binary a user
+    /// copied anywhere, a deleted executable, unreadable `/proc`). Compared case-sensitively.
     pub exe: Option<Arc<str>>,
     /// The connector verified that a bulk `CacheDump` returns the whole tree of this app (B-1
     /// 2.2). True only for a verified gnome-shell today; computed from verified identity, never

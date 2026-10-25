@@ -79,24 +79,134 @@ pub fn read_proc_info(pid: u32) -> ProcInfo {
     info
 }
 
-/// The executable basename of process `pid`, only when the process is still the one that
-/// started at `start` (pids are reused). The evidence behind a verified application identity:
-/// read from `/proc/<pid>/exe`, which the process cannot forge, never from what the application
-/// reports about itself. A deleted binary (` (deleted)` suffix) still names its executable.
-pub fn exe_of(pid: u32, start: u64) -> Option<String> {
+/// Prefixes of the root-owned system trees a native application's executable may live in.
+const SYSTEM_PREFIXES: &[&str] = &["/usr/", "/opt/"];
+
+/// True when `path` (absolute, canonical) is a regular file in a system tree that only root can
+/// change: under `/usr` or `/opt`, and the file and every directory above it owned by root, not
+/// writable by anyone else (group-writable only for group 0). A binary a user copied to `~/bin`
+/// or `/tmp` fails, whatever it is called.
+pub fn is_trusted_system_path(path: &std::path::Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let Some(text) = path.to_str() else {
+        return false;
+    };
+    if text.ends_with(" (deleted)") || !SYSTEM_PREFIXES.iter().any(|p| text.starts_with(p)) {
+        return false;
+    }
+    let root_only = |m: &std::fs::Metadata| {
+        let mode = m.mode();
+        m.uid() == 0 && mode & 0o002 == 0 && (mode & 0o020 == 0 || m.gid() == 0)
+    };
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.is_file() && root_only(&m) => {}
+        _ => return false,
+    }
+    path.ancestors()
+        .skip(1)
+        .filter(|a| !a.as_os_str().is_empty())
+        .all(|a| {
+            std::fs::symlink_metadata(a)
+                .is_ok_and(|m| m.is_dir() && !m.file_type().is_symlink() && root_only(&m))
+        })
+}
+
+/// The `[Application] name=` of the contents of a `.flatpak-info` file.
+pub fn parse_flatpak_info(text: &str) -> Option<String> {
+    let mut in_app = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_app = line == "[Application]";
+        } else if in_app && let Some(v) = line.strip_prefix("name=") {
+            let ok = !v.is_empty()
+                && v.len() <= 255
+                && v.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-');
+            return ok.then(|| v.to_owned());
+        }
+    }
+    None
+}
+
+/// The flatpak application id when the process is a flatpak sandbox: `.flatpak-info` names it
+/// and the systemd scope of the process agrees (`app-flatpak-<id>-<n>.scope`). Case-sensitive.
+pub fn flatpak_identity(info: &str, cgroup_scope: Option<&str>) -> Option<String> {
+    let id = parse_flatpak_info(info)?;
+    let scope = cgroup_scope?;
+    scope
+        .strip_prefix("app-flatpak-")
+        .is_some_and(|rest| rest.starts_with(&format!("{id}-")))
+        .then_some(id)
+}
+
+/// The snap name in an AppArmor label (`snap.<name>.<app> (enforce)`). The kernel sets the
+/// label; a process cannot choose it.
+pub fn snap_identity(label: &str) -> Option<String> {
+    let rest = label.trim().strip_prefix("snap.")?;
+    let name = rest.split(['.', ' ']).next()?;
+    (!name.is_empty()
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_'))
+    .then(|| name.to_owned())
+}
+
+/// The verified identity of process `pid`, or `None` (unverified). The process must still be the
+/// one that started at `start` (pids are reused). Evidence, in order:
+///
+/// 1. a **snap**: the AppArmor label `snap.<name>.<app>`: identity `snap:<name>`;
+/// 2. a **flatpak**: `/proc/<pid>/root/.flatpak-info` naming the application, consistent with the
+///    process's systemd scope: identity `flatpak:<app id>`;
+/// 3. a **native** application: `/proc/<pid>/exe`, canonicalised, a live (not deleted) file in a
+///    root-owned system tree ([`is_trusted_system_path`]): identity is the file's name, which is
+///    trustworthy because only root could have put it there.
+///
+/// Anything else (a copy under `$HOME` or `/tmp`, a deleted binary, an unreadable `/proc`) is
+/// unverified. The self-reported application name is never consulted. Comparison with a
+/// manifest's `[match] apps` is case-sensitive.
+///
+/// Limit: a flatpak identity rests on files the sandbox runtime provides; a process of the same
+/// user that builds its own mount namespace can imitate one. Native and snap identities do not
+/// have that weakness.
+pub fn verified_identity(pid: u32, start: u64) -> Option<String> {
     if read_proc_info(pid).start != Some(start) {
         return None;
     }
-    let target = std::fs::read_link(format!("/proc/{pid}/exe")).ok()?;
-    let name = target.file_name()?.to_str()?;
-    let name = name.strip_suffix(" (deleted)").unwrap_or(name);
-    // Re-check after the read: the pid may have been recycled in between.
-    (read_proc_info(pid).start == Some(start) && !name.is_empty()).then(|| name.to_owned())
+    let found = identity_unchecked(pid);
+    // Re-check after the reads: the pid may have been recycled in between.
+    (read_proc_info(pid).start == Some(start))
+        .then_some(found)
+        .flatten()
 }
 
-/// [`exe_of`] off the async executor under a deadline.
+fn identity_unchecked(pid: u32) -> Option<String> {
+    if let Ok(label) = std::fs::read_to_string(format!("/proc/{pid}/attr/apparmor/current"))
+        .or_else(|_| std::fs::read_to_string(format!("/proc/{pid}/attr/current")))
+        && let Some(name) = snap_identity(&label)
+    {
+        return Some(format!("snap:{name}"));
+    }
+    if let Ok(info) = std::fs::read_to_string(format!("/proc/{pid}/root/.flatpak-info")) {
+        let scope = std::fs::read_to_string(format!("/proc/{pid}/cgroup"))
+            .ok()
+            .and_then(|s| parse_cgroup(&s));
+        return flatpak_identity(&info, scope.as_deref()).map(|id| format!("flatpak:{id}"));
+    }
+    let target = std::fs::read_link(format!("/proc/{pid}/exe")).ok()?;
+    if target.to_str()?.ends_with(" (deleted)") {
+        return None;
+    }
+    let canon = std::fs::canonicalize(&target).ok()?;
+    if !is_trusted_system_path(&canon) {
+        return None;
+    }
+    canon.file_name()?.to_str().map(str::to_owned)
+}
+
+/// [`verified_identity`] off the async executor under a deadline.
 pub async fn exe_of_async(pid: u32, start: u64) -> Option<String> {
-    let job = tokio::task::spawn_blocking(move || exe_of(pid, start));
+    let job = tokio::task::spawn_blocking(move || verified_identity(pid, start));
     match tokio::time::timeout(std::time::Duration::from_millis(250), job).await {
         Ok(Ok(e)) => e,
         Ok(Err(_)) | Err(_) => None,
@@ -160,13 +270,74 @@ mod tests {
 
     const STAT: &str = "1234 (gnome-shell) S 1 1234 1234 0 -1 4194560 1000 0 0 0 10 5 0 0 20 0 12 0 98765 1000000 500 18446744073709551615 0 0 0 0 0 0 0 0 0 0 0 0 17 3 0 0 0 0 0";
 
+    use std::os::unix::fs::PermissionsExt as _;
+    use std::process::{Child, Command, Stdio};
+
+    fn spawn(path: &str) -> Child {
+        Command::new(path)
+            .arg("30")
+            .stdout(Stdio::null())
+            .spawn()
+            .expect("spawn")
+    }
+
+    fn start_of(c: &Child) -> u64 {
+        read_proc_info(c.id()).start.expect("start")
+    }
+
     #[test]
-    fn our_own_executable_is_found_while_a_wrong_start_time_finds_nothing() {
+    fn a_system_binary_is_verified_by_its_file_name() {
+        let mut c = spawn("/usr/bin/sleep");
+        let id = verified_identity(c.id(), start_of(&c));
+        let _ = c.kill();
+        let _ = c.wait();
+        assert_eq!(id.as_deref(), Some("sleep"));
+    }
+
+    #[test]
+    fn a_copy_in_a_user_writable_directory_is_not_verified_whatever_it_is_called() {
+        let dir = tempfile::tempdir_in("/var/tmp").expect("tmp");
+        let copy = dir.path().join("firefox");
+        std::fs::copy("/usr/bin/sleep", &copy).expect("copy");
+        std::fs::set_permissions(&copy, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        let mut c = spawn(copy.to_str().expect("utf8"));
+        let id = verified_identity(c.id(), start_of(&c));
+        assert_eq!(id, None, "a binary called firefox in {} is not Firefox", dir.path().display());
+        // Deleted while running: unverified as well.
+        std::fs::remove_file(&copy).expect("rm");
+        assert_eq!(verified_identity(c.id(), start_of(&c)), None);
+        let _ = c.kill();
+        let _ = c.wait();
+        // And the path rules on their own.
+        assert!(!is_trusted_system_path(&copy));
+        assert!(!is_trusted_system_path(std::path::Path::new("/usr/bin/sleep (deleted)")));
+        assert!(!is_trusted_system_path(std::path::Path::new("/var/tmp/x")));
+        assert!(!is_trusted_system_path(std::path::Path::new("/usr/bin/does-not-exist")));
+        assert!(is_trusted_system_path(std::path::Path::new("/usr/bin/sleep")));
+    }
+
+    #[test]
+    fn a_wrong_start_time_is_a_different_process() {
         let me = std::process::id();
         let start = read_proc_info(me).start.expect("own start time");
-        let exe = exe_of(me, start).expect("own exe");
-        assert!(!exe.is_empty());
-        assert_eq!(exe_of(me, start + 1), None, "a recycled pid is not the same process");
+        assert_eq!(verified_identity(me, start + 1), None);
+    }
+
+    #[test]
+    fn flatpak_and_snap_identities_are_ids_not_binary_names() {
+        let info = "[Application]\nname=org.mozilla.firefox\nruntime=runtime/x\n[Instance]\ninstance-id=1\n";
+        assert_eq!(parse_flatpak_info(info).as_deref(), Some("org.mozilla.firefox"));
+        let scope = Some("app-flatpak-org.mozilla.firefox-1234.scope");
+        assert_eq!(flatpak_identity(info, scope).as_deref(), Some("org.mozilla.firefox"));
+        // The scope must agree with the info file; a mismatch or no scope is unverified.
+        assert_eq!(flatpak_identity(info, Some("app-flatpak-org.evil.app-1.scope")), None);
+        assert_eq!(flatpak_identity(info, None), None);
+        // Case-sensitive: a differently-cased id is a different application.
+        assert_eq!(flatpak_identity(info, Some("app-flatpak-org.mozilla.Firefox-1.scope")), None);
+        assert_eq!(parse_flatpak_info("[Application]\nname=bad name\n"), None);
+        assert_eq!(snap_identity("snap.chromium.chromium (enforce)\n").as_deref(), Some("chromium"));
+        assert_eq!(snap_identity("unconfined"), None);
+        assert_eq!(snap_identity("snap..x"), None);
     }
 
     #[test]

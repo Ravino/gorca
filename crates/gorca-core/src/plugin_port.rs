@@ -310,12 +310,12 @@ pub trait PluginService: Send + Sync + std::fmt::Debug {
 ///
 /// `app_name` is what the application says about itself; anyone can claim any name. The
 /// identity is **verified** only when the connector established the executable of the bus peer
-/// from the bus credentials and `/proc` (`AppInfo::exe`), and then the executable's basename is
-/// the identity. Without it the self-reported name is used for display only and the scope is
+/// from the bus credentials and `/proc` (`AppInfo::exe`: a root-owned system executable, a flatpak
+/// app id or a snap name), and then that verified identity is the application name. Without it the self-reported name is used for display only and the scope is
 /// unverified: the service refuses URL-scoped and third-party plugins for it.
 pub fn scope_identity(app_name: &Arc<str>, exe: Option<&Arc<str>>) -> (Arc<str>, bool) {
     match exe {
-        Some(e) if !e.is_empty() => (Arc::from(e.to_ascii_lowercase()), true),
+        Some(e) if !e.is_empty() => (Arc::clone(e), true),
         Some(_) | None => (Arc::clone(app_name), false),
     }
 }

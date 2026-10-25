@@ -26,7 +26,7 @@ use gorca_doc_source_api::{
     JoinKeyCaps, RepairReport, SourceCaps, SourceError, SourceKind, web_attrs,
 };
 use gorca_model::{
-    DocDelta, LocalId, NodeEvent, PropMask, Role, SrcNode, SrcNodeId, TextEdit, TextUnit,
+    DocDelta, DocHint, LocalId, NodeEvent, PropMask, Role, SrcNode, SrcNodeId, TextEdit, TextUnit,
 };
 use gorca_rt::{BoxFuture, Deadline, mpsc};
 use smallvec::SmallVec;
@@ -446,6 +446,26 @@ async fn read_node_raw(
     Some((role, state, name, attrs, target))
 }
 
+/// The URL of the document: `Document.GetAttributes` carries `DocURL` (Gecko) or `URI` (Blink).
+/// One call under a short deadline; `None` when the engine does not say (the page then matches no
+/// site-scoped plugin).
+async fn fetch_doc_url(app: &AppConn, root: &str) -> Option<Arc<str>> {
+    let dl = Deadline(Instant::now() + Duration::from_millis(250));
+    let lane = app.next_lane();
+    let msg = app
+        .call(lane, dl, root, "org.a11y.atspi.Document", "GetAttributes", &())
+        .await
+        .ok()?;
+    let attrs = wire::parse_string_map(msg.body().data().bytes()).ok()?;
+    let url = attrs
+        .iter()
+        .find(|(k, _)| k == "DocURL")
+        .or_else(|| attrs.iter().find(|(k, _)| k == "URI"))
+        .map(|(_, v)| v.as_str())
+        .filter(|u| !u.is_empty() && u.len() <= 2048)?;
+    Some(Arc::from(url))
+}
+
 /// Mutable per-document state of the running source.
 struct Live {
     /// The rectangle request in flight (label inference); a newer one aborts it.
@@ -502,6 +522,9 @@ impl Drop for Flight {
 struct Pusher {
     runs: Option<RunLayer>,
     batch: u64,
+    /// The document's URL (`Document.GetAttributes`, `DocURL` or `URI`): reported to the doc actor
+    /// right after every `Reset`, where plugins scoped to a site match it (ADR-0026 K2).
+    url: Option<Arc<str>>,
 }
 
 impl Pusher {
@@ -511,7 +534,13 @@ impl Pusher {
             None => deltas,
         };
         for d in deltas {
+            let reset = matches!(d, DocDelta::Reset { .. });
             sink.push(d);
+            if reset && let Some(url) = &self.url {
+                sink.push(DocDelta::Hint(DocHint::RouteChanged {
+                    url: Arc::clone(url),
+                }));
+            }
         }
         self.batch += 1;
         sink.push(DocDelta::Settled { batch: self.batch });
@@ -683,6 +712,7 @@ impl AtspiDocSource {
                     }
                 }),
                 batch: 0,
+                url: None,
             },
             locals: HashMap::new(),
             activity: Activity::Awake,
@@ -694,6 +724,7 @@ impl AtspiDocSource {
             touched_overflow: false,
         };
         let mut flight: Option<Flight> = None;
+        live.out.url = fetch_doc_url(&self.app, &self.root_path).await;
 
         // Build. A failed block fetch is the one hard error: nothing to mirror.
         let t_attach = Instant::now();
