@@ -130,6 +130,14 @@ class Params:
     warmup: int = 8         # replies before a plugin's own histogram is trusted
     cap_fuel_us: int = 200  # B-2 per-call cap (wall-time equivalent)
     kappa: int = 21_739     # fuel units per us (interactive calibration rate)
+    # ---- warm hook (plugin-warm-hook-model.md); none of these change the decisions above ----
+    warm_bucket_us: int = 60_000      # hook CPU bucket (us)
+    warm_rate_us_per_s: int = 30_000  # refill: 3 % of one core
+    warm_est_us: int = 150            # charged per hook before its measured cost is known
+    warm_delta_us: int = 60           # prior shift cold -> warm exec until both histograms are trusted
+    theta_warm_q16: int = Q // 100    # min expected gain (facts) per hook, like theta_spin
+    warm_gap_ms: int = 20             # frequency cap: at most one hook per plugin per 20 ms
+    warm_third_max: int = 1           # third-party hooks per key-down
 
 
 @dataclass
@@ -145,6 +153,8 @@ class PluginStats:
     excluded: int = 0       # activations remaining excluded from W
     ontime_run: int = 0
     denied: int = 0         # consecutive hot-thread denials (aging)
+    exec_hw: Hist = field(default_factory=Hist)  # exec when the call path was warm (hooked)
+    last_warm_ms: int = -(1 << 40)
 
     def __post_init__(self):
         self.useful_q16 = LABELS[self.label][0]
@@ -185,6 +195,11 @@ class Scheduler:
         self.bucket_us = self.p.spin_bucket_us
         self.last_ms = 0
         self.turn = 0
+        # warm hook state (pooled host properties)
+        self.warm_cost_h = Hist()
+        self.warm_bucket = self.p.warm_bucket_us
+        self.warm_last_ms = 0
+        self.warm_delta = self.p.warm_delta_us
 
     # ---------- (a) key-down: how many threads to pre-wake ----------
     def _refill(self, now_ms: int) -> None:
@@ -192,12 +207,28 @@ class Scheduler:
         self.last_ms = now_ms
         self.bucket_us = min(self.p.spin_bucket_us, self.bucket_us + dt * self.p.spin_rate_us_per_s // 1000)
 
-    def _f_state(self, st: PluginStats, state: str, t_us: int, offset: int = 0) -> int:
-        """Q16 lower bound of P(start + exec < t), start from the pooled histogram of `state`."""
+    def _f_state(self, st: PluginStats, state: str, t_us: int, offset: int = 0, warm: bool = False) -> int:
+        """Q16 lower bound of P(start + exec < t), start from the pooled histogram of `state`.
+
+        warm=True: the exec histogram of hooked calls once it has `warmup` samples, before that the
+        cold histogram shifted left by the pooled cold-warm difference (`warm_delta`)."""
         acc = 0
+        if warm and st.exec_hw.n >= self.p.warmup:
+            h, shift = st.exec_hw, 0
+        else:
+            h, shift = st.exec_h, (self.warm_delta if warm else 0)
         for up, m in self.start_h[state].pmf():
-            acc += m * st.exec_h.cdf_at(t_us - offset - up) // Q
+            acc += m * h.cdf_at(t_us - offset - up + shift) // Q
         return acc
+
+    def _exec_q(self, st: PluginStats, p_q16: int, warm: bool, default: int) -> int:
+        """Exec quantile, warm-aware (same fallback as _f_state)."""
+        if warm and st.exec_hw.n >= self.p.warmup:
+            return st.exec_hw.quantile(p_q16)
+        if not st.exec_h.total():
+            return default
+        q = st.exec_h.quantile(p_q16)
+        return max(1, q - self.warm_delta) if warm and q < INF_US else q
 
     def keydown(self, ctx, now_ms: int) -> int:
         self._refill(now_ms)
@@ -224,13 +255,94 @@ class Scheduler:
         self.bucket_us -= k * self.p.spin_est_us
         return max(0, k)
 
+    def keydown_plan(self, ctx, now_ms: int, warm: bool = True, k_force: int | None = None):
+        """Key-down with explicit worker choice and the warm action.
+
+        Returns (k, armed, hooks): `armed` = the k spin-eligible plugins with the highest score
+        (their workers spin until the focus change; one worker per plugin, as in the runtime);
+        `hooks` = plugins whose warm hook fires now, chosen greedily by expected gain per us of hook
+        CPU under the warm bucket (fractional-knapsack order). K and the spin bucket follow
+        `keydown`; `k_force` overrides K (0 = no spinning, hooks only)."""
+        self._refill(now_ms)
+        p = self.p
+        dw = p.D - p.fuse_us - p.snap_us
+        no_host = not self.start_h["hot"].total() or not self.start_h["cold"].total()
+        scored = []
+        load = 0
+        for st in self.s.values():
+            if not LABELS[st.label][3]:
+                continue
+            a = st.alpha(ctx)
+            gain = Q // 2 if no_host else max(0, self._f_state(st, "hot", dw) - self._f_state(st, "cold", dw))
+            sc = a * st.value() // Q * gain // Q
+            if sc >= p.theta_spin_q16:
+                scored.append((sc, st.pid))
+                load += a
+        k = 0
+        if scored:
+            k = min(len(scored), p.k_max, max(1, -(-load * p.k_mult_q16 // (Q * Q))))
+            k = min(k, self.bucket_us // p.spin_est_us)
+        if k_force is not None:
+            k = min(k_force, len(scored))
+        k = max(0, k)
+        self.bucket_us -= k * p.spin_est_us
+        scored.sort(key=lambda x: (-x[0], x[1]))
+        armed = [pid for _, pid in scored[:k]]
+        hooks: list[int] = []
+        if not warm:
+            return k, armed, hooks
+        dt = max(0, now_ms - self.warm_last_ms)
+        self.warm_last_ms = now_ms
+        self.warm_bucket = min(p.warm_bucket_us, self.warm_bucket + dt * p.warm_rate_us_per_s // 1000)
+        cost = max(1, self.warm_cost_h.quantile(Q // 2) if self.warm_cost_h.total() else p.warm_est_us)
+        cand = []
+        for st in self.s.values():
+            # never refinement (never waited: a hook cannot add a first-utterance fact), never an
+            # excluded plugin, at most one hook per plugin per warm_gap_ms (frequency cap)
+            if not LABELS[st.label][2] or not LABELS[st.label][3] or st.excluded:
+                continue
+            if now_ms - st.last_warm_ms < p.warm_gap_ms:
+                continue
+            state = "hot" if st.pid in armed else "cold"
+            g = max(0, self._f_state(st, state, dw, 0, True) - self._f_state(st, state, dw))
+            sc = st.alpha(ctx) * st.value() // Q * g // Q
+            if sc >= p.theta_warm_q16:
+                cand.append((sc * 1024 // cost, sc, st.pid))
+        cand.sort(key=lambda x: (-x[0], x[2]))
+        third = 0
+        for _, _, pid in cand:
+            if self.warm_bucket < cost:
+                break
+            st = self.s[pid]
+            if st.tier == "third":
+                if third >= p.warm_third_max:
+                    continue
+                third += 1
+            self.warm_bucket -= cost
+            st.last_warm_ms = now_ms
+            hooks.append(pid)
+        return k, armed, hooks
+
+    def observe_warm(self, pid: int, cpu_us: int, est_us: int) -> None:
+        """A hook finished: its CPU feeds the pooled cost histogram and settles the warm bucket."""
+        self.warm_cost_h.add(cpu_us)
+        self.warm_bucket = min(self.p.warm_bucket_us,
+                               max(-self.p.warm_bucket_us, self.warm_bucket + est_us - cpu_us))
+
     def spin_refund(self, est_us: int, actual_us: int) -> None:
         """Called when a pre-woken thread parks: correct the estimate charged at key-down."""
         self.bucket_us = min(self.p.spin_bucket_us, max(-self.p.spin_bucket_us, self.bucket_us + est_us - actual_us))
 
     # ---------- (b)+(c) dispatch ----------
-    def dispatch(self, triggered: list[int], k_hot: int) -> Plan:
+    def dispatch(self, triggered: list[int], k_hot: int, armed: list[int] | None = None,
+                 warm: frozenset = frozenset()) -> Plan:
+        """armed=None: K generic pre-armed queues (ADR text). armed=list: one worker per plugin (the
+        runtime); a plugin is hot iff its own worker was armed, offset 0. `warm`: hooked plugins,
+        whose deadlines and F use the warm exec histogram."""
         p = self.p
+        per_thread = armed is not None
+        if per_thread:
+            k_hot = len(armed)
         self.turn += 1
         n = len(triggered)
         dw = p.D - p.fuse_us - p.snap_us
@@ -260,11 +372,15 @@ class Scheduler:
         assign: list[Assignment] = []
         for pid in order:
             st = self.s[pid]
-            e90 = st.exec_h.quantile(Q * 9 // 10) if st.exec_h.total() else 64
-            e99 = st.exec_h.quantile(Q * 99 // 100) if st.exec_h.total() else INF_US
+            w_i = pid in warm
+            e90 = self._exec_q(st, Q * 9 // 10, w_i, 64)
+            e99 = self._exec_q(st, Q * 99 // 100, w_i, INF_US)
             hot = None
             off = 0
-            if k_hot and LABELS[st.label][3] and hot_used[st.tier] < TIER_SPIN_CAP[st.tier]:
+            if per_thread:
+                if pid in armed:
+                    hot, off, off99 = armed.index(pid), 0, 0
+            elif k_hot and LABELS[st.label][3] and hot_used[st.tier] < TIER_SPIN_CAP[st.tier]:
                 k = min(range(k_hot), key=lambda j: (free[j], j))
                 if free[k] + hot_q90 <= cold_q90:
                     hot, off = k, free[k]
@@ -295,7 +411,7 @@ class Scheduler:
                 if st.exec_h.n < p.warmup:  # no data yet: the label prior says "it fits by d_i"
                     f = Q if t >= a.deadline_us else 0
                 else:
-                    f = self._f_state(st, state, min(t, a.deadline_us), a.offset_us)
+                    f = self._f_state(st, state, min(t, a.deadline_us), a.offset_us, a.pid in warm)
                 obj += st.value() * f // Q
             if obj > best_obj:
                 best_t, best_obj = t, obj
@@ -306,7 +422,7 @@ class Scheduler:
             if st.exec_h.n < p.warmup:
                 f = Q
             else:
-                f = self._f_state(st, "cold" if a.hot is None else "hot", h, a.offset_us)
+                f = self._f_state(st, "cold" if a.hot is None else "hot", h, a.offset_us, a.pid in warm)
             if h > 0 and st.value() * f // Q >= p.lam_q16 * h:  # worth its own hold
                 a.hold_us = h
                 wait.append(a.pid)
@@ -336,12 +452,16 @@ class Scheduler:
             st.act[ctx] = ewma_q16(st.alpha(ctx), x, self.p.act_shift)
 
     def observe_reply(self, pid: int, state: str, start_us: int, exec_us: int, resp_us: int,
-                      a: Assignment, waited: bool, useful: bool) -> None:
-        """start_us = thread start latency (queue offset excluded), resp_us = from send to reply."""
+                      a: Assignment, waited: bool, useful: bool, warm: bool = False) -> None:
+        """start_us = thread start latency (queue offset excluded), resp_us = from send to reply.
+        warm: the call followed this plugin's warm hook (exec goes to the warm histogram)."""
         st = self.s[pid]
         deadline_us = a.deadline_us
         self.start_h[state].add(start_us)
-        st.exec_h.add(exec_us)
+        (st.exec_hw if warm else st.exec_h).add(exec_us)
+        if warm and st.exec_hw.n >= self.p.warmup and st.exec_h.n >= self.p.warmup:
+            d = max(0, st.exec_h.quantile(Q // 2) - st.exec_hw.quantile(Q // 2))
+            self.warm_delta += (d - self.warm_delta) >> 3  # pooled over plugins, integer EWMA
         st.useful_q16 = ewma_q16(st.useful_q16, Q if useful else 0, self.p.val_shift)
         late = resp_us > (a.hold_us if waited else deadline_us)
         own_fault = exec_us > a.exec_allow_us and not a.clipped
@@ -411,6 +531,39 @@ def _selftest() -> None:
         s.observe_reply(1, "hot", 2, 10, 12, late, False, False)
     assert st.excluded == 0
     print("sps.py self-test OK", vec)
+    _selftest_warm()
+
+
+def _selftest_warm() -> None:
+    """Warm action (plugin-warm-hook-model.md): selection, caps, warm-aware dispatch; golden vector."""
+    A = Assignment
+    s = Scheduler([(0, "interactive", "first"), (1, "default", "first"), (2, "refinement", "first"),
+                   (3, "interactive", "third"), (4, "interactive", "third")])
+    for i in range(100):
+        s.observe_reply(0, "cold", 120, 140, 260, A(0, None, 0, 290, 0, 400), False, True)
+        s.observe_reply(0, "cold", 15, 40, 55, A(0, None, 0, 290, 0, 400), False, True, warm=True)
+        s.observe_reply(1, "cold", 120, 20, 140, A(1, None, 0, 290, 0, 400), False, True)
+        s.observe_reply(2, "cold", 120, 150, 270, A(2, None, 0, 290, 0, 400), False, True)
+        for pid in (3, 4):
+            s.observe_reply(pid, "cold", 120, 150, 270, A(pid, None, 0, 290, 0, 400), False, True)
+        s.observe_reply(0, "hot", 2, 40, 42, A(0, 0, 0, 120, 0, 64), True, True)
+    for _ in range(50):
+        s.observe_context("nav", {0, 1, 2, 3, 4})
+    k, armed, hooks = s.keydown_plan("nav", 10_000, k_force=0)
+    assert k == 0 and armed == []
+    assert 2 not in hooks, "refinement is never hooked"
+    assert 1 not in hooks, "a plugin that fits cold gains nothing from a hook"
+    assert 0 in hooks
+    assert sum(1 for h in hooks if s.s[h].tier == "third") <= 1, "third-party hook cap"
+    # frequency cap: the same plugins cannot be hooked again within warm_gap_ms
+    _, _, again = s.keydown_plan("nav", 10_005, k_force=0)
+    assert not set(again) & set(hooks)
+    plan = s.dispatch([0, 1, 2], 0, armed=[], warm=frozenset(hooks))
+    vec = (k, armed, hooks, [(a.pid, a.hot, a.deadline_us, a.hold_us) for a in plan.assign], plan.wait,
+           plan.t_star, s.warm_delta, s.warm_bucket)
+    GOLD = (0, [], [0, 3], [(0, None, 184, 184), (1, None, 160, 160), (2, None, 286, 0)], [0, 1], 184, 137, 59700)
+    assert vec == GOLD, vec
+    print("sps.py warm self-test OK", vec)
 
 
 if __name__ == "__main__":
