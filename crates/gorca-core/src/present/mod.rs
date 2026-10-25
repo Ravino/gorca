@@ -12,6 +12,7 @@ mod flow;
 mod job;
 mod log;
 mod node;
+pub(crate) use node::entry_of;
 mod notification;
 mod utterance;
 mod window;
@@ -30,7 +31,7 @@ pub(crate) use notification::NoticeCtx;
 pub use notification::{
     announcement_utterance, clean_announcement, is_notice_role, notice_segments,
 };
-pub use utterance::{flat_zone_text, log_states, value_text};
+pub use utterance::{flat_zone_text, flat_zone_tokens, log_states, value_text};
 pub(crate) use window::WindowCtx;
 pub use window::{
     Content, DesktopEffect, WindowEffect, WindowInfo, WindowMsg, WindowState, dialog_content,

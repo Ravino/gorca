@@ -19,7 +19,7 @@ use super::model::{
 };
 use super::objnav::{PresClass, class};
 use super::validity::snapshot_hash;
-use crate::present::flat_zone_text;
+use crate::present::flat_zone_tokens;
 
 /// U+FFFC OBJECT REPLACEMENT CHARACTER: an embedded object inside a text.
 const EMBEDDED: char = '\u{fffc}';
@@ -105,10 +105,12 @@ fn actionable(s: &NodeSnapshot) -> bool {
     s.interfaces.contains(Ifaces::ACTION)
 }
 
-/// The object zone of a node, if it has anything to say or can be acted on.
-fn object_zone(n: &BuildNode, surface: Option<Rect>) -> Option<Zone> {
+/// The pieces the object zone of a node says (name, role, states, value), or its role word for
+/// an object that can be acted on or focused but says nothing; empty for a silent object nobody
+/// can act on.
+pub(super) fn legacy_zone_tokens(n: &BuildNode) -> Vec<(gorca_model::SegmentKind, String)> {
     let s = &*n.snap;
-    let mut text = if is_entry(s.role) && s.value.is_none() && n.lines.is_some() {
+    let mut tokens = if is_entry(s.role) && s.value.is_none() && n.lines.is_some() {
         // A single-line entry: the label, the role and what is typed.
         let typed = n
             .lines
@@ -122,22 +124,37 @@ fn object_zone(n: &BuildNode, surface: Option<Rect>) -> Option<Zone> {
             .unwrap_or_default();
         let mut shadow = (*n.snap).clone();
         shadow.value = (!typed.is_empty()).then(|| Value::Text(Arc::from(typed)));
-        flat_zone_text(&shadow)
+        flat_zone_tokens(&shadow)
     } else {
-        flat_zone_text(s)
+        flat_zone_tokens(s)
     };
-    if text.is_empty() {
-        if !(focusable(s) || actionable(s)) {
-            return None;
-        }
+    if tokens.is_empty() && (focusable(s) || actionable(s)) {
         let w = s.role.spoken();
-        if w.is_empty() {
-            gorca_i18n::t(gorca_i18n::MsgId::WordObject)
-        } else {
-            w
-        }
-        .clone_into(&mut text);
+        tokens.push((
+            gorca_model::SegmentKind::Role,
+            if w.is_empty() {
+                gorca_i18n::t(gorca_i18n::MsgId::WordObject)
+            } else {
+                w
+            }
+            .to_owned(),
+        ));
     }
+    tokens
+}
+
+/// The object zone of a node, if it has anything to say or can be acted on.
+fn object_zone(n: &BuildNode, surface: Option<Rect>) -> Option<Zone> {
+    let s = &*n.snap;
+    let tokens = legacy_zone_tokens(n);
+    if tokens.is_empty() {
+        return None;
+    }
+    let text = tokens
+        .iter()
+        .map(|(_, t)| t.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
     Some(Zone {
         node: s.key,
         kind: ZoneKind::Object,

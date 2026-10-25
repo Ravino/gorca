@@ -33,14 +33,14 @@ use crate::legacy_agreement_tests::{NodeMeta, page, page_meta, page_with, pages_
 
 /// A corpus family: directory under `tests/fixtures/sem`, toolkit name for the profile tables,
 /// and the web engine (`None` for native applications).
-struct Family {
-    dir: &'static str,
-    toolkit: &'static str,
-    web: WebEngine,
+pub(crate) struct Family {
+    pub(crate) dir: &'static str,
+    pub(crate) toolkit: &'static str,
+    pub(crate) web: WebEngine,
 }
 
 /// Keep in step with `FAMILIES` in `xtask/src/cutover.rs`.
-const FAMILIES: &[Family] = &[
+pub(crate) const FAMILIES: &[Family] = &[
     Family {
         dir: "gtk3",
         toolkit: "GTK",
@@ -96,7 +96,7 @@ struct Record {
     new: String,
 }
 
-fn esc(s: &str) -> String {
+pub(crate) fn esc(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('\t', "\\t")
         .replace('\n', "\\n")
@@ -155,14 +155,14 @@ fn dropped(
     }
 }
 
-fn describe(s: &NodeSnapshot) -> String {
+pub(crate) fn describe(s: &NodeSnapshot) -> String {
     let name: String = s.name.as_deref().unwrap_or("").chars().take(30).collect();
     format!("{:?} {name:?}", s.role)
 }
 
 /// Why a node has no fused entry. A text leaf is merged into its parent's content name and is
 /// never a focus target; any other role without an entry is a defect the gate must not hide.
-fn no_entry_reason(s: &NodeSnapshot) -> &'static str {
+pub(crate) fn no_entry_reason(s: &NodeSnapshot) -> &'static str {
     if matches!(s.role, Role::StaticText | Role::Label) {
         "static-leaf-no-entry"
     } else {
@@ -171,7 +171,7 @@ fn no_entry_reason(s: &NodeSnapshot) -> &'static str {
 }
 
 /// The reason a node of the wrong kind for this family's run is not compared.
-fn kind_mismatch_reason(web_run: bool) -> &'static str {
+pub(crate) fn kind_mismatch_reason(web_run: bool) -> &'static str {
     if web_run {
         "native-node-in-web-family"
     } else {
@@ -227,7 +227,7 @@ fn arrival_order(snaps: &[Arc<NodeSnapshot>], seed: u64) -> Vec<usize> {
 
 /// Fuse `snaps` the way the app actor does. With a non-zero `seed` the nodes arrive in a seeded
 /// shuffled order (and so in other batches); the result is returned in the original order.
-fn fuse(
+pub(crate) fn fuse(
     tables: Option<gorca_model::SemTables>,
     label: &str,
     snaps: &[Arc<NodeSnapshot>],
@@ -258,7 +258,7 @@ fn is_web(s: &NodeSnapshot) -> bool {
 /// Whether each node is web content: it carries the engine's DOM tag, is a web document, or has a
 /// web ancestor. Chromium exports no tag on its text leaves, so the tag alone would call them
 /// native and drop them. The page is in document order (parents first).
-fn web_flags(snaps: &[Arc<NodeSnapshot>]) -> Vec<bool> {
+pub(crate) fn web_flags(snaps: &[Arc<NodeSnapshot>]) -> Vec<bool> {
     let index: BTreeMap<gorca_model::NodeKey, usize> =
         snaps.iter().enumerate().map(|(i, s)| (s.key, i)).collect();
     let mut out = vec![false; snaps.len()];

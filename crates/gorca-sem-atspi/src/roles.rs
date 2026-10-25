@@ -18,6 +18,7 @@ use gorca_model::sem::SemRole;
 /// Raw `AtspiRole` numbers used by name elsewhere in this crate.
 pub mod raw {
     pub const INVALID: u32 = 0;
+    pub const LABEL: u32 = 29;
     pub const PUSH_BUTTON: u32 = 43;
     pub const TOGGLE_BUTTON: u32 = 62;
     pub const ENTRY: u32 = 79;

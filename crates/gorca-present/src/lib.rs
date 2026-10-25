@@ -23,6 +23,7 @@ pub use gorca_present_ir as ir;
 pub mod render;
 pub mod roles;
 mod web;
+pub mod zone;
 
 pub use change::{changed_groups, compose_change};
 pub use compose::{
@@ -37,3 +38,4 @@ pub use ir::{
     FlatSpan, IrFlags, LangId, LangTags, Origin, PRES_IR_VERSION, PresIr, Reason, Redacted, RowId,
 };
 pub use render::{RenderOpts, Token, TokenText, render, render_kinds};
+pub use zone::{plain_text_role, review_role_word, role_word_of};

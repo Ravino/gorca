@@ -10,7 +10,13 @@
 
 use std::sync::Arc;
 
-use gorca_model::{ChildList, Lookup, NodeKey, NodeSnapshot, NodeView, PropMask, Role, StateSet};
+use gorca_model::sem::{SemEntry, SemFlags, SemRole};
+use gorca_model::{
+    ChildList, Lookup, NodeKey, NodeSnapshot, NodeView, PropMask, Role, StateSet, StructFlags,
+    StructState,
+};
+
+use crate::present::entry_of;
 
 use super::model::ReviewLimits;
 
@@ -111,6 +117,154 @@ pub fn class_in(snap: &NodeSnapshot, web: bool) -> PresClass {
     }
 }
 
+/// The class of a node from its fused entry and its structural state (M22b3): the name and the
+/// description the user would hear, the model role, and whether the node is on the screen. The
+/// structural bits are the only thing read of the node's state set; nothing spoken is.
+pub fn class_entry(entry: &SemEntry, st: StructState, web: bool) -> PresClass {
+    let showing = !st.is_known()
+        || (st.contains(StructFlags::SHOWING) && st.contains(StructFlags::VISIBLE))
+        // Some toolkits set only one of the pair.
+        || st.contains(StructFlags::SHOWING)
+        || (web && st.contains(StructFlags::VISIBLE));
+    if st.is_defunct() || !showing {
+        return PresClass::Unavailable;
+    }
+    let description = entry
+        .sem
+        .text
+        .as_deref()
+        .and_then(|t| t.description.as_ref());
+    let nameless = blank(entry.name.as_ref()) && blank(description);
+    // A label is said with its control or in the dialog's text; static text is a stop.
+    if entry.sem.role == SemRole::StaticText && entry.sem.flags.contains(SemFlags::TEXT_LABEL) {
+        return PresClass::Layout;
+    }
+    match role_class(entry.sem.role) {
+        RoleClass::Layout => PresClass::Layout,
+        RoleClass::LayoutIfNameless if nameless => PresClass::Layout,
+        RoleClass::LayoutIfNameless | RoleClass::Content => PresClass::Content,
+    }
+}
+
+/// [`class_entry`] of a snapshot (the entry the snapshot carries, or its provisional one).
+pub fn class_of_snapshot(snap: &NodeSnapshot, web: bool) -> PresClass {
+    class_entry(&entry_of(snap), snap.struct_state(), web)
+}
+
+/// What a model role is to object navigation.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum RoleClass {
+    /// Layout only: never a stop, its children are spliced into the parent.
+    Layout,
+    /// A stop when it has a name or a description, layout otherwise (a window, a landmark).
+    LayoutIfNameless,
+    Content,
+}
+
+/// The navigation class of a model role. One exhaustive `match`: a new model role cannot be added
+/// without deciding what object navigation does with it.
+pub const fn role_class(role: SemRole) -> RoleClass {
+    match role {
+        SemRole::Unknown
+        | SemRole::Generic
+        | SemRole::Group
+        | SemRole::Presentation
+        | SemRole::Paragraph
+        | SemRole::Caption
+        | SemRole::Separator
+        // Roles the object model has no stop for (inline text roles, structure the engine adds).
+        | SemRole::Blockquote
+        | SemRole::Figure
+        | SemRole::Log
+        | SemRole::Marquee
+        | SemRole::Math
+        | SemRole::Note
+        | SemRole::RadioGroup
+        | SemRole::RowGroup
+        | SemRole::TabPanel
+        | SemRole::Timer
+        | SemRole::Comment
+        | SemRole::Suggestion
+        | SemRole::Details
+        | SemRole::Summary
+        | SemRole::Iframe => RoleClass::Layout,
+        SemRole::Window
+        | SemRole::Form
+        | SemRole::Region
+        | SemRole::Banner
+        | SemRole::Complementary
+        | SemRole::ContentInfo
+        | SemRole::Main
+        | SemRole::Navigation
+        | SemRole::Search
+        | SemRole::Article => RoleClass::LayoutIfNameless,
+        SemRole::Alert
+        | SemRole::AlertDialog
+        | SemRole::Application
+        | SemRole::Button
+        | SemRole::Cell
+        | SemRole::Checkbox
+        | SemRole::ColumnHeader
+        | SemRole::Combobox
+        | SemRole::Definition
+        | SemRole::Dialog
+        | SemRole::Document
+        | SemRole::DocumentWeb
+        | SemRole::Feed
+        | SemRole::Grid
+        | SemRole::GridCell
+        | SemRole::Heading
+        | SemRole::Img
+        | SemRole::Link
+        | SemRole::List
+        | SemRole::Listbox
+        | SemRole::ListItem
+        | SemRole::Menu
+        | SemRole::Menubar
+        | SemRole::MenuItem
+        | SemRole::MenuItemCheckbox
+        | SemRole::MenuItemRadio
+        | SemRole::Meter
+        | SemRole::Option
+        | SemRole::ProgressBar
+        | SemRole::Radio
+        | SemRole::Row
+        | SemRole::RowHeader
+        | SemRole::Scrollbar
+        | SemRole::SearchBox
+        | SemRole::Slider
+        | SemRole::SpinButton
+        | SemRole::Status
+        | SemRole::Switch
+        | SemRole::Tab
+        | SemRole::Table
+        | SemRole::TabList
+        | SemRole::Term
+        | SemRole::TextBox
+        | SemRole::PasswordBox
+        | SemRole::Toolbar
+        | SemRole::Tooltip
+        | SemRole::Tree
+        | SemRole::TreeGrid
+        | SemRole::TreeItem
+        | SemRole::Terminal
+        | SemRole::Popover
+        | SemRole::DescriptionList
+        // Text runs: static text (the model has one role for the engine's label and static text)
+        // and the inline phrase roles.
+        | SemRole::StaticText
+        | SemRole::Emphasis
+        | SemRole::Strong
+        | SemRole::Mark
+        | SemRole::Code
+        | SemRole::Time
+        | SemRole::Insertion
+        | SemRole::Deletion
+        | SemRole::Subscript
+        | SemRole::Superscript => RoleClass::Content,
+    }
+}
+
 /// One object command (the seven of ADR-0006 5.2, minus `current`, which moves nothing).
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum NavMove {
@@ -183,13 +337,23 @@ struct Walk<'a, S: NavSource> {
     simple: bool,
     /// Degraded mode: a node the mirror cannot give is skipped instead of fetched.
     lenient: bool,
+    class_fn: &'a ClassFn<'a>,
 }
+
+/// How a walk classifies a node.
+pub type ClassFn<'a> = dyn Fn(&NodeSnapshot) -> PresClass + 'a;
 
 /// `Ok(Some)` = a node, `Ok(None)` = none, `Err(Stop)` = need data.
 type R<T> = Result<T, Stop>;
 
 impl<'a, S: NavSource> Walk<'a, S> {
-    fn new(src: &'a S, simple: bool, lenient: bool, limits: ReviewLimits) -> Self {
+    fn new(
+        src: &'a S,
+        simple: bool,
+        lenient: bool,
+        limits: ReviewLimits,
+        class_fn: &'a ClassFn<'a>,
+    ) -> Self {
         Self {
             src,
             visits: 0,
@@ -197,6 +361,7 @@ impl<'a, S: NavSource> Walk<'a, S> {
             last_content: None,
             simple,
             lenient,
+            class_fn,
         }
     }
 
@@ -221,7 +386,7 @@ impl<'a, S: NavSource> Walk<'a, S> {
                 if critical_missing {
                     return self.miss(NavOp::Node { node: k });
                 }
-                if class(&v.snap) == PresClass::Content {
+                if (self.class_fn)(&v.snap) == PresClass::Content {
                     self.last_content = Some(k);
                 }
                 Ok(Some(Read { snap: v.snap }))
@@ -279,7 +444,7 @@ impl<'a, S: NavSource> Walk<'a, S> {
 
     fn class_of(&self, r: &Read) -> PresClass {
         if self.simple {
-            class(&r.snap)
+            (self.class_fn)(&r.snap)
         } else if r.snap.states.contains(StateSet::DEFUNCT) {
             PresClass::Unavailable
         } else {
@@ -487,7 +652,23 @@ pub fn step<S: NavSource>(
     simple: bool,
     limits: ReviewLimits,
 ) -> StepResult {
-    run(&mut Walk::new(src, simple, false, limits), nav, mv)
+    step_with(src, nav, mv, simple, limits, &class)
+}
+
+/// [`step`] with the classification the walk uses (the cut-over gate replays both).
+pub fn step_with<S: NavSource>(
+    src: &S,
+    nav: NodeKey,
+    mv: NavMove,
+    simple: bool,
+    limits: ReviewLimits,
+    class_fn: &ClassFn<'_>,
+) -> StepResult {
+    run(
+        &mut Walk::new(src, simple, false, limits, class_fn),
+        nav,
+        mv,
+    )
 }
 
 /// The degraded move of OB-4: a raw move over whatever the mirror holds, never fetching.
@@ -497,7 +678,7 @@ pub fn step_degraded<S: NavSource>(
     mv: NavMove,
     limits: ReviewLimits,
 ) -> StepResult {
-    run(&mut Walk::new(src, false, true, limits), nav, mv)
+    run(&mut Walk::new(src, false, true, limits, &class), nav, mv)
 }
 
 fn run<S: NavSource>(w: &mut Walk<'_, S>, nav: NodeKey, mv: NavMove) -> StepResult {

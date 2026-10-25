@@ -38,6 +38,22 @@ fn no_ext() -> &'static gorca_i18n::ext::ExtCatalogs {
     EMPTY.get_or_init(gorca_i18n::ext::ExtCatalogs::empty)
 }
 
+/// The fused entry of a snapshot without the document mirror (PV-1, no `Option`): the attached
+/// entry, else the provisional entry of the source record, else an entry that has only the name.
+/// Review reads the application mirror, whose snapshots carry the entry the app actor fused.
+pub(crate) fn entry_of(snap: &NodeSnapshot) -> Arc<SemEntry> {
+    if let Some(e) = &snap.sem.entry {
+        return Arc::clone(e);
+    }
+    if let Some(r) = &snap.sem.rec {
+        return Arc::new(r.provisional_entry());
+    }
+    Arc::new(SemEntry {
+        name: snap.name.clone(),
+        ..SemEntry::default()
+    })
+}
+
 /// What the focus presentation of a node came to.
 pub(crate) struct Built {
     pub utterance: gorca_model::Utterance,
@@ -83,13 +99,7 @@ impl Reader {
         if let Some(e) = self.web_entry(snap.key) {
             return e;
         }
-        if let Some(r) = &snap.sem.rec {
-            return Arc::new(r.provisional_entry());
-        }
-        Arc::new(SemEntry {
-            name: snap.name.clone(),
-            ..SemEntry::default()
-        })
+        entry_of(snap)
     }
 
     /// The snapshot with its fused entry attached (a clone only when the entry changes), so that

@@ -95,6 +95,19 @@ pub enum Classifier {
     /// The fused value (`aria-valuetext`, `aria-valuenow`) is spoken where the legacy snapshot of
     /// the recorded fixture carries no `Value` interface.
     ValueFromAttrs,
+    /// Review: a name made only of white space is not a name; the legacy zone spoke it.
+    BlankNameNotSpoken,
+    /// Review: the legacy mapping called a node it had no role for a panel or a paragraph; the
+    /// model's role has no word (a figure, a log, a comment, a radio group) or is plain text (an
+    /// option, a term, a definition), and the catch-all word says nothing.
+    WrapperWordDropped,
+    /// Review: a role the native table has no word for is "object"; the legacy mapping said
+    /// nothing (an empty role word) or "panel".
+    UnwordedRoleIsObject,
+    /// Review class: a role the legacy mapping had no word for (`Unknown`, layout) the model knows.
+    ClassRoleFromModel,
+    /// Review class: a layout table (presentation role) is not a stop.
+    LayoutTableClass,
 }
 
 /// Roles whose field contents the legacy presenter speaks as a value and the text layer owns:
@@ -169,7 +182,7 @@ pub const VALUE_ROLES: &[SemRole] = &[
 ];
 
 /// (role, legacy word, model word) pairs accepted by `role-word-improved`.
-pub fn role_word_pairs(lang: Lang) -> [(SemRole, &'static str, &'static str); 5] {
+pub fn role_word_pairs(lang: Lang) -> [(SemRole, &'static str, &'static str); 7] {
     use gorca_i18n::MsgId as M;
     let t = |id| gorca_i18n::t_in(lang, id);
     [
@@ -179,11 +192,15 @@ pub fn role_word_pairs(lang: Lang) -> [(SemRole, &'static str, &'static str); 5]
         // A layout table (presentation role) is not a table for the user.
         (SemRole::Presentation, t(M::RoleTable), t(M::RolePanel)),
         (SemRole::AlertDialog, t(M::RoleAlert), t(M::RoleDialog)),
+        // Review: the engine exports an item that opens a submenu as a menu; it is a menu item.
+        (SemRole::MenuItem, t(M::RoleMenu), t(M::RoleMenuItem)),
+        // Review: an ARIA switch is exported as a toggle button.
+        (SemRole::Switch, t(M::RoleToggleButton), t(M::RoleSwitch)),
     ]
 }
 
 impl Classifier {
-    pub const ALL: [Classifier; 21] = [
+    pub const ALL: [Classifier; 26] = [
         Classifier::FieldContentsNotFused,
         Classifier::ContentDerivedName,
         Classifier::PressedWithoutToggle,
@@ -205,6 +222,11 @@ impl Classifier {
         Classifier::UnavailableItem,
         Classifier::CanvasGraphic,
         Classifier::AlertDialogParity,
+        Classifier::BlankNameNotSpoken,
+        Classifier::WrapperWordDropped,
+        Classifier::UnwordedRoleIsObject,
+        Classifier::ClassRoleFromModel,
+        Classifier::LayoutTableClass,
     ];
 
     pub const fn id(self) -> &'static str {
@@ -230,6 +252,11 @@ impl Classifier {
             Classifier::UnavailableItem => "unavailable-item",
             Classifier::CanvasGraphic => "canvas-graphic",
             Classifier::AlertDialogParity => "alert-dialog-parity",
+            Classifier::BlankNameNotSpoken => "blank-name-not-spoken",
+            Classifier::WrapperWordDropped => "wrapper-word-dropped",
+            Classifier::UnwordedRoleIsObject => "unworded-role-is-object",
+            Classifier::ClassRoleFromModel => "class-role-from-model",
+            Classifier::LayoutTableClass => "layout-table-class",
         }
     }
 }
@@ -264,6 +291,12 @@ pub struct DiffCtx<'a> {
     pub canvas_graphic: bool,
     /// Browse and quick navigation: the range holds an `alertdialog`, announced as a dialog.
     pub alert_dialog: bool,
+    /// Review: the legacy snapshot's role is one the legacy class treats as layout and the legacy
+    /// words call coarse (`Unknown`, `Panel`, `Paragraph`): the mapping had no role of its own.
+    pub legacy_coarse: bool,
+    /// Review: the legacy side had no text for the object and spoke its role word as a stand-in
+    /// (the zone of a silent object that can be acted on).
+    pub legacy_fallback: bool,
     /// The UI language the classifiers' catalog words are taken in (the language `render` used).
     pub lang: Lang,
 }
@@ -283,6 +316,8 @@ impl DiffCtx<'static> {
         unavailable_item: false,
         canvas_graphic: false,
         alert_dialog: false,
+        legacy_coarse: false,
+        legacy_fallback: false,
         lang: Lang::En,
     };
 }
@@ -308,6 +343,8 @@ impl<'a> DiffCtx<'a> {
             unavailable_item: false,
             canvas_graphic: false,
             alert_dialog: false,
+            legacy_coarse: false,
+            legacy_fallback: false,
             lang,
         }
     }
@@ -429,8 +466,16 @@ fn explain<'a>(
             }
             let text = kind(SegmentKind::Text);
             if count_kind(legacy_all, SegmentKind::Text) == 0 {
-                // The legacy snapshot had no name at all.
-                count_kind(only_new, SegmentKind::Text) == 1 && take(only_new, text)
+                // The legacy snapshot had no name at all (and spoke its role word instead when it
+                // could be acted on).
+                if count_kind(only_new, SegmentKind::Text) != 1 {
+                    return false;
+                }
+                take(only_new, text);
+                if ctx.legacy_fallback {
+                    take(only_legacy, kind(SegmentKind::Role));
+                }
+                true
             } else {
                 // The legacy name was a different join of the same content.
                 let squash = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
@@ -595,7 +640,7 @@ fn explain<'a>(
             // apply to (SM-5: static structure is never "unavailable").
             let applies = if is_change(ctx.surface) {
                 ctx.avail_na
-            } else if ctx.surface == "focus" {
+            } else if ctx.surface == "focus" || ctx.surface == "review" {
                 // Native: a static actor or label that reports neither SENSITIVE nor ENABLED
                 // (GNOME Shell's St actors) is not disabled; the model says not applicable.
                 ctx.avail_na
@@ -695,11 +740,77 @@ fn explain<'a>(
                 k.0 == kind_code(SegmentKind::State) && k.1 == ro
             })
         }
+        Classifier::BlankNameNotSpoken => {
+            let text = kind_code(SegmentKind::Text);
+            take(only_legacy, |k| {
+                k.0 == text && crate::compose::name_is_blank(Some(k.1))
+            })
+        }
+        Classifier::WrapperWordDropped => {
+            use gorca_i18n::MsgId as M;
+            let role = kind_code(SegmentKind::Role);
+            let (panel, paragraph) = (
+                gorca_i18n::t_in(ctx.lang, M::RolePanel),
+                gorca_i18n::t_in(ctx.lang, M::RoleParagraph),
+            );
+            (crate::zone::plain_text_role(ctx.role)
+                || crate::zone::review_role_word(ctx.role, Press::NotToggle).is_none())
+                && count_kind(new_all, SegmentKind::Role) == 0
+                && take(only_legacy, |k| {
+                    k.0 == role && (k.1 == panel || k.1 == paragraph)
+                })
+        }
+        Classifier::UnwordedRoleIsObject => {
+            use gorca_i18n::MsgId as M;
+            let role = kind_code(SegmentKind::Role);
+            let (object, panel) = (
+                gorca_i18n::t_in(ctx.lang, M::WordObject),
+                gorca_i18n::t_in(ctx.lang, M::RolePanel),
+            );
+            crate::zone::review_role_word(ctx.role, Press::NotToggle).is_none()
+                && !crate::zone::plain_text_role(ctx.role)
+                && only_new
+                    .iter()
+                    .filter(|k| k.0 == role && k.1 == object)
+                    .count()
+                    == 1
+                && only_legacy.iter().filter(|k| k.0 == role).count() <= 1
+                && only_legacy.iter().all(|k| k.0 != role || k.1 == panel)
+                && take(only_new, |k| k.0 == role && k.1 == object)
+                && {
+                    take(only_legacy, |k| k.0 == role);
+                    true
+                }
+        }
+        Classifier::ClassRoleFromModel => {
+            let text = kind_code(SegmentKind::Text);
+            ctx.legacy_coarse
+                && (ROLE_FROM_MODEL_ROLES.contains(&ctx.role)
+                    || ctx.role.is_inline_text()
+                    || matches!(ctx.role, SemRole::Option | SemRole::Definition))
+                && take(only_legacy, |k| k.0 == text && k.1 == "Layout")
+                && take(only_new, |k| k.0 == text && k.1 == "Content")
+        }
+        Classifier::LayoutTableClass => {
+            let text = kind_code(SegmentKind::Text);
+            ctx.role == SemRole::Presentation
+                && take(only_legacy, |k| k.0 == text && k.1 == "Content")
+                && take(only_new, |k| k.0 == text && k.1 == "Layout")
+        }
         Classifier::RoleFromModel => {
-            ROLE_FROM_MODEL_ROLES.contains(&ctx.role)
-                && count_kind(legacy_all, SegmentKind::Role) == 0
-                && count_kind(only_new, SegmentKind::Role) == 1
-                && take(only_new, kind(SegmentKind::Role))
+            // The legacy side may have spoken its fallback role word ("object", "row"): that is
+            // not a role the mapping knew.
+            let stand_in = usize::from(ctx.legacy_fallback);
+            let applies = (ROLE_FROM_MODEL_ROLES.contains(&ctx.role) || ctx.role.is_inline_text())
+                && count_kind(legacy_all, SegmentKind::Role) == stand_in
+                && count_kind(only_new, SegmentKind::Role) == 1;
+            if applies {
+                take(only_new, kind(SegmentKind::Role));
+                if ctx.legacy_fallback {
+                    take(only_legacy, kind(SegmentKind::Role));
+                }
+            }
+            applies
         }
     }
 }

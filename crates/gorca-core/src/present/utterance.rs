@@ -119,32 +119,41 @@ fn is_plain_text_role(role: gorca_model::Role) -> bool {
     }
 }
 
-/// What a flat-review zone says for a whole object (ADR-0006 6.3 rule 2): the name (or the
-/// value), then a role word for controls and the same state words as focus speech. "Wi-Fi toggle
-/// button checked", "Apply button", "Volume slider 40". Empty when the node has nothing to say.
-pub fn flat_zone_text(n: &NodeSnapshot) -> String {
-    let mut out = String::new();
-    let mut push = |s: &str| {
+/// What a flat-review zone says for a whole object (ADR-0006 6.3 rule 2) as spoken pieces: the
+/// name (or the value), then a role word for controls and the same state words as focus speech.
+pub fn flat_zone_tokens(n: &NodeSnapshot) -> Vec<(SegmentKind, String)> {
+    let mut out: Vec<(SegmentKind, String)> = Vec::new();
+    let mut push = |kind: SegmentKind, s: &str| {
         if !s.is_empty() {
-            if !out.is_empty() {
-                out.push(' ');
-            }
-            out.push_str(s);
+            out.push((kind, s.to_owned()));
         }
     };
     if let Some(name) = n.name.as_deref().filter(|s| !s.is_empty()) {
-        push(name);
+        push(SegmentKind::Text, name);
     }
     if !is_plain_text_role(n.role) {
-        push(n.role.spoken());
+        push(SegmentKind::Role, n.role.spoken());
     }
     for (flag, word) in STATE_WORDS {
         if n.states.contains(*flag) {
-            push(t(*word));
+            push(SegmentKind::State, t(*word));
         }
     }
     if let Some(v) = value_text(n.value.as_ref()) {
-        push(&v);
+        push(SegmentKind::Value, &v);
+    }
+    out
+}
+
+/// [`flat_zone_tokens`] as one line: "Wi-Fi toggle button checked", "Apply button", "Volume slider
+/// 40". Empty when the node has nothing to say.
+pub fn flat_zone_text(n: &NodeSnapshot) -> String {
+    let mut out = String::new();
+    for (_, piece) in flat_zone_tokens(n) {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(&piece);
     }
     out
 }

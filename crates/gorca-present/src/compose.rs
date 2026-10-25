@@ -239,11 +239,11 @@ pub fn compose(
     match reason {
         Reason::Focus if ctx.web => Ok(crate::web::web_focus(entry, node, ctx)),
         Reason::Focus => Ok(native_focus(entry, node, ctx)),
+        Reason::Review => Ok(crate::zone::review(entry, node, ctx)),
         Reason::FocusAncestor
         | Reason::BrowseLine { .. }
         | Reason::QuickNav
         | Reason::SayAll
-        | Reason::Review
         | Reason::Change { .. }
         | Reason::ListEntry
         | Reason::WhereAmI
