@@ -212,7 +212,10 @@ pub struct HostState {
     call_start: Instant,
     /// Thread CPU time at the start of the call: the watchdog counts CPU time, so a plugin
     /// thread the host descheduled is not a misbehaving plugin (the ext host learned this).
-    cpu_start: Duration,
+    pub(crate) cpu_start: Duration,
+    pub(crate) probe_t: u64,
+    pub(crate) probe_ns: u64,
+    pub(crate) probe_n: u64,
     call_limit: Duration,
     forged_lifetime: u32,
     facts: usize,
@@ -258,6 +261,9 @@ impl HostState {
             imports: 0,
             call_start: Instant::now(),
             cpu_start: Duration::ZERO,
+            probe_t: 0,
+            probe_ns: 0,
+            probe_n: 0,
             call_limit: Duration::ZERO,
             forged_lifetime: 0,
             facts: 0,

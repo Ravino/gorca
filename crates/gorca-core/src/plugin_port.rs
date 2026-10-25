@@ -137,13 +137,49 @@ pub struct FrozenRow {
     pub children: Vec<u32>,
 }
 
+/// Multiplicative hasher for small integer node indices: a snapshot is read by every import of
+/// every plugin, and SipHash on a `u32` key was a visible share of a call (M18a-4). Not a
+/// security boundary: keys are host-side indices, never guest-chosen hash inputs that matter
+/// (a guest handle is verified by MAC first and only then looked up).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct IndexHasher(u64);
+
+impl std::hash::Hasher for IndexHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for b in bytes {
+            self.0 = (self.0 ^ u64::from(*b)).wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    fn write_u32(&mut self, v: u32) {
+        self.write_u64(u64::from(v));
+    }
+    fn write_u64(&mut self, v: u64) {
+        self.0 = (self.0.rotate_left(5) ^ v).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        self.0 ^= self.0 >> 29;
+    }
+    fn write_usize(&mut self, v: usize) {
+        self.write_u64(v as u64);
+    }
+}
+
+/// A `HashMap` with [`IndexHasher`] (small integer keys the bridge itself produces).
+pub type FastMap<K, V> = HashMap<K, V, std::hash::BuildHasherDefault<IndexHasher>>;
+/// A `HashSet` with [`IndexHasher`].
+pub type FastSet<K> = HashSet<K, std::hash::BuildHasherDefault<IndexHasher>>;
+
+/// Rows by node index.
+pub type RowMap = HashMap<u32, FrozenRow, std::hash::BuildHasherDefault<IndexHasher>>;
+
 /// The immutable snapshot a job reads (`FrozenRows`, ADR-0026 section 2.4.6).
 #[derive(Clone, Debug, Default)]
 pub struct FrozenRows {
     /// The scope.
     pub scope: ScopeSpec,
     /// Rows by node index.
-    pub rows: HashMap<u32, FrozenRow>,
+    pub rows: RowMap,
 }
 
 /// The tree structure of the writer's engine (S0 structure, PF-2).
@@ -493,15 +529,15 @@ pub struct PluginBridge {
     /// Writer clock T.
     t: u64,
     /// `(plugin, watch)` matches by node.
-    watched: HashMap<u32, Vec<(usize, u16)>>,
+    watched: FastMap<u32, Vec<(usize, u16)>>,
     /// Dirty nodes per plugin, coalesced (latest cause wins per node).
     pending: Vec<BTreeMap<u32, (u16, u8)>>,
     /// Jobs in flight: `(plugin, target) -> turn sent`.
-    inflight: HashMap<(usize, u32), u64>,
-    live: HashMap<(usize, u32), LiveToken>,
+    inflight: FastMap<(usize, u32), u64>,
+    live: FastMap<(usize, u32), LiveToken>,
     /// Reverse index `node -> tokens that read it`.
-    rev: HashMap<u32, HashSet<(usize, u32)>>,
-    overflowed: HashSet<(usize, u32)>,
+    rev: FastMap<u32, FastSet<(usize, u32)>>,
+    overflowed: FastSet<(usize, u32)>,
     masked: Vec<bool>,
     ops: Vec<FactOp>,
     last_wait_ns: u64,
@@ -540,12 +576,12 @@ impl PluginBridge {
             stamp: Vec::new(),
             scope_stamp: 0,
             t: 1,
-            watched: HashMap::new(),
+            watched: FastMap::default(),
             pending: (0..n).map(|_| BTreeMap::new()).collect(),
-            inflight: HashMap::new(),
-            live: HashMap::new(),
-            rev: HashMap::new(),
-            overflowed: HashSet::new(),
+            inflight: FastMap::default(),
+            live: FastMap::default(),
+            rev: FastMap::default(),
+            overflowed: FastSet::default(),
             masked: vec![false; n],
             ops: Vec::new(),
             last_wait_ns: 0,
@@ -754,8 +790,10 @@ impl PluginBridge {
     // ---- snapshots ----------------------------------------------------------------------
 
     fn snapshot(&self, targets: &[u32], tree: &dyn Tree) -> Arc<FrozenRows> {
-        let mut rows: HashMap<u32, FrozenRow> = HashMap::new();
-        let add = |n: u32, rows: &mut HashMap<u32, FrozenRow>, tree: &dyn Tree| -> bool {
+        let mut rows =
+            RowMap::with_capacity_and_hasher(32, std::hash::BuildHasherDefault::default());
+        // One tree query per node: the parent and the children are read once, here.
+        let add = |n: u32, rows: &mut RowMap, tree: &dyn Tree| -> bool {
             if rows.contains_key(&n) {
                 return true;
             }
@@ -776,29 +814,31 @@ impl PluginBridge {
             );
             true
         };
+        let mut q: VecDeque<(u32, usize)> = VecDeque::new();
         for &t in targets {
             if !add(t, &mut rows, tree) {
                 continue;
             }
             // Ancestors (structure only, bounded).
-            let mut cur = tree.parent(t);
+            let mut cur = rows.get(&t).and_then(|r| r.parent);
             let mut up = 0;
             while let Some(p) = cur {
                 if up >= SNAPSHOT_ANCESTORS || !add(p, &mut rows, tree) {
                     break;
                 }
-                cur = tree.parent(p);
+                cur = rows.get(&p).and_then(|r| r.parent);
                 up += 1;
             }
             // Subtree breadth first, bounded in depth and size.
-            let mut q: VecDeque<(u32, usize)> = VecDeque::new();
+            q.clear();
             q.push_back((t, 0));
             let mut taken = 0;
             while let Some((n, d)) = q.pop_front() {
                 if taken >= SNAPSHOT_NODES || d >= SNAPSHOT_DEPTH {
                     continue;
                 }
-                for c in tree.children(n) {
+                let kids = rows.get(&n).map(|r| r.children.clone()).unwrap_or_default();
+                for c in kids {
                     if taken >= SNAPSHOT_NODES {
                         break;
                     }
@@ -850,6 +890,8 @@ impl PluginBridge {
     /// `t0_ns + 0.3 ms`, `t0_ns` the start of this writer turn), and admit what arrived.
     /// Returns true when the writer has new fact operations to apply.
     pub fn interactive(&mut self, chain: &[u32], tree: &dyn Tree, t0_ns: u64) -> bool {
+        use gorca_rt::stage::{id, mark, mark_at};
+        mark_at(id::W_ENTRY, 0, t0_ns);
         let mut per: Vec<Vec<Dirty>> = vec![Vec::new(); self.metas.len()];
         for &n in chain.iter().take(MAX_INTERACTIVE_NODES) {
             let Some(w) = self.watched.get(&n).cloned() else {
@@ -880,6 +922,7 @@ impl PluginBridge {
             }
         }
         let jobs = self.jobs_for(per, tree);
+        mark(id::W_SNAP, 0);
         if jobs.is_empty() {
             return self.drain();
         }
@@ -893,6 +936,7 @@ impl PluginBridge {
         } else {
             self.stats.no_wait += 1;
         }
+        mark(id::W_CLAIM, 0);
         let h = self.runner.interactive(t0_ns, wait, jobs);
         self.stats.handoff_asked += u64::from(h.asked);
         self.stats.handoff_arrived += u64::from(h.arrived);
@@ -902,6 +946,7 @@ impl PluginBridge {
         let admit_ns = now_ns().saturating_sub(t);
         self.stats.handoff_drain_ns += admit_ns;
         self.runner.turn_done(admit_ns, self.drained);
+        mark(id::B_ADMIT, 0);
         any
     }
 
@@ -948,6 +993,7 @@ impl PluginBridge {
         let t = now_ns();
         if waited_only {
             self.runner.poll_waited(&mut replies);
+            gorca_rt::stage::mark(gorca_rt::stage::id::B_POLL, 0);
             self.stats.handoff_poll_ns += now_ns().saturating_sub(t);
         } else {
             self.runner.poll(&mut replies);

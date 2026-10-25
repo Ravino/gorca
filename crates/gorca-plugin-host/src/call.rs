@@ -273,6 +273,9 @@ pub trait Exec: Send + 'static {
     /// Build the instance off the writer turn (at start and after a fault), so the first
     /// interactive call does not pay the instantiation. Default: nothing.
     fn warm(&mut self) {}
+    /// Run `job` again only to warm caches: the result is dropped and no state outside the
+    /// instance is touched. Default: nothing.
+    fn warm_call(&mut self, _job: &DeriveJob) {}
 }
 
 /// The wasmtime-backed executor of one plugin: owns the instance, rebuilds it after a fault.
@@ -382,6 +385,20 @@ impl Exec for PluginExec {
 
     fn reset(&mut self) {
         self.instance = None;
+    }
+
+    fn warm_call(&mut self, job: &DeriveJob) {
+        let Some(inst) = self.instance.as_mut() else {
+            return;
+        };
+        if inst
+            .derive(job.interactive, job.epoch, &job.nodes, &job.view, job.grant)
+            .is_err()
+        {
+            // The store is not trusted after a fault: rebuild it now, off the writer's turn.
+            self.instance = None;
+            self.warm();
+        }
     }
 
     fn warm(&mut self) {

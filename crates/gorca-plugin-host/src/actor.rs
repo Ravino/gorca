@@ -53,6 +53,11 @@ pub struct Config {
     pub idle_spin: Duration,
     /// A job running longer than this with no heartbeat makes the actor wedged.
     pub lost_after: Duration,
+    /// A pre-armed worker re-runs its last interactive job once per arming and drops the result
+    /// ("warm call"): after an idle period the code and data a call touches are cold (a first call
+    /// costs 4-6 times a warm one on this host), and the spin of the pre-wake keeps the core awake
+    /// but touches none of it. Same job, same grant, same imports, no effect is kept.
+    pub warm_on_arm: bool,
 }
 
 impl Default for Config {
@@ -62,6 +67,7 @@ impl Default for Config {
             tail: Duration::from_micros(30),
             idle_spin: Duration::from_micros(40),
             lost_after: Duration::from_millis(50),
+            warm_on_arm: true,
         }
     }
 }
@@ -374,6 +380,9 @@ fn execute(
         sent_ns,
     } = q;
     let picked = monotonic_ns();
+    let tg = u16::try_from(job.plugin).unwrap_or(u16::MAX);
+    gorca_rt::stage::set_tag(tg);
+    gorca_rt::stage::mark_at(gorca_rt::stage::id::K_PICK, tg, picked);
     *lock(&actor.running) = Some(Running {
         inc,
         plugin: job.plugin,
@@ -383,7 +392,9 @@ fn execute(
         tag,
     });
     actor.running_since.store(monotonic_ns().max(1), Release);
+    gorca_rt::stage::mark(gorca_rt::stage::id::K_CALL0, tg);
     let r = catch_unwind(AssertUnwindSafe(|| exec.run(&job)));
+    gorca_rt::stage::mark(gorca_rt::stage::id::K_RUN1, tg);
     if actor.inc.load(Acquire) == inc {
         actor.running_since.store(0, Release);
     }
@@ -403,6 +414,7 @@ fn execute(
     }
     // Reply first, then count down: a writer that sees the mask complete finds every reply in
     // its mailbox.
+    gorca_rt::stage::mark(gorca_rt::stage::id::K_POST0, tg);
     sink.send_timed(
         reply,
         ReplyTiming {
@@ -413,9 +425,11 @@ fn execute(
             at_ns: monotonic_ns(),
         },
     );
+    gorca_rt::stage::mark(gorca_rt::stage::id::K_POST1, tg);
     if let Some(t) = tag {
         gate.done(t);
     }
+    gorca_rt::stage::mark(gorca_rt::stage::id::K_GATE, tg);
     true
 }
 
@@ -434,11 +448,17 @@ fn worker_main(
     // Set when the worker went to park (or was about to) since its last job: the job it takes
     // next started cold. A spinning worker (idle tail or pre-armed) takes it hot.
     let mut went_to_park = false;
+    // The last interactive job and the arming (`spin_until`) it was last replayed for.
+    let mut last: Option<DeriveJob> = None;
+    let mut warmed_for: u64 = 0;
     loop {
         if actor.stop.load(Acquire) || actor.inc.load(Acquire) != inc {
             return;
         }
         if let Some(q) = actor.take(inc) {
+            if cfg.warm_on_arm && q.job.interactive {
+                last = Some(q.job.clone());
+            }
             if !execute(actor, inc, exec.as_mut(), q, gate, went_to_park) {
                 return;
             }
@@ -447,6 +467,20 @@ fn worker_main(
             exec.warm();
             idle_since = monotonic_ns();
             continue;
+        }
+        // Armed and not yet warmed for this arming: replay the last job (at least 1 ms of lead
+        // left, so a real job is not made to wait behind it).
+        if cfg.warm_on_arm {
+            let until = actor.spin_until.load(Acquire);
+            let now = monotonic_ns();
+            if let Some(job) = &last
+                && until > now.saturating_add(1_000_000)
+                && until != warmed_for
+            {
+                warmed_for = until;
+                exec.warm_call(job);
+                continue;
+            }
         }
         if monotonic_ns().saturating_sub(idle_since) < ns(cfg.idle_spin) {
             // Spinning: a job that arrives now starts hot, even after an earlier park.
@@ -746,6 +780,7 @@ impl ActorRunner {
     ) -> HandoffOutcome {
         writer_slack();
         let start = monotonic_ns();
+        gorca_rt::stage::mark_at(gorca_rt::stage::id::H_ENTER, 0, start);
         let gate = Arc::clone(&self.core.gate);
         // The runner owns turn tags: a caller-supplied tag could be reused while a late reply of
         // the earlier turn is still in flight and would count down the wrong wait.
@@ -773,11 +808,13 @@ impl ActorRunner {
         // moment the waited jobs are out, the others follow at once.
         self.core.parking.wake(mask);
         let t_sent = monotonic_ns();
+        gorca_rt::stage::mark_at(gorca_rt::stage::id::H_SENT_W, 0, t_sent);
         let mut mask = 0;
         for pj in rest {
             mask |= self.send_one(pj.job, sink, None);
         }
         self.core.parking.wake(mask);
+        gorca_rt::stage::mark(gorca_rt::stage::id::H_SENT_ALL, 0);
         if disarm {
             self.core.disarm();
         }
@@ -845,6 +882,7 @@ impl ActorRunner {
                 gate.parked.store(0, SeqCst);
             }
         }
+        gorca_rt::stage::mark(gorca_rt::stage::id::H_WAIT_END, 0);
         HandoffOutcome {
             asked: u32::try_from(n_w).unwrap_or(u32::MAX),
             arrived: (gate.got(tag) & want).count_ones(),
