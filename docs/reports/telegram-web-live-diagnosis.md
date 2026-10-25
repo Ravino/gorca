@@ -140,3 +140,6 @@ before: 2 jobs, 0 admitted), the live dump now gives 30 facts, 1 per row, no fau
 
 Logs: `RUST_LOG=info,gorca_daemon::plugins=debug` adds `plugin call exec_us=... grant_us=...`, `plugin fact`
 and message-catalog misses. Faults and masks are WARN already; the drop-in is only needed to see timings.
+## Update 2026-10-26
+
+The unit-side workaround (dropping the namespace options) is superseded: the full sandbox is back and identity comes from the identity helper, see `docs/reports/2026-10-26-linux-platform-identity-helper.md`.

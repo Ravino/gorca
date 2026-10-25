@@ -278,6 +278,9 @@ impl AppServer {
         let mut known: Option<(String, String)> = None;
         let mut settle_ms = 0u32;
         let mut exe: Option<String> = None;
+        // Identity re-resolution: the identity helper may not have been up yet when this
+        // application was first seen; ask again with a bounded backoff (attempts so far).
+        let mut reidentify: Option<usize> = None;
         if !verified && let Some(rx) = &shell_rx {
             verified = is_the_shell(*rx.borrow(), self.identity);
         }
@@ -288,10 +291,33 @@ impl AppServer {
                     Some(_) | None => std::future::pending().await,
                 }
             };
+            let reidentify_due = async {
+                match reidentify {
+                    Some(n) => {
+                        let ms = REIDENTIFY_BACKOFF_MS.get(n).copied().unwrap_or(30_000);
+                        tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+                    }
+                    None => std::future::pending().await,
+                }
+            };
             tokio::select! {
                 biased;
                 () = self.shutdown.cancelled() => break,
                 () = self.gone.cancelled() => break,
+                () = reidentify_due, if reidentify.is_some() && known.is_some() => {
+                    let attempt = reidentify.unwrap_or(0) + 1;
+                    if let Some((pid, start)) = self.identity {
+                        exe = crate::proc::exe_of_async(pid, start).await;
+                    }
+                    if exe.is_some() {
+                        reidentify = None;
+                        if let Some((t, n)) = &known {
+                            announce_info(&port, t, n, exe.as_deref(), verified, settle_ms);
+                        }
+                    } else {
+                        reidentify = (attempt < REIDENTIFY_BACKOFF_MS.len()).then_some(attempt);
+                    }
+                }
                 Some(req) = requests.recv() => self.accept(req, &cx, &permits, &background, &mut inflight),
                 found = &mut info_rx, if info_pending => {
                     info_pending = false;
@@ -304,6 +330,9 @@ impl AppServer {
                         None => None,
                     };
                     announce_info(&port, &toolkit, &app_name, exe.as_deref(), verified, settle_ms);
+                    if exe.is_none() && self.identity.is_some() && crate::identity_svc::uses_helper() {
+                        reidentify = Some(0);
+                    }
                     self.caller.set_text_screen_coords(
                         Toolkit::classify(&toolkit, &app_name).text_extents_use_screen_coords(),
                     );
@@ -347,6 +376,9 @@ impl AppServer {
             }
         }
         inflight.abort_all();
+        if let Some((pid, start)) = self.identity {
+            crate::identity_client::forget(pid, start);
+        }
         if self.gone.is_cancelled() {
             send_gone(&port).await;
         }
@@ -399,6 +431,10 @@ impl AppServer {
         });
     }
 }
+
+/// Waits before each re-resolution of an unverified identity through the identity helper
+/// (a helper that started late or restarted); after the last one the identity stays as it is.
+const REIDENTIFY_BACKOFF_MS: [u64; 5] = [500, 1_000, 2_000, 5_000, 15_000];
 
 fn announce_info(
     port: &AppPort,
