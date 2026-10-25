@@ -20,7 +20,7 @@
 //! The text is the page's own, so it is untrusted: it is only ever spoken, never interpreted.
 
 use gorca_model::sem::SemRole;
-use gorca_model::{DocNodeId, Rect, Role};
+use gorca_model::{DocNodeId, Rect};
 
 use super::cats::{Cat, NodeFlags};
 use super::doc::WebDoc;
@@ -127,7 +127,10 @@ fn cannot_label(d: &WebDoc, id: DocNodeId) -> bool {
         let Some(v) = d.node(n) else { return false };
         if v.cats.intersects(widget)
             || v.cats.intersects(Cat::HEADING)
-            || matches!(v.role, Role::ListItem | Role::Heading)
+            || matches!(
+                v.role,
+                SemRole::ListItem | SemRole::Option | SemRole::Heading
+            )
         {
             return true;
         }
@@ -183,7 +186,7 @@ pub fn hyper_range(d: &WebDoc, id: DocNodeId) -> Option<(DocNodeId, u32, u32)> {
     let mut at = 0u32;
     for c in d.children(parent) {
         let v = d.node(c)?;
-        let is_run = v.role == Role::StaticText && d.child_count(c) == Some(0);
+        let is_run = v.role.is_inline_text() && d.child_count(c) == Some(0);
         let len = if is_run {
             u32::try_from(v.text.map_or(0, |t| t.chars().count())).ok()?
         } else {

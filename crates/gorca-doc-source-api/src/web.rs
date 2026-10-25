@@ -206,6 +206,26 @@ impl TreeBlock {
 /// True for keys a source allocated itself.
 /// Roles whose invalid state is announced with their error message. Containers (a form that
 /// holds an invalid field) are marked invalid by Gecko too and say nothing.
+pub fn takes_error_text_sem(role: gorca_model::sem::SemRole) -> bool {
+    use gorca_model::sem::SemRole as R;
+    matches!(
+        role,
+        R::TextBox
+            | R::SearchBox
+            | R::PasswordBox
+            | R::Combobox
+            | R::Checkbox
+            | R::MenuItemCheckbox
+            | R::Radio
+            | R::MenuItemRadio
+            | R::SpinButton
+            | R::Slider
+            | R::Switch
+            | R::Button
+    )
+}
+
+/// Roles whose invalid state is announced with their error message (the source role).
 pub fn takes_error_text(role: Role) -> bool {
     matches!(
         role,

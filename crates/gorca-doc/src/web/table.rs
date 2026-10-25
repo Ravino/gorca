@@ -8,7 +8,8 @@
 //! interface, which the source does not fetch yet (M8 gap TB.span). A spanning cell is one cell
 //! in its own row.
 
-use gorca_model::{DocNodeId, Role};
+use gorca_model::DocNodeId;
+use gorca_model::sem::SemRole;
 
 use super::cats::NodeFlags;
 use super::doc::WebDoc;
@@ -65,20 +66,24 @@ fn visible(doc: &WebDoc, id: DocNodeId) -> bool {
 
 fn is_cell(doc: &WebDoc, id: DocNodeId) -> bool {
     doc.node(id).is_some_and(|v| {
-        matches!(v.role, Role::Cell | Role::ColumnHeader | Role::RowHeader)
-            && !v.flags.contains(NodeFlags::HIDDEN)
+        matches!(
+            v.role,
+            SemRole::Cell | SemRole::GridCell | SemRole::ColumnHeader | SemRole::RowHeader
+        ) && !v.flags.contains(NodeFlags::HIDDEN)
     })
 }
 
 fn is_row(doc: &WebDoc, id: DocNodeId) -> bool {
     doc.node(id)
-        .is_some_and(|v| v.role == Role::Row && !v.flags.contains(NodeFlags::HIDDEN))
+        .is_some_and(|v| v.role == SemRole::Row && !v.flags.contains(NodeFlags::HIDDEN))
 }
 
 /// A data table (or grid): not a layout table.
 fn is_table(doc: &WebDoc, id: DocNodeId) -> bool {
-    doc.node(id)
-        .is_some_and(|v| v.role == Role::Table && !v.flags.contains(NodeFlags::LAYOUT))
+    doc.node(id).is_some_and(|v| {
+        matches!(v.role, SemRole::Table | SemRole::Grid | SemRole::TreeGrid)
+            && !v.flags.contains(NodeFlags::LAYOUT)
+    })
 }
 
 /// The cell holding `node` (or `node` itself), with its row and table. `None` outside a data
@@ -116,7 +121,10 @@ fn first_row_in(doc: &WebDoc, n: DocNodeId, depth: u8) -> Option<DocNodeId> {
     let v = doc.node(n)?;
     if depth >= GROUP_DEPTH
         || v.flags.contains(NodeFlags::HIDDEN)
-        || matches!(v.role, Role::Cell | Role::ColumnHeader | Role::RowHeader)
+        || matches!(
+            v.role,
+            SemRole::Cell | SemRole::GridCell | SemRole::ColumnHeader | SemRole::RowHeader
+        )
     {
         return None;
     }
@@ -131,7 +139,10 @@ fn last_row_in(doc: &WebDoc, n: DocNodeId, depth: u8) -> Option<DocNodeId> {
     let v = doc.node(n)?;
     if depth >= GROUP_DEPTH
         || v.flags.contains(NodeFlags::HIDDEN)
-        || matches!(v.role, Role::Cell | Role::ColumnHeader | Role::RowHeader)
+        || matches!(
+            v.role,
+            SemRole::Cell | SemRole::GridCell | SemRole::ColumnHeader | SemRole::RowHeader
+        )
     {
         return None;
     }
@@ -246,7 +257,7 @@ pub fn column_header(doc: &WebDoc, table: DocNodeId, col: usize) -> Option<DocNo
     let mut found = None;
     for _ in 0..4 {
         match cell_at(doc, row, col) {
-            Some(c) if doc.node(c).is_some_and(|v| v.role == Role::ColumnHeader) => {
+            Some(c) if doc.node(c).is_some_and(|v| v.role == SemRole::ColumnHeader) => {
                 found = Some(c);
             }
             _ => break,
@@ -265,7 +276,7 @@ pub fn row_header(doc: &WebDoc, row: DocNodeId, col: usize) -> Option<DocNodeId>
     doc.children(row)
         .filter(|c| is_cell(doc, *c))
         .take(col + 1)
-        .find(|c| doc.node(*c).is_some_and(|v| v.role == Role::RowHeader))
+        .find(|c| doc.node(*c).is_some_and(|v| v.role == SemRole::RowHeader))
 }
 
 /// Does the node exist and is it visible (a stale `DocNodeId` after a re-render).
@@ -279,6 +290,7 @@ mod tests {
 
     use super::*;
     use crate::web::{DocOp, NodeSpec, SubtreeSpec};
+    use gorca_model::Role;
 
     fn cell(role: Role, t: &str) -> SubtreeSpec {
         SubtreeSpec::with_children(
@@ -327,7 +339,7 @@ mod tests {
         let t = d.first_of(super::super::Cat::TABLE).unwrap_or_else(|| {
             // the synthetic tables here carry no flags: find it by role
             d.preorder()
-                .find(|n| d.node(*n).is_some_and(|v| v.role == Role::Table))
+                .find(|n| d.node(*n).is_some_and(|v| matches!(v.role, SemRole::Table)))
                 .unwrap()
         });
         (d, t)

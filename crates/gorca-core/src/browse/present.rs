@@ -854,7 +854,7 @@ mod tests {
         attrs: &[(gorca_model::AttrKey, &str)],
         desc: Option<&str>,
     ) -> NodeSpec {
-        hinted(leaf(role), st, attrs, desc)
+        crate::doc_actor::legacy_sem_tests::hinted_as(Some(role), leaf(role), st, attrs, desc)
     }
 
     fn blk() -> NodeFlags {

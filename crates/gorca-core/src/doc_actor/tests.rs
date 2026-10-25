@@ -169,7 +169,7 @@ async fn a_settled_batch_is_published_and_joined_before_the_reader_is_told() {
     let (doc, id) = r.join.get(nk(14)).expect("link joined");
     assert_eq!(doc, DocId(7));
     r.handle.read.with(|d| {
-        assert_eq!(d.node(id).map(|v| v.role), Some(Role::Link));
+        assert_eq!(d.node(id).map(|v| v.role), Some(gorca_model::SemRole::Link));
         assert_eq!(d.text_in(0, d.text_len()), "\nhello docs");
         assert!(d.validate().is_ok());
     });

@@ -85,7 +85,7 @@ fn move_items(doc: &WebDoc, from: CellRef, to: CellRef, mv: TableMove, at: u32) 
         doc.node(c).is_some_and(|v| {
             matches!(
                 v.role,
-                gorca_model::Role::ColumnHeader | gorca_model::Role::RowHeader
+                gorca_model::sem::SemRole::ColumnHeader | gorca_model::sem::SemRole::RowHeader
             )
         })
     };

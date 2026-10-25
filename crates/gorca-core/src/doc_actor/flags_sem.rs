@@ -10,29 +10,44 @@
 //! `SrcNode::attrs`.
 
 use gorca_doc::web::NodeFlags;
+use gorca_model::SrcNode;
 use gorca_model::sem::{Invalid, SemFlags, SemRole, Semantics};
-use gorca_model::{Role, SrcNode, StateSet};
 
 /// Roles whose source node is a table cell: one line, cells separated by a space.
-const fn is_cell(r: Role) -> bool {
-    matches!(r, Role::Cell | Role::ColumnHeader | Role::RowHeader)
-}
-
-fn role_is_block(r: Role) -> bool {
+const fn is_cell(r: SemRole) -> bool {
     matches!(
         r,
-        Role::Paragraph
-            | Role::Heading
-            | Role::List
-            | Role::ListItem
-            | Role::Table
-            | Role::Row
-            | Role::Landmark
-            | Role::Separator
-            | Role::Document
-            | Role::DocumentWeb
-            | Role::Dialog
-            | Role::Alert
+        SemRole::Cell | SemRole::GridCell | SemRole::ColumnHeader | SemRole::RowHeader
+    )
+}
+
+fn role_is_block(r: SemRole) -> bool {
+    matches!(
+        r,
+        SemRole::Paragraph
+            | SemRole::Heading
+            | SemRole::List
+            | SemRole::Listbox
+            | SemRole::ListItem
+            | SemRole::Option
+            | SemRole::Table
+            | SemRole::Grid
+            | SemRole::TreeGrid
+            | SemRole::Row
+            | SemRole::Region
+            | SemRole::Banner
+            | SemRole::Complementary
+            | SemRole::ContentInfo
+            | SemRole::Main
+            | SemRole::Navigation
+            | SemRole::Search
+            | SemRole::Form
+            | SemRole::Separator
+            | SemRole::Document
+            | SemRole::DocumentWeb
+            | SemRole::Dialog
+            | SemRole::AlertDialog
+            | SemRole::Alert
     )
 }
 
@@ -47,19 +62,17 @@ pub fn flags_from_sem(
 ) -> (NodeFlags, u8) {
     let mut f = NodeFlags::NONE;
     // `showing` is viewport state and flips without events (TBD-WEB-1): only `visible` counts.
-    if !n.states.contains(StateSet::VISIBLE) {
+    if !n.is_visible() {
         f = f | NodeFlags::HIDDEN;
     }
-    if n.states.contains(StateSet::VISITED) {
+    if sem.flags.contains(SemFlags::VISITED) {
         f = f | NodeFlags::VISITED;
     }
-    if n.states.contains(StateSet::FOCUSABLE) {
+    if n.is_focusable() || sem.flags.contains(SemFlags::FOCUSABLE) {
         f = f | NodeFlags::FOCUSABLE;
     }
     let role = sem.role;
-    if n.role == Role::Landmark
-        && ((role == SemRole::Region && sem.flags.contains(SemFlags::ROLE_AUTHORED))
-            || tag == "section")
+    if role == SemRole::Region && (sem.flags.contains(SemFlags::ROLE_AUTHORED) || tag == "section")
     {
         f = f | NodeFlags::REGION;
     }
@@ -69,15 +82,16 @@ pub fn flags_from_sem(
     if tag == "blockquote" {
         f = f | NodeFlags::BLOCKQUOTE;
     }
-    if n.role == Role::Table
-        && (sem.flags.contains(SemFlags::LAYOUT_TABLE) || role == SemRole::Presentation)
+    if (matches!(role, SemRole::Table | SemRole::Grid | SemRole::TreeGrid)
+        && sem.flags.contains(SemFlags::LAYOUT_TABLE))
+        || (role == SemRole::Presentation && tag == "table")
     {
         f = f | NodeFlags::LAYOUT;
     }
     // A live region root of its own (an `aria-live` or a status or log), or a role that is a live
     // region only to be quiet. A node the engine reports as an alert is a live region by its
     // category already.
-    let own_live = sem.live.is_some_and(|l| l.root) && n.role != Role::Alert;
+    let own_live = sem.live.is_some_and(|l| l.root);
     if own_live
         || matches!(
             role,
@@ -86,7 +100,7 @@ pub fn flags_from_sem(
     {
         f = f | NodeFlags::LIVE;
     }
-    if n.role == Role::List && (role == SemRole::Listbox || tag == "select") {
+    if role == SemRole::Listbox || (role == SemRole::List && tag == "select") {
         f = f | NodeFlags::LISTBOX;
     }
     if matches!(tag, "ins" | "del")
@@ -98,23 +112,24 @@ pub fn flags_from_sem(
         f = f | NodeFlags::ANNOTATION;
     }
     // A form field that is invalid is announced as the field; W finds the marked-up text.
-    if (sem.invalid != Invalid::No || n.states.contains(StateSet::INVALID))
+    if (sem.invalid != Invalid::No || n.reports_invalid())
         && !matches!(
-            n.role,
-            Role::TextEntry
-                | Role::PasswordEntry
-                | Role::ComboBox
-                | Role::SpinButton
-                | Role::Slider
+            role,
+            SemRole::TextBox
+                | SemRole::SearchBox
+                | SemRole::PasswordBox
+                | SemRole::Combobox
+                | SemRole::SpinButton
+                | SemRole::Slider
         )
     {
         f = f | NodeFlags::ERROR;
     }
-    if n.role == Role::DocumentWeb && nested_doc {
+    if role == SemRole::DocumentWeb && nested_doc {
         f = f | NodeFlags::FRAME;
     }
     // Table cells stay inline: a row is one line, cells separated by a space (NVDA screen layout).
-    let cell = is_cell(n.role);
+    let cell = is_cell(role);
     if cell {
         f = f | NodeFlags::CELL;
     }
@@ -124,12 +139,12 @@ pub fn flags_from_sem(
         } else if sem.flags.contains(SemFlags::DISPLAY_INLINE) {
             false
         } else {
-            role_is_block(n.role)
+            role_is_block(role)
         };
     if block {
         f = f | NodeFlags::BLOCK;
     }
-    let level = if n.role == Role::Heading && (1..=6).contains(&sem.level) {
+    let level = if role == SemRole::Heading && (1..=6).contains(&sem.level) {
         sem.level
     } else {
         0
@@ -149,7 +164,13 @@ pub fn flags_of(
     match (entry, &n.rec) {
         (Some(e), _) => flags_from_sem(n, &e.sem, tag, nested_doc),
         (None, Some(r)) => flags_from_sem(n, &r.sem, tag, nested_doc),
-        (None, None) => flags_from_sem(n, &Semantics::default(), tag, nested_doc),
+        (None, None) => {
+            let sem = Semantics {
+                role: n.model_role(None),
+                ..Semantics::default()
+            };
+            flags_from_sem(n, &sem, tag, nested_doc)
+        }
     }
 }
 
@@ -158,7 +179,7 @@ mod tests {
     use std::sync::Arc;
 
     use gorca_model::sem::{Live, Relevant, SemFlags, SemRole, SrcRecord, TagName};
-    use gorca_model::{SrcNodeId, StateSet};
+    use gorca_model::{Role, SrcNodeId, StateSet};
 
     use super::*;
 
@@ -189,8 +210,10 @@ mod tests {
     #[test]
     fn hidden_and_visited_follow_the_source_states() {
         let mut n = node(Role::Link, "a");
-        n.states = StateSet::VISITED | StateSet::FOCUSABLE;
-        let (f, _) = flags_from_sem(&n, &sem(SemRole::Link), "a", false);
+        n.states = StateSet::FOCUSABLE;
+        let mut visited = sem(SemRole::Link);
+        visited.flags |= SemFlags::VISITED;
+        let (f, _) = flags_from_sem(&n, &visited, "a", false);
         assert!(f.contains(NodeFlags::HIDDEN | NodeFlags::VISITED | NodeFlags::FOCUSABLE));
     }
 
@@ -266,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    fn live_roots_are_flagged_except_a_node_the_engine_calls_an_alert() {
+    fn live_roots_and_live_roles_are_flagged_and_an_alert_is_live_by_its_category_too() {
         let live = Live {
             politeness: gorca_model::event::Politeness::Polite,
             atomic: false,
@@ -282,8 +305,10 @@ mod tests {
                 .contains(NodeFlags::LIVE)
         );
         let n = node(Role::Alert, "div");
+        let mut alert = s.clone();
+        alert.role = SemRole::Alert;
         assert!(
-            !flags_from_sem(&n, &s, "div", false)
+            flags_from_sem(&n, &alert, "div", false)
                 .0
                 .contains(NodeFlags::LIVE)
         );

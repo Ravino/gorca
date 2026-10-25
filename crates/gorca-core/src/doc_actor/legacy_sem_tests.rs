@@ -216,6 +216,8 @@ impl SemLookup for LegacySem {
 /// signature, until [`fuse_spec`] turns them into the entry.
 #[derive(Clone, Debug, Default)]
 struct Hint {
+    /// The legacy role the test meant, where the model role loses it (`ToggleButton`).
+    role: Option<Role>,
     states: StateSet,
     attrs: Vec<(gorca_model::AttrKey, Arc<str>)>,
     description: Option<Arc<str>>,
@@ -227,6 +229,17 @@ thread_local! {
 
 /// `n` with the states, attributes and description a test gives it (see [`Hint`]).
 pub(crate) fn hinted(
+    n: gorca_doc::web::NodeSpec,
+    states: StateSet,
+    attrs: &[(gorca_model::AttrKey, &str)],
+    description: Option<&str>,
+) -> gorca_doc::web::NodeSpec {
+    hinted_as(None, n, states, attrs, description)
+}
+
+/// [`hinted`] for a node whose legacy `role` the model role does not keep.
+pub(crate) fn hinted_as(
+    role: Option<Role>,
     mut n: gorca_doc::web::NodeSpec,
     states: StateSet,
     attrs: &[(gorca_model::AttrKey, &str)],
@@ -239,6 +252,7 @@ pub(crate) fn hinted(
         h.insert(
             sig,
             Hint {
+                role,
                 states,
                 attrs: attrs.iter().map(|(k, v)| (*k, Arc::from(*v))).collect(),
                 description: description.map(Arc::from),
@@ -252,7 +266,7 @@ pub(crate) fn hinted(
 /// and attributes give it (and a content name where the role takes one and the node has none).
 pub(crate) fn fuse_spec(s: gorca_doc::web::SubtreeSpec) -> gorca_doc::web::SubtreeSpec {
     fn text_below(s: &gorca_doc::web::SubtreeSpec, out: &mut Vec<String>) {
-        if s.node.role == Role::StaticText
+        if s.node.role.is_inline_text()
             && let Some(t) = s.node.text.as_deref()
         {
             out.push(t.trim().to_owned());
@@ -268,9 +282,10 @@ pub(crate) fn fuse_spec(s: gorca_doc::web::SubtreeSpec) -> gorca_doc::web::Subtr
         if s.node.sig >= 0xF000_0000_0000_0000 {
             s.node.sig = 0;
         }
+        let role = hint.role.unwrap_or_else(|| Role::from(s.node.role));
         let mut node = SrcNode {
             id: SrcNodeId(0),
-            role: s.node.role,
+            role,
             states: hint.states,
             name: s.node.name.clone(),
             text: None,
@@ -281,13 +296,13 @@ pub(crate) fn fuse_spec(s: gorca_doc::web::SubtreeSpec) -> gorca_doc::web::Subtr
         if let Some(d) = hint.description.as_ref() {
             node.attrs.push((web_attrs::DESCRIPTION, Arc::clone(d)));
         }
-        if s.node.role == Role::Heading && s.node.level > 0 {
+        if role == Role::Heading && s.node.level > 0 {
             node.attrs
                 .push((web_attrs::LEVEL, Arc::from(s.node.level.to_string())));
         }
         if node.name.is_none()
             && matches!(
-                s.node.role,
+                role,
                 Role::Link
                     | Role::Heading
                     | Role::Button

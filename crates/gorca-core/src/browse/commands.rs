@@ -11,17 +11,18 @@ use std::time::{Duration, Instant};
 
 use gorca_doc::web::{Cat, WebDoc, WebSpace};
 use gorca_input_api::{GrabSet, InputContext, ModeKind};
+use gorca_model::sem::{Expand, SemFlags, SemRole};
 use gorca_model::{
-    AppId, DocAction, DocId, DocNodeId, Lookup, NodeKey, Prio, Role, Segment, SegmentKind, StateSet,
+    AppId, DocAction, DocId, DocNodeId, Lookup, NodeKey, Prio, Segment, SegmentKind,
 };
 use gorca_text::{Dir, TextSpace, Unit};
 
 use super::cursor::{self, Edge, Mv};
-use super::forms::{self, Reason};
+use super::forms::{self, PassFacts, Reason};
 use super::present::{self, Item};
 use super::{
     BrowseState, CursorFrom, LIVE_TTL_ASSERTIVE, LIVE_TTL_POLITE, ModeWord, NativeSync, SavedWeb,
-    SelectionModel, WebEv, WebFx, WebMode, step,
+    SelectionModel, Toggles, WebEv, WebFx, WebMode, step,
 };
 use crate::SpeechIntent;
 use crate::commands::CoreCmd;
@@ -29,6 +30,8 @@ use crate::doc_actor::live::LiveMsg;
 use crate::doc_actor::{DocDirectory, DocNotice, SelOutcome, WebJoin};
 use crate::focus::FocusState;
 use crate::mode::{Mode, ModeMsg, WebCursor};
+use crate::nodekind::role_of;
+use crate::present::entry_of;
 use crate::present::message;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 
@@ -538,58 +541,9 @@ fn quicknav(c: CoreCmd) -> Option<(Dir, Cat, M)> {
         .map(|(_, d, cat, name)| (*d, *cat, *name))
 }
 
-/// The browse-mode view of a fused entry as the flat states the form logic reads. A disabled
-/// control still passes the keys through (the web path never had a disabled state), so
-/// availability is not part of it.
-pub(crate) fn states_of_entry(e: &gorca_model::SemEntry) -> StateSet {
-    use gorca_model::sem::{Check, Expand, Invalid, Press, Select, SemFlags};
-    let mut s = StateSet::empty();
-    let f = e.sem.flags;
-    for (flag, state) in [
-        (SemFlags::FOCUSABLE, StateSet::FOCUSABLE),
-        (SemFlags::EDITABLE, StateSet::EDITABLE),
-        (SemFlags::READ_ONLY, StateSet::READ_ONLY),
-        (SemFlags::MODAL, StateSet::MODAL),
-        (SemFlags::REQUIRED, StateSet::REQUIRED),
-        (SemFlags::BUSY, StateSet::BUSY),
-    ] {
-        if f.contains(flag) {
-            s |= state;
-        }
-    }
-    if e.sem.select != Select::NotSelectable {
-        s |= StateSet::SELECTABLE;
-    }
-    if e.sem.select == Select::On {
-        s |= StateSet::SELECTED;
-    }
-    match e.sem.check {
-        Check::On => s |= StateSet::CHECKED,
-        Check::Mixed => s |= StateSet::MIXED,
-        Check::Off | Check::NotCheckable => {}
-    }
-    if e.sem.press == Press::On {
-        s |= StateSet::PRESSED;
-    }
-    match e.sem.expand {
-        Expand::Expanded => s |= StateSet::EXPANDED,
-        Expand::Collapsed => s |= StateSet::COLLAPSED,
-        Expand::NotExpandable => {}
-    }
-    if e.sem.invalid != Invalid::No {
-        s |= StateSet::INVALID;
-    }
-    if e.sem.avail != gorca_model::sem::Avail::Disabled {
-        s |= StateSet::ENABLED;
-    }
-    s
-}
-
-/// States of a node, from its fused entry.
-fn states_of(d: &WebDoc, id: DocNodeId) -> StateSet {
-    d.node(id)
-        .and_then(|v| v.sem_ref().map(states_of_entry))
-        .unwrap_or_else(StateSet::empty)
+/// The entry of a document node.
+fn entry_at(d: &WebDoc, id: DocNodeId) -> Option<Arc<gorca_model::SemEntry>> {
+    d.node(id).and_then(|v| v.sem())
 }
 
 /// A group of controls: a `fieldset`, or an element the author gave `role=group` or
@@ -600,11 +554,13 @@ fn is_group(v: &gorca_doc::web::NodeView<'_>) -> bool {
         .is_some_and(|e| matches!(e.sem.role, SemRole::Group | SemRole::RadioGroup))
 }
 
-fn role_states(d: &WebDoc, id: DocNodeId) -> (Role, StateSet) {
-    (
-        d.node(id).map_or(Role::Unknown, |v| v.role),
-        states_of(d, id),
-    )
+/// The model role of a document node, its pass-through facts and its toggle states.
+fn node_facts(d: &WebDoc, id: DocNodeId) -> (SemRole, PassFacts, Toggles) {
+    let role = d.node(id).map_or(SemRole::Unknown, |v| v.role);
+    match entry_at(d, id) {
+        Some(e) => (role, PassFacts::of(&e.sem, false), Toggles::of(&e.sem)),
+        None => (role, PassFacts::default(), Toggles::default()),
+    }
 }
 
 /// The nearest ancestor-or-self (within `hops`) whose categories intersect `c`.
@@ -646,7 +602,7 @@ fn prev_match(d: &WebDoc, node: DocNodeId, c: Cat, scope: Option<DocNodeId>) -> 
 /// stay inside it while the cursor is.
 fn modal_scope(d: &WebDoc, mut node: DocNodeId) -> Option<DocNodeId> {
     for _ in 0..64 {
-        if states_of(d, node).contains(StateSet::MODAL) {
+        if entry_at(d, node).is_some_and(|e| e.sem.flags.contains(SemFlags::MODAL)) {
             return Some(node);
         }
         node = d.parent(node)?;
@@ -656,7 +612,7 @@ fn modal_scope(d: &WebDoc, mut node: DocNodeId) -> Option<DocNodeId> {
 
 /// The document itself (or an embedded one): focus on it is not a move onto a control.
 fn is_document(d: &WebDoc, node: DocNodeId) -> bool {
-    d.root() == Some(node) || d.node(node).is_some_and(|v| v.role == Role::DocumentWeb)
+    d.root() == Some(node) || d.node(node).is_some_and(|v| v.role == SemRole::DocumentWeb)
 }
 
 /// Whether `anc` is `node` or one of its ancestors.
@@ -1139,7 +1095,7 @@ impl Reader {
                 ..
             } => b.docs.get(doc).is_some_and(|h| {
                 h.read
-                    .with(|d| states_of(d, node).contains(StateSet::EXPANDED))
+                    .with(|d| entry_at(d, node).is_some_and(|e| e.sem.expand == Expand::Expanded))
             }),
             WebMode::Focus { .. }
             | WebMode::Browse { .. }
@@ -1171,9 +1127,9 @@ impl Reader {
         );
         if let Some((doc, id)) = hit
             && let Some(h) = b.docs.get(doc)
-            && let Some((role, states)) = h.read.with(|d| {
+            && let Some((role, facts, _)) = h.read.with(|d| {
                 d.node(id)?;
-                Some(role_states(d, id))
+                Some(node_facts(d, id))
             })
         {
             b.counters.join_hits += 1;
@@ -1247,7 +1203,7 @@ impl Reader {
                 b.frame_focus = Some((node, due));
                 fx.push(ReaderEffect::ArmTimer(due));
             }
-            let passes = forms::passes_through(role, states, Reason::Focus);
+            let passes = forms::passes_through(role, facts, Reason::Focus);
             let application = forms::is_application(role);
             let last_before = match b.mode {
                 WebMode::Browse { doc: d, cur, .. } if d == doc => Some(cur.node),
@@ -1333,7 +1289,11 @@ impl Reader {
             b.counters.join_misses += 1;
             let (editable, known) = match self.dir.lookup(node) {
                 Lookup::Hit(snap) => (
-                    forms::passes_through(snap.role, snap.states, Reason::Focus),
+                    forms::passes_through(
+                        role_of(&snap),
+                        PassFacts::of(&entry_of(&snap).sem, true),
+                        Reason::Focus,
+                    ),
                     true,
                 ),
                 Lookup::Miss | Lookup::Gone => (false, false),
@@ -1368,12 +1328,12 @@ impl Reader {
             let Some(sn) = self.dir.lookup(cur).hit() else {
                 return false;
             };
-            if matches!(sn.role, Role::DocumentWeb | Role::Document) {
+            if matches!(role_of(&sn), SemRole::DocumentWeb | SemRole::Document) {
                 return false;
             }
             match sn.parent {
                 Some(p) => cur = p,
-                None => return sn.role == Role::Application,
+                None => return crate::nodekind::is_app_node(&sn),
             }
         }
         false
@@ -1429,12 +1389,12 @@ impl Reader {
         let h = b.docs.get(doc)?;
         let came_from = from.and_then(|f| b.join.get(f)).filter(|(d, _)| *d == doc);
         h.read.with(|d| {
-            if d.node(id)?.role != Role::MenuItem {
+            if d.node(id)?.role != SemRole::MenuItem {
                 return None;
             }
             let menu = d.parent(id)?;
             let v = d.node(menu)?;
-            if !matches!(v.role, Role::Menu | Role::MenuBar) {
+            if !matches!(v.role, SemRole::Menu | SemRole::Menubar) {
                 return None;
             }
             if let Some((_, f)) = came_from
@@ -1443,7 +1403,7 @@ impl Reader {
                 return None;
             }
             let name = v.name.filter(|n| !n.is_empty())?;
-            Some((v.role == Role::MenuBar, Arc::from(name)))
+            Some((v.role == SemRole::Menubar, Arc::from(name)))
         })
     }
 
@@ -1451,7 +1411,6 @@ impl Reader {
     /// name, value), so the first focus into a field is spoken at once and the fetch only
     /// confirms it (the mirror knows the node: this is what the page last told us).
     pub(crate) fn web_focus_snapshot(&self, node: NodeKey) -> Option<gorca_model::NodeSnapshot> {
-        use gorca_model::{ChildList, Freshness, Ifaces, PropMask, Relations};
         let b = self.web.as_ref()?;
         let (doc, id) = b.join.get(node)?;
         let h = b.docs.get(doc)?;
@@ -1460,7 +1419,7 @@ impl Reader {
             // A document root keeps the full path: its title, the mode word and the first line
             // are arranged around the fetch (BM-5, W3).
             if v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN)
-                || matches!(v.role, Role::DocumentWeb | Role::Document)
+                || matches!(v.role, SemRole::DocumentWeb | SemRole::Document)
             {
                 return None;
             }
@@ -1469,7 +1428,7 @@ impl Reader {
             // An invalid control whose error text the mirror lacks (the source reads a bounded
             // number per fetch) takes the full focus fetch, which reads it (M8b).
             if entry.sem.invalid != gorca_model::sem::Invalid::No
-                && gorca_doc_source_api::takes_error_text(v.role)
+                && gorca_doc_source_api::takes_error_text_sem(v.role)
                 && entry
                     .sem
                     .text
@@ -1478,43 +1437,18 @@ impl Reader {
             {
                 return None;
             }
-            let mut have = PropMask::NAME | PropMask::ROLE | PropMask::STATES;
             // A password's value is never spoken, not even from the mirror.
             let value = v
                 .field_value()
                 .cloned()
-                .filter(|_| !gorca_model::is_secret_node(v.role, v.sem().as_deref()));
-            if value.is_some() {
-                have |= PropMask::VALUE;
-            }
-            Some(gorca_model::NodeSnapshot {
-                key: node,
-                role: v.role,
-                states: states_of_entry(entry),
-                name: Some(Arc::from(name)),
-                description: entry
-                    .sem
-                    .text
-                    .as_deref()
-                    .and_then(|t| t.description.clone()),
+                .filter(|_| !gorca_present::is_secret_role(v.role));
+            Some(gorca_model::NodeSnapshot::from_fused(
+                node,
+                v.sem()?,
+                Arc::from(name),
                 value,
-                parent: None,
-                children: ChildList::Unknown,
-                interfaces: Ifaces::empty(),
-                attrs: SmallVec::default(),
-                relations: Relations::default(),
-                bounds: None,
-                have,
-                confirmed_seq: 0,
-                fresh: Freshness::Stale {
-                    since: Instant::now(),
-                    mask: PropMask::VALUE,
-                },
-                sem: gorca_model::NodeSem {
-                    rec: None,
-                    entry: v.sem(),
-                },
-            })
+                Instant::now(),
+            ))
         })
     }
 
@@ -1559,7 +1493,11 @@ impl Reader {
         if focus != snap.key {
             return;
         }
-        let editable = forms::passes_through(snap.role, snap.states, Reason::Focus);
+        let editable = forms::passes_through(
+            role_of(snap),
+            PassFacts::of(&entry_of(snap).sem, true),
+            Reason::Focus,
+        );
         b.mode = WebMode::Loading {
             doc,
             since,
@@ -1727,7 +1665,7 @@ impl Reader {
             return false;
         };
         let lead = h.read.with(|d| {
-            if d.node(id)?.role != Role::ListItem {
+            if !matches!(d.node(id)?.role, SemRole::ListItem | SemRole::Option) {
                 return None;
             }
             let mut cur = d.parent(id);
@@ -1782,15 +1720,35 @@ impl Reader {
             let v = d.node(id)?;
             let plain = matches!(
                 v.role,
-                Role::Landmark
-                    | Role::Panel
-                    | Role::Unknown
-                    | Role::Paragraph
-                    | Role::List
-                    | Role::ListItem
-                    | Role::Table
-                    | Role::Cell
-                    | Role::Document
+                SemRole::Region
+                    | SemRole::Banner
+                    | SemRole::Complementary
+                    | SemRole::ContentInfo
+                    | SemRole::Main
+                    | SemRole::Navigation
+                    | SemRole::Search
+                    | SemRole::Form
+                    | SemRole::Generic
+                    | SemRole::Group
+                    | SemRole::Presentation
+                    | SemRole::Unknown
+                    | SemRole::Paragraph
+                    | SemRole::List
+                    | SemRole::Listbox
+                    | SemRole::ListItem
+                    | SemRole::Option
+                    | SemRole::Table
+                    | SemRole::Grid
+                    | SemRole::TreeGrid
+                    | SemRole::Cell
+                    | SemRole::GridCell
+                    | SemRole::Document
+                    | SemRole::Article
+                    | SemRole::Blockquote
+                    | SemRole::Figure
+                    | SemRole::Feed
+                    | SemRole::Details
+                    | SemRole::DescriptionList
             );
             if !plain || d.root() == Some(id) {
                 return None;
@@ -1932,9 +1890,9 @@ impl Reader {
                     let said = match now {
                         Some(name) if !name.is_empty() => {
                             let role = target.and_then(|n| {
-                                b.docs.get(doc).and_then(|h| {
-                                    h.read.with(|d| d.node(n).map(|_| role_states(d, n).0))
-                                })
+                                b.docs
+                                    .get(doc)
+                                    .and_then(|h| h.read.with(|d| d.node(n).map(|v| v.role)))
                             });
                             if let (Some(node), Some(role)) = (target, role) {
                                 b.announced_change = Some(super::AnnouncedChange {
@@ -1986,8 +1944,8 @@ impl Reader {
             WebMode::Loading { focus, .. } => {
                 // Focus was waiting for this document: resolve it through the join.
                 let focus_node = b.join.get(focus).filter(|(d, _)| *d == doc).map(|(_, id)| {
-                    let (role, states) = h.read.with(|d| role_states(d, id));
-                    (id, forms::passes_through(role, states, Reason::Focus))
+                    let (role, facts, _) = h.read.with(|d| node_facts(d, id));
+                    (id, forms::passes_through(role, facts, Reason::Focus))
                 });
                 // A document the focus was not in before (the first visit of a tab): the page
                 // title leads when the focus sits inside it rather than on its root.
@@ -2195,8 +2153,8 @@ impl Reader {
             return;
         };
         let Some(h) = b.docs.get(jd) else { return };
-        let (role, states) = h.read.with(|d| role_states(d, id));
-        let passes = forms::passes_through(role, states, Reason::Focus);
+        let (role, facts, _) = h.read.with(|d| node_facts(d, id));
+        let passes = forms::passes_through(role, facts, Reason::Focus);
         let application = forms::is_application(role);
         if let Some(b) = self.web.as_mut() {
             b.grace_fallback = None;
@@ -2248,10 +2206,8 @@ impl Reader {
                     self.now.saturating_duration_since(a.at) < super::CARET_FOLLOW
                         && a.cursor == cur.node
                         && h.read.with(|dd| {
-                            let (role, st) = role_states(dd, a.target);
-                            dd.is_attached(a.target)
-                                && role == a.role
-                                && (st & TOGGLE_STATES) != a.toggles
+                            let (role, _, toggles) = node_facts(dd, a.target);
+                            dd.is_attached(a.target) && role == a.role && toggles != a.toggles
                         })
                 });
                 if !just_activated
@@ -2266,9 +2222,8 @@ impl Reader {
                     let spoken = b.announced_change.take().is_some_and(|a| {
                         self.now.saturating_duration_since(a.at) <= super::ANNOUNCE_WINDOW
                             && h.read.with(|dd| {
-                                dd.node(a.node).is_some_and(|v| {
-                                    v.name == Some(&*a.name) && role_states(dd, a.node).0 == a.role
-                                })
+                                dd.node(a.node)
+                                    .is_some_and(|v| v.name == Some(&*a.name) && v.role == a.role)
                             })
                     });
                     if !spoken {
@@ -2424,8 +2379,8 @@ impl Reader {
             return;
         };
         let Some(h) = b.docs.get(doc) else { return };
-        let (role, states) = h.read.with(|d| role_states(d, id));
-        let passes = forms::passes_through(role, states, Reason::Focus);
+        let (role, facts, _) = h.read.with(|d| node_facts(d, id));
+        let passes = forms::passes_through(role, facts, Reason::Focus);
         let switched = b.active != Some(doc);
         self.web_activate(doc, fx);
         self.web_apply(
@@ -2901,9 +2856,8 @@ impl Reader {
             let matches = self.now.saturating_duration_since(a.at) <= super::ANNOUNCE_WINDOW
                 && b.docs.get(doc).is_some_and(|h| {
                     h.read.with(|dd| {
-                        dd.node(a.node).is_some_and(|v| {
-                            v.name == Some(&*a.name) && role_states(dd, a.node).0 == a.role
-                        })
+                        dd.node(a.node)
+                            .is_some_and(|v| v.name == Some(&*a.name) && v.role == a.role)
                     })
                 });
             if !matches {
@@ -2920,16 +2874,22 @@ impl Reader {
                 Cat::LINK | Cat::FORM_FIELD | Cat::CLICKABLE | Cat::FOCUSABLE,
                 8,
             )?;
-            let (role, states) = role_states(d, n);
+            let (role, facts, toggles) = node_facts(d, n);
+            let toggle_button =
+                entry_at(d, n).is_some_and(|e| e.sem.press != gorca_model::sem::Press::NotToggle);
             Some((
                 n,
                 role,
-                states & TOGGLE_STATES,
-                forms::passes_through(role, states, Reason::Activate),
+                toggles,
+                forms::passes_through(role, facts, Reason::Activate),
                 matches!(
                     role,
-                    Role::CheckBox | Role::RadioButton | Role::ToggleButton
-                ),
+                    SemRole::Checkbox
+                        | SemRole::MenuItemCheckbox
+                        | SemRole::Radio
+                        | SemRole::MenuItemRadio
+                        | SemRole::Switch
+                ) || (role == SemRole::Button && toggle_button),
             ))
         });
         let Some((node, target_role, toggles, passes, checkable)) = target else {
@@ -2974,13 +2934,13 @@ impl Reader {
                 Cat::LINK | Cat::FORM_FIELD | Cat::CLICKABLE | Cat::FOCUSABLE,
                 8,
             )?;
-            let (role, states) = role_states(d, target);
+            let (role, _, toggles) = node_facts(d, target);
             Some(super::ArmedClick {
                 cursor,
                 target,
                 role,
                 name: d.node(target).and_then(|v| v.name).map(Arc::from),
-                toggles: states & TOGGLE_STATES,
+                toggles,
             })
         })
     }
@@ -3312,8 +3272,8 @@ impl Reader {
         let Some(field) = field.filter(|f| {
             h.read.with(|d| {
                 d.node(*f).is_some_and(|_| {
-                    let (role, states) = role_states(d, *f);
-                    forms::passes_through(role, states, Reason::Focus)
+                    let (role, facts, _) = node_facts(d, *f);
+                    forms::passes_through(role, facts, Reason::Focus)
                 }) && d
                     .subtree_text_range(*f)
                     .is_none_or(|(flo, fhi)| fhi <= lo || flo >= hi)
@@ -3706,11 +3666,6 @@ fn content_sig(d: &WebDoc, n: DocNodeId) -> Option<u64> {
     Some(h.finish())
 }
 
-/// The states a toggle flips when it is pressed.
-const TOGGLE_STATES: StateSet = StateSet::PRESSED
-    .union(StateSet::CHECKED)
-    .union(StateSet::EXPANDED);
-
 /// What a pointer click on a web node's centre can hit.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum PointerClass {
@@ -3722,50 +3677,101 @@ enum PointerClass {
     Container,
 }
 
-fn pointer_class(role: Role) -> PointerClass {
+fn pointer_class(role: SemRole) -> PointerClass {
     match role {
-        Role::Link
-        | Role::Button
-        | Role::ToggleButton
-        | Role::Switch
-        | Role::CheckBox
-        | Role::RadioButton
-        | Role::ComboBox
-        | Role::TextEntry
-        | Role::PasswordEntry
-        | Role::SpinButton
-        | Role::Slider
-        | Role::MenuItem
-        | Role::Tab
-        | Role::TreeItem => PointerClass::Interactive,
-        Role::Heading | Role::StaticText | Role::Label | Role::Image | Role::ProgressBar => {
-            PointerClass::Leaf
-        }
-        Role::Unknown
-        | Role::Application
-        | Role::Window
-        | Role::Dialog
-        | Role::Panel
-        | Role::Document
-        | Role::DocumentWeb
-        | Role::Paragraph
-        | Role::List
-        | Role::ListItem
-        | Role::Table
-        | Role::Row
-        | Role::Cell
-        | Role::ColumnHeader
-        | Role::RowHeader
-        | Role::Menu
-        | Role::MenuBar
-        | Role::Popover
-        | Role::TabList
-        | Role::Tree
-        | Role::Toolbar
-        | Role::StatusBar
-        | Role::Separator
-        | Role::Terminal
-        | Role::Landmark
-        | Role::Alert => PointerClass::Container,
+        SemRole::Link
+        | SemRole::Button
+        | SemRole::Switch
+        | SemRole::Checkbox
+        | SemRole::MenuItemCheckbox
+        | SemRole::Radio
+        | SemRole::MenuItemRadio
+        | SemRole::Combobox
+        | SemRole::TextBox
+        | SemRole::SearchBox
+        | SemRole::PasswordBox
+        | SemRole::SpinButton
+        | SemRole::Slider
+        | SemRole::MenuItem
+        | SemRole::Tab
+        | SemRole::TreeItem => PointerClass::Interactive,
+        SemRole::Heading
+        | SemRole::StaticText
+        | SemRole::Caption
+        | SemRole::Img
+        | SemRole::ProgressBar
+        | SemRole::Meter
+        | SemRole::Emphasis
+        | SemRole::Strong
+        | SemRole::Mark
+        | SemRole::Code
+        | SemRole::Time
+        | SemRole::Insertion
+        | SemRole::Deletion
+        | SemRole::Subscript
+        | SemRole::Superscript => PointerClass::Leaf,
+        SemRole::Unknown
+        | SemRole::Generic
+        | SemRole::Alert
+        | SemRole::AlertDialog
+        | SemRole::Application
+        | SemRole::Article
+        | SemRole::Banner
+        | SemRole::Blockquote
+        | SemRole::Cell
+        | SemRole::ColumnHeader
+        | SemRole::Complementary
+        | SemRole::ContentInfo
+        | SemRole::Definition
+        | SemRole::Dialog
+        | SemRole::Document
+        | SemRole::DocumentWeb
+        | SemRole::Feed
+        | SemRole::Figure
+        | SemRole::Form
+        | SemRole::Grid
+        | SemRole::GridCell
+        | SemRole::Group
+        | SemRole::List
+        | SemRole::Listbox
+        | SemRole::ListItem
+        | SemRole::Log
+        | SemRole::Main
+        | SemRole::Marquee
+        | SemRole::Math
+        | SemRole::Menu
+        | SemRole::Menubar
+        | SemRole::Navigation
+        | SemRole::Note
+        | SemRole::Option
+        | SemRole::Paragraph
+        | SemRole::RadioGroup
+        | SemRole::Region
+        | SemRole::Row
+        | SemRole::RowGroup
+        | SemRole::RowHeader
+        | SemRole::Scrollbar
+        | SemRole::Search
+        | SemRole::Separator
+        | SemRole::Status
+        | SemRole::Table
+        | SemRole::TabList
+        | SemRole::TabPanel
+        | SemRole::Term
+        | SemRole::Timer
+        | SemRole::Toolbar
+        | SemRole::Tooltip
+        | SemRole::Tree
+        | SemRole::TreeGrid
+        | SemRole::Terminal
+        | SemRole::Window
+        | SemRole::Popover
+        | SemRole::Comment
+        | SemRole::Suggestion
+        | SemRole::Details
+        | SemRole::Summary
+        | SemRole::DescriptionList
+        | SemRole::Iframe
+        | SemRole::Presentation => PointerClass::Container,
     }
 }

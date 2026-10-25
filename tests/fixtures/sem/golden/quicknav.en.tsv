@@ -76,6 +76,12 @@ chromium/aria-props	88	node	Said:ac inline | Role:combo box | State:collapsed
 chromium/aria-props	88	node-from	Said:ac inline | Role:combo box | State:collapsed
 chromium/aria-props	89	node	Said:ac both | Role:combo box | State:collapsed
 chromium/aria-props	89	node-from	Said:ac both | Role:combo box | State:collapsed
+chromium/aria-props	96	node	Said:selected option
+chromium/aria-props	96	node-from	Said:selected option
+chromium/aria-props	98	node	Said:unselected option
+chromium/aria-props	98	node-from	Said:unselected option
+chromium/aria-props	100	node	Said:option no selected attr
+chromium/aria-props	100	node-from	Said:option no selected attr
 chromium/aria-props	102	node	Role:button | State:expanded | Said:expanded
 chromium/aria-props	102	node-from	Role:button | State:expanded | Said:expanded
 chromium/aria-props	104	node	Role:button | State:collapsed | Said:collapsed
@@ -250,6 +256,8 @@ chromium/exotic-date	1	node	Role:main landmark | Role:heading level 1 | Said:Exo
 chromium/exotic-date	1	node-from	Said:Exotic input date
 chromium/exotic-date	2	node	Role:main landmark | Role:heading level 1 | Said:Exotic input date
 chromium/exotic-date	2	node-from	Role:heading level 1 | Said:Exotic input date
+chromium/exotic-date	6	node	Role:spin button | Said:slash | Role:spin button | Said:slash | Role:spin button | Said:Show date picker Date of birth | Role:button | State:submenu
+chromium/exotic-date	6	node-from	Role:spin button | Said:slash | Role:spin button | Said:slash | Role:spin button | Said:Show date picker Date of birth | Role:button | State:submenu
 chromium/exotic-date	9	node	Said:Month Date of birth | Role:spin button
 chromium/exotic-date	9	node-from	Said:Month Date of birth | Role:spin button
 chromium/exotic-date	11	node	Said:Day Date of birth | Role:spin button
@@ -272,6 +280,8 @@ chromium/exotic-datetime	1	node	Role:main landmark | Role:heading level 1 | Said
 chromium/exotic-datetime	1	node-from	Said:Exotic input datetime-local
 chromium/exotic-datetime	2	node	Role:main landmark | Role:heading level 1 | Said:Exotic input datetime-local
 chromium/exotic-datetime	2	node-from	Role:heading level 1 | Said:Exotic input datetime-local
+chromium/exotic-datetime	6	node	Role:spin button | Said:slash | Role:spin button | Said:slash | Role:spin button | Said:, | Role:spin button | Said:: | Role:spin button | Role:spin button | Said:Show local date and time picker Departure | Role:button | State:submenu
+chromium/exotic-datetime	6	node-from	Role:spin button | Said:slash | Role:spin button | Said:slash | Role:spin button | Said:, | Role:spin button | Said:: | Role:spin button | Role:spin button | Said:Show local date and time picker Departure | Role:button | State:submenu
 chromium/exotic-datetime	9	node	Said:Month Departure | Role:spin button
 chromium/exotic-datetime	9	node-from	Said:Month Departure | Role:spin button
 chromium/exotic-datetime	11	node	Said:Day Departure | Role:spin button
@@ -296,12 +306,16 @@ chromium/exotic-month	1	node	Role:main landmark | Role:heading level 1 | Said:Ex
 chromium/exotic-month	1	node-from	Said:Exotic input month and week
 chromium/exotic-month	2	node	Role:main landmark | Role:heading level 1 | Said:Exotic input month and week
 chromium/exotic-month	2	node-from	Role:heading level 1 | Said:Exotic input month and week
+chromium/exotic-month	6	node	Role:spin button | Role:spin button | Said:Show month picker Billing month | Role:button | State:submenu
+chromium/exotic-month	6	node-from	Role:spin button | Role:spin button | Said:Show month picker Billing month | Role:button | State:submenu
 chromium/exotic-month	9	node	Said:Month Billing month | Role:spin button
 chromium/exotic-month	9	node-from	Said:Month Billing month | Role:spin button
 chromium/exotic-month	11	node	Said:Year Billing month | Role:spin button
 chromium/exotic-month	11	node-from	Said:Year Billing month | Role:spin button
 chromium/exotic-month	12	node	Said:Show month picker Billing month | Role:button | State:submenu
 chromium/exotic-month	12	node-from	Said:Show month picker Billing month | Role:button | State:submenu
+chromium/exotic-month	15	node	Said:Week | Role:spin button | Said:, | Role:spin button | Said:Show week picker Report week | Role:button | State:submenu
+chromium/exotic-month	15	node-from	Said:Week | Role:spin button | Said:, | Role:spin button | Said:Show week picker Report week | Role:button | State:submenu
 chromium/exotic-month	19	node	Said:Week Report week | Role:spin button
 chromium/exotic-month	19	node-from	Said:Week Report week | Role:spin button
 chromium/exotic-month	21	node	Said:Year Report week | Role:spin button
@@ -312,6 +326,8 @@ chromium/exotic-time	1	node	Role:main landmark | Role:heading level 1 | Said:Exo
 chromium/exotic-time	1	node-from	Said:Exotic input time
 chromium/exotic-time	2	node	Role:main landmark | Role:heading level 1 | Said:Exotic input time
 chromium/exotic-time	2	node-from	Role:heading level 1 | Said:Exotic input time
+chromium/exotic-time	6	node	Role:spin button | Said:: | Role:spin button | Role:spin button | Said:Show time picker Alarm | Role:button | State:submenu
+chromium/exotic-time	6	node-from	Role:spin button | Said:: | Role:spin button | Role:spin button | Said:Show time picker Alarm | Role:button | State:submenu
 chromium/exotic-time	9	node	Said:Hours Alarm | Role:spin button
 chromium/exotic-time	9	node-from	Said:Hours Alarm | Role:spin button
 chromium/exotic-time	11	node	Said:Minutes Alarm | Role:spin button
@@ -320,6 +336,8 @@ chromium/exotic-time	13	node	Said:AM slash PM Alarm | Role:spin button
 chromium/exotic-time	13	node-from	Said:AM slash PM Alarm | Role:spin button
 chromium/exotic-time	14	node	Said:Show time picker Alarm | Role:button | State:submenu
 chromium/exotic-time	14	node-from	Said:Show time picker Alarm | Role:button | State:submenu
+chromium/exotic-time	17	node	Role:spin button | Said:: | Role:spin button | Said:: | Role:spin button | Role:spin button | Said:Show time picker Meeting | Role:button | State:submenu
+chromium/exotic-time	17	node-from	Role:spin button | Said:: | Role:spin button | Said:: | Role:spin button | Role:spin button | Said:Show time picker Meeting | Role:button | State:submenu
 chromium/exotic-time	20	node	Said:Hours Meeting | Role:spin button
 chromium/exotic-time	20	node-from	Said:Hours Meeting | Role:spin button
 chromium/exotic-time	22	node	Said:Minutes Meeting | Role:spin button
@@ -444,6 +462,8 @@ chromium/forms	104	node	Role:button | Said:Submit
 chromium/forms	104	node-from	Role:button | Said:Submit
 chromium/forms	106	node	Role:button | Said:With described-by | Description:Use your legal name
 chromium/forms	106	node-from	Role:button | Said:With described-by | Description:Use your legal name
+chromium/forms	108	node	Role:edit | State:blank
+chromium/forms	108	node-from	Role:edit | State:blank
 chromium/forms	109	node	Said:In unnamed form | Role:edit | State:blank
 chromium/forms	109	node-from	Said:In unnamed form | Role:edit | State:blank
 chromium/forms	110	node	Said:Site search | Role:search landmark | Role:edit | State:blank
@@ -698,6 +718,8 @@ chromium/m8-landmarks	53	node	Said:Feedback form | Role:form | Said:Comment | Ro
 chromium/m8-landmarks	53	node-from	Said:Feedback form | Role:form | Said:Comment | Role:edit | State:blank
 chromium/m8-landmarks	56	node	Said:Comment | Role:edit | State:blank
 chromium/m8-landmarks	56	node-from	Said:Comment | Role:edit | State:blank
+chromium/m8-landmarks	57	node	Said:Unnamed form field | Role:edit | State:blank
+chromium/m8-landmarks	57	node-from	Said:Unnamed form field | Role:edit | State:blank
 chromium/m8-landmarks	60	node	Said:Unnamed form field | Role:edit | State:blank
 chromium/m8-landmarks	60	node-from	Said:Unnamed form field | Role:edit | State:blank
 chromium/m8-landmarks	61	node	Said:Related links | Role:complementary landmark | Role:heading level 2 | Said:Related heading
@@ -1312,6 +1334,8 @@ chromium/structure	136	node	Said:SVG chart | Role:graphic | Description:SVG titl
 chromium/structure	136	node-from	Said:SVG chart | Role:graphic | Description:SVG title
 chromium/structure	137	node	State:unlabeled | Role:graphic
 chromium/structure	137	node-from	State:unlabeled | Role:graphic
+chromium/structure	138	node	Role:graphic | Said:Canvas fallback
+chromium/structure	138	node-from	Role:graphic | Said:Canvas fallback
 chromium/structure	146	node	Said:Chapter 1 | Role:region | Said:Chapter text
 chromium/structure	146	node-from	Said:Chapter 1 | Role:region | Said:Chapter text
 chromium/structure	148	node	Role:link | Said:1
@@ -2096,12 +2120,16 @@ firefox/exotic-date	1	node	Role:main landmark | Role:heading level 1 | Said:Exot
 firefox/exotic-date	1	node-from	Said:Exotic input date
 firefox/exotic-date	2	node	Role:main landmark | Role:heading level 1 | Said:Exotic input date
 firefox/exotic-date	2	node-from	Role:heading level 1 | Said:Exotic input date
+firefox/exotic-date	7	node	Said:Date of birth | Role:spin button | Said:10 | Said:slash | Said:slash
+firefox/exotic-date	7	node-from	Said:Date of birth | Role:spin button | Said:10 | Said:slash | Said:slash
 firefox/exotic-date	8	node	Said:Month | Role:spin button | Said:10
 firefox/exotic-date	8	node-from	Said:Month | Role:spin button | Said:10
 firefox/exotic-datetime	1	node	Role:main landmark | Role:heading level 1 | Said:Exotic input datetime-local
 firefox/exotic-datetime	1	node-from	Said:Exotic input datetime-local
 firefox/exotic-datetime	2	node	Role:main landmark | Role:heading level 1 | Said:Exotic input datetime-local
 firefox/exotic-datetime	2	node-from	Role:heading level 1 | Said:Exotic input datetime-local
+firefox/exotic-datetime	7	node	Said:Departure | Role:spin button | Said:10 | Said:slash | Said:slash | Said:, | Said::
+firefox/exotic-datetime	7	node-from	Said:Departure | Role:spin button | Said:10 | Said:slash | Said:slash | Said:, | Said::
 firefox/exotic-datetime	8	node	Said:Month | Role:spin button | Said:10
 firefox/exotic-datetime	8	node-from	Said:Month | Role:spin button | Said:10
 firefox/exotic-file	1	node	Role:main landmark | Role:heading level 1 | Said:Exotic input file
@@ -2238,6 +2266,8 @@ firefox/forms	133	node	Role:button | Said:Submit
 firefox/forms	133	node-from	Role:button | Said:Submit
 firefox/forms	136	node	Role:button | Said:With described-by | Description:Use your legal name
 firefox/forms	136	node-from	Role:button | Said:With described-by | Description:Use your legal name
+firefox/forms	138	node	Role:edit | State:blank
+firefox/forms	138	node-from	Role:edit | State:blank
 firefox/forms	139	node	Said:In unnamed form | Role:edit | State:blank
 firefox/forms	139	node-from	Said:In unnamed form | Role:edit | State:blank
 firefox/forms	140	node	Said:Site search | Role:search landmark | Role:edit | State:blank
@@ -2433,6 +2463,8 @@ firefox/m8-iframes	43	node	Role:frame | Said:Form frame | Role:heading level 1 |
 firefox/m8-iframes	43	node-from	Role:frame | Said:Form frame | Said:Frame form heading | Said:Frame field | Role:edit | State:blank | Role:button | Said:Frame submit
 firefox/m8-iframes	44	node	Role:heading level 1 | Said:Frame form heading
 firefox/m8-iframes	44	node-from	Role:heading level 1 | Said:Frame form heading
+firefox/m8-iframes	46	node	Said:Frame field | Role:edit | State:blank | Role:button | Said:Frame submit
+firefox/m8-iframes	46	node-from	Said:Frame field | Role:edit | State:blank | Role:button | Said:Frame submit
 firefox/m8-iframes	50	node	Said:Frame field | Role:edit | State:blank
 firefox/m8-iframes	50	node-from	Said:Frame field | Role:edit | State:blank
 firefox/m8-iframes	52	node	Role:button | Said:Frame submit
@@ -2510,6 +2542,8 @@ firefox/m8-landmarks	53	node	Said:Feedback form | Role:form | Said:Comment | Rol
 firefox/m8-landmarks	53	node-from	Said:Feedback form | Role:form | Said:Comment | Role:edit | State:blank
 firefox/m8-landmarks	56	node	Said:Comment | Role:edit | State:blank
 firefox/m8-landmarks	56	node-from	Said:Comment | Role:edit | State:blank
+firefox/m8-landmarks	57	node	Said:Unnamed form field | Role:edit | State:blank
+firefox/m8-landmarks	57	node-from	Said:Unnamed form field | Role:edit | State:blank
 firefox/m8-landmarks	60	node	Said:Unnamed form field | Role:edit | State:blank
 firefox/m8-landmarks	60	node-from	Said:Unnamed form field | Role:edit | State:blank
 firefox/m8-landmarks	61	node	Said:Related links | Role:complementary landmark | Role:heading level 2 | Said:Related heading
@@ -3124,6 +3158,8 @@ firefox/structure	143	node	Said:SVG chart | Role:graphic
 firefox/structure	143	node-from	Said:SVG chart | Role:graphic
 firefox/structure	145	node	State:unlabeled | Role:graphic
 firefox/structure	145	node-from	State:unlabeled | Role:graphic
+firefox/structure	147	node	Role:graphic | Said:Canvas fallback
+firefox/structure	147	node-from	Role:graphic | Said:Canvas fallback
 firefox/structure	161	node	Said:Chapter 1 | Role:region | Said:Chapter text
 firefox/structure	161	node-from	Said:Chapter 1 | Role:region | Said:Chapter text
 firefox/structure	163	node	Role:link | Said:1

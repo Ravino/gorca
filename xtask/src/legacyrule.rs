@@ -128,6 +128,12 @@ const PORTED: &[&str] = &[
     "crates/gorca-core/src/text/",
     "crates/gorca-core/src/commands/",
     "crates/gorca-core/src/present/",
+    "crates/gorca-core/src/doc_actor/flags_sem.rs",
+    "crates/gorca-core/src/doc_actor/translate.rs",
+    "crates/gorca-core/src/doc_actor/live.rs",
+    "crates/gorca-core/src/doc_actor/mod.rs",
+    "crates/gorca-core/src/doc_actor/repair.rs",
+    "crates/gorca-core/src/browse/",
     "crates/gorca-core/src/focus.rs",
     "crates/gorca-core/src/nodekind.rs",
 ];
@@ -226,9 +232,10 @@ pub const BANS: &[Ban] = &[
     Ban {
         id: "legacy-role-type",
         needle: "Role",
-        not_followed_by: "",
-        // `SegmentKind::Role` is a speech segment kind, not the legacy role.
-        not_preceded_by: "Kind::",
+        // `Item::Role(..)`, `SegmentKind::Role`, `Group::Role` and `Val::Role` are not the legacy
+        // role.
+        not_followed_by: "(",
+        not_preceded_by: "Kind::|Group::|Val::|Item::",
         scope: PORTED,
         replacement: LEGACY_ROLE,
     },
@@ -238,9 +245,11 @@ pub const BANS: &[Ban] = &[
     ban("snap-interfaces", ".interfaces", PORTED, LEGACY_IFACES),
     Ban {
         id: "snap-role",
-        needle: ".role",
+        // The snapshot is named `snap` throughout (`v.snap.role`, `r.snap.role`); other receivers
+        // of `.role` are the document views and the fused semantics, which carry model roles.
+        needle: "snap.role",
         not_followed_by: "",
-        not_preceded_by: "sem",
+        not_preceded_by: "",
         scope: PORTED,
         replacement: LEGACY_ROLE,
     },
@@ -299,8 +308,10 @@ fn line_matches(line: &str, ban: &Ban) -> bool {
         let after = line[end..].chars().next();
         let after_bad =
             after.is_some_and(|c| (last_ident && is_ident(c)) || ban.not_followed_by.contains(c));
-        let preceded_bad =
-            !ban.not_preceded_by.is_empty() && line[..start].ends_with(ban.not_preceded_by);
+        let preceded_bad = ban
+            .not_preceded_by
+            .split('|')
+            .any(|p| !p.is_empty() && line[..start].ends_with(p));
         if before_ok && !after_bad && !preceded_bad {
             return true;
         }
@@ -539,7 +550,7 @@ mod tests {
     fn a_ported_module_cannot_read_the_legacy_role_states_or_interfaces() {
         const P: &str = "crates/gorca-core/src/review/x.rs";
         let src = "use gorca_model::{Role, StateSet};\n\
-                   fn a(s: &NodeSnapshot) -> bool { s.role == Role::Window }\n\
+                   fn a(snap: &NodeSnapshot) -> bool { snap.role == Role::Window }\n\
                    fn b(s: &NodeSnapshot) -> bool { s.states.contains(x) || s.interfaces.is_empty() }\n\
                    fn c(e: &SemEntry) -> bool { e.sem.role == SemRole::Window }\n\
                    fn d() -> SegmentKind { SegmentKind::Role }\n";

@@ -22,7 +22,8 @@
 //! on the common ancestor that rounds nested ends out to whole children (engines that keep one).
 
 use gorca_doc::web::{NodeFlags, WebDoc};
-use gorca_model::{DocNodeId, DocRange, Role, SelSpan};
+use gorca_model::sem::SemRole;
+use gorca_model::{DocNodeId, DocRange, SelSpan};
 
 /// How to select a flat range in the page.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -55,14 +56,14 @@ fn add(a: Off, b: Off) -> Off {
 
 fn is_leaf(d: &WebDoc, id: DocNodeId) -> bool {
     d.node(id)
-        .is_some_and(|v| v.role == Role::StaticText && v.text.is_some())
+        .is_some_and(|v| v.role.is_inline_text() && v.text.is_some())
         && d.child_count(id) == Some(0)
 }
 
 /// An embedded object with no text of its own: an image (its flat text is the U+FFFC marker).
 fn is_object(d: &WebDoc, id: DocNodeId) -> bool {
     d.node(id)
-        .is_some_and(|v| v.role == Role::Image && v.text.is_some_and(|t| t.chars().eq([OBJECT])))
+        .is_some_and(|v| v.role == SemRole::Img && v.text.is_some_and(|t| t.chars().eq([OBJECT])))
         && d.child_count(id) == Some(0)
 }
 
@@ -169,7 +170,7 @@ fn secret(d: &WebDoc, id: DocNodeId) -> bool {
     for _ in 0..64 {
         let Some(n) = cur else { return false };
         if d.node(n)
-            .is_some_and(|v| gorca_model::is_secret_node(v.role, v.sem().as_deref()))
+            .is_some_and(|v| gorca_present::is_secret_role(v.role))
         {
             return true;
         }
@@ -214,7 +215,7 @@ fn atoms(d: &WebDoc, lo: u32, hi: u32) -> Option<(Hit, Hit)> {
         let leaf = is_leaf(d, id);
         let object = !leaf && is_object(d, id);
         if v.flags.contains(NodeFlags::HIDDEN) || !(leaf || object) {
-            if gorca_model::is_secret_node(v.role, v.sem().as_deref()) {
+            if gorca_present::is_secret_role(v.role) {
                 // Never mirror (and so never copy) a password field: the range stops before it.
                 break;
             }

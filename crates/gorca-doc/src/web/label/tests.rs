@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use super::*;
 use crate::web::{DocOp, NodeSpec, SubtreeSpec};
+use gorca_model::Role;
 
 const BR: NodeFlags = NodeFlags::BREAK_BEFORE;
 

@@ -29,8 +29,8 @@ use gorca_doc::web::{
     ChildSpec, DocError, DocOp, DocWriter, NodeData, NodeFlags, NodeSpec, PropsPatch, SubtreeSpec,
     WebDoc,
 };
-use gorca_model::sem::SemEntry;
-use gorca_model::{DocDelta, DocNodeId, LocalId, Role, SrcNode, SrcNodeId, StateSet, TextEdit};
+use gorca_model::sem::{SemEntry, SemRole};
+use gorca_model::{DocDelta, DocNodeId, LocalId, SrcNode, SrcNodeId, TextEdit};
 
 use gorca_doc_source_api::limits::{
     MAX_CHILDREN, MAX_DOC_NODES, MAX_NODE_TEXT_BYTES, MAX_PENDING_IDS as MAX_PENDING,
@@ -125,16 +125,7 @@ impl Collected {
 }
 
 fn placeholder_node(id: SrcNodeId) -> SrcNode {
-    SrcNode {
-        id,
-        role: Role::Unknown,
-        states: StateSet::VISIBLE,
-        name: None,
-        text: None,
-        attrs: smallvec::SmallVec::default(),
-        local: None,
-        rec: None,
-    }
+    SrcNode::placeholder(id)
 }
 
 fn data_of(n: &SrcNode, sem: Option<Arc<SemEntry>>) -> Arc<NodeData> {
@@ -150,7 +141,9 @@ fn data_of(n: &SrcNode, sem: Option<Arc<SemEntry>>) -> Arc<NodeData> {
 /// A node's mirror spec (without break flags, which depend on the siblings).
 pub fn spec_of(n: &SrcNode, nested_doc: bool, sem: Option<Arc<SemEntry>>) -> NodeSpec {
     let (flags, level) = super::flags_sem::flags_of(n, sem.as_deref(), nested_doc);
-    let mut s = NodeSpec::new(n.role).level(level).flags(flags);
+    let mut s = NodeSpec::new(n.model_role(sem.as_deref()))
+        .level(level)
+        .flags(flags);
     // A page can put a megabyte in aria-label: the translator applies the source's cap again.
     s.name = n.name.as_ref().map(|a| {
         if a.len() > gorca_doc_source_api::limits::MAX_NAME_BYTES {
@@ -197,20 +190,23 @@ pub fn assign_breaks(flags: &mut [NodeFlags]) {
 }
 
 /// Roles that get a U+FFFC object marker when nothing else speaks for them (FT-6).
-fn marker_role(r: Role) -> bool {
+fn marker_role(r: SemRole) -> bool {
     matches!(
         r,
-        Role::Image
-            | Role::CheckBox
-            | Role::RadioButton
-            | Role::ToggleButton
-            | Role::Button
-            | Role::TextEntry
-            | Role::PasswordEntry
-            | Role::ComboBox
-            | Role::Slider
-            | Role::SpinButton
-            | Role::ProgressBar
+        SemRole::Img
+            | SemRole::Checkbox
+            | SemRole::MenuItemCheckbox
+            | SemRole::Radio
+            | SemRole::MenuItemRadio
+            | SemRole::Button
+            | SemRole::Switch
+            | SemRole::TextBox
+            | SemRole::SearchBox
+            | SemRole::PasswordBox
+            | SemRole::Combobox
+            | SemRole::Slider
+            | SemRole::SpinButton
+            | SemRole::ProgressBar
     )
 }
 
@@ -502,7 +498,7 @@ impl Translator {
         let mut cur = Some(parent);
         let mut hops = 0;
         while let Some(p) = cur {
-            if doc.node(p).is_some_and(|v| v.role == Role::DocumentWeb) {
+            if doc.node(p).is_some_and(|v| v.role == SemRole::DocumentWeb) {
                 return true;
             }
             cur = doc.parent(p);
@@ -629,11 +625,12 @@ impl Translator {
                 this.cut((kids.len() - MAX_CHILDREN) as u64);
                 kids.truncate(MAX_CHILDREN);
             }
+            let spec_role = spec.role;
             Frame {
                 spec,
                 kids: kids.into_iter(),
                 children: Vec::new(),
-                nested: nested || n.role == Role::DocumentWeb,
+                nested: nested || spec_role == SemRole::DocumentWeb,
                 depth,
             }
         }
@@ -643,7 +640,7 @@ impl Translator {
             let Some(top) = stack.last_mut() else {
                 // Unreachable: the root frame is only popped below, which returns.
                 return Built {
-                    spec: SubtreeSpec::leaf(NodeSpec::new(Role::Unknown)),
+                    spec: SubtreeSpec::leaf(NodeSpec::new(SemRole::Unknown)),
                     order,
                 };
             };
@@ -821,8 +818,8 @@ impl Translator {
         let Some(cur) = doc.node(id) else {
             return Ok(());
         };
-        let nested =
-            n.role == Role::DocumentWeb && doc.parent(id).is_some_and(|p| Self::nested_doc(doc, p));
+        let nested = n.model_role(sem.map(|e| &**e)) == SemRole::DocumentWeb
+            && doc.parent(id).is_some_and(|p| Self::nested_doc(doc, p));
         let spec = spec_of(n, nested, sem.cloned());
         let keep_breaks = cur.flags.0 & (NodeFlags::BREAK_BEFORE.0 | NodeFlags::CELL_SEP.0);
         let new_flags = NodeFlags(without_breaks(spec.flags).0 | keep_breaks);
@@ -1084,6 +1081,7 @@ mod tests {
     use super::*;
     use gorca_doc::web::channel;
     use gorca_doc_source_api::web_attrs;
+    use gorca_model::{Role, StateSet};
 
     fn n(id: u64, role: Role) -> SrcNode {
         SrcNode {
@@ -1168,7 +1166,7 @@ mod tests {
             .find(|(l, _)| *l == LocalId(1006))
             .copied()
             .unwrap();
-        r.with(|d| assert_eq!(d.node(link_id).map(|v| v.role), Some(Role::Link)));
+        r.with(|d| assert_eq!(d.node(link_id).map(|v| v.role), Some(SemRole::Link)));
     }
 
     #[test]
@@ -1251,7 +1249,7 @@ mod tests {
         .unwrap();
         w.publish();
         let ph = t.id_of(SrcNodeId(3)).unwrap();
-        r.with(|d| assert_eq!(d.node(ph).map(|v| v.role), Some(Role::Unknown)));
+        r.with(|d| assert_eq!(d.node(ph).map(|v| v.role), Some(SemRole::Unknown)));
         // The later block fills it in place and gives it a child.
         t.apply(
             &mut w,
@@ -1265,7 +1263,7 @@ mod tests {
         w.publish();
         assert_eq!(t.id_of(SrcNodeId(3)), Some(ph));
         r.with(|d| {
-            assert_eq!(d.node(ph).map(|v| v.role), Some(Role::Heading));
+            assert_eq!(d.node(ph).map(|v| v.role), Some(SemRole::Heading));
             assert!(d.text_in(0, d.text_len()).ends_with("late"));
             assert!(d.validate().is_ok());
         });

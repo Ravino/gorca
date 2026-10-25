@@ -15,7 +15,8 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use gorca_model::sem::SemEntry;
-use gorca_model::{DocNodeId, LocalId, Role, SrcNodeId};
+use gorca_model::sem::SemRole;
+use gorca_model::{DocNodeId, LocalId, SrcNodeId};
 
 use super::cats::{
     Cat, NodeData, NodeFlags, NodeSpec, RANKED, RANKED_N, SubtreeSpec, cats_of, ranked_index,
@@ -38,7 +39,7 @@ pub(crate) struct Slot {
     nchild: u32,
     /// For a detached root: the root of its (intact) treap.
     dtroot: u32,
-    role: Role,
+    role: SemRole,
     level: u8,
     flags: NodeFlags,
     cats: Cat,
@@ -67,7 +68,7 @@ struct TNode {
 /// Borrowed view of one node.
 #[derive(Clone, Copy, Debug)]
 pub struct NodeView<'a> {
-    pub role: Role,
+    pub role: SemRole,
     pub level: u8,
     pub flags: NodeFlags,
     pub cats: Cat,

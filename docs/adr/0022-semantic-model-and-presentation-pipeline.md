@@ -754,3 +754,31 @@ The label inference of the document actor and the gorca-doc label planner take t
   looked into, not skipped (1 node); an item the engine exports with a menu role and an ARIA option
   exported as a filler need a name like menu items (2 nodes).
 
+#### M22c part 2: document actor and browse mode (2026-10-25)
+
+The mirror's document nodes carry the fused model role: `gorca_doc::web::NodeSpec::role`,
+`NodeView::role` and `PropsPatch::role` are `SemRole` (a node without an entry or record takes
+`SrcNode::model_role`, the closest model role of the source role; `NodeSpec::new` accepts a
+legacy `Role` through `From<Role> for SemRole` for tests and fixtures). The categories
+(`cats_of`), the table and label planners, `doc_actor` (`flags_sem`, `translate`, `live`, `mod`,
+`repair`) and all of `browse/` read `SemRole`, the fused flags and the toggle states of the entry;
+none names the legacy `Role`, `StateSet` or `Ifaces`. `forms::passes_through` takes `PassFacts`
+(from the fused semantics; a disabled web control still passes keys, as before). The focus
+snapshot of a document node (`web_focus_snapshot`) is built by `NodeSnapshot::from_fused` in the
+model, which derives the legacy fields there for the consumers that remain (`impl From<SemRole>
+for Role`). `doc_actor/fuse.rs` is not in the ratchet yet: its `row_of` hands raw state bits to the
+plugin watch rows (`plugin_port::Row`), a bridge another slice owns. `SrcNode` keeps
+`is_visible`, `is_focusable` and `reports_invalid` for the structural facts the source reports even
+where the fused flags group was not fetched.
+
+Goldens: `docflags.tsv` 6 records, `quicknav.{en,ru}.tsv` +18 nodes each, `browse.*` unchanged.
+
+* 2026-10-25: a node the engine exports as an alert is flagged `LIVE` like any live region (it was
+  excluded because its category already says live): 5 nodes, the categories are unchanged.
+* 2026-10-25: a date or time editor (old role `Unknown`, now `TextBox`) is a form field and no
+  longer carries the `ERROR` flag of a non-field container (1 node), and 18 nodes become
+  quick-navigation targets: the segments of Chromium date, time, month and week inputs
+  (edit, spin button), ARIA options exported as fillers (list item) and a canvas fallback (graphic).
+* 2026-10-25: `meter` stays without an object marker (it never had one); the model role `Meter`
+  is not in the marker roles.
+

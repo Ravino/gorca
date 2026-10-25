@@ -83,6 +83,49 @@ pub struct SrcNode {
     pub rec: Option<Arc<SrcRecord>>,
 }
 
+impl SrcNode {
+    /// An empty visible node of no known kind, standing for one the source has not delivered yet.
+    pub fn placeholder(id: SrcNodeId) -> Self {
+        SrcNode {
+            id,
+            role: Role::Unknown,
+            states: StateSet::VISIBLE,
+            name: None,
+            text: None,
+            attrs: smallvec::SmallVec::default(),
+            local: None,
+            rec: None,
+        }
+    }
+
+    /// The model role of the node: the fused `entry`'s, else its source record's, else (a
+    /// synthetic node: a text run, a placeholder) the closest model role of the source role.
+    pub fn model_role(&self, entry: Option<&crate::SemEntry>) -> crate::SemRole {
+        match (entry, &self.rec) {
+            (Some(e), _) => e.sem.role,
+            (None, Some(r)) => r.sem.role,
+            (None, None) => crate::SemRole::from(self.role),
+        }
+    }
+
+    /// The source reported the node as focusable (structure, as `visible` is; the fused flag
+    /// only exists for nodes whose states the source fetched).
+    pub fn is_focusable(&self) -> bool {
+        self.states.contains(StateSet::FOCUSABLE)
+    }
+
+    /// The source reported the node as invalid (an `invalid` state on any role, a form
+    /// container included, which the fused `invalid` group is only given for fields).
+    pub fn reports_invalid(&self) -> bool {
+        self.states.contains(StateSet::INVALID)
+    }
+
+    /// The source reported the node as visible (viewport-independent: `showing` is not asked).
+    pub fn is_visible(&self) -> bool {
+        self.states.contains(StateSet::VISIBLE)
+    }
+}
+
 /// Offsets are in the source's declared `TextUnit`; the mirror converts at apply time (IR-6).
 #[derive(Clone, Debug)]
 pub enum TextEdit {

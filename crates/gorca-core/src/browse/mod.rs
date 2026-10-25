@@ -51,14 +51,34 @@ pub enum FocusCause {
     Application,
 }
 
+/// The states a click flips: pressed, checked and expanded (not mixed, not selected).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct Toggles {
+    pub pressed: bool,
+    pub checked: bool,
+    pub expanded: bool,
+}
+
+impl Toggles {
+    /// The toggle states of a fused entry.
+    pub fn of(sem: &gorca_model::sem::Semantics) -> Self {
+        use gorca_model::sem::{Check, Expand, Press};
+        Self {
+            pressed: sem.press == Press::On,
+            checked: sem.check == Check::On,
+            expanded: sem.expand == Expand::Expanded,
+        }
+    }
+}
+
 /// The click target as it was announced (see [`Browse::armed_click`]).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ArmedClick {
     pub cursor: gorca_model::DocNodeId,
     pub target: gorca_model::DocNodeId,
-    pub role: gorca_model::Role,
+    pub role: gorca_model::sem::SemRole,
     pub name: Option<Arc<str>>,
-    pub toggles: gorca_model::StateSet,
+    pub toggles: Toggles,
 }
 
 /// See [`Browse::grace_fallback`].
@@ -80,7 +100,7 @@ pub struct GraceFallback {
 pub struct AnnouncedChange {
     pub node: DocNodeId,
     pub name: std::sync::Arc<str>,
-    pub role: gorca_model::Role,
+    pub role: gorca_model::sem::SemRole,
     pub at: Instant,
 }
 
@@ -533,9 +553,9 @@ impl Default for BrowseSettings {
 pub struct ActivatedNode {
     pub cursor: gorca_model::DocNodeId,
     pub target: gorca_model::DocNodeId,
-    pub role: gorca_model::Role,
+    pub role: gorca_model::sem::SemRole,
     /// Its pressed, checked and expanded states when we clicked it.
-    pub toggles: gorca_model::StateSet,
+    pub toggles: Toggles,
     pub at: Instant,
 }
 

@@ -348,6 +348,86 @@ impl NodeSnapshot {
         Some(c)
     }
 
+    /// The snapshot of a document node from its fused `entry` (the document mirror's focus
+    /// snapshot): the legacy role and state set are derived from the entry here, in the model,
+    /// for the consumers that still read them. `value` is the contents of a field.
+    pub fn from_fused(
+        key: NodeKey,
+        entry: Arc<crate::SemEntry>,
+        name: Arc<str>,
+        value: Option<Value>,
+        now: Instant,
+    ) -> NodeSnapshot {
+        use crate::sem::{Avail, Check, Expand, Invalid, Press, Select, SemFlags};
+        let sem = &entry.sem;
+        let mut states = StateSet::empty();
+        for (flag, state) in [
+            (SemFlags::FOCUSABLE, StateSet::FOCUSABLE),
+            (SemFlags::EDITABLE, StateSet::EDITABLE),
+            (SemFlags::READ_ONLY, StateSet::READ_ONLY),
+            (SemFlags::MODAL, StateSet::MODAL),
+            (SemFlags::REQUIRED, StateSet::REQUIRED),
+            (SemFlags::BUSY, StateSet::BUSY),
+        ] {
+            if sem.flags.contains(flag) {
+                states |= state;
+            }
+        }
+        if sem.select != Select::NotSelectable {
+            states |= StateSet::SELECTABLE;
+        }
+        if sem.select == Select::On {
+            states |= StateSet::SELECTED;
+        }
+        match sem.check {
+            Check::On => states |= StateSet::CHECKED,
+            Check::Mixed => states |= StateSet::MIXED,
+            Check::Off | Check::NotCheckable => {}
+        }
+        if sem.press == Press::On {
+            states |= StateSet::PRESSED;
+        }
+        match sem.expand {
+            Expand::Expanded => states |= StateSet::EXPANDED,
+            Expand::Collapsed => states |= StateSet::COLLAPSED,
+            Expand::NotExpandable => {}
+        }
+        if sem.invalid != Invalid::No {
+            states |= StateSet::INVALID;
+        }
+        if sem.avail != Avail::Disabled {
+            states |= StateSet::ENABLED;
+        }
+        let mut have = PropMask::NAME | PropMask::ROLE | PropMask::STATES;
+        if value.is_some() {
+            have |= PropMask::VALUE;
+        }
+        NodeSnapshot {
+            key,
+            role: Role::from(sem.role),
+            states,
+            name: Some(name),
+            description: sem.text.as_deref().and_then(|t| t.description.clone()),
+            value,
+            parent: None,
+            children: ChildList::Unknown,
+            interfaces: Ifaces::empty(),
+            attrs: AttrMap::default(),
+            relations: Relations::default(),
+            bounds: None,
+            have,
+            confirmed_seq: 0,
+            fresh: Freshness::Stale {
+                since: now,
+                mask: PropMask::VALUE,
+            },
+            sem: NodeSem {
+                rec: None,
+                entry: Some(entry),
+            },
+        }
+    }
+
     /// The capabilities the source claimed for the node (see [`NodeCaps`]).
     pub fn caps(&self) -> NodeCaps {
         NodeCaps::new(self.interfaces)
@@ -508,6 +588,42 @@ impl Freshness {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_snapshot_from_a_fused_entry_derives_the_legacy_fields() {
+        use crate::sem::{Check, Expand, Select, SemEntry, SemFlags, SemRole};
+        let mut e = SemEntry::default();
+        e.sem.role = SemRole::Checkbox;
+        e.sem.check = Check::On;
+        e.sem.expand = Expand::Collapsed;
+        e.sem.select = Select::Off;
+        e.sem.flags |= SemFlags::FOCUSABLE;
+        let key = NodeKey {
+            app: crate::AppId {
+                connector: crate::ConnectorId(1),
+                serial: 1,
+            },
+            local: crate::LocalId(5),
+        };
+        let s =
+            NodeSnapshot::from_fused(key, Arc::new(e), Arc::from("Wi-Fi"), None, Instant::now());
+        assert_eq!(s.role, Role::CheckBox);
+        for st in [
+            StateSet::CHECKED,
+            StateSet::COLLAPSED,
+            StateSet::SELECTABLE,
+            StateSet::FOCUSABLE,
+            StateSet::ENABLED,
+        ] {
+            assert!(s.states.contains(st), "{st:?}");
+        }
+        assert!(!s.states.contains(StateSet::SELECTED));
+        assert!(
+            s.have
+                .contains(PropMask::NAME | PropMask::ROLE | PropMask::STATES)
+        );
+        assert!(s.sem.entry.is_some());
+    }
+
     use super::*;
 
     fn t0() -> Instant {

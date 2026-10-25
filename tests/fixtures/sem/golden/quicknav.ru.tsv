@@ -76,6 +76,12 @@ chromium/aria-props	88	node	Said:ac inline | Role:комбинированный
 chromium/aria-props	88	node-from	Said:ac inline | Role:комбинированный список | State:свёрнуто
 chromium/aria-props	89	node	Said:ac both | Role:комбинированный список | State:свёрнуто
 chromium/aria-props	89	node-from	Said:ac both | Role:комбинированный список | State:свёрнуто
+chromium/aria-props	96	node	Said:selected option
+chromium/aria-props	96	node-from	Said:selected option
+chromium/aria-props	98	node	Said:unselected option
+chromium/aria-props	98	node-from	Said:unselected option
+chromium/aria-props	100	node	Said:option no selected attr
+chromium/aria-props	100	node-from	Said:option no selected attr
 chromium/aria-props	102	node	Role:кнопка | State:развёрнуто | Said:expanded
 chromium/aria-props	102	node-from	Role:кнопка | State:развёрнуто | Said:expanded
 chromium/aria-props	104	node	Role:кнопка | State:свёрнуто | Said:collapsed
@@ -250,6 +256,8 @@ chromium/exotic-date	1	node	Role:ориентир: основное содерж
 chromium/exotic-date	1	node-from	Said:Exotic input date
 chromium/exotic-date	2	node	Role:ориентир: основное содержимое | Role:заголовок уровня 1 | Said:Exotic input date
 chromium/exotic-date	2	node-from	Role:заголовок уровня 1 | Said:Exotic input date
+chromium/exotic-date	6	node	Role:счётчик | Said:косая черта | Role:счётчик | Said:косая черта | Role:счётчик | Said:Show date picker Date of birth | Role:кнопка | State:подменю
+chromium/exotic-date	6	node-from	Role:счётчик | Said:косая черта | Role:счётчик | Said:косая черта | Role:счётчик | Said:Show date picker Date of birth | Role:кнопка | State:подменю
 chromium/exotic-date	9	node	Said:Month Date of birth | Role:счётчик
 chromium/exotic-date	9	node-from	Said:Month Date of birth | Role:счётчик
 chromium/exotic-date	11	node	Said:Day Date of birth | Role:счётчик
@@ -272,6 +280,8 @@ chromium/exotic-datetime	1	node	Role:ориентир: основное соде
 chromium/exotic-datetime	1	node-from	Said:Exotic input datetime-local
 chromium/exotic-datetime	2	node	Role:ориентир: основное содержимое | Role:заголовок уровня 1 | Said:Exotic input datetime-local
 chromium/exotic-datetime	2	node-from	Role:заголовок уровня 1 | Said:Exotic input datetime-local
+chromium/exotic-datetime	6	node	Role:счётчик | Said:косая черта | Role:счётчик | Said:косая черта | Role:счётчик | Said:, | Role:счётчик | Said:: | Role:счётчик | Role:счётчик | Said:Show local date and time picker Departure | Role:кнопка | State:подменю
+chromium/exotic-datetime	6	node-from	Role:счётчик | Said:косая черта | Role:счётчик | Said:косая черта | Role:счётчик | Said:, | Role:счётчик | Said:: | Role:счётчик | Role:счётчик | Said:Show local date and time picker Departure | Role:кнопка | State:подменю
 chromium/exotic-datetime	9	node	Said:Month Departure | Role:счётчик
 chromium/exotic-datetime	9	node-from	Said:Month Departure | Role:счётчик
 chromium/exotic-datetime	11	node	Said:Day Departure | Role:счётчик
@@ -296,12 +306,16 @@ chromium/exotic-month	1	node	Role:ориентир: основное содер�
 chromium/exotic-month	1	node-from	Said:Exotic input month and week
 chromium/exotic-month	2	node	Role:ориентир: основное содержимое | Role:заголовок уровня 1 | Said:Exotic input month and week
 chromium/exotic-month	2	node-from	Role:заголовок уровня 1 | Said:Exotic input month and week
+chromium/exotic-month	6	node	Role:счётчик | Role:счётчик | Said:Show month picker Billing month | Role:кнопка | State:подменю
+chromium/exotic-month	6	node-from	Role:счётчик | Role:счётчик | Said:Show month picker Billing month | Role:кнопка | State:подменю
 chromium/exotic-month	9	node	Said:Month Billing month | Role:счётчик
 chromium/exotic-month	9	node-from	Said:Month Billing month | Role:счётчик
 chromium/exotic-month	11	node	Said:Year Billing month | Role:счётчик
 chromium/exotic-month	11	node-from	Said:Year Billing month | Role:счётчик
 chromium/exotic-month	12	node	Said:Show month picker Billing month | Role:кнопка | State:подменю
 chromium/exotic-month	12	node-from	Said:Show month picker Billing month | Role:кнопка | State:подменю
+chromium/exotic-month	15	node	Said:Week | Role:счётчик | Said:, | Role:счётчик | Said:Show week picker Report week | Role:кнопка | State:подменю
+chromium/exotic-month	15	node-from	Said:Week | Role:счётчик | Said:, | Role:счётчик | Said:Show week picker Report week | Role:кнопка | State:подменю
 chromium/exotic-month	19	node	Said:Week Report week | Role:счётчик
 chromium/exotic-month	19	node-from	Said:Week Report week | Role:счётчик
 chromium/exotic-month	21	node	Said:Year Report week | Role:счётчик
@@ -312,6 +326,8 @@ chromium/exotic-time	1	node	Role:ориентир: основное содерж
 chromium/exotic-time	1	node-from	Said:Exotic input time
 chromium/exotic-time	2	node	Role:ориентир: основное содержимое | Role:заголовок уровня 1 | Said:Exotic input time
 chromium/exotic-time	2	node-from	Role:заголовок уровня 1 | Said:Exotic input time
+chromium/exotic-time	6	node	Role:счётчик | Said:: | Role:счётчик | Role:счётчик | Said:Show time picker Alarm | Role:кнопка | State:подменю
+chromium/exotic-time	6	node-from	Role:счётчик | Said:: | Role:счётчик | Role:счётчик | Said:Show time picker Alarm | Role:кнопка | State:подменю
 chromium/exotic-time	9	node	Said:Hours Alarm | Role:счётчик
 chromium/exotic-time	9	node-from	Said:Hours Alarm | Role:счётчик
 chromium/exotic-time	11	node	Said:Minutes Alarm | Role:счётчик
@@ -320,6 +336,8 @@ chromium/exotic-time	13	node	Said:AM косая черта PM Alarm | Role:сч�
 chromium/exotic-time	13	node-from	Said:AM косая черта PM Alarm | Role:счётчик
 chromium/exotic-time	14	node	Said:Show time picker Alarm | Role:кнопка | State:подменю
 chromium/exotic-time	14	node-from	Said:Show time picker Alarm | Role:кнопка | State:подменю
+chromium/exotic-time	17	node	Role:счётчик | Said:: | Role:счётчик | Said:: | Role:счётчик | Role:счётчик | Said:Show time picker Meeting | Role:кнопка | State:подменю
+chromium/exotic-time	17	node-from	Role:счётчик | Said:: | Role:счётчик | Said:: | Role:счётчик | Role:счётчик | Said:Show time picker Meeting | Role:кнопка | State:подменю
 chromium/exotic-time	20	node	Said:Hours Meeting | Role:счётчик
 chromium/exotic-time	20	node-from	Said:Hours Meeting | Role:счётчик
 chromium/exotic-time	22	node	Said:Minutes Meeting | Role:счётчик
@@ -444,6 +462,8 @@ chromium/forms	104	node	Role:кнопка | Said:Submit
 chromium/forms	104	node-from	Role:кнопка | Said:Submit
 chromium/forms	106	node	Role:кнопка | Said:With described-by | Description:Use your legal name
 chromium/forms	106	node-from	Role:кнопка | Said:With described-by | Description:Use your legal name
+chromium/forms	108	node	Role:поле ввода | State:пусто
+chromium/forms	108	node-from	Role:поле ввода | State:пусто
 chromium/forms	109	node	Said:In unnamed form | Role:поле ввода | State:пусто
 chromium/forms	109	node-from	Said:In unnamed form | Role:поле ввода | State:пусто
 chromium/forms	110	node	Said:Site search | Role:ориентир: поиск | Role:поле ввода | State:пусто
@@ -698,6 +718,8 @@ chromium/m8-landmarks	53	node	Said:Feedback form | Role:форма | Said:Commen
 chromium/m8-landmarks	53	node-from	Said:Feedback form | Role:форма | Said:Comment | Role:поле ввода | State:пусто
 chromium/m8-landmarks	56	node	Said:Comment | Role:поле ввода | State:пусто
 chromium/m8-landmarks	56	node-from	Said:Comment | Role:поле ввода | State:пусто
+chromium/m8-landmarks	57	node	Said:Unnamed form field | Role:поле ввода | State:пусто
+chromium/m8-landmarks	57	node-from	Said:Unnamed form field | Role:поле ввода | State:пусто
 chromium/m8-landmarks	60	node	Said:Unnamed form field | Role:поле ввода | State:пусто
 chromium/m8-landmarks	60	node-from	Said:Unnamed form field | Role:поле ввода | State:пусто
 chromium/m8-landmarks	61	node	Said:Related links | Role:ориентир: дополнительное содержимое | Role:заголовок уровня 2 | Said:Related heading
@@ -1312,6 +1334,8 @@ chromium/structure	136	node	Said:SVG chart | Role:изображение | Descr
 chromium/structure	136	node-from	Said:SVG chart | Role:изображение | Description:SVG title
 chromium/structure	137	node	State:без подписи | Role:изображение
 chromium/structure	137	node-from	State:без подписи | Role:изображение
+chromium/structure	138	node	Role:изображение | Said:Canvas fallback
+chromium/structure	138	node-from	Role:изображение | Said:Canvas fallback
 chromium/structure	146	node	Said:Chapter 1 | Role:область | Said:Chapter text
 chromium/structure	146	node-from	Said:Chapter 1 | Role:область | Said:Chapter text
 chromium/structure	148	node	Role:ссылка | Said:1
@@ -2096,12 +2120,16 @@ firefox/exotic-date	1	node	Role:ориентир: основное содерж�
 firefox/exotic-date	1	node-from	Said:Exotic input date
 firefox/exotic-date	2	node	Role:ориентир: основное содержимое | Role:заголовок уровня 1 | Said:Exotic input date
 firefox/exotic-date	2	node-from	Role:заголовок уровня 1 | Said:Exotic input date
+firefox/exotic-date	7	node	Said:Date of birth | Role:счётчик | Said:10 | Said:косая черта | Said:косая черта
+firefox/exotic-date	7	node-from	Said:Date of birth | Role:счётчик | Said:10 | Said:косая черта | Said:косая черта
 firefox/exotic-date	8	node	Said:Month | Role:счётчик | Said:10
 firefox/exotic-date	8	node-from	Said:Month | Role:счётчик | Said:10
 firefox/exotic-datetime	1	node	Role:ориентир: основное содержимое | Role:заголовок уровня 1 | Said:Exotic input datetime-local
 firefox/exotic-datetime	1	node-from	Said:Exotic input datetime-local
 firefox/exotic-datetime	2	node	Role:ориентир: основное содержимое | Role:заголовок уровня 1 | Said:Exotic input datetime-local
 firefox/exotic-datetime	2	node-from	Role:заголовок уровня 1 | Said:Exotic input datetime-local
+firefox/exotic-datetime	7	node	Said:Departure | Role:счётчик | Said:10 | Said:косая черта | Said:косая черта | Said:, | Said::
+firefox/exotic-datetime	7	node-from	Said:Departure | Role:счётчик | Said:10 | Said:косая черта | Said:косая черта | Said:, | Said::
 firefox/exotic-datetime	8	node	Said:Month | Role:счётчик | Said:10
 firefox/exotic-datetime	8	node-from	Said:Month | Role:счётчик | Said:10
 firefox/exotic-file	1	node	Role:ориентир: основное содержимое | Role:заголовок уровня 1 | Said:Exotic input file
@@ -2238,6 +2266,8 @@ firefox/forms	133	node	Role:кнопка | Said:Submit
 firefox/forms	133	node-from	Role:кнопка | Said:Submit
 firefox/forms	136	node	Role:кнопка | Said:With described-by | Description:Use your legal name
 firefox/forms	136	node-from	Role:кнопка | Said:With described-by | Description:Use your legal name
+firefox/forms	138	node	Role:поле ввода | State:пусто
+firefox/forms	138	node-from	Role:поле ввода | State:пусто
 firefox/forms	139	node	Said:In unnamed form | Role:поле ввода | State:пусто
 firefox/forms	139	node-from	Said:In unnamed form | Role:поле ввода | State:пусто
 firefox/forms	140	node	Said:Site search | Role:ориентир: поиск | Role:поле ввода | State:пусто
@@ -2433,6 +2463,8 @@ firefox/m8-iframes	43	node	Role:фрейм | Said:Form frame | Role:заголо
 firefox/m8-iframes	43	node-from	Role:фрейм | Said:Form frame | Said:Frame form heading | Said:Frame field | Role:поле ввода | State:пусто | Role:кнопка | Said:Frame submit
 firefox/m8-iframes	44	node	Role:заголовок уровня 1 | Said:Frame form heading
 firefox/m8-iframes	44	node-from	Role:заголовок уровня 1 | Said:Frame form heading
+firefox/m8-iframes	46	node	Said:Frame field | Role:поле ввода | State:пусто | Role:кнопка | Said:Frame submit
+firefox/m8-iframes	46	node-from	Said:Frame field | Role:поле ввода | State:пусто | Role:кнопка | Said:Frame submit
 firefox/m8-iframes	50	node	Said:Frame field | Role:поле ввода | State:пусто
 firefox/m8-iframes	50	node-from	Said:Frame field | Role:поле ввода | State:пусто
 firefox/m8-iframes	52	node	Role:кнопка | Said:Frame submit
@@ -2510,6 +2542,8 @@ firefox/m8-landmarks	53	node	Said:Feedback form | Role:форма | Said:Comment
 firefox/m8-landmarks	53	node-from	Said:Feedback form | Role:форма | Said:Comment | Role:поле ввода | State:пусто
 firefox/m8-landmarks	56	node	Said:Comment | Role:поле ввода | State:пусто
 firefox/m8-landmarks	56	node-from	Said:Comment | Role:поле ввода | State:пусто
+firefox/m8-landmarks	57	node	Said:Unnamed form field | Role:поле ввода | State:пусто
+firefox/m8-landmarks	57	node-from	Said:Unnamed form field | Role:поле ввода | State:пусто
 firefox/m8-landmarks	60	node	Said:Unnamed form field | Role:поле ввода | State:пусто
 firefox/m8-landmarks	60	node-from	Said:Unnamed form field | Role:поле ввода | State:пусто
 firefox/m8-landmarks	61	node	Said:Related links | Role:ориентир: дополнительное содержимое | Role:заголовок уровня 2 | Said:Related heading
@@ -3124,6 +3158,8 @@ firefox/structure	143	node	Said:SVG chart | Role:изображение
 firefox/structure	143	node-from	Said:SVG chart | Role:изображение
 firefox/structure	145	node	State:без подписи | Role:изображение
 firefox/structure	145	node-from	State:без подписи | Role:изображение
+firefox/structure	147	node	Role:изображение | Said:Canvas fallback
+firefox/structure	147	node-from	Role:изображение | Said:Canvas fallback
 firefox/structure	161	node	Said:Chapter 1 | Role:область | Said:Chapter text
 firefox/structure	161	node-from	Said:Chapter 1 | Role:область | Said:Chapter text
 firefox/structure	163	node	Role:ссылка | Said:1

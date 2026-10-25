@@ -72,7 +72,7 @@ const FAMILIES: &[Family] = &[
 /// rest are the pages recorded after it: the M8b widgets and forms of both engines and the
 /// error-message page.
 const GATE_BROWSE_RECORDS: usize = 17847;
-const GATE_QUICKNAV_RECORDS: usize = 3464;
+const GATE_QUICKNAV_RECORDS: usize = 3500;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/sem")

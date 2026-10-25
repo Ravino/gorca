@@ -399,7 +399,7 @@ chromium/exotic-date	14	flags	NodeFlags(256) level 0
 chromium/exotic-date	15	flags	NodeFlags(2304) level 0
 chromium/exotic-date	16	flags	NodeFlags(0) level 0
 chromium/exotic-date	17	flags	NodeFlags(0) level 0
-chromium/exotic-date	18	flags	NodeFlags(131328) level 0
+chromium/exotic-date	18	flags	NodeFlags(256) level 0
 chromium/exotic-date	19	flags	NodeFlags(2048) level 0
 chromium/exotic-date	20	flags	NodeFlags(0) level 0
 chromium/exotic-date	21	flags	NodeFlags(256) level 0
@@ -2940,13 +2940,13 @@ firefox/aria-props	23	flags	NodeFlags(2080) level 0
 firefox/aria-props	23	live	Props { politeness: Polite, atomic: false, removals: true, busy: false, alert: false }
 firefox/aria-props	24	flags	NodeFlags(2080) level 0
 firefox/aria-props	24	live	Props { politeness: Polite, atomic: false, removals: false, busy: true, alert: false }
-firefox/aria-props	25	flags	NodeFlags(2048) level 0
+firefox/aria-props	25	flags	NodeFlags(2080) level 0
 firefox/aria-props	25	live	Props { politeness: Assertive, atomic: true, removals: false, busy: false, alert: true }
 firefox/aria-props	26	flags	NodeFlags(2080) level 0
 firefox/aria-props	26	live	Props { politeness: Polite, atomic: true, removals: false, busy: false, alert: false }
 firefox/aria-props	27	flags	NodeFlags(32) level 0
 firefox/aria-props	27	live	Props { politeness: Polite, atomic: false, removals: false, busy: false, alert: false }
-firefox/aria-props	28	flags	NodeFlags(2048) level 0
+firefox/aria-props	28	flags	NodeFlags(2080) level 0
 firefox/aria-props	28	live	Props { politeness: Polite, atomic: true, removals: false, busy: false, alert: true }
 firefox/aria-props	29	flags	NodeFlags(2080) level 0
 firefox/aria-props	29	live	Props { politeness: Polite, atomic: false, removals: false, busy: false, alert: false }
@@ -3003,7 +3003,7 @@ firefox/aria-props	77	flags	NodeFlags(256) level 0
 firefox/aria-props	78	flags	NodeFlags(2304) level 0
 firefox/aria-props	79	flags	NodeFlags(2048) level 0
 firefox/aria-props	80	flags	NodeFlags(256) level 0
-firefox/aria-props	81	flags	NodeFlags(2048) level 0
+firefox/aria-props	81	flags	NodeFlags(2080) level 0
 firefox/aria-props	81	live	Props { politeness: Assertive, atomic: true, removals: false, busy: false, alert: true }
 firefox/aria-props	82	flags	NodeFlags(0) level 0
 firefox/aria-props	83	flags	NodeFlags(256) level 0
@@ -3173,7 +3173,7 @@ firefox/errors	16	flags	NodeFlags(0) level 0
 firefox/errors	17	flags	NodeFlags(256) level 0
 firefox/errors	18	flags	NodeFlags(0) level 0
 firefox/errors	19	flags	NodeFlags(0) level 0
-firefox/errors	20	flags	NodeFlags(2048) level 0
+firefox/errors	20	flags	NodeFlags(2080) level 0
 firefox/errors	20	live	Props { politeness: Assertive, atomic: true, removals: false, busy: false, alert: true }
 firefox/exotic-color	1	flags	NodeFlags(2304) level 0
 firefox/exotic-color	2	flags	NodeFlags(2048) level 0
@@ -4306,7 +4306,7 @@ firefox/widgets	56	flags	NodeFlags(2304) level 0
 firefox/widgets	57	flags	NodeFlags(2048) level 0
 firefox/widgets	58	flags	NodeFlags(256) level 0
 firefox/widgets	59	flags	NodeFlags(2048) level 0
-firefox/widgets	60	flags	NodeFlags(2048) level 0
+firefox/widgets	60	flags	NodeFlags(2080) level 0
 firefox/widgets	60	live	Props { politeness: Assertive, atomic: true, removals: false, busy: false, alert: true }
 firefox/widgets	61	flags	NodeFlags(2080) level 0
 firefox/widgets	61	live	Props { politeness: Polite, atomic: true, removals: false, busy: false, alert: false }

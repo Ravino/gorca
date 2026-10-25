@@ -40,4 +40,6 @@ pub use gorca_model::{
 };
 pub use join::{JoinEntry, JoinPort, JoinQuality, JoinReceiver, join_channel};
 pub use request::{Activity, DocRequest, ExtentProbe, RepairReport, Reply, SourceError};
-pub use web::{Completeness, TreeBlock, is_dynamic, takes_error_text, web_attrs};
+pub use web::{
+    Completeness, TreeBlock, is_dynamic, takes_error_text, takes_error_text_sem, web_attrs,
+};

@@ -6,7 +6,8 @@ use std::ops::BitOr;
 use std::sync::Arc;
 
 use gorca_model::sem::SemEntry;
-use gorca_model::{LocalId, Role, SrcNodeId, Value};
+use gorca_model::sem::SemRole;
+use gorca_model::{LocalId, SrcNodeId, Value};
 
 /// Set of navigation categories (bit mask). A node's own `Cat` is a pure function of
 /// `(role, level, flags)`; queries pass the union they are interested in.
@@ -206,13 +207,13 @@ impl BitOr for NodeFlags {
 }
 
 /// DM-4: categories are a pure function of `(role, level, flags)`.
-pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
+pub fn cats_of(role: SemRole, level: u8, flags: NodeFlags) -> Cat {
     if flags.contains(NodeFlags::HIDDEN) {
         return Cat::NONE;
     }
     let mut c = match role {
-        Role::Heading => Cat::HEADING | Cat::heading_level(level),
-        Role::Link => {
+        SemRole::Heading => Cat::HEADING | Cat::heading_level(level),
+        SemRole::Link => {
             let v = if flags.contains(NodeFlags::VISITED) {
                 Cat::LINK_VISITED
             } else {
@@ -220,59 +221,104 @@ pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
             };
             Cat::LINK | v | Cat::FOCUSABLE | Cat::CLICKABLE
         }
-        Role::Button | Role::ToggleButton | Role::Switch => {
-            Cat::FORM_FIELD | Cat::BUTTON | Cat::FOCUSABLE
+        SemRole::Button | SemRole::Switch => Cat::FORM_FIELD | Cat::BUTTON | Cat::FOCUSABLE,
+        SemRole::Checkbox | SemRole::MenuItemCheckbox => {
+            Cat::FORM_FIELD | Cat::CHECKBOX | Cat::FOCUSABLE
         }
-        Role::CheckBox => Cat::FORM_FIELD | Cat::CHECKBOX | Cat::FOCUSABLE,
-        Role::RadioButton => Cat::FORM_FIELD | Cat::RADIO | Cat::FOCUSABLE,
-        Role::ComboBox => Cat::FORM_FIELD | Cat::COMBOBOX | Cat::FOCUSABLE,
-        Role::TextEntry | Role::PasswordEntry => Cat::FORM_FIELD | Cat::EDIT | Cat::FOCUSABLE,
-        Role::SpinButton | Role::Slider => Cat::FORM_FIELD | Cat::SLIDER_SPIN | Cat::FOCUSABLE,
-        Role::Landmark => {
+        SemRole::Radio | SemRole::MenuItemRadio => Cat::FORM_FIELD | Cat::RADIO | Cat::FOCUSABLE,
+        SemRole::Combobox => Cat::FORM_FIELD | Cat::COMBOBOX | Cat::FOCUSABLE,
+        SemRole::TextBox | SemRole::SearchBox | SemRole::PasswordBox => {
+            Cat::FORM_FIELD | Cat::EDIT | Cat::FOCUSABLE
+        }
+        SemRole::SpinButton | SemRole::Slider => {
+            Cat::FORM_FIELD | Cat::SLIDER_SPIN | Cat::FOCUSABLE
+        }
+        SemRole::Region
+        | SemRole::Banner
+        | SemRole::Complementary
+        | SemRole::ContentInfo
+        | SemRole::Main
+        | SemRole::Navigation
+        | SemRole::Search
+        | SemRole::Form => {
             if flags.contains(NodeFlags::REGION) {
                 Cat::REGION
             } else {
                 Cat::LANDMARK
             }
         }
-        Role::Dialog => Cat::DIALOG,
-        Role::Application => Cat::EMBEDDED,
-        Role::Alert => Cat::ALERT | Cat::LIVE_REGION,
-        Role::Table => {
-            if flags.contains(NodeFlags::LAYOUT) {
-                Cat::LAYOUT_TABLE
-            } else {
-                Cat::TABLE
-            }
+        SemRole::Dialog | SemRole::AlertDialog => Cat::DIALOG,
+        SemRole::Application => Cat::EMBEDDED,
+        SemRole::Alert => Cat::ALERT | Cat::LIVE_REGION,
+        SemRole::Table | SemRole::Grid | SemRole::TreeGrid | SemRole::Presentation
+            if flags.contains(NodeFlags::LAYOUT) =>
+        {
+            Cat::LAYOUT_TABLE
         }
-        Role::List => Cat::LIST,
-        Role::ListItem => Cat::LIST_ITEM,
-        Role::Image => Cat::GRAPHIC,
-        Role::Separator => Cat::SEPARATOR,
-        Role::Paragraph => Cat::TEXT_BLOCK,
-        Role::StaticText => Cat::TEXT_RUN,
-        Role::Unknown
-        | Role::Window
-        | Role::Panel
-        | Role::Document
-        | Role::DocumentWeb
-        | Role::Row
-        | Role::Cell
-        | Role::ColumnHeader
-        | Role::RowHeader
-        | Role::ProgressBar
-        | Role::Menu
-        | Role::MenuBar
-        | Role::MenuItem
-        | Role::Popover
-        | Role::Tab
-        | Role::TabList
-        | Role::Tree
-        | Role::TreeItem
-        | Role::Toolbar
-        | Role::StatusBar
-        | Role::Label
-        | Role::Terminal => Cat::NONE,
+        SemRole::Table | SemRole::Grid | SemRole::TreeGrid => Cat::TABLE,
+        SemRole::List | SemRole::Listbox => Cat::LIST,
+        SemRole::ListItem | SemRole::Option => Cat::LIST_ITEM,
+        SemRole::Img => Cat::GRAPHIC,
+        SemRole::Separator => Cat::SEPARATOR,
+        SemRole::Paragraph => Cat::TEXT_BLOCK,
+        SemRole::StaticText
+        | SemRole::Emphasis
+        | SemRole::Strong
+        | SemRole::Mark
+        | SemRole::Code
+        | SemRole::Time
+        | SemRole::Insertion
+        | SemRole::Deletion
+        | SemRole::Subscript
+        | SemRole::Superscript => Cat::TEXT_RUN,
+        SemRole::Unknown
+        | SemRole::Generic
+        | SemRole::Article
+        | SemRole::Blockquote
+        | SemRole::Caption
+        | SemRole::Cell
+        | SemRole::ColumnHeader
+        | SemRole::Comment
+        | SemRole::Definition
+        | SemRole::DescriptionList
+        | SemRole::Details
+        | SemRole::Document
+        | SemRole::DocumentWeb
+        | SemRole::Feed
+        | SemRole::Figure
+        | SemRole::Group
+        | SemRole::Log
+        | SemRole::Marquee
+        | SemRole::Math
+        | SemRole::Menu
+        | SemRole::Menubar
+        | SemRole::MenuItem
+        | SemRole::Meter
+        | SemRole::Note
+        | SemRole::Presentation
+        | SemRole::ProgressBar
+        | SemRole::RadioGroup
+        | SemRole::Row
+        | SemRole::RowGroup
+        | SemRole::RowHeader
+        | SemRole::Scrollbar
+        | SemRole::Status
+        | SemRole::Suggestion
+        | SemRole::Summary
+        | SemRole::Tab
+        | SemRole::TabList
+        | SemRole::TabPanel
+        | SemRole::Term
+        | SemRole::Timer
+        | SemRole::Toolbar
+        | SemRole::Tooltip
+        | SemRole::Tree
+        | SemRole::TreeItem
+        | SemRole::Terminal
+        | SemRole::Window
+        | SemRole::Popover
+        | SemRole::Iframe
+        | SemRole::GridCell => Cat::NONE,
     };
     if flags.contains(NodeFlags::ARTICLE) {
         c = c | Cat::ARTICLE;
@@ -327,7 +373,7 @@ pub struct NodeData {
 /// Everything a source supplies for one node.
 #[derive(Clone, Debug)]
 pub struct NodeSpec {
-    pub role: Role,
+    pub role: SemRole,
     /// Heading level 1 to 6 (ignored for other roles).
     pub level: u8,
     pub flags: NodeFlags,
@@ -340,9 +386,9 @@ pub struct NodeSpec {
 }
 
 impl NodeSpec {
-    pub fn new(role: Role) -> Self {
+    pub fn new(role: impl Into<SemRole>) -> Self {
         NodeSpec {
-            role,
+            role: role.into(),
             level: 0,
             flags: NodeFlags::NONE,
             sig: 0,
@@ -423,7 +469,7 @@ impl SubtreeSpec {
 /// Partial update of a node's properties (attribute change).
 #[derive(Clone, Debug, Default)]
 pub struct PropsPatch {
-    pub role: Option<Role>,
+    pub role: Option<SemRole>,
     pub level: Option<u8>,
     pub flags: Option<NodeFlags>,
     pub sig: Option<u64>,
@@ -433,11 +479,34 @@ pub struct PropsPatch {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn landmark_roles_are_regions_only_with_the_region_flag_and_tables_follow_the_layout_flag() {
+        for r in [
+            SemRole::Region,
+            SemRole::Banner,
+            SemRole::Main,
+            SemRole::Form,
+        ] {
+            assert!(
+                cats_of(r, 0, NodeFlags::NONE).intersects(Cat::LANDMARK),
+                "{r:?}"
+            );
+            assert!(
+                cats_of(r, 0, NodeFlags::REGION).intersects(Cat::REGION),
+                "{r:?}"
+            );
+        }
+        assert!(cats_of(SemRole::Table, 0, NodeFlags::NONE).intersects(Cat::TABLE));
+        assert!(cats_of(SemRole::Presentation, 0, NodeFlags::LAYOUT).intersects(Cat::LAYOUT_TABLE));
+        assert!(cats_of(SemRole::Presentation, 0, NodeFlags::NONE).is_empty());
+        assert!(cats_of(SemRole::Option, 0, NodeFlags::NONE).intersects(Cat::LIST_ITEM));
+    }
+
     use super::*;
 
     #[test]
     fn heading_cats_carry_level() {
-        let c = cats_of(Role::Heading, 3, NodeFlags::NONE);
+        let c = cats_of(SemRole::Heading, 3, NodeFlags::NONE);
         assert!(c.intersects(Cat::HEADING));
         assert!(c.intersects(Cat::HEADING_3));
         assert!(!c.intersects(Cat::HEADING_2));
@@ -447,7 +516,7 @@ mod tests {
 
     #[test]
     fn hidden_has_no_cats() {
-        assert!(cats_of(Role::Link, 0, NodeFlags::HIDDEN).is_empty());
+        assert!(cats_of(SemRole::Link, 0, NodeFlags::HIDDEN).is_empty());
     }
 
     #[test]

@@ -20,13 +20,14 @@ use gorca_doc::web::{
     word_range_in,
 };
 use gorca_model::Role;
+use gorca_model::sem::SemRole;
 
 #[derive(Clone)]
 struct MNode {
     id: DocNodeId,
     parent: Option<usize>,
     children: Vec<usize>,
-    role: Role,
+    role: SemRole,
     level: u8,
     flags: NodeFlags,
     sig: u64,
@@ -62,21 +63,21 @@ struct Model {
     detached: BTreeSet<usize>,
 }
 
-const ROLES: [Role; 14] = [
-    Role::Heading,
-    Role::Link,
-    Role::Paragraph,
-    Role::StaticText,
-    Role::List,
-    Role::ListItem,
-    Role::Table,
-    Role::Button,
-    Role::TextEntry,
-    Role::Landmark,
-    Role::Image,
-    Role::Panel,
-    Role::CheckBox,
-    Role::Alert,
+const ROLES: [SemRole; 14] = [
+    SemRole::Heading,
+    SemRole::Link,
+    SemRole::Paragraph,
+    SemRole::StaticText,
+    SemRole::List,
+    SemRole::ListItem,
+    SemRole::Table,
+    SemRole::Button,
+    SemRole::TextBox,
+    SemRole::Region,
+    SemRole::Img,
+    SemRole::Generic,
+    SemRole::Checkbox,
+    SemRole::Alert,
 ];
 
 const TEXTS: [&str; 7] = ["", "a", "hello world", "x\ny", "\n", "one, two", "  sp  "];

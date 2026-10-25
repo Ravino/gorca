@@ -2497,7 +2497,7 @@ fn flat_at(d: &gorca_doc::web::WebDoc, text: &str, local: u32) -> u32 {
         .find(|id| {
             d.node(*id).is_some_and(|v| {
                 if text.is_empty() {
-                    v.role == Role::Image
+                    v.role == gorca_model::SemRole::Img
                 } else {
                     v.text == Some(text)
                 }
@@ -4122,6 +4122,7 @@ fn the_cursor_follows_its_item_by_dom_id_across_a_re_render() {
                 .filter_map(|n| {
                     let dom = n.attrs.iter().find(|(k, _)| *k == web_attrs::DOM_ID)?;
                     let mut e = gorca_model::sem::SemEntry::default();
+                    e.sem.role = gorca_model::sem::SemRole::from(n.role);
                     e.sem.text = Some(Arc::new(gorca_model::sem::SemText {
                         dom_id: Some(Arc::clone(&dom.1)),
                         ..gorca_model::sem::SemText::default()

@@ -266,8 +266,152 @@ impl Role {
     }
 }
 
+impl From<crate::sem::SemRole> for Role {
+    /// The legacy role of a model role, for the snapshots the model builds from a fused entry
+    /// (the document mirror's focus snapshot) while consumers of the legacy role remain. Lossy:
+    /// every landmark is `Landmark`, every filler `Panel`, a role with no legacy word `Unknown`.
+    fn from(r: crate::sem::SemRole) -> Self {
+        use crate::sem::SemRole as S;
+        match r {
+            S::Application => Role::Application,
+            S::Window => Role::Window,
+            S::Dialog | S::AlertDialog => Role::Dialog,
+            S::Generic | S::Group | S::Presentation | S::RadioGroup | S::TabPanel => Role::Panel,
+            S::Document => Role::Document,
+            S::DocumentWeb => Role::DocumentWeb,
+            S::Heading => Role::Heading,
+            S::Paragraph => Role::Paragraph,
+            S::Link => Role::Link,
+            S::Img => Role::Image,
+            S::List | S::Listbox | S::Feed => Role::List,
+            S::ListItem | S::Option => Role::ListItem,
+            S::Table | S::Grid | S::TreeGrid => Role::Table,
+            S::Row => Role::Row,
+            S::Cell | S::GridCell => Role::Cell,
+            S::ColumnHeader => Role::ColumnHeader,
+            S::RowHeader => Role::RowHeader,
+            S::Button => Role::Button,
+            S::Switch => Role::Switch,
+            S::Checkbox | S::MenuItemCheckbox => Role::CheckBox,
+            S::Radio | S::MenuItemRadio => Role::RadioButton,
+            S::Combobox => Role::ComboBox,
+            S::TextBox | S::SearchBox => Role::TextEntry,
+            S::PasswordBox => Role::PasswordEntry,
+            S::SpinButton => Role::SpinButton,
+            S::Slider | S::Scrollbar => Role::Slider,
+            S::ProgressBar | S::Meter => Role::ProgressBar,
+            S::Menu => Role::Menu,
+            S::Menubar => Role::MenuBar,
+            S::MenuItem => Role::MenuItem,
+            S::Popover => Role::Popover,
+            S::Tab => Role::Tab,
+            S::TabList => Role::TabList,
+            S::Tree => Role::Tree,
+            S::TreeItem => Role::TreeItem,
+            S::Toolbar => Role::Toolbar,
+            S::Status => Role::StatusBar,
+            S::Separator => Role::Separator,
+            S::Caption => Role::Label,
+            S::StaticText
+            | S::Emphasis
+            | S::Strong
+            | S::Mark
+            | S::Code
+            | S::Time
+            | S::Insertion
+            | S::Deletion
+            | S::Subscript
+            | S::Superscript => Role::StaticText,
+            S::Terminal => Role::Terminal,
+            S::Region
+            | S::Banner
+            | S::Complementary
+            | S::ContentInfo
+            | S::Main
+            | S::Navigation
+            | S::Search
+            | S::Form => Role::Landmark,
+            S::Alert => Role::Alert,
+            S::Unknown
+            | S::Article
+            | S::Blockquote
+            | S::Comment
+            | S::Definition
+            | S::DescriptionList
+            | S::Details
+            | S::Figure
+            | S::Iframe
+            | S::Log
+            | S::Marquee
+            | S::Math
+            | S::Note
+            | S::RowGroup
+            | S::Suggestion
+            | S::Summary
+            | S::Term
+            | S::Timer
+            | S::Tooltip => Role::Unknown,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_legacy_role_survives_the_trip_through_the_model_role_except_toggle_buttons() {
+        use crate::sem::SemRole;
+        for r in [
+            Role::Unknown,
+            Role::Application,
+            Role::Window,
+            Role::Dialog,
+            Role::Panel,
+            Role::Document,
+            Role::DocumentWeb,
+            Role::Heading,
+            Role::Paragraph,
+            Role::Link,
+            Role::Image,
+            Role::List,
+            Role::ListItem,
+            Role::Table,
+            Role::Row,
+            Role::Cell,
+            Role::ColumnHeader,
+            Role::RowHeader,
+            Role::Button,
+            Role::Switch,
+            Role::CheckBox,
+            Role::RadioButton,
+            Role::ComboBox,
+            Role::TextEntry,
+            Role::PasswordEntry,
+            Role::SpinButton,
+            Role::Slider,
+            Role::ProgressBar,
+            Role::Menu,
+            Role::MenuBar,
+            Role::MenuItem,
+            Role::Popover,
+            Role::Tab,
+            Role::TabList,
+            Role::Tree,
+            Role::TreeItem,
+            Role::Toolbar,
+            Role::StatusBar,
+            Role::Separator,
+            Role::Label,
+            Role::StaticText,
+            Role::Terminal,
+            Role::Landmark,
+            Role::Alert,
+        ] {
+            assert_eq!(Role::from(SemRole::from(r)), r, "{r:?}");
+        }
+        // The one loss: a toggle button is a button to the model.
+        assert_eq!(Role::from(SemRole::from(Role::ToggleButton)), Role::Button);
+    }
+
     use super::*;
 
     #[test]
