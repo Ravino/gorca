@@ -226,6 +226,14 @@ fn identity_unchecked(pid: u32) -> Option<String> {
     )
 }
 
+/// True when this process is in a user namespace of its own. Then the kernel refuses the
+/// ptrace-class `/proc/<pid>/{exe,ns/*,root}` reads of every process outside it, so no peer can be
+/// verified: gorca runs this way under a systemd *user* unit with any mount-namespace sandboxing
+/// (`PrivateTmp=`, `ProtectSystem=`, `ProtectKernelTunables=`, `ProtectControlGroups=`, ...).
+pub fn in_private_user_ns() -> bool {
+    std::fs::read_link("/proc/self/ns/user").is_ok_and(|l| l != std::path::Path::new(INIT_USER_NS))
+}
+
 /// The initial user namespace (`PROC_USER_INIT_INO`): where the session's own processes live.
 const INIT_USER_NS: &str = "user:[4026531837]";
 
@@ -498,6 +506,16 @@ mod tests {
         let ours = std::env::var("GORCA_PROBE_OURS")
             .ok()
             .map(std::path::PathBuf::from);
+        if ours.is_none() {
+            // Run inside a transient unit: the whole real path, no injected values.
+            let start = read_proc_info(pid).start.unwrap_or(0);
+            println!(
+                "private user ns: {}, identity of {pid}: {:?}",
+                in_private_user_ns(),
+                verified_identity(pid, start)
+            );
+            return;
+        }
         let id = identity_in(
             pid,
             mount_ns(&pid.to_string()).as_deref(),

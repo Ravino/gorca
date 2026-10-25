@@ -78,3 +78,36 @@ Unit tests pass, but this has not been exercised live for other apps.
 * journalctl --user -u gorca: 0 `plugin scope opened`; `readlink /proc/{689561,4531}/ns/{mnt,user}` above.
 * Tests: `cargo test -p gorca-connector-atspi --lib proc::` (14 pass), `-p gorca-daemon --test plugin_runtime` (11 pass,
   incl. the live-shaped row), plugin crate 10 pass; clippy `-D warnings` on both crates; xtask deps/strings/legacy ok.
+
+## Follow-up (22:49 restart, still no `plugin scope opened`): the real root cause
+
+The first fix was unreachable. Measured 2026-10-25 23:2x with `systemd-run --user --pipe` transient units:
+
+| unit properties | `readlink /proc/4531/exe` (Firefox) | own user ns |
+|---|---|---|
+| `NoNewPrivileges RestrictSUIDSGID RestrictNamespaces LockPersonality RestrictAddressFamilies` | ok | initial |
+| `+ PrivateTmp=yes` (or `ProtectSystem=strict`, `ProtectKernelTunables`, `ProtectKernelModules`, `ProtectControlGroups`, each alone) | **Permission denied** | private |
+
+Any mount-namespace sandboxing in a *user* unit creates a user namespace (gorca pid 729030:
+`user:[4026533184]`, `uid_map` `1000 1000 1`). From there the kernel refuses every ptrace-class
+`/proc/<pid>/` entry of processes outside it: `exe`, `ns/*`, `root`, `cwd`, `environ`, `maps`
+(`stat`, `status`, `cmdline`, `cgroup`, `mountinfo` stay readable). So `verified_identity` gets
+no exe and no namespace for any peer: unverified, URL-scoped scope never opens. (Root-owned files
+also show owner 65534 there; moot, since the exe read fails first.) The earlier namespace rule only
+helps a process that can read the peer, which a private-user-ns service cannot.
+
+Probe in the transient units (`live_peer_identity_probe`, whole real path): hardened unit
+`private user ns: true, identity: None`; same unit without the namespace options
+`private user ns: false, identity: Some("firefox-esr")`.
+
+### Fix and what to do
+* `contrib/systemd/gorca.service`: drop `ProtectSystem`, `ProtectKernelTunables`,
+  `ProtectKernelModules`, `ProtectControlGroups`, `PrivateTmp` (keep NoNewPrivileges,
+  RestrictSUIDSGID, RestrictNamespaces, LockPersonality, RestrictAddressFamilies,
+  SystemCallArchitectures).
+* Owner: apply the same to `~/.config/systemd/user/gorca.service`
+  (`systemctl --user daemon-reload`, restart). Drop-in alternative cannot remove options;
+  reset them with an override file that sets `ProtectSystem=no`, `ProtectKernelTunables=no`,
+  `ProtectKernelModules=no`, `ProtectControlGroups=no`, `PrivateTmp=no`.
+* Daemon logs a WARN at startup when plugins are enabled and gorca is in a private user namespace.
+* Expected after restart: `plugin scope opened app=firefox-esr doc=true plugins=1`.
