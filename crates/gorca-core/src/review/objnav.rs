@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use gorca_model::sem::{SemEntry, SemFlags, SemRole};
 use gorca_model::{
-    ChildList, Lookup, NodeKey, NodeSnapshot, NodeView, PropMask, Role, StructFlags, StructState,
+    ChildList, Lookup, NodeKey, NodeSnapshot, NodeView, PropMask, StructFlags, StructState,
 };
 
 use crate::present::entry_of;
@@ -79,6 +79,19 @@ pub fn class_entry(entry: &SemEntry, st: StructState, web: bool) -> PresClass {
         RoleClass::LayoutIfNameless if nameless => PresClass::Layout,
         RoleClass::LayoutIfNameless | RoleClass::Content => PresClass::Content,
     }
+}
+
+/// The application root of the accessibility tree, as opposed to an ARIA `application` widget
+/// (which carries an author's role token, [`SemFlags::ROLE_AUTHORED`]) or an embedded object (an
+/// HTML `<object>` is exported with the same model role): the root is the one application node
+/// that has no parent in its own application, which only a snapshot that carries its parent can
+/// say. A snapshot that does not is not taken for the root; the walk fetches its ancestry.
+pub fn is_app_root(snap: &NodeSnapshot) -> bool {
+    let e = entry_of(snap);
+    e.sem.role == SemRole::Application
+        && !e.sem.flags.contains(SemFlags::ROLE_AUTHORED)
+        && snap.have.contains(PropMask::PARENT)
+        && snap.parent.is_none()
 }
 
 /// [`class_entry`] of a snapshot (the entry the snapshot carries, or its provisional one).
@@ -351,7 +364,7 @@ impl<'a, S: NavSource> Walk<'a, S> {
 
     fn parent(&mut self, r: &Read) -> R<Option<NodeKey>> {
         // The application root of the accessibility tree, not an ARIA `application` widget.
-        if r.snap.role == Role::Application {
+        if is_app_root(&r.snap) {
             // Never above the application root (ADR-0006 5.2).
             return Ok(None);
         }
@@ -813,11 +826,12 @@ mod entry_tests {
         use super::super::collect::testsrc::{key, snap};
         use super::super::replay::PageSource;
         let win = snap(1, Role::Window, "Doc", None, &[2]);
-        // A web `role=application` widget: the fused role says application, the AT-SPI role
-        // does not, and the move to the parent must still go through it.
+        // A web `role=application` widget: the author's role token says application, the
+        // AT-SPI role does not, and the move to the parent must still go through it.
         let mut widget = snap(2, Role::Panel, "Board", Some(1), &[3]);
         let mut e = (*entry_of(&widget)).clone();
         e.sem.role = SemRole::Application;
+        e.sem.flags |= SemFlags::ROLE_AUTHORED;
         widget.sem.entry = Some(Arc::new(e));
         let leaf = snap(3, Role::Button, "Play", Some(2), &[]);
         let page = PageSource(
@@ -846,5 +860,20 @@ mod entry_tests {
             StepResult::Found(key(1)),
             "not stopped as the tree root"
         );
+    }
+
+    #[test]
+    fn only_a_parentless_application_node_is_the_tree_root() {
+        use super::super::collect::testsrc::snap;
+        let root = snap(1, Role::Application, "App", None, &[2]);
+        assert!(is_app_root(&root));
+        // An embedded object has the model role application and a parent inside the tree.
+        let embedded = snap(2, Role::Application, "Frame", Some(1), &[]);
+        assert!(!is_app_root(&embedded));
+        // A snapshot that never carried its parent cannot be taken for the root.
+        let mut unfetched = root.clone();
+        unfetched.have.remove(PropMask::PARENT);
+        assert!(!is_app_root(&unfetched));
+        assert!(!is_app_root(&snap(3, Role::Window, "W", None, &[])));
     }
 }

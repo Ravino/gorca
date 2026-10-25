@@ -37,9 +37,9 @@ pub use fact::{Fact, Subject};
 pub use geometry::{Point, Rect};
 pub use ids::{AppId, ConnectorId, Epoch, LocalId, NodeKey, ReqId, UttId};
 pub use node::{
-    AttrKey, AttrMap, ChildList, Freshness, FreshnessEvent, Ifaces, Lookup, NodeSem, NodeSnapshot,
-    NodeView, PropMask, RelationKind, Relations, SnapshotBatch, StateSet, StructFlags, StructState,
-    Value,
+    AttrKey, AttrMap, ChildList, Freshness, FreshnessEvent, Ifaces, Lookup, NodeCaps, NodeSem,
+    NodeSnapshot, NodeView, PropMask, RelationKind, Relations, SnapshotBatch, StateSet,
+    StructFlags, StructState, Value,
 };
 pub use redact::{RedactKey, is_secret_node};
 pub use role::Role;

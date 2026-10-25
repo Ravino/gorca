@@ -80,6 +80,9 @@ pub struct Ban {
     /// A use is ignored when the character right after the match is one of these (a builder
     /// method `.meta(` is not the field `.meta`).
     pub not_followed_by: &'static str,
+    /// A use is ignored when the text right before the match ends with this (`.sem.role` is the
+    /// fused role, `.role` alone is the legacy field).
+    pub not_preceded_by: &'static str,
     /// Repo-relative path prefixes the ban applies to.
     pub scope: &'static [&'static str],
     /// What replaces it.
@@ -111,10 +114,21 @@ const fn ban(
         id,
         needle,
         not_followed_by: "",
+        not_preceded_by: "",
         scope,
         replacement,
     }
 }
+
+/// Modules already moved off the legacy node record (M22c ratchet, ADR-0022 section 8.7): they
+/// read the fused entry only. A module joins this list in the commit that ports it and never
+/// leaves; the rule then fails on every legacy `Role`, `StateSet` or interface read in it.
+const PORTED: &[&str] = &["crates/gorca-core/src/review/"];
+const LEGACY_ROLE: &str =
+    "SemRole from the fused entry (`review::zone::entry_of`, `Ivm::entry_view`)";
+const LEGACY_STATES: &str = "StructState (`NodeSnapshot::struct_state`) or the semantic states and flags of the fused entry";
+const LEGACY_IFACES: &str =
+    "SemFlags (FOCUSABLE, EDITABLE, ...) and the typed groups of the fused entry";
 
 const FUSED: &str = "gorca_present::{compose, render} on the fused entry";
 const PROVISIONAL: &str = "provisional S4 fact in the model (ADR-0022 section 8.3)";
@@ -178,6 +192,7 @@ pub const BANS: &[Ban] = &[
         id: "meta-field",
         needle: ".meta",
         not_followed_by: "(",
+        not_preceded_by: "",
         scope: CORE,
         replacement: "SemEntry through Ivm::entry_view",
     },
@@ -201,10 +216,31 @@ pub const BANS: &[Ban] = &[
         CORE,
         "delete with the legacy values it compares against (b4); the PresIr shadow is gorca-present",
     ),
+    Ban {
+        id: "legacy-role-type",
+        needle: "Role",
+        not_followed_by: "",
+        // `SegmentKind::Role` is a speech segment kind, not the legacy role.
+        not_preceded_by: "Kind::",
+        scope: PORTED,
+        replacement: LEGACY_ROLE,
+    },
+    ban("legacy-stateset", "StateSet", PORTED, LEGACY_STATES),
+    ban("legacy-ifaces", "Ifaces", PORTED, LEGACY_IFACES),
+    ban("legacy-iface", "Iface", PORTED, LEGACY_IFACES),
+    ban("snap-interfaces", ".interfaces", PORTED, LEGACY_IFACES),
+    Ban {
+        id: "snap-role",
+        needle: ".role",
+        not_followed_by: "",
+        not_preceded_by: "sem",
+        scope: PORTED,
+        replacement: LEGACY_ROLE,
+    },
     ban(
         "snapshot-states",
         ".states",
-        &["crates/gorca-core/src/review/"],
+        PORTED,
         "NodeSnapshot::struct_state() (StructState: showing, visible, defunct, focusable); every spoken state is a group of the fused entry",
     ),
     ban(
@@ -256,7 +292,9 @@ fn line_matches(line: &str, ban: &Ban) -> bool {
         let after = line[end..].chars().next();
         let after_bad =
             after.is_some_and(|c| (last_ident && is_ident(c)) || ban.not_followed_by.contains(c));
-        if before_ok && !after_bad {
+        let preceded_bad =
+            !ban.not_preceded_by.is_empty() && line[..start].ends_with(ban.not_preceded_by);
+        if before_ok && !after_bad && !preceded_bad {
             return true;
         }
         from = end;
@@ -488,6 +526,42 @@ mod tests {
         let src = "use crate::aria::Node;\nlet a = n.attrs;\n";
         assert!(scan("crates/gorca-model/src/x.rs", src).is_empty());
         assert_eq!(scan(F, src).len(), 2);
+    }
+
+    #[test]
+    fn a_ported_module_cannot_read_the_legacy_role_states_or_interfaces() {
+        const P: &str = "crates/gorca-core/src/review/x.rs";
+        let src = "use gorca_model::{Role, StateSet};\n\
+                   fn a(s: &NodeSnapshot) -> bool { s.role == Role::Window }\n\
+                   fn b(s: &NodeSnapshot) -> bool { s.states.contains(x) || s.interfaces.is_empty() }\n\
+                   fn c(e: &SemEntry) -> bool { e.sem.role == SemRole::Window }\n\
+                   fn d() -> SegmentKind { SegmentKind::Role }\n";
+        let mut ids: Vec<(&str, usize)> = scan(P, src).iter().map(|h| (h.ban, h.line)).collect();
+        ids.sort_unstable();
+        assert_eq!(
+            ids,
+            vec![
+                ("legacy-role-type", 1),
+                ("legacy-role-type", 2),
+                ("legacy-stateset", 1),
+                ("snap-interfaces", 3),
+                ("snap-role", 2),
+                ("snapshot-states", 3),
+            ]
+        );
+        // The same text elsewhere is not in the ratchet yet.
+        assert!(scan("crates/gorca-core/src/browse/x.rs", src).is_empty());
+    }
+
+    #[test]
+    fn ported_modules_exist() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        for m in PORTED {
+            assert!(
+                root.join(m).exists(),
+                "{m} was ported and then moved: update PORTED"
+            );
+        }
     }
 
     #[test]

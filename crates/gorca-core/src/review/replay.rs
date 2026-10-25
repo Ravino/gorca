@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use gorca_model::{Lookup, NodeKey, NodeSnapshot, NodeView, PropMask};
 
+pub use super::collect::{is_surface_role, wants_lines};
 pub use super::model::ReviewLimits;
 pub use super::objnav::{NavMove, NavSource, PresClass, StepResult, class_of_snapshot, step};
 pub use super::zone::{join_tokens, object_tokens, role_word, zone_tokens};
@@ -17,7 +18,7 @@ pub use super::zone::{join_tokens, object_tokens, role_word, zone_tokens};
 pub fn actionable(snap: &NodeSnapshot) -> bool {
     snap.struct_state()
         .contains(gorca_model::StructFlags::FOCUSABLE)
-        || snap.interfaces.contains(gorca_model::Ifaces::ACTION)
+        || snap.caps().has_action()
 }
 
 /// A page of snapshots as a [`NavSource`], every node fresh.
