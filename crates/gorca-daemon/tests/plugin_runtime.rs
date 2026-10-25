@@ -2,7 +2,13 @@
 //! The plugin runtime end to end below the browser: the real first-party Telegram plugin
 //! (`plugins/telegram-web`, a wasm32-wasip2 component) loaded through the pin list, matched to a
 //! verified document scope, driven through the core's `PluginBridge`, and its facts checked.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::pedantic,
+    clippy::disallowed_methods,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic
+)]
 
 use std::collections::HashMap;
 use std::path::PathBuf;

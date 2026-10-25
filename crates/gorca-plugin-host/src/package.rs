@@ -263,7 +263,7 @@ fn parse_watches(doc: &DocumentMut) -> Result<Vec<Watch>, PackageError> {
     for t in tables {
         let id = t
             .get("id")
-            .and_then(|v| v.as_integer())
+            .and_then(toml_edit::Item::as_integer)
             .and_then(|n| u16::try_from(n).ok())
             .filter(|n| *n != 0)
             .ok_or_else(|| PackageError::Manifest("watch.id must be 1..65535".into()))?;

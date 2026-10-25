@@ -384,6 +384,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)] // polling a child process: a plain test thread
     fn a_process_in_another_mount_namespace_is_unverified_without_sandbox_evidence() {
         // `unshare` needs unprivileged user namespaces; where the kernel forbids them there is
         // nothing to test.

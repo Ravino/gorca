@@ -261,7 +261,7 @@ impl HostState {
         self.host_left = grant.units;
         self.imports = 0;
         self.call_start = Instant::now();
-        self.call_limit = grant.time * WATCHDOG_FACTOR;
+        self.call_limit = grant.wall * WATCHDOG_FACTOR;
         self.effects.clear();
         self.malformed = false;
         self.facts = 0;
@@ -529,7 +529,8 @@ impl model::Host for HostState {
             };
             let name = if names { self.view.name(i) } else { None };
             let text = if texts {
-                self.view.text(i, 0, Cap::Text.bytes() as u32)
+                self.view
+                    .text(i, 0, u32::try_from(Cap::Text.bytes()).unwrap_or(u32::MAX))
             } else {
                 None
             };

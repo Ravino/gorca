@@ -129,27 +129,26 @@ impl Tree for IvmTree<'_> {
 /// The S0 row of a source node: the primary's observed values and neutral attributes, never a
 /// fused entry (PF-2).
 fn row_of(n: &SrcNode) -> Row {
-    use gorca_doc_source_api::web_attrs as attr;
-    let (role, name) = match &n.rec {
-        Some(rec) => (rec.sem.role, rec.name.clone()),
-        None => (SemRole::StaticText, n.text.clone()),
-    };
-    let get = |k| {
-        n.attrs
-            .iter()
-            .find(|(key, _)| *key == k)
-            .map(|(_, v)| Arc::clone(v))
-    };
-    Row {
-        role: role.code(),
-        states: n.states.bits(),
-        name,
-        text: n.text.clone(),
-        tag: get(attr::TAG),
-        class: get(attr::CLASS),
-        aria_role: get(attr::XML_ROLES),
-        dom_id: get(attr::DOM_ID),
-        secret: Row::is_secret_role(role),
+    match &n.rec {
+        Some(rec) => Row {
+            role: rec.sem.role.code(),
+            states: n.states.bits(),
+            name: rec.name.clone(),
+            text: n.text.clone(),
+            tag: (!rec.tag.is_empty()).then(|| Arc::from(rec.tag.as_str())),
+            class: rec.class.clone(),
+            aria_role: rec.aria_role.clone(),
+            dom_id: rec.dom_id.clone(),
+            secret: Row::is_secret_role(rec.sem.role),
+        },
+        // A synthetic node (a text run): the text is its content.
+        None => Row {
+            role: SemRole::StaticText.code(),
+            states: n.states.bits(),
+            name: n.text.clone(),
+            text: n.text.clone(),
+            ..Row::default()
+        },
     }
 }
 
@@ -1219,10 +1218,11 @@ mod tests {
     // ---- plugins (M18a) -----------------------------------------------------------------
 
     use crate::plugin_port::testing::{svc, svc_with};
-    use gorca_doc_source_api::web_attrs;
 
     fn with_class(mut n: SrcNode, class: &str) -> SrcNode {
-        n.attrs.push((web_attrs::CLASS, Arc::from(class)));
+        let mut r = n.rec.as_deref().cloned().unwrap_or_default();
+        r.class = Some(Arc::from(class));
+        n.rec = Some(Arc::new(r));
         n
     }
 

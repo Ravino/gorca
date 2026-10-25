@@ -28,6 +28,12 @@ pub struct FuelGrant {
     pub units: u64,
     /// The wall time the grant stands for (`units / kappa`).
     pub time: Duration,
+    /// The wall time the overrun rule and the host watchdog are measured against. Equal to
+    /// `time` for a call that has its grant to itself; the per-call cap for an interactive call
+    /// whose fuel is only its share of a crowded handoff (the serial-equivalent bound, ADR-0026
+    /// section 2.4.6): the plugins run in parallel, so a small share of fuel is no reason to
+    /// expect a call to finish in proportionally less wall time.
+    pub wall: Duration,
 }
 
 impl FuelGrant {
@@ -38,14 +44,22 @@ impl FuelGrant {
         Self {
             units: us.saturating_mul(kappa).max(1),
             time,
+            wall: time,
         }
     }
 
-    /// A wall overrun is a call that took more than `max(2 x grant_time, grant_time + 50 us)`
+    /// Measure the wall rules against `wall` instead of the (smaller) fuel share.
+    #[must_use]
+    pub fn with_wall(mut self, wall: Duration) -> Self {
+        self.wall = wall.max(self.time);
+        self
+    }
+
+    /// A wall overrun is a call that took more than `max(2 x wall, wall + 50 us)` (`wall` is the grant time unless the grant is a crowded share)
     /// (§2.5.2).
     #[must_use]
     pub fn is_wall_overrun(&self, wall: Duration) -> bool {
-        let limit = (self.time * 2).max(self.time + Duration::from_micros(50));
+        let limit = (self.wall * 2).max(self.wall + Duration::from_micros(50));
         wall > limit
     }
 }
@@ -258,6 +272,20 @@ mod tests {
         let tiny = FuelGrant::for_time(Duration::from_micros(10), KAPPA_PROVISIONAL);
         assert!(!tiny.is_wall_overrun(Duration::from_micros(60)));
         assert!(tiny.is_wall_overrun(Duration::from_micros(61)));
+    }
+
+    #[test]
+    fn a_crowded_share_is_judged_against_the_cap_not_the_share() {
+        // 23 us of fuel (a tenth of a crowded handoff) must not make a 90 us call an overrun
+        // (the plugins run in parallel): the wall rules follow the 200 us cap.
+        let share = FuelGrant::for_time(Duration::from_micros(23), KAPPA_PROVISIONAL)
+            .with_wall(B2_INTERACTIVE);
+        assert_eq!(share.units, 23 * KAPPA_PROVISIONAL);
+        assert!(!share.is_wall_overrun(Duration::from_micros(400)));
+        assert!(share.is_wall_overrun(Duration::from_micros(401)));
+        // The wall basis never drops below the grant itself.
+        let big = FuelGrant::for_time(B1_BACKGROUND, KAPPA_PROVISIONAL).with_wall(B2_INTERACTIVE);
+        assert_eq!(big.wall, B1_BACKGROUND);
     }
 
     #[test]

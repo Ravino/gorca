@@ -378,7 +378,13 @@ fn overlay_observed(e: &mut SemEntry, rec: &gorca_model::sem::SrcRecord) {
     }
 }
 
+/// The name the node is spoken with: its entry's (None when it has none).
+pub(crate) fn spoken_name(snap: &NodeSnapshot) -> Option<&str> {
+    snap.sem.entry.as_ref().and_then(|e| e.name.as_deref())
+}
+
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod overlay_tests {
     use super::*;
     use gorca_model::sem::{Group, ProvCode, SrcRecord};
@@ -409,9 +415,4 @@ mod overlay_tests {
             assert_eq!(e.name.as_deref(), Some("Alice, 1 unread"), "{p:?}");
         }
     }
-}
-
-/// The name the node is spoken with: its entry's (None when it has none).
-pub(crate) fn spoken_name(snap: &NodeSnapshot) -> Option<&str> {
-    snap.sem.entry.as_ref().and_then(|e| e.name.as_deref())
 }

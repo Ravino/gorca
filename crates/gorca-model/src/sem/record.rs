@@ -146,6 +146,13 @@ pub struct SrcRecord {
     /// The HTML `id` the engine exports, capped. Not a group: the engine stamps it on the fused
     /// entry (`SemText::dom_id`) and uses it to bind DOM-id anchors.
     pub dom_id: Option<Arc<str>>,
+    /// The HTML `class` attribute, capped: neutral input of add-on `[[watch]]` selectors and the
+    /// plugin `attr("class")` read (ADR-0026 section 2.3.1). Not a group, never presented. Set
+    /// by the document source only; the app connector does not read it.
+    pub class: Option<Arc<str>>,
+    /// The authored ARIA role tokens (`xml-roles`), capped: the neutral `aria-role` attribute of
+    /// the same readers.
+    pub aria_role: Option<Arc<str>>,
     /// Diagnostics.
     pub notes: Notes,
 }

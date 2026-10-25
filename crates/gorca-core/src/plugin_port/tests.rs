@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The plugin port: PF-2, PF-4, PF-7, strata by tier, the wait governor and the displaced-job
 //! rule (a busy plugin's newest job is never skipped).
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::cast_possible_truncation,
+    clippy::field_reassign_with_default
+)]
 
 use std::sync::{Arc, Mutex};
 

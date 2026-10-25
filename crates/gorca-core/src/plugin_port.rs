@@ -448,6 +448,12 @@ pub struct BridgeStats {
     pub waited: u64,
     /// Interactive turns that were refused the wait.
     pub no_wait: u64,
+    /// Interactive jobs sent, and replies that had arrived when the bounded wait ended.
+    pub handoff_asked: u64,
+    /// See `handoff_asked`.
+    pub handoff_arrived: u64,
+    /// Nanoseconds spent in the bounded wait, summed.
+    pub handoff_waited_ns: u64,
 }
 
 struct LiveToken {
@@ -831,7 +837,10 @@ impl PluginBridge {
         } else {
             self.stats.no_wait += 1;
         }
-        let _ = self.runner.interactive(t0_ns, wait, jobs);
+        let h = self.runner.interactive(t0_ns, wait, jobs);
+        self.stats.handoff_asked += u64::from(h.asked);
+        self.stats.handoff_arrived += u64::from(h.arrived);
+        self.stats.handoff_waited_ns += h.waited_ns;
         self.drain()
     }
 
@@ -952,7 +961,7 @@ impl PluginBridge {
                 effects,
                 reads,
                 overflow,
-            } => self.admit_done(r.plugin, r.t, &r.targets, effects, reads, overflow),
+            } => self.admit_done(r.plugin, r.t, &r.targets, &effects, reads, overflow),
         }
     }
 
@@ -961,7 +970,7 @@ impl PluginBridge {
         plugin: usize,
         t: u64,
         targets: &[u32],
-        effects: Vec<FactEffect>,
+        effects: &[FactEffect],
         mut reads: Vec<u32>,
         overflow: bool,
     ) {

@@ -219,21 +219,14 @@ impl Tree for IvmTree<'_> {
 
 /// The S0 row of a snapshot: the observed record and neutral attributes, never a fused entry.
 fn row_of(snap: &NodeSnapshot, rec: &SrcRecord) -> Row {
-    use gorca_doc_source_api::web_attrs as attr;
-    let get = |k| {
-        snap.attrs
-            .iter()
-            .find(|(key, _)| *key == k)
-            .map(|(_, v)| Arc::clone(v))
-    };
     Row {
         role: rec.sem.role.code(),
         states: snap.states.bits(),
         name: rec.name.clone(),
         text: None,
-        tag: get(attr::TAG),
-        class: get(attr::CLASS),
-        aria_role: get(attr::XML_ROLES),
+        tag: (!rec.tag.is_empty()).then(|| Arc::from(rec.tag.as_str())),
+        class: rec.class.clone(),
+        aria_role: rec.aria_role.clone(),
         dom_id: rec.dom_id.clone(),
         secret: Row::is_secret_role(rec.sem.role),
     }
@@ -971,10 +964,7 @@ mod tests {
         rec.name = Some(Arc::from(name));
         rec.known.set(Group::Role, true);
         rec.known.set(Group::Name, true);
-        let mut attrs = gorca_model::AttrMap::default();
-        if let Some(c) = class {
-            attrs.push((gorca_doc_source_api::web_attrs::CLASS, Arc::from(c)));
-        }
+        rec.class = class.map(Arc::from);
         Arc::new(NodeSnapshot {
             key: key(n),
             role: Role::Unknown,
@@ -985,7 +975,7 @@ mod tests {
             parent: parent.map(key),
             children: ChildList::Unknown,
             interfaces: Ifaces::empty(),
-            attrs,
+            attrs: gorca_model::AttrMap::default(),
             relations: gorca_model::Relations::default(),
             bounds: None,
             have: gorca_model::PropMask::PRESENT,
