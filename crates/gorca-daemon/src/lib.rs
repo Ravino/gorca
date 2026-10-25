@@ -30,6 +30,7 @@ mod cli;
 mod config_task;
 mod input;
 mod platform;
+pub mod plugins;
 mod power;
 mod probe;
 mod rtkit;
@@ -358,6 +359,30 @@ pub async fn run_with_policy(
     run_inner(opts, shutdown, Some(policy), Some(Box::new(on_ready))).await
 }
 
+/// The plugin runtime (ADR-0026, M18a): only when `[plugins] enabled` is set in the settings
+/// file. Packages load on a blocking thread; a failure leaves the daemon running without
+/// plugins.
+async fn wire_plugins(core: Core, opts: &Options) -> Core {
+    let enabled = match &opts.config_path {
+        Some(p) => config_task::startup_plugins_enabled(p).await,
+        None => false,
+    };
+    if !enabled {
+        return core;
+    }
+    let popts = opts.plugins.clone();
+    match tokio::task::spawn_blocking(move || plugins::PluginRuntime::load(&popts)).await {
+        Ok(rt) => {
+            tracing::info!(plugins = ?rt.ids(), "plugin runtime ready");
+            core.with_plugins(rt)
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "plugin loading failed: running without plugins");
+            core
+        }
+    }
+}
+
 async fn run_inner(
     mut opts: Options,
     shutdown: CancellationToken,
@@ -475,6 +500,7 @@ async fn run_inner(
     let atspi_state = AtspiState::default();
     let core = wire_sources::wire_sources(core);
     let core = wire::wire_present_log(core, &opts, &atspi_state);
+    let core = wire_plugins(core, &opts).await;
     let core = wire::wire_web(core, &opts, &atspi_state);
     if let Some(f) = on_ready {
         f(DaemonProbe::new(core.mirrors(), atspi_state.clone()));

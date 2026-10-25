@@ -453,7 +453,14 @@ async fn fetch_doc_url(app: &AppConn, root: &str) -> Option<Arc<str>> {
     let dl = Deadline(Instant::now() + Duration::from_millis(250));
     let lane = app.next_lane();
     let msg = app
-        .call(lane, dl, root, "org.a11y.atspi.Document", "GetAttributes", &())
+        .call(
+            lane,
+            dl,
+            root,
+            "org.a11y.atspi.Document",
+            "GetAttributes",
+            &(),
+        )
         .await
         .ok()?;
     let attrs = wire::parse_string_map(msg.body().data().bytes()).ok()?;

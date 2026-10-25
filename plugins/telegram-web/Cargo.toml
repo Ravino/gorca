@@ -1,0 +1,23 @@
+[package]
+name = "gorca-plugin-telegram-web"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "First-party gorca plugin for Telegram Web A and K (ADR-0026 P-3): chat-row names and message roles as facts."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "=0.46.0"
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"
+strip = true
+codegen-units = 1
+
+# A guest is built on its own (target wasm32-wasip2), never as part of the host workspace.
+[workspace]

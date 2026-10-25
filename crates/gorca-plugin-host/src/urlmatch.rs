@@ -70,7 +70,11 @@ struct Parts<'a> {
 
 fn split(s: &str) -> Option<Parts<'_>> {
     let (scheme, rest) = s.split_once("://")?;
-    if scheme.is_empty() || !scheme.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'-' || b == b'.') {
+    if scheme.is_empty()
+        || !scheme
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'-' || b == b'.')
+    {
         return None;
     }
     let (rest, fragment) = match rest.split_once('#') {
@@ -469,7 +473,13 @@ mod tests {
 
     #[test]
     fn only_http_and_https_are_web_schemes() {
-        for bad in ["ftp://x.org/*", "javascript://x.org/*", "chrome://settings/*", "file:///etc/*", "x.org/*"] {
+        for bad in [
+            "ftp://x.org/*",
+            "javascript://x.org/*",
+            "chrome://settings/*",
+            "file:///etc/*",
+            "x.org/*",
+        ] {
             assert!(UrlPattern::parse(bad).is_err(), "{bad}");
         }
         let dev = UrlPattern::parse_dev("file:///a/tests/*").expect("dev");

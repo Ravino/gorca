@@ -34,6 +34,7 @@ gorca-speech = { workspace = true }
 gorca-speech-voicego = { workspace = true }
 gorca-speech-ssip = { workspace = true }
 gorca-ext-host = { workspace = true }
+gorca-plugin-host = { workspace = true }
 thiserror = { workspace = true }
 zbus = { workspace = true }
 serde = { workspace = true }
@@ -54,3 +55,5 @@ workspace = true
 gorca-testkit = { workspace = true }
 serde_json = "1"
 tokio = { workspace = true, features = ["test-util"] }
+tempfile = "3"
+gorca-fuse = { workspace = true }

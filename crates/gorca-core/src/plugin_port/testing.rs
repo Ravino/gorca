@@ -24,7 +24,9 @@ impl Echo {
         for j in jobs {
             *self.jobs.lock().unwrap() += 1;
             for d in &j.nodes {
-                let Some(r) = j.rows.rows.get(&d.node) else { continue };
+                let Some(r) = j.rows.rows.get(&d.node) else {
+                    continue;
+                };
                 let mut reads = vec![d.node];
                 let mut text = String::new();
                 for c in &r.children {

@@ -237,9 +237,14 @@ impl FuseStage {
         }
         let scope = ScopeSpec {
             app: Arc::clone(&pl.app),
-            url: if pl.service.wants_url() { url.cloned() } else { None },
+            url: if pl.service.wants_url() {
+                url.cloned()
+            } else {
+                None
+            },
             engine: pl.engine,
             verified: pl.verified,
+            doc: true,
         };
         if pl.service.wants_url() && scope.url.is_none() {
             return;
@@ -1253,11 +1258,19 @@ mod tests {
         s.apply(&[DocDelta::Upsert(vec![node(1, SemRole::DocumentWeb, None)])]);
         assert_eq!(*jobs.lock().unwrap(), 1);
         // The child the call read changed: one more call, new value.
-        s.apply(&[DocDelta::Upsert(vec![node(3, SemRole::StaticText, Some("Bob"))])]);
+        s.apply(&[DocDelta::Upsert(vec![node(
+            3,
+            SemRole::StaticText,
+            Some("Bob"),
+        )])]);
         assert_eq!(name_of(&s, 2).as_deref(), Some("Bob!"));
         assert_eq!(*jobs.lock().unwrap(), 2);
         // The same row again is not a change.
-        s.apply(&[DocDelta::Upsert(vec![node(3, SemRole::StaticText, Some("Bob"))])]);
+        s.apply(&[DocDelta::Upsert(vec![node(
+            3,
+            SemRole::StaticText,
+            Some("Bob"),
+        )])]);
         assert_eq!(*jobs.lock().unwrap(), 2);
     }
 
@@ -1289,7 +1302,10 @@ mod tests {
             children: smallvec::SmallVec::new(),
         }]);
         assert!(s.sem(SrcNodeId(2)).is_none());
-        s.apply(&[reset(9), DocDelta::Upsert(vec![node(9, SemRole::DocumentWeb, None)])]);
+        s.apply(&[
+            reset(9),
+            DocDelta::Upsert(vec![node(9, SemRole::DocumentWeb, None)]),
+        ]);
         assert_eq!(s.len(), 1);
     }
 
@@ -1297,12 +1313,8 @@ mod tests {
     fn an_unverified_document_gets_no_url_scoped_plugin() {
         // The service refuses an unverified scope; the stage then runs exactly as without.
         let (service, jobs) = svc_with(true, true);
-        let mut s = FuseStage::new(setup()).with_plugins(
-            service,
-            Arc::from("web.telegram.org"),
-            1,
-            false,
-        );
+        let mut s =
+            FuseStage::new(setup()).with_plugins(service, Arc::from("web.telegram.org"), 1, false);
         let mut batch = vec![reset(1), hint("https://web.telegram.org/a/")];
         batch.extend(chat_doc("Alice"));
         s.apply(&batch);

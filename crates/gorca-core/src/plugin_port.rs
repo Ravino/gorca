@@ -29,8 +29,8 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use gorca_fuse::{Ivm, NodeIdx, Payload, PatchSource, Quirks, SourceInfo, SourceState, Val, Write};
 use gorca_fuse::{AnchorId, FactIn, Grant, Input};
+use gorca_fuse::{Ivm, NodeIdx, PatchSource, Payload, Quirks, SourceInfo, SourceState, Val, Write};
 use gorca_model::fact::{Basis, SourceId};
 use gorca_model::sem::{Group, GroupClass, GroupCode, SemRole, SourceClass, TrustTier};
 
@@ -77,8 +77,10 @@ pub struct ScopeSpec {
     pub url: Option<Arc<str>>,
     /// Engine registry code.
     pub engine: u16,
-    /// The identity was verified by the connector.
+    /// The identity was verified from the peer's credentials ([`scope_identity`]).
     pub verified: bool,
+    /// A document scope (one web document, K2 plugins); else an application scope (K1).
+    pub doc: bool,
 }
 
 /// The S0 projection of one node a plugin may read.
@@ -300,8 +302,11 @@ pub trait PluginService: Send + Sync + std::fmt::Debug {
     fn wants_url(&self) -> bool;
     /// Open the plugins matching `scope`; `None` when nothing matches. `wake` must be called
     /// (non-blocking) whenever a reply is waiting, so the writer drains it in a later turn.
-    fn open(&self, scope: &ScopeSpec, wake: Arc<dyn Fn() + Send + Sync>)
-    -> Option<Box<dyn ScopeRunner>>;
+    fn open(
+        &self,
+        scope: &ScopeSpec,
+        wake: Arc<dyn Fn() + Send + Sync>,
+    ) -> Option<Box<dyn ScopeRunner>>;
     /// The keypress-path governor shared by every writer.
     fn governor(&self) -> Arc<Governor>;
 }
@@ -748,11 +753,7 @@ impl PluginBridge {
         })
     }
 
-    fn jobs_for(
-        &mut self,
-        per_plugin: Vec<Vec<Dirty>>,
-        tree: &dyn Tree,
-    ) -> Vec<Job> {
+    fn jobs_for(&mut self, per_plugin: Vec<Vec<Dirty>>, tree: &dyn Tree) -> Vec<Job> {
         let targets: Vec<u32> = per_plugin
             .iter()
             .flat_map(|v| v.iter().map(|d| d.node))
@@ -821,7 +822,8 @@ impl PluginBridge {
             return self.drain();
         }
         self.stats.interactive_jobs += jobs.len() as u64;
-        let may = t0_ns.saturating_sub(self.last_wait_ns) >= WAIT_EVERY_NS || self.last_wait_ns == 0;
+        let may =
+            t0_ns.saturating_sub(self.last_wait_ns) >= WAIT_EVERY_NS || self.last_wait_ns == 0;
         let wait = may && self.gov.claim(t0_ns);
         if wait {
             self.last_wait_ns = t0_ns;
@@ -898,7 +900,12 @@ impl PluginBridge {
                 if let Some(m) = self.masked.get_mut(r.plugin) {
                     *m = true;
                 }
-                let keys: Vec<_> = self.live.keys().filter(|(p, _)| *p == r.plugin).copied().collect();
+                let keys: Vec<_> = self
+                    .live
+                    .keys()
+                    .filter(|(p, _)| *p == r.plugin)
+                    .copied()
+                    .collect();
                 for k in keys {
                     self.drop_token(k);
                 }
@@ -916,7 +923,11 @@ impl PluginBridge {
                 let nodes: Vec<(u32, u16)> = self
                     .watched
                     .iter()
-                    .filter_map(|(n, w)| w.iter().find(|(p, _)| *p == r.plugin).map(|(_, w)| (*n, *w)))
+                    .filter_map(|(n, w)| {
+                        w.iter()
+                            .find(|(p, _)| *p == r.plugin)
+                            .map(|(_, w)| (*n, *w))
+                    })
                     .collect();
                 for (n, w) in nodes {
                     self.mark_dirty(r.plugin, n, w, cause::ATTACH);
@@ -986,7 +997,10 @@ impl PluginBridge {
             return;
         }
         self.stats.admitted += 1;
-        let tier = self.metas.get(plugin).map_or(PluginTier::Untrusted, |m| m.tier);
+        let tier = self
+            .metas
+            .get(plugin)
+            .map_or(PluginTier::Untrusted, |m| m.tier);
         let name = self
             .metas
             .get(plugin)
@@ -1008,7 +1022,8 @@ impl PluginBridge {
                 };
                 // Stratum by tier: only a computed patch of a first-party or user-trusted
                 // plugin is S1; everything else is S4 and hedged.
-                let s1 = e.patch && matches!(tier, PluginTier::FirstParty | PluginTier::TrustedThirdParty);
+                let s1 = e.patch
+                    && matches!(tier, PluginTier::FirstParty | PluginTier::TrustedThirdParty);
                 self.stats.facts += 1;
                 if s1 {
                     let taint = match tier {
@@ -1051,7 +1066,10 @@ impl PluginBridge {
             let old = self.drop_token((plugin, *tgt));
             if let Some(old) = old {
                 for (node, group, patch) in old.facts {
-                    if !new_facts.iter().any(|(n, g, p)| *n == node && *g == group && *p == patch) {
+                    if !new_facts
+                        .iter()
+                        .any(|(n, g, p)| *n == node && *g == group && *p == patch)
+                    {
                         self.ops.push(FactOp::Retract {
                             node,
                             plugin,

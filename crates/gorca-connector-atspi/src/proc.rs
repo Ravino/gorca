@@ -189,7 +189,7 @@ fn mount_ns(pid: &str) -> Option<std::path::PathBuf> {
 ///    trustworthy because only root could have put it there;
 /// 3. a **flatpak** sandbox (another mount namespace with a `.flatpak-info` naming the app and
 ///    a matching systemd scope): identity `flatpak:<app id>`, which the caller treats as
-///    **sandboxed-unverified**, see [`is_sandboxed_unverified`].
+///    **sandboxed-unverified** (the core never treats a `flatpak:` identity as verified).
 ///
 /// Anything else (a copy under `$HOME` or `/tmp`, a deleted binary, another mount namespace
 /// without the evidence above, an unreadable `/proc`) is unverified. The self-reported
@@ -213,11 +213,6 @@ pub fn verified_identity(pid: u32, start: u64) -> Option<String> {
     (read_proc_info(pid).start == Some(start))
         .then_some(found)
         .flatten()
-}
-
-/// The identity of a flatpak sandbox is evidence of a weaker kind (see [`verified_identity`]).
-pub fn is_sandboxed_unverified(identity: &str) -> bool {
-    identity.starts_with("flatpak:")
 }
 
 fn identity_unchecked(pid: u32) -> Option<String> {
@@ -350,7 +345,12 @@ mod tests {
         std::fs::set_permissions(&copy, std::fs::Permissions::from_mode(0o755)).expect("chmod");
         let mut c = spawn(copy.to_str().expect("utf8"));
         let id = verified_identity(c.id(), start_of(&c));
-        assert_eq!(id, None, "a binary called firefox in {} is not Firefox", dir.path().display());
+        assert_eq!(
+            id,
+            None,
+            "a binary called firefox in {} is not Firefox",
+            dir.path().display()
+        );
         // Deleted while running: unverified as well.
         std::fs::remove_file(&copy).expect("rm");
         assert_eq!(verified_identity(c.id(), start_of(&c)), None);
@@ -358,10 +358,16 @@ mod tests {
         let _ = c.wait();
         // And the path rules on their own.
         assert!(!is_trusted_system_path(&copy));
-        assert!(!is_trusted_system_path(std::path::Path::new("/usr/bin/sleep (deleted)")));
+        assert!(!is_trusted_system_path(std::path::Path::new(
+            "/usr/bin/sleep (deleted)"
+        )));
         assert!(!is_trusted_system_path(std::path::Path::new("/var/tmp/x")));
-        assert!(!is_trusted_system_path(std::path::Path::new("/usr/bin/does-not-exist")));
-        assert!(is_trusted_system_path(std::path::Path::new("/usr/bin/sleep")));
+        assert!(!is_trusted_system_path(std::path::Path::new(
+            "/usr/bin/does-not-exist"
+        )));
+        assert!(is_trusted_system_path(std::path::Path::new(
+            "/usr/bin/sleep"
+        )));
     }
 
     #[test]
@@ -394,16 +400,23 @@ mod tests {
         let mut ns_differs = false;
         for _ in 0..100 {
             std::thread::sleep(std::time::Duration::from_millis(20));
-            if mount_ns(&pid.to_string()).is_some() && mount_ns(&pid.to_string()) != mount_ns("self") {
+            if mount_ns(&pid.to_string()).is_some()
+                && mount_ns(&pid.to_string()) != mount_ns("self")
+            {
                 ns_differs = true;
                 break;
             }
         }
-        let id = read_proc_info(pid).start.and_then(|st| verified_identity(pid, st));
+        let id = read_proc_info(pid)
+            .start
+            .and_then(|st| verified_identity(pid, st));
         let _ = c.kill();
         let _ = c.wait();
         if ns_differs {
-            assert_eq!(id, None, "a system binary in a foreign mount namespace is not verified");
+            assert_eq!(
+                id, None,
+                "a system binary in a foreign mount namespace is not verified"
+            );
         }
     }
 
@@ -417,22 +430,34 @@ mod tests {
     #[test]
     fn flatpak_and_snap_identities_are_ids_not_binary_names() {
         let info = "[Application]\nname=org.mozilla.firefox\nruntime=runtime/x\n[Instance]\ninstance-id=1\n";
-        assert_eq!(parse_flatpak_info(info).as_deref(), Some("org.mozilla.firefox"));
+        assert_eq!(
+            parse_flatpak_info(info).as_deref(),
+            Some("org.mozilla.firefox")
+        );
         let scope = Some("app-flatpak-org.mozilla.firefox-1234.scope");
-        assert_eq!(flatpak_identity(info, scope).as_deref(), Some("org.mozilla.firefox"));
+        assert_eq!(
+            flatpak_identity(info, scope).as_deref(),
+            Some("org.mozilla.firefox")
+        );
         // The scope must agree with the info file; a mismatch or no scope is unverified.
-        assert_eq!(flatpak_identity(info, Some("app-flatpak-org.evil.app-1.scope")), None);
+        assert_eq!(
+            flatpak_identity(info, Some("app-flatpak-org.evil.app-1.scope")),
+            None
+        );
         assert_eq!(flatpak_identity(info, None), None);
         // Case-sensitive: a differently-cased id is a different application.
-        assert_eq!(flatpak_identity(info, Some("app-flatpak-org.mozilla.Firefox-1.scope")), None);
+        assert_eq!(
+            flatpak_identity(info, Some("app-flatpak-org.mozilla.Firefox-1.scope")),
+            None
+        );
         assert_eq!(parse_flatpak_info("[Application]\nname=bad name\n"), None);
-        assert_eq!(snap_identity("snap.chromium.chromium (enforce)\n").as_deref(), Some("chromium"));
+        assert_eq!(
+            snap_identity("snap.chromium.chromium (enforce)\n").as_deref(),
+            Some("chromium")
+        );
         // Complain mode confines nothing: not evidence.
         assert_eq!(snap_identity("snap.chromium.chromium (complain)"), None);
         assert_eq!(snap_identity("snap.chromium.chromium"), None);
-        assert!(is_sandboxed_unverified("flatpak:org.mozilla.firefox"));
-        assert!(!is_sandboxed_unverified("snap:chromium"));
-        assert!(!is_sandboxed_unverified("firefox"));
         assert_eq!(snap_identity("unconfined"), None);
         assert_eq!(snap_identity("snap..x"), None);
     }

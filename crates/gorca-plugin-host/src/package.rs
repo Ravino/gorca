@@ -11,8 +11,8 @@ use std::path::Path;
 use sha2::{Digest, Sha256};
 use toml_edit::DocumentMut;
 
-use crate::urlmatch::UrlPattern;
 use crate::trust::{PermError, Perms, TrustTier, effective_grants, parse_perm};
+use crate::urlmatch::UrlPattern;
 
 /// Component file cap (§2.5.3).
 pub const MAX_COMPONENT_BYTES: u64 = 8 << 20;
@@ -425,7 +425,10 @@ mod tests {
         assert!(!m.matches_scope("gedit", Some("https://web.telegram.org/a/")));
         assert!(!m.matches_scope("firefox", Some("https://web.telegram.org.evil.com/a/")));
         assert!(
-            parse_manifest(&format!("{M}[match]\nurls = [\"https://web.telegram.org*\"]\n")).is_err()
+            parse_manifest(&format!(
+                "{M}[match]\nurls = [\"https://web.telegram.org*\"]\n"
+            ))
+            .is_err()
         );
         assert_eq!(m.watches.len(), 2);
         assert!(m.watches[0].matches(Some("div"), Some("Message x"), None));

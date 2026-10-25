@@ -569,7 +569,11 @@ impl FuseWriter {
         !self.queue.is_empty()
             || !self.awaiting.is_empty()
             || self.ivm.pending() > 0
-            || self.plugins.as_ref().and_then(|p| p.open.as_ref()).is_some_and(|(b, _)| b.has_work())
+            || self
+                .plugins
+                .as_ref()
+                .and_then(|p| p.open.as_ref())
+                .is_some_and(|(b, _)| b.has_work())
             || !self.pending_inval.is_empty()
             || self.inval_sweep.is_some()
     }

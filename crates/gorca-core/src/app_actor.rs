@@ -848,10 +848,8 @@ impl AppActor {
                     self.profile = AppProfile::for_app(&info);
                     self.fuse.set_tables(info.sem_tables);
                     if let Some(svc) = &self.plugin_service {
-                        let (app, verified) = crate::plugin_port::scope_identity(
-                            &info.app_name,
-                            info.exe.as_ref(),
-                        );
+                        let (app, verified) =
+                            crate::plugin_port::scope_identity(&info.app_name, info.exe.as_ref());
                         self.fuse.set_plugins(
                             Arc::clone(svc),
                             crate::plugin_port::ScopeSpec {
@@ -859,6 +857,7 @@ impl AppActor {
                                 url: None,
                                 engine: 0,
                                 verified: verified || info.verified_shell,
+                                doc: false,
                             },
                         );
                     }

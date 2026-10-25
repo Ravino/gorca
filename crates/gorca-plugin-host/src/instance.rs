@@ -56,6 +56,21 @@ impl std::fmt::Debug for Loaded {
 }
 
 impl Loaded {
+    /// Compile (through the verified cache when there is one), link and pre-instantiate the
+    /// component in `wasm`, whose sha256 is `sha256`. Blocking: call it off the async executor.
+    pub fn from_package(
+        engine: &Engine,
+        cache: Option<&crate::cache::CwasmCache>,
+        wasm: &[u8],
+        sha256: &[u8; 32],
+    ) -> Result<Self, String> {
+        let component = match cache {
+            Some(c) => c.load(engine, wasm, sha256).map_err(|e| e.to_string())?,
+            None => Component::new(engine, wasm).map_err(|e| e.to_string())?,
+        };
+        Self::new(engine, &component).map_err(|e| e.to_string())
+    }
+
     /// Link the host imports and pre-instantiate. Imports outside the WIT world (the WASI the
     /// Rust standard library pulls in) trap on use: a plugin has no ambient capability.
     pub fn new(engine: &Engine, component: &Component) -> wasmtime::Result<Self> {

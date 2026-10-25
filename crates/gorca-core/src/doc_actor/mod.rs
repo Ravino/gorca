@@ -896,10 +896,13 @@ async fn run(
         ..
     } = spec;
     // The source hands over the fusion tables of its engine before it is attached.
-    let fuse = source.fuse_setup().map(FuseStage::new).map(|f| match plugins {
-        Some(p) => f.with_plugins(p.service, p.app, p.engine, p.verified),
-        None => f,
-    });
+    let fuse = source
+        .fuse_setup()
+        .map(FuseStage::new)
+        .map(|f| match plugins {
+            Some(p) => f.with_plugins(p.service, p.app, p.engine, p.verified),
+            None => f,
+        });
     let (sink, mut deltas): (_, DeltaReceiver) = delta_channel(SINK_CAPACITY);
     let (req_tx, req_rx) = mpsc::channel(REQUEST_CAPACITY);
     let (join_port, _join_rx) = join_channel(1);

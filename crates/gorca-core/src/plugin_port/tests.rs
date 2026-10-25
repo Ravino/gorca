@@ -100,7 +100,11 @@ fn bridge(tiers: &[PluginTier]) -> (PluginBridge, Arc<Mutex<Shared>>) {
         sh: Arc::clone(&sh),
     };
     (
-        PluginBridge::new(Box::new(runner), Arc::new(Governor::default()), ScopeSpec::default()),
+        PluginBridge::new(
+            Box::new(runner),
+            Arc::new(Governor::default()),
+            ScopeSpec::default(),
+        ),
         sh,
     )
 }
@@ -156,21 +160,32 @@ fn a_watched_row_is_derived_in_the_background_and_a_first_party_patch_is_s1() {
     for n in [0, 1, 3] {
         assert!(job.rows.rows.contains_key(&n), "node {n}");
     }
-    sh.lock()
-        .unwrap()
-        .replies
-        .push(done(0, job.t, 1, vec![name_effect(1, "Alice, 1 unread", true)], vec![1, 3]));
+    sh.lock().unwrap().replies.push(done(
+        0,
+        job.t,
+        1,
+        vec![name_effect(1, "Alice, 1 unread", true)],
+        vec![1, 3],
+    ));
     assert!(b.drain());
     let ops = b.take_ops();
     assert!(matches!(
         ops.as_slice(),
-        [FactOp::Patch { node: 1, taint: TrustTier::T0Core, .. }]
+        [FactOp::Patch {
+            node: 1,
+            taint: TrustTier::T0Core,
+            ..
+        }]
     ));
     assert_eq!(b.live_len(), 1);
     // PF-4: admitting a fact enqueued nothing.
     assert_eq!(b.pending_len(), 0);
     b.background(&tree());
-    assert_eq!(sh.lock().unwrap().jobs.len(), 1, "no job followed the admission");
+    assert_eq!(
+        sh.lock().unwrap().jobs.len(),
+        1,
+        "no job followed the admission"
+    );
 }
 
 #[test]
@@ -191,8 +206,18 @@ fn strata_follow_the_tier() {
             .push(done(0, t, 1, vec![name_effect(1, "x", patch)], vec![1]));
         b.drain();
         let got = match b.take_ops().as_slice() {
-            [FactOp::Patch { taint: TrustTier::T0Core, .. }] => "patch",
-            [FactOp::Patch { taint: TrustTier::T3Untrusted, .. }] => "patch-tainted",
+            [
+                FactOp::Patch {
+                    taint: TrustTier::T0Core,
+                    ..
+                },
+            ] => "patch",
+            [
+                FactOp::Patch {
+                    taint: TrustTier::T3Untrusted,
+                    ..
+                },
+            ] => "patch-tainted",
             [FactOp::Inferred { .. }] => "inferred",
             other => panic!("{other:?}"),
         };
@@ -215,7 +240,10 @@ fn a_reply_for_a_view_that_changed_is_dropped_and_rederived() {
         .replies
         .push(done(0, t, 1, vec![name_effect(1, "old", true)], vec![1, 3]));
     b.drain();
-    assert!(b.take_ops().is_empty(), "a stale reply admits nothing (PF-7)");
+    assert!(
+        b.take_ops().is_empty(),
+        "a stale reply admits nothing (PF-7)"
+    );
     assert_eq!(b.stats().stale_dropped, 1);
     assert_eq!(b.pending_len(), 1, "the target is re-derived");
 }
@@ -243,7 +271,11 @@ fn a_change_of_a_read_node_retracts_and_rederives_only_that_target() {
     assert_eq!(b.pending_len(), 1);
     assert!(matches!(
         b.take_ops().as_slice(),
-        [FactOp::Retract { node: 1, patch: true, .. }]
+        [FactOp::Retract {
+            node: 1,
+            patch: true,
+            ..
+        }]
     ));
     assert_eq!(b.live_len(), 0);
     // An identical row is not a change.
@@ -258,10 +290,13 @@ fn a_plugin_sees_only_observed_rows_never_another_plugins_patch() {
     populate(&mut b);
     b.background(&tree());
     let t = sh.lock().unwrap().jobs[0].1.t;
-    sh.lock()
-        .unwrap()
-        .replies
-        .push(done(0, t, 1, vec![name_effect(1, "patched by p0", true)], vec![1]));
+    sh.lock().unwrap().replies.push(done(
+        0,
+        t,
+        1,
+        vec![name_effect(1, "patched by p0", true)],
+        vec![1],
+    ));
     b.drain();
     assert!(!b.take_ops().is_empty());
     b.begin_turn();
@@ -312,7 +347,11 @@ fn focus_derives_only_nodes_without_a_live_fact_and_waits_once_per_path() {
     let t0 = 10_000_000;
     app.interactive(&[1, 0], &tree(), t0);
     doc.interactive(&[1, 0], &tree(), t0 + 50_000);
-    assert_eq!(sh.lock().unwrap().waits, vec![true, false], "one wait per path");
+    assert_eq!(
+        sh.lock().unwrap().waits,
+        vec![true, false],
+        "one wait per path"
+    );
     // A later keypress, outside the window, waits again (once the writer's own limit passed).
     app.begin_turn();
     app.upsert(3, row("changed", ""));
@@ -366,7 +405,10 @@ fn masking_removes_the_plugins_facts_and_unmasking_rederives() {
         body: ReplyBody::Masked,
     });
     b.drain();
-    assert!(matches!(b.take_ops().as_slice(), [FactOp::Mask { plugin: 0 }]));
+    assert!(matches!(
+        b.take_ops().as_slice(),
+        [FactOp::Mask { plugin: 0 }]
+    ));
     assert_eq!(b.live_len(), 0);
     sh.lock().unwrap().replies.push(Reply {
         plugin: 0,
@@ -381,10 +423,19 @@ fn masking_removes_the_plugins_facts_and_unmasking_rederives() {
 #[test]
 fn computed_ops_reach_the_engine_and_leave_with_the_mask() {
     use gorca_fuse::{Budget, Input, NoPatches, NoQuirks, PrimarySlot, Profile, Rules};
-    let mut ivm = Ivm::new(Profile::new(&[PrimarySlot::P0], Rules::aria()), NoQuirks, NoPatches);
+    let mut ivm = Ivm::new(
+        Profile::new(&[PrimarySlot::P0], Rules::aria()),
+        NoQuirks,
+        NoPatches,
+    );
     ivm.add_node(NodeIdx(1), None).unwrap();
     ivm.apply([
-        Input::Life { node: NodeIdx(1), src: PrimarySlot::P0, seq: 1, alive: true },
+        Input::Life {
+            node: NodeIdx(1),
+            src: PrimarySlot::P0,
+            seq: 1,
+            alive: true,
+        },
         Input::Obs {
             node: NodeIdx(1),
             src: PrimarySlot::P0,
@@ -394,12 +445,22 @@ fn computed_ops_reach_the_engine_and_leave_with_the_mask() {
     ]);
     ivm.run(Budget::UNLIMITED);
     let metas = vec![
-        PluginMeta { name: Arc::from("fp"), tier: PluginTier::FirstParty },
-        PluginMeta { name: Arc::from("tp"), tier: PluginTier::Untrusted },
+        PluginMeta {
+            name: Arc::from("fp"),
+            tier: PluginTier::FirstParty,
+        },
+        PluginMeta {
+            name: Arc::from("tp"),
+            tier: PluginTier::Untrusted,
+        },
     ];
     let mut src = PluginSources::register(&mut ivm, &metas);
     let name = |ivm: &Ivm<NoQuirks, NoPatches>| {
-        ivm.entry_view(NodeIdx(1)).unwrap().name.as_deref().map(str::to_owned)
+        ivm.entry_view(NodeIdx(1))
+            .unwrap()
+            .name
+            .as_deref()
+            .map(str::to_owned)
     };
     src.apply(
         &mut ivm,

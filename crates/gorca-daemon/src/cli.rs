@@ -102,6 +102,55 @@ pub struct Options {
     /// `--terminal-policy=auto|native` / `GORCA_TERMINAL_POLICY`: where the terminal policy runs,
     /// with the same meaning as `--shell-policy` for the `ext-vte` component.
     pub terminal_policy: ShellPolicyMode,
+    /// Where the plugin runtime (`[plugins] enabled`) looks for packages and what it adds for
+    /// private-session tests. The directories default from the XDG variables in
+    /// [`Options::with_env`]; nothing is read unless the setting turns plugins on.
+    pub plugins: crate::plugins::PluginOptions,
+}
+
+/// The plugin directories and test knobs from the environment, over `base`:
+/// `GORCA_PLUGINS_DIR` (user packages, default `$XDG_DATA_HOME/gorca/plugins`),
+/// `GORCA_PLUGINS_FIRST_PARTY_DIR` (default `/usr/lib/gorca/addons`), `GORCA_PLUGINS_CACHE_DIR`
+/// (default `$XDG_CACHE_HOME/gorca/plugins-cwasm`) and `GORCA_PLUGINS_URL_EXTRA`
+/// (`id=pattern,id=pattern`: extra URL patterns for a loaded plugin, `file://` allowed; the
+/// private-session test knob).
+fn plugin_options_from_env(
+    mut o: crate::plugins::PluginOptions,
+    get: &impl Fn(&str) -> Option<String>,
+) -> crate::plugins::PluginOptions {
+    let var = |k: &str| get(k).filter(|s| !s.is_empty());
+    let xdg = |xdg: &str, home_rel: &str| {
+        var(xdg)
+            .map(PathBuf::from)
+            .or_else(|| var("HOME").map(|h| PathBuf::from(h).join(home_rel)))
+    };
+    if o.user_dir.is_none() {
+        o.user_dir = var("GORCA_PLUGINS_DIR")
+            .map(PathBuf::from)
+            .or_else(|| xdg("XDG_DATA_HOME", ".local/share").map(|d| d.join("gorca/plugins")));
+    }
+    if o.first_party_dir.is_none() {
+        o.first_party_dir = Some(
+            var("GORCA_PLUGINS_FIRST_PARTY_DIR")
+                .map_or_else(|| PathBuf::from("/usr/lib/gorca/addons"), PathBuf::from),
+        );
+    }
+    if o.cache_dir.is_none() {
+        o.cache_dir = var("GORCA_PLUGINS_CACHE_DIR")
+            .map(PathBuf::from)
+            .or_else(|| xdg("XDG_CACHE_HOME", ".cache").map(|d| d.join("gorca/plugins-cwasm")));
+    }
+    if o.url_extra.is_empty()
+        && let Some(v) = var("GORCA_PLUGINS_URL_EXTRA")
+    {
+        o.url_extra = v
+            .split(',')
+            .filter_map(|p| p.split_once('='))
+            .map(|(id, pat)| (id.trim().to_owned(), pat.trim().to_owned()))
+            .collect();
+    }
+    o.portable = get("GORCA_CPU_DISABLE").as_deref() == Some("all");
+    o
 }
 
 /// Where the Shell policy runs (ADR-0008 amendment 1: one source, two builds).
@@ -319,6 +368,7 @@ impl Options {
                 .filter(|s| !s.is_empty())
                 .map(PathBuf::from);
         }
+        o.plugins = plugin_options_from_env(o.plugins.clone(), &get);
         if o.shell_policy == ShellPolicyMode::Auto
             && let Some(p) = get("GORCA_SHELL_POLICY").and_then(|v| ShellPolicyMode::parse(&v))
         {
