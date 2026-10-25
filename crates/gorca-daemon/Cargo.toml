@@ -12,6 +12,7 @@ name = "gorca"
 path = "src/main.rs"
 
 [dependencies]
+gorca-cpu = { workspace = true }
 gorca-core = { workspace = true }
 ext-gnome-shell = { path = "../../extensions/ext-gnome-shell" }
 ext-vte = { workspace = true }

@@ -34,6 +34,8 @@ pub enum FillChoice {
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Options {
+    /// `--cpu-disable` list (ADR-0027); `GORCA_CPU_DISABLE` is the fallback in `with_env`.
+    pub cpu_disable: Option<String>,
     pub speech: SpeechMode,
     /// The speech language the user's locale gives (`ru` for `ru_RU.UTF-8`); `[speech] language`
     /// overrides it. Empty: `en`.
@@ -153,7 +155,6 @@ fn plugin_options_from_env(
     if o.sched_log.is_none() {
         o.sched_log = var("GORCA_SCHED_LOG").map(PathBuf::from);
     }
-    o.portable = get("GORCA_CPU_DISABLE").as_deref() == Some("all");
     o
 }
 
@@ -249,6 +250,8 @@ OPTIONS:
     --session-address=ADDRESS    session bus address (testing; default: $DBUS_SESSION_BUS_ADDRESS)
     --speech-peer-uid=UID        also trust a speech server running as UID (repeatable; default:
                                  only our own user)
+    --cpu-disable=LIST           diagnostic: run these CPU extensions' kernels portable (comma
+                                 list such as avx2,bmi2, or all); same as GORCA_CPU_DISABLE
     --no-enable                  do not set org.a11y.Status IsEnabled (gorca never writes
                                  ScreenReaderEnabled: that would make GNOME autostart Orca)
     --config=PATH                settings file (default: $XDG_CONFIG_HOME/gorca/gorca.toml)
@@ -373,6 +376,12 @@ impl Options {
                 .map(PathBuf::from);
         }
         o.plugins = plugin_options_from_env(o.plugins.clone(), &get);
+        // The plugin engine follows the same list as the Rust kernels (ADR-0027 CD-W4): only
+        // `all` (or `portable`) changes how guest code is compiled. The list is the one
+        // `main` gave `gorca_cpu::init` (flag over environment).
+        let cpu_list = o.cpu_disable.clone().or_else(|| get("GORCA_CPU_DISABLE"));
+        o.plugins.portable =
+            gorca_cpu::DisableList::parse(cpu_list.as_deref().unwrap_or("")).all;
         if o.shell_policy == ShellPolicyMode::Auto
             && let Some(p) = get("GORCA_SHELL_POLICY").and_then(|v| ShellPolicyMode::parse(&v))
         {
@@ -476,6 +485,21 @@ impl Options {
             ..Self::default()
         }
     }
+}
+
+/// The `--cpu-disable` value in `args`, found by a plain scan that runs no kernel (ADR-0027
+/// CD-1: `gorca_cpu::init` is the first statement of `main`, before `parse`).
+pub fn cpu_disable_arg(args: &[String]) -> Option<String> {
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        if let Some(v) = a.strip_prefix("--cpu-disable=") {
+            return Some(v.to_owned());
+        }
+        if a == "--cpu-disable" {
+            return it.next().cloned();
+        }
+    }
+    None
 }
 
 /// Parse `args` (without the program name).
@@ -617,6 +641,8 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
             "--ext-settings" => {
                 opts.ext_settings = Some(PathBuf::from(value("--ext-settings")?));
             }
+            // Consumed at the top of `main` by `cpu_disable_arg`; kept for the plugin engine.
+            "--cpu-disable" => opts.cpu_disable = Some(value("--cpu-disable")?),
             "--a11y-address" => opts.a11y_address = Some(value("--a11y-address")?),
             "--session-address" => opts.session_address = Some(value("--session-address")?),
             _ => return Err(CliError::Unknown(arg)),
@@ -638,6 +664,23 @@ mod tests {
             Parsed::Run(o) => o,
             Parsed::Help | Parsed::Config(_) => panic!("unexpected help or config"),
         }
+    }
+
+    #[test]
+    fn cpu_disable_flag_is_scanned_and_drives_the_plugin_engine() {
+        let a = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        assert_eq!(cpu_disable_arg(&a(&["--cpu-disable=avx2"])), Some("avx2".into()));
+        assert_eq!(cpu_disable_arg(&a(&["--x", "--cpu-disable", "all"])), Some("all".into()));
+        assert_eq!(cpu_disable_arg(&a(&["--cpu-disable"])), None);
+        assert_eq!(cpu_disable_arg(&a(&[])), None);
+        let env = |k: &str| (k == "GORCA_CPU_DISABLE").then(|| "all".to_owned());
+        assert!(opts(&[]).with_env(env).plugins.portable);
+        let partial = |k: &str| (k == "GORCA_CPU_DISABLE").then(|| "avx2".to_owned());
+        assert!(!opts(&[]).with_env(partial).plugins.portable);
+        // The flag wins over the environment.
+        let o = opts(&["--cpu-disable=avx2"]).with_env(env);
+        assert!(!o.plugins.portable);
+        assert!(opts(&["--cpu-disable=portable"]).with_env(|_| None).plugins.portable);
     }
 
     #[test]

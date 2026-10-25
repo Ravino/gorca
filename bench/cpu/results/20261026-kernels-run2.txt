@@ -1,0 +1,956 @@
+Benchmarking utf8-scalar-count/ascii/portable/16
+Benchmarking utf8-scalar-count/ascii/portable/16: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/portable/16: Collecting 100 samples in estimated 2.0000 s (588M iterations)
+Benchmarking utf8-scalar-count/ascii/portable/16: Analyzing
+utf8-scalar-count/ascii/portable/16
+                        time:   [3.3683 ns 3.3701 ns 3.3721 ns]
+                        thrpt:  [4.4189 GiB/s 4.4216 GiB/s 4.4240 GiB/s]
+                 change:
+                        time:   [−0.0558% +0.1514% +0.3617%] (p = 0.18 > 0.05)
+                        thrpt:  [−0.3604% −0.1512% +0.0558%]
+                        No change in performance detected.
+Found 8 outliers among 100 measurements (8.00%)
+  2 (2.00%) high mild
+  6 (6.00%) high severe
+Benchmarking utf8-scalar-count/ascii/avx2/16
+Benchmarking utf8-scalar-count/ascii/avx2/16: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/avx2/16: Collecting 100 samples in estimated 2.0000 s (1.1B iterations)
+Benchmarking utf8-scalar-count/ascii/avx2/16: Analyzing
+utf8-scalar-count/ascii/avx2/16
+                        time:   [1.7791 ns 1.7799 ns 1.7808 ns]
+                        thrpt:  [8.3678 GiB/s 8.3720 GiB/s 8.3758 GiB/s]
+                 change:
+                        time:   [−0.1507% −0.0308% +0.0929%] (p = 0.65 > 0.05)
+                        thrpt:  [−0.0928% +0.0308% +0.1509%]
+                        No change in performance detected.
+Found 9 outliers among 100 measurements (9.00%)
+  3 (3.00%) low mild
+  3 (3.00%) high mild
+  3 (3.00%) high severe
+Benchmarking utf8-scalar-count/ascii/portable/64
+Benchmarking utf8-scalar-count/ascii/portable/64: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/portable/64: Collecting 100 samples in estimated 2.0000 s (690M iterations)
+Benchmarking utf8-scalar-count/ascii/portable/64: Analyzing
+utf8-scalar-count/ascii/portable/64
+                        time:   [2.8704 ns 2.8723 ns 2.8743 ns]
+                        thrpt:  [20.737 GiB/s 20.752 GiB/s 20.765 GiB/s]
+                 change:
+                        time:   [−0.0602% +0.0156% +0.0917%] (p = 0.70 > 0.05)
+                        thrpt:  [−0.0917% −0.0156% +0.0602%]
+                        No change in performance detected.
+Found 3 outliers among 100 measurements (3.00%)
+  1 (1.00%) high mild
+  2 (2.00%) high severe
+Benchmarking utf8-scalar-count/ascii/avx2/64
+Benchmarking utf8-scalar-count/ascii/avx2/64: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/avx2/64: Collecting 100 samples in estimated 2.0000 s (994M iterations)
+Benchmarking utf8-scalar-count/ascii/avx2/64: Analyzing
+utf8-scalar-count/ascii/avx2/64
+                        time:   [1.9802 ns 1.9819 ns 1.9840 ns]
+                        thrpt:  [30.042 GiB/s 30.075 GiB/s 30.100 GiB/s]
+                 change:
+                        time:   [−0.1693% −0.0680% +0.0352%] (p = 0.23 > 0.05)
+                        thrpt:  [−0.0352% +0.0680% +0.1696%]
+                        No change in performance detected.
+Found 8 outliers among 100 measurements (8.00%)
+  3 (3.00%) low mild
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+Benchmarking utf8-scalar-count/ascii/portable/256
+Benchmarking utf8-scalar-count/ascii/portable/256: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/portable/256: Collecting 100 samples in estimated 2.0000 s (325M iterations)
+Benchmarking utf8-scalar-count/ascii/portable/256: Analyzing
+utf8-scalar-count/ascii/portable/256
+                        time:   [6.1145 ns 6.1206 ns 6.1268 ns]
+                        thrpt:  [38.914 GiB/s 38.954 GiB/s 38.992 GiB/s]
+                 change:
+                        time:   [−0.0531% +0.1152% +0.2750%] (p = 0.17 > 0.05)
+                        thrpt:  [−0.2742% −0.1151% +0.0531%]
+                        No change in performance detected.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high severe
+Benchmarking utf8-scalar-count/ascii/avx2/256
+Benchmarking utf8-scalar-count/ascii/avx2/256: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/avx2/256: Collecting 100 samples in estimated 2.0000 s (829M iterations)
+Benchmarking utf8-scalar-count/ascii/avx2/256: Analyzing
+utf8-scalar-count/ascii/avx2/256
+                        time:   [2.3779 ns 2.3806 ns 2.3838 ns]
+                        thrpt:  [100.01 GiB/s 100.15 GiB/s 100.27 GiB/s]
+                 change:
+                        time:   [−0.7991% −0.1879% +0.1775%] (p = 0.65 > 0.05)
+                        thrpt:  [−0.1772% +0.1883% +0.8055%]
+                        No change in performance detected.
+Found 13 outliers among 100 measurements (13.00%)
+  8 (8.00%) high mild
+  5 (5.00%) high severe
+Benchmarking utf8-scalar-count/ascii/portable/1024
+Benchmarking utf8-scalar-count/ascii/portable/1024: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/portable/1024: Collecting 100 samples in estimated 2.0000 s (86M iterations)
+Benchmarking utf8-scalar-count/ascii/portable/1024: Analyzing
+utf8-scalar-count/ascii/portable/1024
+                        time:   [22.944 ns 22.954 ns 22.964 ns]
+                        thrpt:  [41.529 GiB/s 41.547 GiB/s 41.565 GiB/s]
+                 change:
+                        time:   [−0.1211% −0.0210% +0.0791%] (p = 0.68 > 0.05)
+                        thrpt:  [−0.0791% +0.0210% +0.1213%]
+                        No change in performance detected.
+Found 7 outliers among 100 measurements (7.00%)
+  4 (4.00%) high mild
+  3 (3.00%) high severe
+Benchmarking utf8-scalar-count/ascii/avx2/1024
+Benchmarking utf8-scalar-count/ascii/avx2/1024: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/avx2/1024: Collecting 100 samples in estimated 2.0000 s (413M iterations)
+Benchmarking utf8-scalar-count/ascii/avx2/1024: Analyzing
+utf8-scalar-count/ascii/avx2/1024
+                        time:   [4.7943 ns 4.7961 ns 4.7978 ns]
+                        thrpt:  [198.77 GiB/s 198.84 GiB/s 198.92 GiB/s]
+                 change:
+                        time:   [−17.538% −17.422% −17.320%] (p = 0.00 < 0.05)
+                        thrpt:  [+20.948% +21.098% +21.268%]
+                        Performance has improved.
+Found 8 outliers among 100 measurements (8.00%)
+  1 (1.00%) low mild
+  3 (3.00%) high mild
+  4 (4.00%) high severe
+Benchmarking utf8-scalar-count/ascii/portable/4096
+Benchmarking utf8-scalar-count/ascii/portable/4096: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/portable/4096: Collecting 100 samples in estimated 2.0001 s (22M iterations)
+Benchmarking utf8-scalar-count/ascii/portable/4096: Analyzing
+utf8-scalar-count/ascii/portable/4096
+                        time:   [90.826 ns 90.865 ns 90.907 ns]
+                        thrpt:  [41.963 GiB/s 41.982 GiB/s 42.000 GiB/s]
+                 change:
+                        time:   [−0.1698% −0.0444% +0.0629%] (p = 0.47 > 0.05)
+                        thrpt:  [−0.0629% +0.0444% +0.1701%]
+                        No change in performance detected.
+Found 3 outliers among 100 measurements (3.00%)
+  2 (2.00%) high mild
+  1 (1.00%) high severe
+Benchmarking utf8-scalar-count/ascii/avx2/4096
+Benchmarking utf8-scalar-count/ascii/avx2/4096: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/avx2/4096: Collecting 100 samples in estimated 2.0000 s (124M iterations)
+Benchmarking utf8-scalar-count/ascii/avx2/4096: Analyzing
+utf8-scalar-count/ascii/avx2/4096
+                        time:   [15.804 ns 15.821 ns 15.844 ns]
+                        thrpt:  [240.77 GiB/s 241.12 GiB/s 241.38 GiB/s]
+                 change:
+                        time:   [−18.549% −18.458% −18.359%] (p = 0.00 < 0.05)
+                        thrpt:  [+22.488% +22.636% +22.773%]
+                        Performance has improved.
+Found 6 outliers among 100 measurements (6.00%)
+  2 (2.00%) high mild
+  4 (4.00%) high severe
+Benchmarking utf8-scalar-count/ascii/portable/65536
+Benchmarking utf8-scalar-count/ascii/portable/65536: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/portable/65536: Collecting 100 samples in estimated 2.0033 s (1.4M iterations)
+Benchmarking utf8-scalar-count/ascii/portable/65536: Analyzing
+utf8-scalar-count/ascii/portable/65536
+                        time:   [1.4546 µs 1.4552 µs 1.4558 µs]
+                        thrpt:  [41.927 GiB/s 41.944 GiB/s 41.959 GiB/s]
+                 change:
+                        time:   [−0.2996% −0.0832% +0.0721%] (p = 0.45 > 0.05)
+                        thrpt:  [−0.0720% +0.0833% +0.3005%]
+                        No change in performance detected.
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+Benchmarking utf8-scalar-count/ascii/avx2/65536
+Benchmarking utf8-scalar-count/ascii/avx2/65536: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/ascii/avx2/65536: Collecting 100 samples in estimated 2.0027 s (3.6M iterations)
+Benchmarking utf8-scalar-count/ascii/avx2/65536: Analyzing
+utf8-scalar-count/ascii/avx2/65536
+                        time:   [554.85 ns 555.06 ns 555.27 ns]
+                        thrpt:  [109.92 GiB/s 109.96 GiB/s 110.00 GiB/s]
+                 change:
+                        time:   [−0.1167% −0.0498% +0.0165%] (p = 0.15 > 0.05)
+                        thrpt:  [−0.0165% +0.0498% +0.1168%]
+                        No change in performance detected.
+Found 4 outliers among 100 measurements (4.00%)
+  3 (3.00%) high mild
+  1 (1.00%) high severe
+Benchmarking utf8-scalar-count/cyrillic/portable/16
+Benchmarking utf8-scalar-count/cyrillic/portable/16: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/portable/16: Collecting 100 samples in estimated 2.0000 s (345M iterations)
+Benchmarking utf8-scalar-count/cyrillic/portable/16: Analyzing
+utf8-scalar-count/cyrillic/portable/16
+                        time:   [5.8012 ns 5.8040 ns 5.8071 ns]
+                        thrpt:  [4.9717 GiB/s 4.9743 GiB/s 4.9767 GiB/s]
+                 change:
+                        time:   [−0.4252% −0.0046% +0.4278%] (p = 0.98 > 0.05)
+                        thrpt:  [−0.4260% +0.0046% +0.4271%]
+                        No change in performance detected.
+Found 17 outliers among 100 measurements (17.00%)
+  1 (1.00%) high mild
+  16 (16.00%) high severe
+Benchmarking utf8-scalar-count/cyrillic/avx2/16
+Benchmarking utf8-scalar-count/cyrillic/avx2/16: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/avx2/16: Collecting 100 samples in estimated 2.0000 s (555M iterations)
+Benchmarking utf8-scalar-count/cyrillic/avx2/16: Analyzing
+utf8-scalar-count/cyrillic/avx2/16
+                        time:   [3.5714 ns 3.5727 ns 3.5740 ns]
+                        thrpt:  [8.0781 GiB/s 8.0811 GiB/s 8.0840 GiB/s]
+                 change:
+                        time:   [−0.2076% −0.0617% +0.0492%] (p = 0.39 > 0.05)
+                        thrpt:  [−0.0492% +0.0618% +0.2080%]
+                        No change in performance detected.
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) low mild
+  2 (2.00%) high mild
+  1 (1.00%) high severe
+Benchmarking utf8-scalar-count/cyrillic/portable/64
+Benchmarking utf8-scalar-count/cyrillic/portable/64: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/portable/64: Collecting 100 samples in estimated 2.0000 s (501M iterations)
+Benchmarking utf8-scalar-count/cyrillic/portable/64: Analyzing
+utf8-scalar-count/cyrillic/portable/64
+                        time:   [3.9390 ns 3.9415 ns 3.9444 ns]
+                        thrpt:  [28.333 GiB/s 28.354 GiB/s 28.373 GiB/s]
+                 change:
+                        time:   [−0.0740% +0.0185% +0.1077%] (p = 0.70 > 0.05)
+                        thrpt:  [−0.1076% −0.0185% +0.0741%]
+                        No change in performance detected.
+Found 6 outliers among 100 measurements (6.00%)
+  1 (1.00%) low mild
+  4 (4.00%) high mild
+  1 (1.00%) high severe
+Benchmarking utf8-scalar-count/cyrillic/avx2/64
+Benchmarking utf8-scalar-count/cyrillic/avx2/64: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/avx2/64: Collecting 100 samples in estimated 2.0000 s (560M iterations)
+Benchmarking utf8-scalar-count/cyrillic/avx2/64: Analyzing
+utf8-scalar-count/cyrillic/avx2/64
+                        time:   [3.5713 ns 3.5726 ns 3.5741 ns]
+                        thrpt:  [31.269 GiB/s 31.282 GiB/s 31.294 GiB/s]
+                 change:
+                        time:   [−0.1173% −0.0526% +0.0089%] (p = 0.11 > 0.05)
+                        thrpt:  [−0.0089% +0.0527% +0.1175%]
+                        No change in performance detected.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high severe
+Benchmarking utf8-scalar-count/cyrillic/portable/256
+Benchmarking utf8-scalar-count/cyrillic/portable/256: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/portable/256: Collecting 100 samples in estimated 2.0000 s (166M iterations)
+Benchmarking utf8-scalar-count/cyrillic/portable/256: Analyzing
+utf8-scalar-count/cyrillic/portable/256
+                        time:   [11.960 ns 11.964 ns 11.968 ns]
+                        thrpt:  [37.274 GiB/s 37.287 GiB/s 37.300 GiB/s]
+                 change:
+                        time:   [−0.2260% −0.1397% −0.0577%] (p = 0.00 < 0.05)
+                        thrpt:  [+0.0578% +0.1399% +0.2265%]
+                        Change within noise threshold.
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) low mild
+  3 (3.00%) high mild
+Benchmarking utf8-scalar-count/cyrillic/avx2/256
+Benchmarking utf8-scalar-count/cyrillic/avx2/256: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/avx2/256: Collecting 100 samples in estimated 2.0000 s (348M iterations)
+Benchmarking utf8-scalar-count/cyrillic/avx2/256: Analyzing
+utf8-scalar-count/cyrillic/avx2/256
+                        time:   [5.7424 ns 5.7464 ns 5.7524 ns]
+                        thrpt:  [77.550 GiB/s 77.632 GiB/s 77.686 GiB/s]
+                 change:
+                        time:   [−0.2786% −0.1894% −0.1034%] (p = 0.00 < 0.05)
+                        thrpt:  [+0.1035% +0.1898% +0.2793%]
+                        Change within noise threshold.
+Found 4 outliers among 100 measurements (4.00%)
+  2 (2.00%) high mild
+  2 (2.00%) high severe
+Benchmarking utf8-scalar-count/cyrillic/portable/1024
+Benchmarking utf8-scalar-count/cyrillic/portable/1024: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/portable/1024: Collecting 100 samples in estimated 2.0001 s (46M iterations)
+Benchmarking utf8-scalar-count/cyrillic/portable/1024: Analyzing
+utf8-scalar-count/cyrillic/portable/1024
+                        time:   [42.912 ns 42.930 ns 42.949 ns]
+                        thrpt:  [41.504 GiB/s 41.522 GiB/s 41.540 GiB/s]
+                 change:
+                        time:   [−0.1728% −0.0542% +0.0665%] (p = 0.38 > 0.05)
+                        thrpt:  [−0.0665% +0.0542% +0.1731%]
+                        No change in performance detected.
+Found 4 outliers among 100 measurements (4.00%)
+  2 (2.00%) high mild
+  2 (2.00%) high severe
+Benchmarking utf8-scalar-count/cyrillic/avx2/1024
+Benchmarking utf8-scalar-count/cyrillic/avx2/1024: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/avx2/1024: Collecting 100 samples in estimated 2.0000 s (177M iterations)
+Benchmarking utf8-scalar-count/cyrillic/avx2/1024: Analyzing
+utf8-scalar-count/cyrillic/avx2/1024
+                        time:   [11.212 ns 11.479 ns 11.782 ns]
+                        thrpt:  [151.29 GiB/s 155.29 GiB/s 158.99 GiB/s]
+                 change:
+                        time:   [+15.549% +16.461% +17.633%] (p = 0.00 < 0.05)
+                        thrpt:  [−14.990% −14.134% −13.457%]
+                        Performance has regressed.
+Found 7 outliers among 100 measurements (7.00%)
+  2 (2.00%) high mild
+  5 (5.00%) high severe
+Benchmarking utf8-scalar-count/cyrillic/portable/4096
+Benchmarking utf8-scalar-count/cyrillic/portable/4096: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/portable/4096: Collecting 100 samples in estimated 2.0008 s (12M iterations)
+Benchmarking utf8-scalar-count/cyrillic/portable/4096: Analyzing
+utf8-scalar-count/cyrillic/portable/4096
+                        time:   [170.86 ns 171.12 ns 171.40 ns]
+                        thrpt:  [41.578 GiB/s 41.646 GiB/s 41.709 GiB/s]
+                 change:
+                        time:   [−0.6638% −0.3158% +0.0773%] (p = 0.09 > 0.05)
+                        thrpt:  [−0.0772% +0.3168% +0.6683%]
+                        No change in performance detected.
+Found 3 outliers among 100 measurements (3.00%)
+  2 (2.00%) high mild
+  1 (1.00%) high severe
+Benchmarking utf8-scalar-count/cyrillic/avx2/4096
+Benchmarking utf8-scalar-count/cyrillic/avx2/4096: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/avx2/4096: Collecting 100 samples in estimated 2.0001 s (65M iterations)
+Benchmarking utf8-scalar-count/cyrillic/avx2/4096: Analyzing
+utf8-scalar-count/cyrillic/avx2/4096
+                        time:   [30.442 ns 30.503 ns 30.572 ns]
+                        thrpt:  [233.11 GiB/s 233.64 GiB/s 234.10 GiB/s]
+                 change:
+                        time:   [−17.134% −16.894% −16.659%] (p = 0.00 < 0.05)
+                        thrpt:  [+19.989% +20.329% +20.677%]
+                        Performance has improved.
+Found 12 outliers among 100 measurements (12.00%)
+  6 (6.00%) high mild
+  6 (6.00%) high severe
+Benchmarking utf8-scalar-count/cyrillic/portable/65536
+Benchmarking utf8-scalar-count/cyrillic/portable/65536: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/portable/65536: Collecting 100 samples in estimated 2.0133 s (732k iterations)
+Benchmarking utf8-scalar-count/cyrillic/portable/65536: Analyzing
+utf8-scalar-count/cyrillic/portable/65536
+                        time:   [2.7124 µs 2.7133 µs 2.7143 µs]
+                        thrpt:  [42.003 GiB/s 42.019 GiB/s 42.033 GiB/s]
+                 change:
+                        time:   [−0.4883% −0.2397% −0.0552%] (p = 0.02 < 0.05)
+                        thrpt:  [+0.0553% +0.2402% +0.4906%]
+                        Change within noise threshold.
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) low mild
+  1 (1.00%) high mild
+Benchmarking utf8-scalar-count/cyrillic/avx2/65536
+Benchmarking utf8-scalar-count/cyrillic/avx2/65536: Warming up for 1.0000 s
+Benchmarking utf8-scalar-count/cyrillic/avx2/65536: Collecting 100 samples in estimated 2.0030 s (3.2M iterations)
+Benchmarking utf8-scalar-count/cyrillic/avx2/65536: Analyzing
+utf8-scalar-count/cyrillic/avx2/65536
+                        time:   [612.87 ns 613.23 ns 613.58 ns]
+                        thrpt:  [185.81 GiB/s 185.92 GiB/s 186.03 GiB/s]
+                 change:
+                        time:   [−41.000% −40.921% −40.842%] (p = 0.00 < 0.05)
+                        thrpt:  [+69.038% +69.266% +69.493%]
+                        Performance has improved.
+Found 13 outliers among 100 measurements (13.00%)
+  7 (7.00%) low mild
+  2 (2.00%) high mild
+  4 (4.00%) high severe
+
+Benchmarking common-prefix-chars/naive/16
+Benchmarking common-prefix-chars/naive/16: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/naive/16: Collecting 100 samples in estimated 2.0000 s (661M iterations)
+Benchmarking common-prefix-chars/naive/16: Analyzing
+common-prefix-chars/naive/16
+                        time:   [3.0070 ns 3.0101 ns 3.0132 ns]
+                        thrpt:  [5.3099 Gelem/s 5.3154 Gelem/s 5.3210 Gelem/s]
+                 change:
+                        time:   [−0.2933% −0.1305% +0.0159%] (p = 0.10 > 0.05)
+                        thrpt:  [−0.0159% +0.1307% +0.2941%]
+                        No change in performance detected.
+Found 4 outliers among 100 measurements (4.00%)
+  2 (2.00%) low severe
+  2 (2.00%) low mild
+Benchmarking common-prefix-chars/portable/16
+Benchmarking common-prefix-chars/portable/16: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/portable/16: Collecting 100 samples in estimated 2.0000 s (583M iterations)
+Benchmarking common-prefix-chars/portable/16: Analyzing
+common-prefix-chars/portable/16
+                        time:   [3.3975 ns 3.3989 ns 3.4004 ns]
+                        thrpt:  [4.7053 Gelem/s 4.7073 Gelem/s 4.7093 Gelem/s]
+                 change:
+                        time:   [+9.9901% +10.118% +10.237%] (p = 0.00 < 0.05)
+                        thrpt:  [−9.2865% −9.1880% −9.0828%]
+                        Performance has regressed.
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) low mild
+  1 (1.00%) high mild
+  2 (2.00%) high severe
+Benchmarking common-prefix-chars/avx2/16
+Benchmarking common-prefix-chars/avx2/16: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/avx2/16: Collecting 100 samples in estimated 2.0000 s (1.2B iterations)
+Benchmarking common-prefix-chars/avx2/16: Analyzing
+common-prefix-chars/avx2/16
+                        time:   [1.5935 ns 1.5940 ns 1.5945 ns]
+                        thrpt:  [10.034 Gelem/s 10.038 Gelem/s 10.041 Gelem/s]
+                 change:
+                        time:   [−0.0876% +0.0379% +0.1505%] (p = 0.55 > 0.05)
+                        thrpt:  [−0.1502% −0.0379% +0.0877%]
+                        No change in performance detected.
+Found 5 outliers among 100 measurements (5.00%)
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+Benchmarking common-prefix-chars/naive/64
+Benchmarking common-prefix-chars/naive/64: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/naive/64: Collecting 100 samples in estimated 2.0001 s (91M iterations)
+Benchmarking common-prefix-chars/naive/64: Analyzing
+common-prefix-chars/naive/64
+                        time:   [21.830 ns 21.841 ns 21.853 ns]
+                        thrpt:  [2.9287 Gelem/s 2.9302 Gelem/s 2.9318 Gelem/s]
+                 change:
+                        time:   [−0.1613% −0.0783% +0.0013%] (p = 0.06 > 0.05)
+                        thrpt:  [−0.0013% +0.0783% +0.1615%]
+                        No change in performance detected.
+Found 5 outliers among 100 measurements (5.00%)
+  1 (1.00%) low mild
+  4 (4.00%) high mild
+Benchmarking common-prefix-chars/portable/64
+Benchmarking common-prefix-chars/portable/64: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/portable/64: Collecting 100 samples in estimated 2.0000 s (314M iterations)
+Benchmarking common-prefix-chars/portable/64: Analyzing
+common-prefix-chars/portable/64
+                        time:   [6.3155 ns 6.3178 ns 6.3204 ns]
+                        thrpt:  [10.126 Gelem/s 10.130 Gelem/s 10.134 Gelem/s]
+                 change:
+                        time:   [+12.202% +12.521% +12.753%] (p = 0.00 < 0.05)
+                        thrpt:  [−11.311% −11.127% −10.875%]
+                        Performance has regressed.
+Found 6 outliers among 100 measurements (6.00%)
+  2 (2.00%) low mild
+  3 (3.00%) high mild
+  1 (1.00%) high severe
+Benchmarking common-prefix-chars/avx2/64
+Benchmarking common-prefix-chars/avx2/64: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/avx2/64: Collecting 100 samples in estimated 2.0000 s (502M iterations)
+Benchmarking common-prefix-chars/avx2/64: Analyzing
+common-prefix-chars/avx2/64
+                        time:   [3.9239 ns 3.9256 ns 3.9275 ns]
+                        thrpt:  [16.295 Gelem/s 16.303 Gelem/s 16.310 Gelem/s]
+                 change:
+                        time:   [+8.5161% +8.6324% +8.7536%] (p = 0.00 < 0.05)
+                        thrpt:  [−8.0490% −7.9464% −7.8477%]
+                        Performance has regressed.
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high severe
+Benchmarking common-prefix-chars/naive/256
+Benchmarking common-prefix-chars/naive/256: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/naive/256: Collecting 100 samples in estimated 2.0001 s (41M iterations)
+Benchmarking common-prefix-chars/naive/256: Analyzing
+common-prefix-chars/naive/256
+                        time:   [47.080 ns 47.462 ns 47.890 ns]
+                        thrpt:  [5.3455 Gelem/s 5.3938 Gelem/s 5.4375 Gelem/s]
+                 change:
+                        time:   [−0.9905% +0.2483% +1.6007%] (p = 0.70 > 0.05)
+                        thrpt:  [−1.5755% −0.2477% +1.0004%]
+                        No change in performance detected.
+Benchmarking common-prefix-chars/portable/256
+Benchmarking common-prefix-chars/portable/256: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/portable/256: Collecting 100 samples in estimated 2.0000 s (147M iterations)
+Benchmarking common-prefix-chars/portable/256: Analyzing
+common-prefix-chars/portable/256
+                        time:   [13.465 ns 13.470 ns 13.476 ns]
+                        thrpt:  [18.996 Gelem/s 19.005 Gelem/s 19.012 Gelem/s]
+                 change:
+                        time:   [+6.0887% +6.2355% +6.3610%] (p = 0.00 < 0.05)
+                        thrpt:  [−5.9805% −5.8695% −5.7392%]
+                        Performance has regressed.
+Found 6 outliers among 100 measurements (6.00%)
+  1 (1.00%) low mild
+  4 (4.00%) high mild
+  1 (1.00%) high severe
+Benchmarking common-prefix-chars/avx2/256
+Benchmarking common-prefix-chars/avx2/256: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/avx2/256: Collecting 100 samples in estimated 2.0000 s (205M iterations)
+Benchmarking common-prefix-chars/avx2/256: Analyzing
+common-prefix-chars/avx2/256
+                        time:   [9.6075 ns 9.6106 ns 9.6141 ns]
+                        thrpt:  [26.628 Gelem/s 26.637 Gelem/s 26.646 Gelem/s]
+                 change:
+                        time:   [+27.814% +27.928% +28.036%] (p = 0.00 < 0.05)
+                        thrpt:  [−21.897% −21.831% −21.761%]
+                        Performance has regressed.
+Found 6 outliers among 100 measurements (6.00%)
+  1 (1.00%) low mild
+  4 (4.00%) high mild
+  1 (1.00%) high severe
+Benchmarking common-prefix-chars/naive/1024
+Benchmarking common-prefix-chars/naive/1024: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/naive/1024: Collecting 100 samples in estimated 2.0001 s (13M iterations)
+Benchmarking common-prefix-chars/naive/1024: Analyzing
+common-prefix-chars/naive/1024
+                        time:   [157.73 ns 159.63 ns 161.51 ns]
+                        thrpt:  [6.3403 Gelem/s 6.4147 Gelem/s 6.4921 Gelem/s]
+                 change:
+                        time:   [−2.1345% −0.6091% +0.9966%] (p = 0.43 > 0.05)
+                        thrpt:  [−0.9868% +0.6128% +2.1810%]
+                        No change in performance detected.
+Benchmarking common-prefix-chars/portable/1024
+Benchmarking common-prefix-chars/portable/1024: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/portable/1024: Collecting 100 samples in estimated 2.0001 s (36M iterations)
+Benchmarking common-prefix-chars/portable/1024: Analyzing
+common-prefix-chars/portable/1024
+                        time:   [54.529 ns 54.570 ns 54.612 ns]
+                        thrpt:  [18.751 Gelem/s 18.765 Gelem/s 18.779 Gelem/s]
+                 change:
+                        time:   [+0.7766% +0.9129% +1.0521%] (p = 0.00 < 0.05)
+                        thrpt:  [−1.0411% −0.9046% −0.7706%]
+                        Change within noise threshold.
+Found 8 outliers among 100 measurements (8.00%)
+  1 (1.00%) low mild
+  5 (5.00%) high mild
+  2 (2.00%) high severe
+Benchmarking common-prefix-chars/avx2/1024
+Benchmarking common-prefix-chars/avx2/1024: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/avx2/1024: Collecting 100 samples in estimated 2.0001 s (70M iterations)
+Benchmarking common-prefix-chars/avx2/1024: Analyzing
+common-prefix-chars/avx2/1024
+                        time:   [28.586 ns 28.597 ns 28.607 ns]
+                        thrpt:  [35.795 Gelem/s 35.808 Gelem/s 35.822 Gelem/s]
+                 change:
+                        time:   [+2.0598% +2.1379% +2.2160%] (p = 0.00 < 0.05)
+                        thrpt:  [−2.1679% −2.0931% −2.0182%]
+                        Performance has regressed.
+Found 3 outliers among 100 measurements (3.00%)
+  1 (1.00%) low mild
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking common-prefix-chars/naive/4096
+Benchmarking common-prefix-chars/naive/4096: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/naive/4096: Collecting 100 samples in estimated 2.0010 s (3.3M iterations)
+Benchmarking common-prefix-chars/naive/4096: Analyzing
+common-prefix-chars/naive/4096
+                        time:   [587.94 ns 594.53 ns 601.34 ns]
+                        thrpt:  [6.8114 Gelem/s 6.8895 Gelem/s 6.9667 Gelem/s]
+                 change:
+                        time:   [−0.3675% +1.0163% +2.4441%] (p = 0.16 > 0.05)
+                        thrpt:  [−2.3858% −1.0061% +0.3688%]
+                        No change in performance detected.
+Benchmarking common-prefix-chars/portable/4096
+Benchmarking common-prefix-chars/portable/4096: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/portable/4096: Collecting 100 samples in estimated 2.0007 s (11M iterations)
+Benchmarking common-prefix-chars/portable/4096: Analyzing
+common-prefix-chars/portable/4096
+                        time:   [176.71 ns 176.78 ns 176.86 ns]
+                        thrpt:  [23.159 Gelem/s 23.170 Gelem/s 23.179 Gelem/s]
+                 change:
+                        time:   [−0.0572% +0.0315% +0.1212%] (p = 0.51 > 0.05)
+                        thrpt:  [−0.1211% −0.0315% +0.0572%]
+                        No change in performance detected.
+Found 7 outliers among 100 measurements (7.00%)
+  4 (4.00%) low mild
+  1 (1.00%) high mild
+  2 (2.00%) high severe
+Benchmarking common-prefix-chars/avx2/4096
+Benchmarking common-prefix-chars/avx2/4096: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/avx2/4096: Collecting 100 samples in estimated 2.0002 s (17M iterations)
+Benchmarking common-prefix-chars/avx2/4096: Analyzing
+common-prefix-chars/avx2/4096
+                        time:   [116.37 ns 116.47 ns 116.56 ns]
+                        thrpt:  [35.140 Gelem/s 35.168 Gelem/s 35.199 Gelem/s]
+                 change:
+                        time:   [−0.9477% −0.7045% −0.4638%] (p = 0.00 < 0.05)
+                        thrpt:  [+0.4659% +0.7095% +0.9568%]
+                        Change within noise threshold.
+Found 11 outliers among 100 measurements (11.00%)
+  1 (1.00%) low severe
+  6 (6.00%) low mild
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+Benchmarking common-prefix-chars/naive/65536
+Benchmarking common-prefix-chars/naive/65536: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/naive/65536: Collecting 100 samples in estimated 2.0310 s (141k iterations)
+Benchmarking common-prefix-chars/naive/65536: Analyzing
+common-prefix-chars/naive/65536
+                        time:   [14.223 µs 14.229 µs 14.235 µs]
+                        thrpt:  [4.6037 Gelem/s 4.6058 Gelem/s 4.6076 Gelem/s]
+                 change:
+                        time:   [+0.5806% +0.7030% +0.8256%] (p = 0.00 < 0.05)
+                        thrpt:  [−0.8188% −0.6981% −0.5772%]
+                        Change within noise threshold.
+Found 8 outliers among 100 measurements (8.00%)
+  4 (4.00%) high mild
+  4 (4.00%) high severe
+Benchmarking common-prefix-chars/portable/65536
+Benchmarking common-prefix-chars/portable/65536: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/portable/65536: Collecting 100 samples in estimated 2.0002 s (323k iterations)
+Benchmarking common-prefix-chars/portable/65536: Analyzing
+common-prefix-chars/portable/65536
+                        time:   [6.1830 µs 6.1860 µs 6.1891 µs]
+                        thrpt:  [10.589 Gelem/s 10.594 Gelem/s 10.599 Gelem/s]
+                 change:
+                        time:   [−0.5278% −0.2540% −0.0462%] (p = 0.03 < 0.05)
+                        thrpt:  [+0.0462% +0.2546% +0.5306%]
+                        Change within noise threshold.
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking common-prefix-chars/avx2/65536
+Benchmarking common-prefix-chars/avx2/65536: Warming up for 1.0000 s
+Benchmarking common-prefix-chars/avx2/65536: Collecting 100 samples in estimated 2.0074 s (475k iterations)
+Benchmarking common-prefix-chars/avx2/65536: Analyzing
+common-prefix-chars/avx2/65536
+                        time:   [4.1660 µs 4.1676 µs 4.1694 µs]
+                        thrpt:  [15.718 Gelem/s 15.725 Gelem/s 15.731 Gelem/s]
+                 change:
+                        time:   [+0.1381% +0.2861% +0.4100%] (p = 0.00 < 0.05)
+                        thrpt:  [−0.4083% −0.2852% −0.1379%]
+                        Change within noise threshold.
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high severe
+
+Benchmarking utf8-extend-chars/ascii/portable/16
+Benchmarking utf8-extend-chars/ascii/portable/16: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/portable/16: Collecting 100 samples in estimated 2.0000 s (190M iterations)
+Benchmarking utf8-extend-chars/ascii/portable/16: Analyzing
+utf8-extend-chars/ascii/portable/16
+                        time:   [11.564 ns 12.268 ns 13.033 ns]
+                        thrpt:  [1.1433 GiB/s 1.2147 GiB/s 1.2885 GiB/s]
+                 change:
+                        time:   [+5.6130% +10.018% +15.166%] (p = 0.00 < 0.05)
+                        thrpt:  [−13.169% −9.1057% −5.3147%]
+                        Performance has regressed.
+Found 17 outliers among 100 measurements (17.00%)
+  1 (1.00%) low mild
+  16 (16.00%) high severe
+Benchmarking utf8-extend-chars/ascii/avx2/16
+Benchmarking utf8-extend-chars/ascii/avx2/16: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/avx2/16: Collecting 100 samples in estimated 2.0000 s (200M iterations)
+Benchmarking utf8-extend-chars/ascii/avx2/16: Analyzing
+utf8-extend-chars/ascii/avx2/16
+                        time:   [12.060 ns 12.761 ns 13.522 ns]
+                        thrpt:  [1.1020 GiB/s 1.1677 GiB/s 1.2356 GiB/s]
+                 change:
+                        time:   [−0.2926% +4.0517% +9.1866%] (p = 0.08 > 0.05)
+                        thrpt:  [−8.4136% −3.8940% +0.2935%]
+                        No change in performance detected.
+Found 20 outliers among 100 measurements (20.00%)
+  4 (4.00%) low mild
+  16 (16.00%) high severe
+Benchmarking utf8-extend-chars/ascii/portable/64
+Benchmarking utf8-extend-chars/ascii/portable/64: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/portable/64: Collecting 100 samples in estimated 2.0001 s (31M iterations)
+Benchmarking utf8-extend-chars/ascii/portable/64: Analyzing
+utf8-extend-chars/ascii/portable/64
+                        time:   [50.327 ns 53.480 ns 56.375 ns]
+                        thrpt:  [1.0573 GiB/s 1.1145 GiB/s 1.1844 GiB/s]
+                 change:
+                        time:   [−21.525% −16.869% −11.417%] (p = 0.00 < 0.05)
+                        thrpt:  [+12.889% +20.292% +27.430%]
+                        Performance has improved.
+Benchmarking utf8-extend-chars/ascii/avx2/64
+Benchmarking utf8-extend-chars/ascii/avx2/64: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/avx2/64: Collecting 100 samples in estimated 2.0001 s (127M iterations)
+Benchmarking utf8-extend-chars/ascii/avx2/64: Analyzing
+utf8-extend-chars/ascii/avx2/64
+                        time:   [16.907 ns 17.933 ns 19.056 ns]
+                        thrpt:  [3.1279 GiB/s 3.3238 GiB/s 3.5255 GiB/s]
+                 change:
+                        time:   [+5.7447% +9.6143% +14.494%] (p = 0.00 < 0.05)
+                        thrpt:  [−12.659% −8.7710% −5.4326%]
+                        Performance has regressed.
+Found 21 outliers among 100 measurements (21.00%)
+  5 (5.00%) low mild
+  16 (16.00%) high severe
+Benchmarking utf8-extend-chars/ascii/portable/256
+Benchmarking utf8-extend-chars/ascii/portable/256: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/portable/256: Collecting 100 samples in estimated 2.0001 s (18M iterations)
+Benchmarking utf8-extend-chars/ascii/portable/256: Analyzing
+utf8-extend-chars/ascii/portable/256
+                        time:   [111.36 ns 113.42 ns 115.61 ns]
+                        thrpt:  [2.0622 GiB/s 2.1021 GiB/s 2.1410 GiB/s]
+                 change:
+                        time:   [+1.0924% +3.1584% +5.1773%] (p = 0.00 < 0.05)
+                        thrpt:  [−4.9225% −3.0617% −1.0806%]
+                        Performance has regressed.
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+Benchmarking utf8-extend-chars/ascii/avx2/256
+Benchmarking utf8-extend-chars/ascii/avx2/256: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/avx2/256: Collecting 100 samples in estimated 2.0001 s (37M iterations)
+Benchmarking utf8-extend-chars/ascii/avx2/256: Analyzing
+utf8-extend-chars/ascii/avx2/256
+                        time:   [55.209 ns 56.273 ns 57.425 ns]
+                        thrpt:  [4.1518 GiB/s 4.2368 GiB/s 4.3185 GiB/s]
+                 change:
+                        time:   [+2.8424% +4.0830% +5.5432%] (p = 0.00 < 0.05)
+                        thrpt:  [−5.2521% −3.9228% −2.7639%]
+                        Performance has regressed.
+Found 16 outliers among 100 measurements (16.00%)
+  16 (16.00%) high severe
+Benchmarking utf8-extend-chars/ascii/portable/1024
+Benchmarking utf8-extend-chars/ascii/portable/1024: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/portable/1024: Collecting 100 samples in estimated 2.0015 s (4.8M iterations)
+Benchmarking utf8-extend-chars/ascii/portable/1024: Analyzing
+utf8-extend-chars/ascii/portable/1024
+                        time:   [420.01 ns 422.35 ns 424.83 ns]
+                        thrpt:  [2.2448 GiB/s 2.2580 GiB/s 2.2706 GiB/s]
+                 change:
+                        time:   [+0.3304% +0.9257% +1.5212%] (p = 0.00 < 0.05)
+                        thrpt:  [−1.4984% −0.9172% −0.3293%]
+                        Change within noise threshold.
+Benchmarking utf8-extend-chars/ascii/avx2/1024
+Benchmarking utf8-extend-chars/ascii/avx2/1024: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/avx2/1024: Collecting 100 samples in estimated 2.0009 s (9.4M iterations)
+Benchmarking utf8-extend-chars/ascii/avx2/1024: Analyzing
+utf8-extend-chars/ascii/avx2/1024
+                        time:   [212.92 ns 213.54 ns 214.14 ns]
+                        thrpt:  [4.4534 GiB/s 4.4660 GiB/s 4.4790 GiB/s]
+                 change:
+                        time:   [+0.7932% +1.1060% +1.3908%] (p = 0.00 < 0.05)
+                        thrpt:  [−1.3717% −1.0939% −0.7870%]
+                        Change within noise threshold.
+Benchmarking utf8-extend-chars/ascii/portable/4096
+Benchmarking utf8-extend-chars/ascii/portable/4096: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/portable/4096: Collecting 100 samples in estimated 2.0072 s (1.1M iterations)
+Benchmarking utf8-extend-chars/ascii/portable/4096: Analyzing
+utf8-extend-chars/ascii/portable/4096
+                        time:   [1.7477 µs 1.7536 µs 1.7593 µs]
+                        thrpt:  [2.1683 GiB/s 2.1754 GiB/s 2.1827 GiB/s]
+                 change:
+                        time:   [+4.2026% +4.6296% +5.0640%] (p = 0.00 < 0.05)
+                        thrpt:  [−4.8199% −4.4248% −4.0331%]
+                        Performance has regressed.
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) low severe
+  3 (3.00%) low mild
+Benchmarking utf8-extend-chars/ascii/avx2/4096
+Benchmarking utf8-extend-chars/ascii/avx2/4096: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/avx2/4096: Collecting 100 samples in estimated 2.0014 s (2.4M iterations)
+Benchmarking utf8-extend-chars/ascii/avx2/4096: Analyzing
+utf8-extend-chars/ascii/avx2/4096
+                        time:   [851.23 ns 852.28 ns 853.32 ns]
+                        thrpt:  [4.4704 GiB/s 4.4759 GiB/s 4.4814 GiB/s]
+                 change:
+                        time:   [+0.6551% +0.8962% +1.1476%] (p = 0.00 < 0.05)
+                        thrpt:  [−1.1346% −0.8882% −0.6508%]
+                        Change within noise threshold.
+Found 8 outliers among 100 measurements (8.00%)
+  6 (6.00%) low mild
+  2 (2.00%) high mild
+Benchmarking utf8-extend-chars/ascii/portable/65536
+Benchmarking utf8-extend-chars/ascii/portable/65536: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/portable/65536: Collecting 100 samples in estimated 2.0940 s (66k iterations)
+Benchmarking utf8-extend-chars/ascii/portable/65536: Analyzing
+utf8-extend-chars/ascii/portable/65536
+                        time:   [31.348 µs 31.364 µs 31.379 µs]
+                        thrpt:  [1.9451 GiB/s 1.9461 GiB/s 1.9470 GiB/s]
+                 change:
+                        time:   [+0.4238% +0.5103% +0.5944%] (p = 0.00 < 0.05)
+                        thrpt:  [−0.5909% −0.5077% −0.4220%]
+                        Change within noise threshold.
+Benchmarking utf8-extend-chars/ascii/avx2/65536
+Benchmarking utf8-extend-chars/ascii/avx2/65536: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/ascii/avx2/65536: Collecting 100 samples in estimated 2.0684 s (116k iterations)
+Benchmarking utf8-extend-chars/ascii/avx2/65536: Analyzing
+utf8-extend-chars/ascii/avx2/65536
+                        time:   [17.454 µs 17.511 µs 17.560 µs]
+                        thrpt:  [3.4758 GiB/s 3.4856 GiB/s 3.4970 GiB/s]
+                 change:
+                        time:   [−0.3616% +0.0154% +0.3827%] (p = 0.94 > 0.05)
+                        thrpt:  [−0.3812% −0.0154% +0.3629%]
+                        No change in performance detected.
+Found 3 outliers among 100 measurements (3.00%)
+  1 (1.00%) low mild
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking utf8-extend-chars/cyrillic/portable/16
+Benchmarking utf8-extend-chars/cyrillic/portable/16: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/portable/16: Collecting 100 samples in estimated 2.0000 s (146M iterations)
+Benchmarking utf8-extend-chars/cyrillic/portable/16: Analyzing
+utf8-extend-chars/cyrillic/portable/16
+                        time:   [14.468 ns 15.167 ns 15.928 ns]
+                        thrpt:  [1.8126 GiB/s 1.9035 GiB/s 1.9955 GiB/s]
+                 change:
+                        time:   [+3.9383% +7.0429% +10.682%] (p = 0.00 < 0.05)
+                        thrpt:  [−9.6511% −6.5795% −3.7891%]
+                        Performance has regressed.
+Found 23 outliers among 100 measurements (23.00%)
+  6 (6.00%) low severe
+  1 (1.00%) low mild
+  16 (16.00%) high severe
+Benchmarking utf8-extend-chars/cyrillic/avx2/16
+Benchmarking utf8-extend-chars/cyrillic/avx2/16: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/avx2/16: Collecting 100 samples in estimated 2.0001 s (145M iterations)
+Benchmarking utf8-extend-chars/cyrillic/avx2/16: Analyzing
+utf8-extend-chars/cyrillic/avx2/16
+                        time:   [14.785 ns 15.442 ns 16.159 ns]
+                        thrpt:  [1.7867 GiB/s 1.8696 GiB/s 1.9527 GiB/s]
+                 change:
+                        time:   [−0.3205% +3.0694% +7.1606%] (p = 0.10 > 0.05)
+                        thrpt:  [−6.6822% −2.9780% +0.3215%]
+                        No change in performance detected.
+Found 20 outliers among 100 measurements (20.00%)
+  1 (1.00%) low severe
+  3 (3.00%) low mild
+  16 (16.00%) high severe
+Benchmarking utf8-extend-chars/cyrillic/portable/64
+Benchmarking utf8-extend-chars/cyrillic/portable/64: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/portable/64: Collecting 100 samples in estimated 2.0004 s (28M iterations)
+Benchmarking utf8-extend-chars/cyrillic/portable/64: Analyzing
+utf8-extend-chars/cyrillic/portable/64
+                        time:   [73.693 ns 75.483 ns 77.413 ns]
+                        thrpt:  [1.4437 GiB/s 1.4806 GiB/s 1.5165 GiB/s]
+                 change:
+                        time:   [+1.2871% +2.7339% +4.5927%] (p = 0.00 < 0.05)
+                        thrpt:  [−4.3910% −2.6611% −1.2708%]
+                        Performance has regressed.
+Found 24 outliers among 100 measurements (24.00%)
+  7 (7.00%) low severe
+  1 (1.00%) high mild
+  16 (16.00%) high severe
+Benchmarking utf8-extend-chars/cyrillic/avx2/64
+Benchmarking utf8-extend-chars/cyrillic/avx2/64: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/avx2/64: Collecting 100 samples in estimated 2.0002 s (26M iterations)
+Benchmarking utf8-extend-chars/cyrillic/avx2/64: Analyzing
+utf8-extend-chars/cyrillic/avx2/64
+                        time:   [78.204 ns 79.549 ns 80.996 ns]
+                        thrpt:  [1.3798 GiB/s 1.4049 GiB/s 1.4291 GiB/s]
+                 change:
+                        time:   [−0.4623% +0.9502% +2.3520%] (p = 0.16 > 0.05)
+                        thrpt:  [−2.2980% −0.9413% +0.4645%]
+                        No change in performance detected.
+Found 17 outliers among 100 measurements (17.00%)
+  1 (1.00%) low severe
+  1 (1.00%) low mild
+  15 (15.00%) high severe
+Benchmarking utf8-extend-chars/cyrillic/portable/256
+Benchmarking utf8-extend-chars/cyrillic/portable/256: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/portable/256: Collecting 100 samples in estimated 2.0007 s (11M iterations)
+Benchmarking utf8-extend-chars/cyrillic/portable/256: Analyzing
+utf8-extend-chars/cyrillic/portable/256
+                        time:   [162.84 ns 168.53 ns 174.49 ns]
+                        thrpt:  [2.5566 GiB/s 2.6470 GiB/s 2.7395 GiB/s]
+                 change:
+                        time:   [−7.7597% +0.9297% +9.3517%] (p = 0.85 > 0.05)
+                        thrpt:  [−8.5519% −0.9211% +8.4125%]
+                        No change in performance detected.
+Found 6 outliers among 100 measurements (6.00%)
+  2 (2.00%) high mild
+  4 (4.00%) high severe
+Benchmarking utf8-extend-chars/cyrillic/avx2/256
+Benchmarking utf8-extend-chars/cyrillic/avx2/256: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/avx2/256: Collecting 100 samples in estimated 2.0017 s (5.5M iterations)
+Benchmarking utf8-extend-chars/cyrillic/avx2/256: Analyzing
+utf8-extend-chars/cyrillic/avx2/256
+                        time:   [363.83 ns 366.98 ns 369.74 ns]
+                        thrpt:  [1.2065 GiB/s 1.2156 GiB/s 1.2261 GiB/s]
+                 change:
+                        time:   [−1.8658% −0.5801% +0.6217%] (p = 0.40 > 0.05)
+                        thrpt:  [−0.6179% +0.5835% +1.9012%]
+                        No change in performance detected.
+Found 11 outliers among 100 measurements (11.00%)
+  7 (7.00%) low severe
+  3 (3.00%) low mild
+  1 (1.00%) high mild
+Benchmarking utf8-extend-chars/cyrillic/portable/1024
+Benchmarking utf8-extend-chars/cyrillic/portable/1024: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/portable/1024: Collecting 100 samples in estimated 2.0016 s (2.8M iterations)
+Benchmarking utf8-extend-chars/cyrillic/portable/1024: Analyzing
+utf8-extend-chars/cyrillic/portable/1024
+                        time:   [647.45 ns 667.74 ns 688.22 ns]
+                        thrpt:  [2.5901 GiB/s 2.6695 GiB/s 2.7532 GiB/s]
+                 change:
+                        time:   [−10.131% −5.1642% −0.2238%] (p = 0.06 > 0.05)
+                        thrpt:  [+0.2243% +5.4454% +11.272%]
+                        No change in performance detected.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+Benchmarking utf8-extend-chars/cyrillic/avx2/1024
+Benchmarking utf8-extend-chars/cyrillic/avx2/1024: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/avx2/1024: Collecting 100 samples in estimated 2.0031 s (1.3M iterations)
+Benchmarking utf8-extend-chars/cyrillic/avx2/1024: Analyzing
+utf8-extend-chars/cyrillic/avx2/1024
+                        time:   [1.5408 µs 1.5458 µs 1.5495 µs]
+                        thrpt:  [1.1504 GiB/s 1.1532 GiB/s 1.1569 GiB/s]
+                 change:
+                        time:   [+0.0796% +1.7188% +3.8047%] (p = 0.07 > 0.05)
+                        thrpt:  [−3.6652% −1.6897% −0.0796%]
+                        No change in performance detected.
+Found 8 outliers among 100 measurements (8.00%)
+  6 (6.00%) low severe
+  2 (2.00%) high mild
+Benchmarking utf8-extend-chars/cyrillic/portable/4096
+Benchmarking utf8-extend-chars/cyrillic/portable/4096: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/portable/4096: Collecting 100 samples in estimated 2.0143 s (323k iterations)
+Benchmarking utf8-extend-chars/cyrillic/portable/4096: Analyzing
+utf8-extend-chars/cyrillic/portable/4096
+                        time:   [5.7486 µs 5.8922 µs 6.0264 µs]
+                        thrpt:  [1.1826 GiB/s 1.2095 GiB/s 1.2397 GiB/s]
+                 change:
+                        time:   [−4.2734% −2.7265% −1.3791%] (p = 0.00 < 0.05)
+                        thrpt:  [+1.3984% +2.8029% +4.4642%]
+                        Performance has improved.
+Found 19 outliers among 100 measurements (19.00%)
+  14 (14.00%) low severe
+  5 (5.00%) low mild
+Benchmarking utf8-extend-chars/cyrillic/avx2/4096
+Benchmarking utf8-extend-chars/cyrillic/avx2/4096: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/avx2/4096: Collecting 100 samples in estimated 2.0157 s (328k iterations)
+Benchmarking utf8-extend-chars/cyrillic/avx2/4096: Analyzing
+utf8-extend-chars/cyrillic/avx2/4096
+                        time:   [5.6723 µs 5.7532 µs 5.8351 µs]
+                        thrpt:  [1.2213 GiB/s 1.2387 GiB/s 1.2564 GiB/s]
+                 change:
+                        time:   [−3.0931% −1.4454% +0.4542%] (p = 0.11 > 0.05)
+                        thrpt:  [−0.4521% +1.4666% +3.1918%]
+                        No change in performance detected.
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) low mild
+Benchmarking utf8-extend-chars/cyrillic/portable/65536
+Benchmarking utf8-extend-chars/cyrillic/portable/65536: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/portable/65536: Collecting 100 samples in estimated 2.4351 s (25k iterations)
+Benchmarking utf8-extend-chars/cyrillic/portable/65536: Analyzing
+utf8-extend-chars/cyrillic/portable/65536
+                        time:   [97.753 µs 98.346 µs 98.825 µs]
+                        thrpt:  [1.1536 GiB/s 1.1593 GiB/s 1.1663 GiB/s]
+                 change:
+                        time:   [+1.0278% +3.5791% +6.3756%] (p = 0.01 < 0.05)
+                        thrpt:  [−5.9935% −3.4554% −1.0174%]
+                        Performance has regressed.
+Found 16 outliers among 100 measurements (16.00%)
+  12 (12.00%) low severe
+  3 (3.00%) low mild
+  1 (1.00%) high mild
+Benchmarking utf8-extend-chars/cyrillic/avx2/65536
+Benchmarking utf8-extend-chars/cyrillic/avx2/65536: Warming up for 1.0000 s
+Benchmarking utf8-extend-chars/cyrillic/avx2/65536: Collecting 100 samples in estimated 2.2493 s (25k iterations)
+Benchmarking utf8-extend-chars/cyrillic/avx2/65536: Analyzing
+utf8-extend-chars/cyrillic/avx2/65536
+                        time:   [88.158 µs 88.783 µs 89.394 µs]
+                        thrpt:  [1.2754 GiB/s 1.2841 GiB/s 1.2932 GiB/s]
+                 change:
+                        time:   [−4.1021% −2.8300% −1.3388%] (p = 0.00 < 0.05)
+                        thrpt:  [+1.3570% +2.9124% +4.2775%]
+                        Performance has improved.
+Found 3 outliers among 100 measurements (3.00%)
+  1 (1.00%) low severe
+  1 (1.00%) low mild
+  1 (1.00%) high mild
+
+Benchmarking dispatch-overhead/inline-portable-8B
+Benchmarking dispatch-overhead/inline-portable-8B: Warming up for 1.0000 s
+Benchmarking dispatch-overhead/inline-portable-8B: Collecting 100 samples in estimated 2.0000 s (1.1B iterations)
+Benchmarking dispatch-overhead/inline-portable-8B: Analyzing
+dispatch-overhead/inline-portable-8B
+                        time:   [1.7457 ns 1.7472 ns 1.7490 ns]
+                        change: [−0.3688% −0.1269% +0.0511%] (p = 0.27 > 0.05)
+                        No change in performance detected.
+Found 8 outliers among 100 measurements (8.00%)
+  1 (1.00%) low mild
+  2 (2.00%) high mild
+  5 (5.00%) high severe
+Benchmarking dispatch-overhead/table-fn-pointer-8B
+Benchmarking dispatch-overhead/table-fn-pointer-8B: Warming up for 1.0000 s
+Benchmarking dispatch-overhead/table-fn-pointer-8B: Collecting 100 samples in estimated 2.0000 s (1.3B iterations)
+Benchmarking dispatch-overhead/table-fn-pointer-8B: Analyzing
+dispatch-overhead/table-fn-pointer-8B
+                        time:   [1.5793 ns 1.5798 ns 1.5803 ns]
+                        change: [−0.2228% −0.1028% +0.0027%] (p = 0.08 > 0.05)
+                        No change in performance detected.
+Found 5 outliers among 100 measurements (5.00%)
+  1 (1.00%) low mild
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+Benchmarking dispatch-overhead/text-wrapper-8B
+Benchmarking dispatch-overhead/text-wrapper-8B: Warming up for 1.0000 s
+Benchmarking dispatch-overhead/text-wrapper-8B: Collecting 100 samples in estimated 2.0000 s (1.1B iterations)
+Benchmarking dispatch-overhead/text-wrapper-8B: Analyzing
+dispatch-overhead/text-wrapper-8B
+                        time:   [1.7474 ns 1.7492 ns 1.7514 ns]
+                        change: [−0.0992% +0.0924% +0.3502%] (p = 0.43 > 0.05)
+                        No change in performance detected.
+Found 4 outliers among 100 measurements (4.00%)
+  4 (4.00%) high severe
+

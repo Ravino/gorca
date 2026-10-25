@@ -1,6 +1,6 @@
 # ADR-0027: Runtime CPU feature dispatch
 
-Status: **Proposed** (r2, 2026-10-24; r1 2026-10-24). Changelog: §14. r2 applies `docs/reports/adr-0027-review.md`. Owner: architect. Implementer: asm-simd-engineer. Gate: perf-engineer.
+Status: **Accepted, implemented in part** (r2, 2026-10-24; r1 2026-10-24; implementation note §15, 2026-10-26: slices CD-0, CD-1 (bench + env/ordering tests; CI matrix and SDE jobs not yet), CD-2 first three kernels, the daemon/plugin wiring of CD-W4; CD-P, CD-W cache key, CD-B1 open). Changelog: §14. r2 applies `docs/reports/adr-0027-review.md`. Owner: architect. Implementer: asm-simd-engineer. Gate: perf-engineer.
 Owner decision (fixed): `docs/decisions.md`, row 2026-10-24 "Owner: hardware-aware Rust". If the CPU has a
 useful extension gorca uses it; otherwise a portable path runs and gorca logs **one informational line
 per missing feature at start-up, as a fact, not an error**. The owner wants the hardware used fully as
@@ -557,3 +557,33 @@ Consequences and decisions:
 | M-3 | WASM: `Config::target(host)` baseline with no `unsafe`; `.cwasm` key stays `precompile_compatibility_hash`; Wasm SIMD is on by default; only `=all` reaches the plugin engine; QC-5 closed for the verified facts |
 | M-4 | profiling slice CD-P before any kernel slice; CD-2 names no kernels until profiled; owner-directive exception limited to tiers 1-2; zbus already validates UTF-8 |
 | QC-1, QC-2 | QC-1 decided: x86-64-v1 (owner may override); QC-2 accepted, conditional on M-1 |
+
+## 15. Implementation note (2026-10-26)
+
+Report: `docs/reports/adr-0027-impl.md`. Crate `crates/gorca-cpu`, benches `crates/gorca-cpu/benches/kernels.rs`,
+raw results `bench/cpu/results/`. Dated deviations from the text above:
+
+- **Logging is split from `init` (CD-1).** `init(disable)` is the first statement of `main` and cannot log
+  (the logger is initialised after argument parsing). It only detects and resolves; `log_report()` emits the
+  INFO lines once the logger is up. The "ignored list" INFO line is the one thing `init` logs itself.
+- **Environment read.** ADR-0001 rule 8 forbids library env reads. `init` takes the merged list as a string
+  (flag over `GORCA_CPU_DISABLE`, read in `main`). The lazy table (tests and tools, never the daemon) reads
+  `GORCA_CPU_DISABLE` once in `gorca-cpu/src/table.rs`, which is exempt in `xtask/src/envrule.rs`, so that
+  `GORCA_CPU_DISABLE=all cargo test --workspace` reaches every crate without wiring.
+- **`Cap<F>`** exists (`gorca_cpu::Cap`, `marker::*`) but is not the soundness invariant (r2): the invariant is
+  `kernel_impl!`. Its trampoline is private to the generated module; the only exits are the resolver,
+  `Impl::checked(have)` and the generated `call_checked(..) -> Option<_>`. `Impl.f` is private.
+- **Detection** uses `is_x86_feature_detected!` / `is_aarch64_feature_detected!` only inside `src/arch/`. AVX10.1
+  has no std macro on 1.99, so it is read from CPUID leaves 7.1 and 0x24 plus XCR0 (opmask/ZMM state).
+  Hybrid cores: `tests/symmetry.rs` pins a thread to every allowed CPU and compares the ISA CPUID words
+  (16 CPUs of the Core Ultra 9 285H, P, E and LP-E, agree).
+- **Log line.** Per feature, the first missing feature of each better implementation owns the kernel. Different
+  hints render as `... would be faster (a ~3x, b ~5x)`; `all` collapses to one line; hints are read from
+  `crates/gorca-cpu/hints.toml` (inside the crate, so it ships with it) rather than `bench/cpu/hints.toml`.
+- **Admission gate (section 5, item 4) was applied against the code being replaced** where the portable
+  function is itself new (`common-prefix-chars`: portable is 3x the old `zip().take_while()`; AVX2 adds 1.5-1.9x
+  on top, 5-6x over the old code). Two kernels are tier 3 (intrinsics): tier 2 measured 6x *slower* than std for
+  scalar count and only 1.3x for the prefix scan. The owner-directive exception was not needed.
+- **CI allow-list lint for `allow(unsafe_code)`** was not added: seven other crates already carry it (the
+  rule as written would fail today); `unsafe` in `gorca-cpu` is confined to `src/arch/` and the symmetry test.
+- aarch64 NEON/SVE are detected and report-only (no aarch64 kernels yet); see the report for the cross-check.

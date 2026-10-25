@@ -9,10 +9,20 @@ use gorca_daemon::{Parsed, USAGE};
 use gorca_rt::CancellationToken;
 
 fn main() -> Result<ExitCode> {
-    // `gorca --version`: the revision the binary was built from (a test harness compares it
-    // with the tree it measures).
-    if std::env::args().nth(1).as_deref() == Some("--version") {
+    // First statement (ADR-0027 CD-1): detect the CPU and resolve the kernel table before any
+    // argument or config parsing can run a kernel. The disable list comes from `--cpu-disable`
+    // (a minimal argv scan that runs no kernel) or `GORCA_CPU_DISABLE`. Nothing is logged yet.
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let cpu_list =
+        gorca_daemon::cpu_disable_arg(&argv).or_else(|| std::env::var("GORCA_CPU_DISABLE").ok());
+    let cpu = gorca_cpu::init(cpu_list.as_deref());
+    // `gorca --version [--verbose]`: the revision the binary was built from (a test harness
+    // compares it with the tree it measures); verbose adds the CPU feature report.
+    if argv.first().map(String::as_str) == Some("--version") {
         println!("gorca {}", env!("GORCA_GIT_REV"));
+        if argv.iter().any(|a| a == "--verbose" || a == "-v") {
+            print!("{}", gorca_cpu::active().describe());
+        }
         return Ok(ExitCode::SUCCESS);
     }
     // Opt-in: segment text in the `debug.explain_last` log (default off, it can be private).
@@ -45,6 +55,11 @@ fn main() -> Result<ExitCode> {
         }
     };
     gorca_daemon::init_tracing()?;
+    if let Err(e) = cpu {
+        // Cannot happen when init is first; kept visible rather than silent.
+        tracing::info!(target: "gorca::cpu", "cpu: {e}");
+    }
+    gorca_cpu::log_report();
     // The environment is read here only: `GORCA_RTKIT_BUS_ADDRESS` points the rtkit client at a
     // bus (the harness replaces DBUS_SYSTEM_BUS_ADDRESS with nothing), else the system bus.
     let rtkit_bus = ["GORCA_RTKIT_BUS_ADDRESS", "DBUS_SYSTEM_BUS_ADDRESS"]

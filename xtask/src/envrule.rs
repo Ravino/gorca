@@ -51,6 +51,10 @@ const EXEMPT: &[&str] = &[
     "crates/gorca-connector-atspi/src/info_golden_tests.rs",
     // Test-only module (`#[cfg(test)] mod golden_tests` of browse): `GORCA_BLESS=1` rewrites the files.
     "crates/gorca-core/src/browse/golden_tests.rs",
+    // The lazy kernel table reads `GORCA_CPU_DISABLE` once so that tests and tools of every
+    // crate can run the portable path without wiring (ADR-0027 section 6.1); the daemon passes
+    // the list explicitly through `gorca_cpu::init`.
+    "crates/gorca-cpu/src/table.rs",
     "xtask/",
 ];
 
