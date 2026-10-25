@@ -45,8 +45,6 @@ policy-facts | crates/gorca-ext-host/src/native.rs | 1 | 2026-12-12 | M22b4
 policy-facts | crates/gorca-ext-host/src/wasm.rs | 2 | 2026-12-12 | M22b4
 policy-facts | extensions/ext-gnome-shell/src/lib.rs | 2 | 2026-12-12 | M22b4
 policy-facts | extensions/ext-test/src/lib.rs | 2 | 2026-12-12 | M22b4
-role-spoken | crates/gorca-core/src/commands/info.rs | 7 | 2026-12-12 | M22b4
-state-words | crates/gorca-core/src/commands/info.rs | 3 | 2026-12-12 | M22b4
 subtree-label | crates/gorca-core/src/app_actor/agree.rs | 1 | 2026-12-12 | M22b4
 web-attrs | crates/gorca-core/src/doc_actor/live.rs | 9 | 2026-12-12 | M22b4
 web-attrs | crates/gorca-core/src/doc_actor/mod.rs | 1 | 2026-12-12 | M22b4

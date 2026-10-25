@@ -133,8 +133,8 @@ pub const SURFACES: &[Surface] = &[
         name: "whereami",
         slice: "M22b4",
         ready: true,
-        package: "gorca-connector-atspi",
-        test: "cutover_gate_tests::cutover_emit",
+        package: "",
+        test: "",
         families: &[],
     },
     Surface {

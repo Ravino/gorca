@@ -260,6 +260,28 @@ impl Reader {
             .into_vec()
     }
 
+    /// The words of one node of the ancestry answer (`Reason::WhereAmI`, M22b4), composed from its
+    /// fused entry: name, role, states and value as a focus on it would say them, plus the
+    /// description. An ancestor the mirror holds only as a source record has its provisional
+    /// entry (PV-1), so a lazily cached ancestor is spoken like any other.
+    pub(crate) fn info_words(&self, snap: &NodeSnapshot) -> crate::commands::info::Words {
+        // The document's entry first for a web node, as a focus does (`with_fused_entry`): the app
+        // actor attaches an entry to web nodes too, and the two must not disagree between surfaces.
+        let entry = self
+            .web_entry(snap.key)
+            .unwrap_or_else(|| self.fused_entry(snap));
+        let cctx = self.compose_ctx(snap.key, false, false);
+        words_of(&entry, snap, cctx, self.render_opts())
+    }
+
+    /// The words of every node of `chain`.
+    pub(crate) fn chain_words(
+        &self,
+        chain: &[Arc<NodeSnapshot>],
+    ) -> Vec<crate::commands::info::Words> {
+        chain.iter().map(|n| self.info_words(n)).collect()
+    }
+
     /// The title an activated window leads with, composed from its fused entry
     /// (`Reason::Window`, M22b4): the name, and the role word for a dialog or an alert.
     pub(crate) fn window_lead(&self, win: &NodeSnapshot) -> SmallVec<[Segment; 2]> {
