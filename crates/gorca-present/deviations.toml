@@ -402,3 +402,24 @@ surface = "whereami"
 epoch = "m22b4"
 reason = "A name longer than the one-line label cap is cut by the fused label; the legacy answer carried the full name."
 until = "2026-12-12"
+
+[[deviation]]
+id = "alertdialog-not-live"
+surface = "docflags"
+epoch = "m22b4"
+reason = "An alertdialog was an assertive atomic live region for the legacy parse; the model keeps it a dialog and no live region (M22a-C2 agreement)."
+until = "2026-12-12"
+
+[[deviation]]
+id = "status-atomic"
+surface = "docflags"
+epoch = "m22b4"
+reason = "A status region is atomic by default in the model (ARIA); the legacy parse made it atomic only on aria-atomic (M22a-C2 agreement)."
+until = "2026-12-12"
+
+[[deviation]]
+id = "alert-live-flag"
+surface = "docflags"
+epoch = "m22b4"
+reason = "An alert keeps its own category: the node flag LIVE is not set for it, where the legacy parse set it when the author wrote an explicit aria-live on the alert."
+until = "2026-12-12"

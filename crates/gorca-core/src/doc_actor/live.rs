@@ -72,7 +72,7 @@ enum Politeness {
     Assertive,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[allow(clippy::struct_excessive_bools)] // independent ARIA flags of one region
 pub(super) struct Props {
     politeness: Politeness,
@@ -80,6 +80,49 @@ pub(super) struct Props {
     removals: bool,
     busy: bool,
     alert: bool,
+}
+
+#[allow(dead_code)] // used by the replay of the gate until the tracker switches to it
+impl Props {
+    /// The properties of a region root from the node's fused semantics (ADR-0022 section 8):
+    /// `live.root` is a region root (an `aria-live`, or the implicit live roles alert, status and
+    /// log), the `LIVE_OFF` flag is an explicit `aria-live=off` (or a timer, a marquee) that mutes
+    /// the enclosing region, `BUSY` is `aria-busy`. `None` for an ordinary or a hidden node.
+    pub(super) fn from_sem(e: &gorca_model::sem::SemEntry, hidden: bool) -> Option<Props> {
+        use gorca_model::sem::{Relevant, SemFlags, SemRole};
+        if hidden {
+            return None;
+        }
+        let s = &e.sem;
+        let busy = s.flags.contains(SemFlags::BUSY);
+        if s.flags.contains(SemFlags::LIVE_OFF) {
+            return Some(Props {
+                politeness: Politeness::Off,
+                atomic: false,
+                removals: false,
+                busy,
+                alert: false,
+            });
+        }
+        let l = s.live.filter(|l| l.root)?;
+        Some(Props {
+            politeness: match l.politeness {
+                gorca_model::event::Politeness::Polite => Politeness::Polite,
+                gorca_model::event::Politeness::Assertive => Politeness::Assertive,
+            },
+            atomic: l.atomic,
+            removals: l.relevant.contains(Relevant::REMOVALS),
+            busy,
+            alert: s.role == SemRole::Alert,
+        })
+    }
+}
+
+/// The properties of the region root `v` is, from its fused entry; `None` for an ordinary node,
+/// a hidden one, and a node with no entry.
+#[allow(dead_code)] // used by the replay of the gate until the tracker switches to it
+pub(super) fn props_from_sem(v: &NodeView<'_>) -> Option<Props> {
+    Props::from_sem(v.sem_ref()?, v.flags.contains(NodeFlags::HIDDEN))
 }
 
 fn attr<'a>(v: &'a NodeView<'_>, k: gorca_model::AttrKey) -> Option<&'a str> {
@@ -150,7 +193,7 @@ fn check_props(v: &NodeView<'_>, legacy: Option<Props>, e: &gorca_model::sem::Se
     }
 }
 
-fn legacy_props(v: &NodeView<'_>) -> Option<Props> {
+pub(super) fn legacy_props(v: &NodeView<'_>) -> Option<Props> {
     if v.flags.contains(NodeFlags::HIDDEN) {
         return None;
     }

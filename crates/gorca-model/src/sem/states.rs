@@ -159,6 +159,15 @@ bitflags! {
         /// The role came from the author's ARIA token (`role="..."`), not from the element or
         /// the engine. Browse mode announces some containers and items only then.
         const ROLE_AUTHORED = 1 << 16;
+        /// An explicit `aria-live=off` (or a timer or marquee role): a boundary that mutes the
+        /// enclosing live region, which an absent `Live` cannot say (absent means "not a
+        /// region", and the walk up would reach the parent's polite region).
+        const LIVE_OFF = 1 << 18;
+        /// The engine reported a block-level CSS `display` (`block`, `list-item`, `table`, ...).
+        const DISPLAY_BLOCK = 1 << 19;
+        /// The engine reported an inline-level CSS `display`. Neither display bit: the engine
+        /// reported none, and the role decides.
+        const DISPLAY_INLINE = 1 << 20;
         /// The engine calls this text a label (the AT-SPI `label` role): the caption of a control
         /// or a line of dialog text, said with the control and not as a stop of its own. The model
         /// has one `StaticText` role for it and for the engine's static text; object review keeps

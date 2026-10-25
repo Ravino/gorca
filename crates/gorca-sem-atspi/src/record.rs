@@ -263,6 +263,17 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
         // flags group is written with it. Without the states it holds nothing else.
         known.set(Group::Flags, true);
     }
+    // The live-off and display bits are facts of attributes, not of the states: the flags group
+    // is written with them even when the states were not fetched.
+    if sem.flags.intersects(
+        SemFlags::LIVE_OFF
+            | SemFlags::DISPLAY_BLOCK
+            | SemFlags::DISPLAY_INLINE
+            | SemFlags::BUSY
+            | SemFlags::LAYOUT_TABLE,
+    ) {
+        known.set(Group::Flags, true);
+    }
     // The engine's `label` role is the one static text the model keeps apart from the engine's
     // static text, for object review. A role the author's token replaced is not a label.
     if have_role && rec.raw_role == raw_role::LABEL && sem.role == SemRole::StaticText {
@@ -364,21 +375,33 @@ fn apply_attrs(
     if have_role {
         sem.level = level_of(role, a);
         sem.live = live_of(role, a);
+        if attrs::live_off(role, a) {
+            sem.flags |= SemFlags::LIVE_OFF;
+        }
+    }
+    if let Some(d) = a.display {
+        sem.flags |= if attrs::display_is_block(d) {
+            SemFlags::DISPLAY_BLOCK
+        } else {
+            SemFlags::DISPLAY_INLINE
+        };
     }
     for v in [a.level, a.posinset, a.rowindex, a.colindex] {
         if v.is_some_and(|s| attrs::parse_u32(s).is_none()) {
             notes.add(Notes::MALFORMED_NUMBER);
         }
     }
+    // `aria-busy` and the layout guess are facts of attributes: they hold even when the states
+    // were not fetched (the flags group is then marked known by the caller).
+    if attrs::parse_bool(a.busy) == Some(true) {
+        sem.flags |= SemFlags::BUSY;
+    }
+    if role == SemRole::Presentation && a.layout_guess == Some("true") {
+        sem.flags |= SemFlags::LAYOUT_TABLE;
+    }
     if have_states {
-        if attrs::parse_bool(a.busy) == Some(true) {
-            sem.flags |= SemFlags::BUSY;
-        }
         if has_details(a) {
             sem.flags |= SemFlags::HAS_DETAILS;
-        }
-        if role == SemRole::Presentation && a.layout_guess == Some("true") {
-            sem.flags |= SemFlags::LAYOUT_TABLE;
         }
     }
 }
@@ -410,6 +433,33 @@ mod tests {
             name: Some("N"),
             description: None,
         }
+    }
+
+    #[test]
+    fn live_off_and_display_are_flags_of_the_record() {
+        let fetched = PropMask::ROLE | PropMask::ATTRS | PropMask::NAME | PropMask::STATES;
+        let flags = |role: u32, attrs: &[(&str, &str)]| {
+            normalise(&node(fetched, role, StateBits(0), attrs))
+                .sem
+                .flags
+        };
+        // An explicit aria-live=off, and the quiet roles, mute the enclosing region.
+        assert!(flags(7, &[("live", "off")]).contains(SemFlags::LIVE_OFF));
+        assert!(flags(7, &[("xml-roles", "timer")]).contains(SemFlags::LIVE_OFF));
+        assert!(flags(7, &[("xml-roles", "marquee")]).contains(SemFlags::LIVE_OFF));
+        assert!(!flags(7, &[("live", "polite")]).contains(SemFlags::LIVE_OFF));
+        assert!(!flags(7, &[]).contains(SemFlags::LIVE_OFF));
+        // The display the engine reported: block-level, inline-level, or none.
+        let block = flags(7, &[("display", "list-item")]);
+        assert!(
+            block.contains(SemFlags::DISPLAY_BLOCK) && !block.contains(SemFlags::DISPLAY_INLINE)
+        );
+        let inline = flags(7, &[("display", "inline-block")]);
+        assert!(
+            inline.contains(SemFlags::DISPLAY_INLINE) && !inline.contains(SemFlags::DISPLAY_BLOCK)
+        );
+        let none = flags(7, &[]);
+        assert!(!none.intersects(SemFlags::DISPLAY_BLOCK | SemFlags::DISPLAY_INLINE));
     }
 
     #[test]

@@ -138,11 +138,19 @@ pub const SURFACES: &[Surface] = &[
         families: &[],
     },
     Surface {
+        name: "docflags",
+        slice: "M22b4",
+        ready: true,
+        package: "gorca-core",
+        test: "doc_actor::flags_gate_tests::flags_emit",
+        families: WEB_FAMILIES,
+    },
+    Surface {
         name: "explain",
         slice: "M22b4",
-        ready: false,
-        package: "",
-        test: "",
+        ready: true,
+        package: "gorca-connector-atspi",
+        test: "explain_gate_tests::explain_emit",
         families: &[],
     },
 ];
@@ -1113,7 +1121,7 @@ fn write_report(
 /// `cargo xtask cutover <surface> [--seed N]` or `cargo xtask cutover --check`.
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<bool> {
     let first = args.next().context(
-        "usage: cargo xtask cutover <surface> [--seed N] | --check   (surfaces: focus, change, browse, quicknav, review, window, notification, whereami, explain)",
+        "usage: cargo xtask cutover <surface> [--seed N] | --check   (surfaces: focus, change, browse, quicknav, review, window, notification, whereami, docflags, explain)",
     )?;
     if first == "--check" {
         return check();

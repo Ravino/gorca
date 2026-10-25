@@ -160,14 +160,14 @@ fn info(engine: WebEngine, name: &str) -> AppInfo {
 }
 
 /// One recorded page, normalised and fused the way the document actor does it.
-struct Built {
+pub(crate) struct Built {
     recs: Vec<Rec>,
-    nodes: Vec<SrcNode>,
-    stage: FuseStage,
+    pub(crate) nodes: Vec<SrcNode>,
+    pub(crate) stage: FuseStage,
     batch: Vec<DocDelta>,
 }
 
-fn build(
+pub(crate) fn build(
     engine: WebEngine,
     app: &str,
     legacy: WebQuirks,
