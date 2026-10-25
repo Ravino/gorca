@@ -27,7 +27,45 @@ id = 2
 tag = "a"
 class = "chatlist-chat"
 
-# A: a message is `div.Message`, with no role of its own.
+# A: a message is `div.Message`, with no role of its own: an item of the message list.
 [[watch]]
 id = 3
 class = "Message"
+
+# A: the message list of the open chat (a flat run of `div.Message` and `div.sticky-date`
+# children): a list.
+[[watch]]
+id = 4
+class = "MessageList"
+
+# A: the chat view; the header title (an `h3.fullName` that is a direct child of it, outside every
+# chat-list row; there is no `MiddleHeader`/`ChatInfo` in the accessible tree) becomes a
+# first-level heading.
+[[watch]]
+id = 5
+class = "messages-layout"
+
+# A: the date separators of a chat: second-level headings.
+[[watch]]
+id = 6
+class = "sticky-date"
+
+# A: the "Unread messages" divider of a chat (class names unverified: no chat with unread
+# messages has been dumped yet): a second-level heading as well.
+[[watch]]
+id = 7
+class = "unread-divider"
+
+[[watch]]
+id = 8
+class = "local-action-message"
+
+# A: the list of chats in the left column: a navigation landmark.
+[[watch]]
+id = 9
+class = "chat-list"
+
+# A: the message composer (the text field, attach, emoji and send buttons): a region.
+[[watch]]
+id = 10
+class = "Composer"

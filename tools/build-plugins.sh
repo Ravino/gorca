@@ -29,6 +29,9 @@ for n in "${names[@]}"; do
   # The message catalogs of the plugin's facts (not pinned: the installed directory is root's).
   rm -rf "$dist/$id/i18n"
   if [ -d "$src/i18n" ]; then cp -r "$src/i18n" "$dist/$id/i18n"; fi
+  # The package is installed root-owned and read by the user's daemon: every directory and file
+  # must be world-readable (an i18n directory left at 0750 silenced every message of the plugin).
+  chmod -R u+rwX,go+rX,go-w "$dist/$id"
   echo "built $id"
 done
 {

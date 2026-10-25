@@ -596,16 +596,33 @@ impl std::fmt::Debug for PluginRuntime {
 /// The plugin's message catalogs (`i18n/en.msg`, `i18n/ru.msg`, the format of the core's catalogs)
 /// under its id as the namespace: the texts its message facts resolve to. Bounded reads; a missing
 /// or refused file only means those messages are missing.
-fn register_catalogs(id: &str, dir: &Path) {
+///
+/// Returns how many catalog files exist but could not be read (a package installed with a
+/// directory the user cannot enter makes every message fact of the plugin vanish, so it is a
+/// warning, never silence).
+fn register_catalogs(id: &str, dir: &Path) -> usize {
     use std::io::Read as _;
     const CAP: u64 = 256 * 1024;
     let mut files: Vec<(gorca_i18n::Lang, String)> = Vec::new();
+    let mut unreadable = 0;
     for (lang, name) in [
         (gorca_i18n::Lang::En, "en.msg"),
         (gorca_i18n::Lang::Ru, "ru.msg"),
     ] {
-        let Ok(f) = gorca_plugin_host::fsx::open_regular(&dir.join("i18n").join(name)) else {
-            continue;
+        let path = dir.join("i18n").join(name);
+        let f = match gorca_plugin_host::fsx::open_regular(&path) {
+            Ok(f) => f,
+            Err(e) => {
+                // A missing file is a catalog the plugin does not have; anything else is an
+                // installation fault.
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    unreadable += 1;
+                    tracing::warn!(id, path = %path.display(), error = %e,
+                        "plugin catalog unreadable: its messages will not be spoken (check the \
+                         permissions of the package's i18n directory: it must be world-readable)");
+                }
+                continue;
+            }
         };
         let mut text = String::new();
         if f.take(CAP).read_to_string(&mut text).is_ok() {
@@ -613,7 +630,7 @@ fn register_catalogs(id: &str, dir: &Path) {
         }
     }
     if files.is_empty() {
-        return;
+        return unreadable;
     }
     let refs: Vec<(gorca_i18n::Lang, &str)> = files.iter().map(|(l, t)| (*l, t.as_str())).collect();
     match gorca_i18n::ext::register_extension(id, &refs) {
@@ -627,6 +644,7 @@ fn register_catalogs(id: &str, dir: &Path) {
         Ok(_) => {}
         Err(e) => tracing::warn!(id, error = %e, "plugin catalog refused"),
     }
+    unreadable
 }
 
 fn package_dirs(root: &Path) -> Vec<PathBuf> {
@@ -1532,6 +1550,20 @@ fn value_shape(v: &FactValue) -> String {
     }
 }
 
+/// The first message fact a plugin returns that its catalog cannot resolve is a warning (the
+/// catalog is missing, unreadable or lacks the id); later ones stay debug lines.
+fn warn_unresolved_once(ns: &str, id: &str) {
+    static SEEN: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+    let first = lock(SEEN.get_or_init(Mutex::default)).insert(ns.to_owned());
+    if first {
+        tracing::warn!(
+            plugin = ns,
+            message = id,
+            "plugin message not in its catalog: the fact is dropped (further ones are debug lines)"
+        );
+    }
+}
+
 fn effects_of(effects: Vec<Effect>, ns: &str) -> Vec<FactEffect> {
     let mut out = Vec::new();
     for e in effects {
@@ -1553,6 +1585,7 @@ fn effects_of(effects: Vec<Effect>, ns: &str) -> Vec<FactEffect> {
                         // Resolved from the plugin's own catalog in the UI language of this
                         // moment; an id the catalog lacks drops the fact.
                         let Some(t) = resolve_msg(ns, &id, &args) else {
+                            warn_unresolved_once(ns, &id);
                             tracing::debug!(
                                 node,
                                 group,
@@ -2144,6 +2177,21 @@ mod tests {
             "plugin text leaked into a log: {log}"
         );
         assert!(!log.contains("hunter2"), "{log}");
+    }
+
+    #[test]
+    fn a_catalog_directory_the_user_cannot_enter_is_counted_not_ignored() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let pkg = tempfile::tempdir().unwrap();
+        let i18n = pkg.path().join("i18n");
+        std::fs::create_dir(&i18n).unwrap();
+        std::fs::write(i18n.join("en.msg"), "hello = hi\n").unwrap();
+        // The installed shape that silenced every message of the Telegram plugin: root's 0750.
+        std::fs::set_permissions(&i18n, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let unreadable = register_catalogs("test.catalog-perm", pkg.path());
+        std::fs::set_permissions(&i18n, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(unreadable, 2, "en.msg and ru.msg both fail to open");
+        assert_eq!(register_catalogs("test.catalog-ok", pkg.path()), 0);
     }
 
     #[test]

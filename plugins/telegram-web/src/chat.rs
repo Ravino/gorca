@@ -171,6 +171,11 @@ pub fn chat_name(cells: &[Cell]) -> Option<Name> {
     })
 }
 
+/// True when the whitespace separated `class` attribute has the token `want`.
+pub fn has_class(class: &str, want: &str) -> bool {
+    class.split_ascii_whitespace().any(|t| t == want)
+}
+
 /// Most characters of each part of a name (a Cyrillic character is two bytes; the host's cap on
 /// one message argument is 1024 bytes).
 const TITLE_MAX: usize = 160;
@@ -531,6 +536,13 @@ mod tests {
         assert!(total * 32 < 32 << 10, "32 rows fit one call: {total}");
         assert_eq!(clip("abc", 3), "abc");
         assert_eq!(clip("abcd", 3), "abc\u{2026}");
+    }
+
+    #[test]
+    fn class_tokens_are_whole_words() {
+        assert!(has_class("fullName _8IVW0azL", "fullName"));
+        assert!(!has_class("fullNameWrapper", "fullName"));
+        assert!(!has_class("", "fullName"));
     }
 
     #[test]
