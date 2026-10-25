@@ -1,6 +1,6 @@
 # ADR-0026: WASM plugin model on the fused semantic model (M18a)
 
-Status: **Proposed** (r6.1 SPS implemented behind `[plugins] scheduler`, default `labels`, 2026-10-25; r6, 2026-10-25, SPS scheduling §2.4.7, DP-1 pending owner; r5 implementation notes, 2026-10-25; r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
+Status: **Proposed** (r7 warm hook and startup preload §2.4.8, replaces the M18a-4 replay; DP-1 (b) approved by the owner, 2026-10-25; r6.1 SPS implemented behind `[plugins] scheduler`, default `labels`, 2026-10-25; r6, 2026-10-25, SPS scheduling §2.4.7, DP-1 pending owner; r5 implementation notes, 2026-10-25; r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
 r4 applies the r3 review (`docs/reports/adr-0026-review.md`, section r3): deadline from the turn start, timer slack,
 wait mechanism, one wait per keypress path, tighter benign gates. r3 follows the owner decision of 2026-10-24 (canonical actor model: plugins are actors, **B' is the design
 target**, §2.4.6, §5) and records QP-1..QP-5 as confirmed (§6).
@@ -675,7 +675,12 @@ mechanisms and replaces the policies:
 | Gap 7 (busy actor not skipped) and gap 8 (2 ms governor window plus 20 ms limit) | Kept unchanged. The governor window stays until the input layer supplies a keypress id; SPS runs inside the one wait |
 | Review findings S-1, S-2, C-1, P-1 | Independent of SPS and gating; they land before anyone enables plugins (M18a-2 acceptance) |
 
-##### 2.4.7.10 Host idle states: a decision for the owner (DP-1, **PENDING OWNER**)
+##### 2.4.7.10 Host idle states: a decision for the owner (DP-1, **(b) APPROVED by the owner 2026-10-25**)
+
+**r7:** the owner approved option (b), the `cpu_dma_latency` lease while plugins are active, on
+2026-10-25 (`docs/decisions.md`). The access method (recommended: udev `uaccess`) and P-core placement
+of plugin workers (in progress) are the owner's; slice M18a-2e implements the lease as specified below.
+The text below is the r6 analysis, unchanged.
 
 **Finding.** Deep C-state exit latency dominates the p99. This host (16 CPUs, `intel_idle` driver,
 `menu` governor) has C2 127 µs and **C3 1048 µs** exit latency, all enabled. A parked pool thread
@@ -769,6 +774,273 @@ change `<= 0.31 ms`, and not more than 60 µs above LABELS; (5) SPS-1..SPS-9 pas
 (1)-(3) pass**, SPS stays and DP-1 becomes mandatory (b). **If (1)-(3) fail**, LABELS stays as the
 shipped policy, the SPS crate remains as a replay tool, and the reviewer states which gate failed; the
 result is recorded in `docs/decisions.md`.
+
+#### 2.4.8 Warm hook and startup preload (r7; replaces the M18a-4 replay)
+
+Status: Proposed (r7, 2026-10-25, owner request of the same day); normative once slice M18a-4w ships.
+Quantities written **TBD-Wn** come from the math model `docs/reports/plugin-warm-hook-model.md`
+(math-researcher, written in parallel, not on main at r7). They are filled by an r7.1 amendment; this
+section does not guess them. Draft WIT: `wit/drafts/gorca-ext-0.11-warmup/warmup.wit` (parsed with
+wit-parser 0.261.0; not built, not linked). **Owner rule for this change (2026-10-25): no backward
+compatibility.** There are no old plugins to keep; the hook is part of the new contract, every existing
+guest is ported, the replay is deleted, and there is no version negotiation or 0.10 host path.
+
+**Why.** M18a-4 (`docs/reports/m18a-4-plugin-costs.md` §1, §2) measured that the guest call is bound by
+the state of the core and its caches, not by software: 6.5-25 µs warm, 107-130 µs after the core slept
+100 ms, 205 µs on an LP-E core. Its opt-in remedy, `warm_on_arm`, **replays the last interactive job**
+on a plan-armed worker. It recovered about 30 % of the cold call (101 to 70 µs) and shipped off. It has
+three faults that a hook removes: the plugin sees a duplicate `derive` with real node data; the host
+keeps a job (node rows) alive beyond its turn to replay it; and the replay runs real imports whose
+effects then have to be dropped. The owner asked for an explicit hook instead, plus preloading of
+interactive plugins at startup.
+
+##### 2.4.8.1 Three warm levels
+
+| Level | What runs | Tiers | Guest code | What the plugin can learn |
+|---|---|---|---|---|
+| **`touch`** | The host reads one byte per cache line of the instance's compiled code range and per page of its resident linear memory, up to TBD-W5 bytes; no guest call | every tier | no | nothing (it is not called) |
+| **`warm(preload)`** | the required guest export, on a **fresh** instance, before its first real call, background lane, B-1 grant | every tier, under the scope rules of §2.4.8.3 | yes | that an instance was created (it already learns this from `attach`) |
+| **`warm(arm)`** | the required guest export on a worker the scheduler armed at key-down, short grant (TBD-W2) | **T2**; T3-trusted only with the owner switch QW-2; never untrusted T3 or T3-dev | yes | that it was armed (§2.4.8.7, CC-2, CC-3) |
+
+**The replay is deleted, not kept as a fallback.** `Config::warm_on_arm`, the saved job behind
+`ActorRunner::set_warm` and the `WARM_JOB` fault tag go away in M18a-4w, together with the bench switch
+`GORCA_BENCH_WARM`. A plugin whose warm state is `Off`, and an armed untrusted third party (which never
+receives `arm`), get `touch` only. The M18a-4 replay number stays as the reference row of
+the C-5 A/B (§2.4.8.10).
+
+##### 2.4.8.2 Required export, versioning, porting
+
+- **Required export, not a manifest declaration.** `warmup` is exported by `app-module` (and therefore
+  `site`) next to `rules`, `commands` and `reactor`. Reasons: (1) the component type is checked by
+  wasmtime when the host instantiates the world, so a plugin cannot claim a hook it lacks or lack one it
+  claims; a manifest flag can lie and would be a second source of truth for one fact; (2) a required
+  export keeps the host on its typed `bindgen!` path (`rules-host` world) with no name lookup and no
+  "absent" state; (3) the cost to a plugin with nothing to warm is an empty function, which the SDK
+  supplies. A component without the export fails to instantiate the world and the package is
+  **refused at load** with a diagnostic (like any other world mismatch).
+- **WIT step: `gorca:ext@0.10.0` → `gorca:ext@0.11.0`, a clean breaking bump.** Adding a required export
+  changes the world, so the version says so; 0.10 and 0.11 are not on one semver track (wasmtime's
+  alternate key is `@0.10` vs `@0.11`, `refs/wasmtime/crates/environ/src/component/names.rs:293`), and
+  the host defines 0.11 only. No shim, no dual linking, no fallback world. `wit/gorca-ext-0.10/` is
+  renamed to `wit/gorca-ext-0.11/` in M18a-4w; `warm-kind` is a `u8` registry code because closed enums
+  cannot grow without another type change.
+- **Ported in the same change** (no guest is left on 0.10): `plugins/telegram-web` (real warm: its
+  row-name and message-role parser over a compiled-in canned row; `plugins/pins.txt` regenerated by
+  `tools/build-plugins.sh`), the host test guest `crates/gorca-plugin-host/tests/guest`, and every
+  fixture or dummy plugin the daemon tests and benches build. Research harnesses that never link the
+  product host (`bench/wasm-hook`, `tools/spikes/wasm-plugin-cost`, the M18a-0 bake-off harness) keep
+  their own frozen WITs and are untouched. The legacy extension world `gorca:ext@0.4.0` is not changed
+  here; it converges into this ABI under §2.4.8.9.
+- **Guest SDK.** A `Warm` trait with an empty default body; helpers touch the allocator and run a
+  closure over canned input, `black_box`ing the result.
+
+##### 2.4.8.3 Firing rules
+
+Only the plugin runtime fires a warm, on the worker thread that owns the W instance. Never on a writer
+turn (I-P3), never inside the writer's wait, never on the R lane (commands have a 20 ms budget and no
+wait; nothing to win). The gates are read on the worker from flags the writer publishes (the M18a-4
+`warm_ok` mechanism), and **all** must hold.
+
+| Gate | `arm` | `preload` | `touch` |
+|---|---|---|---|
+| G-1 slot `Ready` (preload: a fresh spare or a fresh W instance before `attach`), plugin enabled, its source `Active` (not `Paused`, not `Quarantined`), `WarmState::Eligible` | yes | yes | slot `Ready` and source `Active` |
+| G-2 not safe mode; package not quarantined; for any T3: `system-scopes` loaded (fails closed) | yes | yes | yes |
+| G-3 scope = the focused scope; focus not on a secret node (any tier); for T3 not a system scope and focus not editable | yes | n/a (preload of T3 only at attach of a verified, non-system scope that matched) | yes |
+| G-4 key class ∈ {`Nav`, `Tab`, `Enter`}: never `Type`, `EditArrow` or `Other`; never a `refinement` plugin (L-1) | yes | n/a | yes |
+| G-5 the worker was armed **by a plan** of `on_key_down` (top-K, at most one third party, L-2), never by a blanket arm; under the LABELS fallback only `interactive`-labelled T2 plugins, at most `K_max`; once per arming; arming lead left ≥ TBD-W4; the worker idle (no call, no warm) for ≥ TBD-W1; per-plugin rate ≤ TBD-W3; the plugin's own warm bucket not empty (TBD-W6) | yes | n/a | yes, minus the warm bucket (touch is charged to the spin bucket) |
+| G-6 firing rule beyond G-5 (whether to warm every armed worker or only those whose expected gain exceeds the cost): **TBD-W7** | yes | n/a | TBD-W7 |
+
+Preload fires (a) on a startup **spare** (§2.4.8.8, T2 only), (b) on the fresh W instance of a scope
+that attaches, just before `attach`, under the same B-1 grant, for every tier with the export. Exactly
+once per instance. A preload always runs inside a scope the plugin matched or before any scope exists
+(T2 spare); a T3 plugin never runs code without a matching, verified scope.
+
+##### 2.4.8.4 Budget and accounting
+
+- **Grant.** `arm`: fuel from TBD-W2 through κ_int, wall cap TBD-W2. `preload`: the B-1 background grant
+  and the background wall cap of §2.5.2. Import pre-charging (§2.5.2) applies to the denied imports too.
+- **CPU.** Each guest warm's `CLOCK_THREAD_CPUTIME_ID` cost is settled against the **plugin's own warm
+  bucket** (size and refill TBD-W6), **not** the shared spin bucket of §2.4.7.3, so one plugin's warm
+  behaviour can never change another plugin's arming (CC-4). `touch` is host work and is charged to the
+  spin bucket like the spin itself.
+- **SPS.** Warm execution never enters `exec_h`, `u`, `α`, the offence rule or the deadline. The next
+  job's `Observation` carries `after_warm: bool`, so the split histograms of WQ-7 can separate "hot after
+  warm" from "hot". A job that arrives while a warm runs waits behind it (guest calls are not
+  pre-empted); the wait is bounded by the wall cap and lands in the measured start histogram. SPS-1 is
+  unaffected (absolute clamp, §2.4.7.4 step 7); SPS-8 is unaffected (the `Derive` job does not say
+  whether its worker was warmed).
+- **Wedged-actor detector.** `running_since` covers a warm exactly like a call.
+
+##### 2.4.8.5 Failure semantics: the warm state machine
+
+Warm is a property of the plugin's code, so the state is per (plugin, session) and shared by its scopes.
+
+```rust
+// gorca-plugin-host, interface sketch (paper only).
+enum WarmState {                            // no `Absent`: the export is required (§2.4.8.2)
+    Eligible,
+    Cooling { until: Instant, overruns: u8 },  // after a completed warm over its wall cap; 10 s
+    Off(OffReason),                         // rest of the session: `touch` only
+}
+enum OffReason { Fault, Overruns, NotNeutral, Owner }
+```
+
+Initial state at load: `Eligible` (a package without the export never loads).
+
+| State \ Event | warm returns within cap | warm over wall cap, completed | warm fault (trap, `OutOfFuel`, memory denial, over-cap import argument) | cooling expires | package swapped | owner off / on |
+|---|---|---|---|---|---|---|
+| `Eligible` | stay | third overrun within 10 min → `Off(Overruns)`; otherwise → `Cooling{now + 10 s, n + 1}` | → `Off(Fault)` **and a slot fault** (§2.5.4) | — | → `Eligible` (new code) | → `Off(Owner)` |
+| `Cooling` | — (not fired) | — | — | → `Eligible` (overrun count kept for 10 min) | → `Eligible` (new code) | → `Off(Owner)` |
+| `Off(_)` | — | — | — | — | → `Eligible` (new code) | `on` → `Eligible` (only from `Owner`) |
+
+- **A warm fault is a fault of the slot**: strike, instance dropped (`Cold`), backoff escalation, exactly
+  as the M18a-4 security review required for the replay. The hook can never be a free crash channel.
+- **A warm overrun does not enter the slot's `overruns` window** (§2.5.4): host noise must not demote a
+  plugin's `derive` because of an optional hook. It is handled by the warm machine alone.
+- **Effects never exist**: every import is denied during `warm` (§2.4.8.6), so nothing is buffered and
+  nothing is dropped after the fact. Counters per plugin: warms by kind, wall p99, overruns, faults,
+  denied imports.
+- **Revocation.** On mask, backoff, disable, scope close or package swap the writer clears the gate
+  flag before the transition is published; a warm in flight completes and is counted, nothing else.
+- Fault tag `WARM_HOOK` replaces `WARM_JOB`.
+
+##### 2.4.8.6 What a warm may do, neutrality, determinism
+
+- **No host capability.** During `warm` every import of the 0.10 host behaves as if the plugin had no
+  permission for it (§2.5.4 "not faults"): reads return `none` or empty (there is no snapshot and no
+  handle), effects, timers, requests, settings writes and `diag.log` are denied and counted. Own
+  settings reads are denied as well: a plugin that needs a setting to warm the right path reads it in
+  its next real call. Rationale: the smallest rule that cannot leak, and a warm needs no data.
+- **Same environment as `derive`**: fixed per-call random stream, clocks read 0, no `now-ms`.
+- **W-N1 warm-neutral (normative for S1 producers).** `ext-test` replays a recorded `derive` sequence in
+  two fresh instances, one with `warm(0)` and `warm(1)` inserted at random points (including twice in a
+  row); facts, effects and replies must be bit-equal. A T2 plugin must pass it to ship (CI). This is
+  PF-1 applied to the hook; for untrusted T3 (S4 only) private state may legally differ, and untrusted
+  T3 never receives `arm` anyway.
+- **Idempotent**: two calls in a row equal one (part of W-N1).
+
+##### 2.4.8.7 Security: observation, covert channels, out-of-scope code
+
+| Id | Risk | Rule |
+|---|---|---|
+| **CC-1** | the hook hands the plugin data | `warm` carries only `kind`; no node, handle, text, key, time or epoch; all imports denied (§2.4.8.6) |
+| **CC-2** | inbound keystroke signal: `arm` means "a non-typing key went down in your focused scope" and comes on keys that move no focus, which `derive` never reveals | never on `Type`/`EditArrow`/`Other`, never while focus is on a secret node (inter-key timing in password fields is the classic side channel), never in a system scope, never to untrusted T3 or T3-dev, T3-trusted only behind owner switch QW-2 (default off). T2 is first-party code built from this repository |
+| **CC-3** | scheduler leak: arming is top-K over every plugin's statistics, so the count of `arm` warms is a 1-bit-per-key view of SPS state that other plugins' `derive` timings influence | residual, recorded: with no clock and no capability that leaves the process (0.10 has no `net:*`, `clipboard-*`) it cannot be exported. **Rule for later versions:** a plugin holding any capability that can leave the process never receives `arm` |
+| **CC-4** | outbound: a plugin modulates its warm time to signal | warm costs go to the plugin's own bucket only and into no histogram; nothing shared changes with them |
+| **CC-5** | code runs while masked, in backoff or out of scope | G-1/G-2: never in `Backoff`, `Disabled`, `Paused`, `Quarantined`, safe mode; T3 preload only at attach of a matching verified non-system scope; startup spares only for T2 |
+| **CC-6** | denial of service | per-warm cap, per-plugin rate and own bucket, faults strike, overruns turn it off. Worst case per keypress: `K_max` (6) × TBD-W2 of worker CPU, never writer time |
+
+Logging follows §2.7: ids, kinds and durations only.
+
+##### 2.4.8.8 Startup preload and spare instances (manifest)
+
+```toml
+[plugin]
+class = "interactive"   # existing: "interactive" | "refinement" | absent (unlabelled)
+preload = "auto"        # new, optional: "auto" (default) | "lazy". A manifest may only lower it.
+memory-mib = 16         # existing (B-7; above 16 first-party only)
+```
+
+| class \ tier | T2 | T3-trusted | T3, T3-dev |
+|---|---|---|---|
+| `interactive` | deserialize from buffer at startup, first in order; `mlock` of the code range if WQ-5 says so; **one spare W instance + `warm(preload)`** | deserialize at startup, second in order; no spare; `warm(preload)` at attach | as T3-trusted; `arm` never |
+| unlabelled | deserialize at startup, third in order; no spare | same | same |
+| `refinement` | deserialize at the first matching scope (lazy), background | lazy | lazy |
+
+`preload = "lazy"` turns any row into "deserialize at the first matching scope, no spare". The owner
+config `[plugins."<id>"] preload = "eager" | "auto" | "lazy"` may raise a T2 plugin only; it never
+creates a spare for a third party.
+
+- **SP-1** A spare is a fresh instance from the `InstancePre` that has run nothing but `warm(preload)`.
+  It has no handle, no scope and no `attach`. The first matching scope adopts it and runs `attach` as
+  today; the runtime builds the next spare in the background.
+- **SP-2** A W instance of a closed scope is **never** recycled into a spare: its memory holds that
+  scope's state (AC-2).
+- **SP-3** Spares count toward the B-7 total (512 MiB). At most TBD-W8 spares (count and MiB) exist.
+- **SP-4** Eviction: all spares are dropped when `MemAvailable` falls below 4 GiB (the host rule of
+  `CLAUDE.md`) or PSI memory `some avg10` exceeds TBD-W9, and rebuilt with hysteresis when it clears;
+  otherwise, above the cap, the spare of the plugin whose scope opened least recently goes first (ties by
+  id); a spare unused for TBD-W10 is dropped.
+- **SP-5** A spare that fails to instantiate or faults in `warm(preload)` counts as one strike in the
+  package escalation of ADR-0019 §2.5 and ends spares for that plugin for the session; the plugin still
+  loads normally at its next scope attach.
+
+Motivating native case: the `term_parity` flake (decisions 2026-10-25), where the ext-vte native hook's
+first Terminal call takes 20-26 ms under load. Startup preload plus `warm(preload)` is the fix
+§2.4.8.9 extends to native extensions.
+
+##### 2.4.8.9 One ABI: extensions and WASM plugins
+
+The decision of 2026-10-25 (`gorca:ext@0.4.0` frozen, extensions and WASM plugins converge into one ABI
+in M18a) applies:
+- The converged world carries `warmup` as a **required export** of every world with an interactive
+  export (`app-module`, `site`, and the successor of 0.4's `terminal` policy). The frozen 0.4 world is
+  not extended; its components (`ext-vte` and the others) are ported to the converged world, `warmup`
+  included, when the ABIs merge in M18a, and 0.4 is then deleted. Until that merge they get `touch` and
+  startup deserialize only.
+- Native in-process extensions (the ext-vte native hook, `builtin_ext`) implement the same host-side
+  trait, so the runtime fires them under the same gates, caps and state machine:
+
+```rust
+// gorca-plugin-host (paper only). Replaces `Exec::warm_call(&DeriveJob)`.
+pub enum WarmKind { Preload, Arm }                  // wire codes 0 and 1
+pub struct WarmGrant { fuel: u64, wall: Duration }  // fuel ignored by native code
+pub enum WarmOutcome { Done { exec: Duration }, Overrun { exec: Duration }, Fault(FaultKind) }
+pub trait Exec {
+    // ... existing methods ...
+    fn warm(&mut self, kind: WarmKind, grant: WarmGrant) -> WarmOutcome; // required, no default
+    fn touch(&mut self, max_bytes: u32);                                 // host-only, never guest code
+}
+```
+
+##### 2.4.8.10 Slice M18a-4w, the C-5 A/B and metrics
+
+**M18a-4w** (after M18a-4; independent of M18a-5): delete the replay; WIT 0.11.0, the host world and
+every product guest ported in one change (§2.4.8.2); `WarmState`; gates G-1..G-6; `touch`; own warm buckets; spares and SP-1..SP-5; the
+manifest key `preload`; config `[plugins] warm = "off" | "touch" | "hook"`
+(default **off** until C-5; replaces `warm_on_arm`). Acceptance: the tests W-T1..W-T6 pass.
+
+| Test | Obligation |
+|---|---|
+| W-T1 | every cell of the §2.4.8.5 table; a warm fault strikes the slot; a warm overrun leaves the slot's `overruns` untouched |
+| W-T2 | property test over 10^6 random event logs: no `arm` warm on `Type`/`EditArrow`/`Other`, on secret focus, in a system scope, to untrusted T3, to a `refinement` plugin, in `Backoff`/`Paused`/`Quarantined`/safe mode |
+| W-T3 | every import called inside `warm` is denied; no effect reaches the writer (fixture plugin calling every import) |
+| W-T4 | a component without `warmup` (or built against 0.10) is refused at load with a diagnostic; the host defines no 0.10 name |
+| W-T5 | W-N1 warm-neutral for telegram-web |
+| W-T6 | SP-2: no instance of a closed scope is ever adopted by another scope (instance identity test) |
+
+**C-5: none vs touch vs hook (a measured A/B, not a worktree bake-off).** Arms: `off`, `touch`, `hook`
+(telegram-web with its `warm` plus first-party dummies with a canned-input warm), with the M18a-4 replay
+row (101 / 70 µs) as reference. Harness: the M18a-4 `plugin_latency` and `plugin_call_cost` benches on
+`load1 < 4`, default idle states, governor recorded, **in the final host configuration**: with the
+DP-1 (b) lease (approved) and with the P-core placement the owner has in progress, because both remove
+part of the cold cost that a warm would otherwise be credited with. The reviewer judges. A level is
+turned on by default for a tier iff: (1) cold-call recovery on PX-14 ≥ TBD-W11; (2) warm CPU on PX-15
+≤ TBD-W12 at 5 and at 30 keys/s; (3) the C-4 per-plugin first-utterance share does not fall; (4)
+W-T1..W-T6 pass. `touch` and `hook` are judged separately; if `hook` adds less than TBD-W13 over
+`touch`, only `touch` ships on by default and the hook stays available behind the switch.
+
+| Metric | What | Gate |
+|---|---|---|
+| PX-14 | first `derive` exec after ≥ 100 ms idle on an armed worker, p50/p99, per arm and per core class | ≥ TBD-W11 recovery against `off`; reference: replay 101 → 70 µs (M18a-4) |
+| PX-15 | warm CPU per keypress (per plugin and total), at 5 and 30 keys/s; warm wall p99 | ≤ TBD-W12; wall p99 ≤ TBD-W2 |
+| PX-16 | first-call latency of a newly opened scope with and without a spare (Telegram Web tab; ext-vte Terminal once native) | ≤ TBD-W14; `term_parity` first call no longer above its limit under load |
+| PX-17 | spare memory | total ≤ TBD-W8; all spares gone within 1 s of `MemAvailable < 4 GiB` |
+
+**TBD slots for the math model** (`docs/reports/plugin-warm-hook-model.md`):
+
+| Slot | Quantity |
+|---|---|
+| TBD-W1 | idle time after which a worker counts as cold (no warm before it) |
+| TBD-W2 | `arm` warm maximum duration (wall cap) and the fuel it maps to |
+| TBD-W3 | per-plugin maximum `arm` warm rate |
+| TBD-W4 | minimum arming lead left for a warm to start (the replay used 1 ms) |
+| TBD-W5 | `touch` byte budget (code plus data) |
+| TBD-W6 | per-plugin warm bucket size and refill |
+| TBD-W7 | the firing rule: warm every plan-armed worker, or only when expected gain exceeds cost |
+| TBD-W8 | spare cap (count, MiB) |
+| TBD-W9, TBD-W10 | PSI threshold; unused-spare lifetime |
+| TBD-W11..TBD-W14 | C-5 adoption thresholds and the PX-16 target |
 
 ### 2.5 Performance and safety
 
@@ -1142,6 +1414,9 @@ benchmarks in §2.4.7.12): 2a merges the runtime with the interim LABELS policy,
 `gorca-plugin-sched` crate, 2d integration and the C-4 A/B, 2e the idle-state lease (conditional on
 DP-1), 2f warm-instance retention (deferred). M18a-3..7 follow M18a-2d.
 
+**r7:** slice **M18a-4w** (warm hook, startup spares, removal of the replay; §2.4.8.10) follows
+M18a-4 and does not gate M18a-5.
+
 | Slice | Content | Acceptance | Benchmarks |
 |---|---|---|---|
 | **M18a-0** | **C-3 bake-off**: measures A against B' to **confirm B'** (§5, confirmation rule); WQ-1..WQ-3 and WQ-6 measured; H-3 probes (PX-4 adversarial set); κ_int/κ_bg table per core class; lazy-parameter bindgen check (§2.5.3) | reviewer verdict on the measured numbers; budgets B-1..B-9 frozen in the exit report; decision row | PX-4, PX-6 (on the bake-off fixture), WQ-1..3 |
@@ -1399,11 +1674,20 @@ the final `read-*` permissions; relations and positions are assumed to behave li
 
 **MQ-4 (answered, r6):** §2.4.7.5 (report §3.5).
 
-Owner decision pending (r6):
+Owner decision (r6; **(b) approved 2026-10-25**, r7):
 - **DP-1** idle-state policy for the plugin pool: (a) accept deep C-state wake tails, (b) a
   `cpu_dma_latency` lease only while plugins are active, (c) a persistent per-CPU limit on dedicated pool
   CPUs. Options, access methods and the architect's recommendation (b via udev `uaccess`, default off):
-  §2.4.7.10. **Not decided here.**
+  §2.4.7.10. **Decided by the owner: (b)**; access method still the owner's.
+Owner points opened by r7 (warm hook, §2.4.8):
+- **QW-1** Default of `[plugins] warm` before C-5 runs: recommended `off` (as the replay was), then per
+  tier from the C-5 result.
+- **QW-2** `arm` warm for T3-trusted plugins: recommended **no** (CC-2, CC-3); the switch exists for
+  the owner, default off. Untrusted T3 never gets it.
+- **QW-3** Startup spares for first-party `interactive` plugins: recommended yes, capped by TBD-W8 and
+  dropped below 4 GiB available.
+- **QW-4** Whether `touch` may default on for every tier before C-5 (it runs no guest code and reveals
+  nothing): recommended no, judge it in C-5 like the hook.
 - **QS-1** SPS parameter set of §2.4.7.11 is frozen only after PX-6 telemetry on the real host (the
   simulation is synthetic and fitted to one wake probe).
 
@@ -1433,6 +1717,11 @@ WASM engineer (M18a-0 unless noted):
   statistics say, a plugin delays the writer by at most its own hold (third party `<= 100 µs`), a
   `refinement` plugin is never waited for or pre-woken, and scheduler state is integer, writer-owned and
   replayable (§2.4.7.8, SPS-1..SPS-9).
+- I-P10 (r7) A warm never carries data, never runs on a writer turn, a masked, backed-off, disabled
+  or quarantined plugin, in safe mode, or (`arm`) on typing keys, secret focus, a system scope or an
+  untrusted third party; every import is denied inside it; its faults strike the slot; its cost is
+  charged to the plugin's own bucket and feeds no scheduler statistic; no job is ever replayed
+  (§2.4.8, W-T1..W-T6).
 - I-P3 Every guest call has a fuel grant and a wall measurement; no file read, deserialize or compile
   runs on a writer turn.
 - I-P8 (r3, r4, r6) The only blocking call a writer makes for a plugin is the interactive wait (atomic
@@ -1447,6 +1736,18 @@ WASM engineer (M18a-0 unless noted):
 - I-P7 Slot state transitions are exactly §2.5.4; every cell is tested.
 
 ## 8. Changelog
+
+**r7 (2026-10-25)** — owner request: replace the M18a-4 replay (`warm_on_arm`) by an explicit warm hook
+and preload interactive plugins at startup. No change to the fact model, the lanes, the call model or
+SPS decisions. WIT step 0.10.0 → 0.11.0 is breaking on purpose (owner: no backward compatibility).
+
+| Source | Change |
+|---|---|
+| Owner request, M18a-4 report §1/§5 | new §2.4.8: three levels (`touch` host-only, `warm(preload)`, `warm(arm)`), **required** export `warmup` in `gorca:ext@0.11.0` (clean breaking bump, no manifest flag, no compatibility path; all product guests ported), gates G-1..G-6, own warm bucket, `WarmState` machine (fault strikes the slot, overrun only cools the hook), all imports denied, W-N1 warm-neutral test, CC-1..CC-6, startup spares SP-1..SP-5 and manifest `preload`, native-extension trait for the one-ABI convergence, slice M18a-4w, C-5 A/B, PX-14..PX-17, invariant I-P10 |
+| M18a-4 replay | **removed** (not a fallback): `warm_on_arm`, saved job, `WARM_JOB`, `GORCA_BENCH_WARM`; `touch` only for `Off` plugins and untrusted third parties |
+| Math model (parallel) | TBD-W1..TBD-W14 left as explicit slots for `docs/reports/plugin-warm-hook-model.md`; filled by r7.1 |
+| DP-1 | owner approved (b), the `cpu_dma_latency` lease while plugins are active; P-core placement in progress; C-5 runs in that configuration |
+| Open | QW-1..QW-4 (§6) |
 
 **r6 (2026-10-25)** — folds in the statistical plugin scheduler (`docs/reports/plugin-statistical-scheduler.md`)
 and the C-state finding of `docs/reports/m18a-2-review.md` §2. No change to the fact model, the lanes, the
