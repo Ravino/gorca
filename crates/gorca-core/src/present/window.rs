@@ -28,7 +28,6 @@ use gorca_rt::BudgetClass;
 use smallvec::SmallVec;
 
 use super::fair::Kind;
-use super::utterance::seg;
 use crate::SpeechIntent;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 use crate::review::NavSource;
@@ -148,62 +147,6 @@ impl WindowState {
             }
         }
     }
-}
-
-/// What a window utterance leads with: the title, and the role word for dialogs and alerts (a
-/// plain window is its title; "window" after every application name is noise).
-pub fn lead_segments(win: &NodeSnapshot) -> SmallVec<[Segment; 2]> {
-    let mut out = SmallVec::new();
-    if let Some(name) = win.name.as_deref().filter(|s| !s.trim().is_empty()) {
-        out.push(seg(name, SegmentKind::Text));
-    }
-    match win.role {
-        Role::Dialog | Role::Alert => out.push(seg(win.role.spoken(), SegmentKind::Role)),
-        Role::Unknown
-        | Role::Application
-        | Role::Window
-        | Role::Panel
-        | Role::Document
-        | Role::DocumentWeb
-        | Role::Heading
-        | Role::Paragraph
-        | Role::Link
-        | Role::Image
-        | Role::List
-        | Role::ListItem
-        | Role::Table
-        | Role::Row
-        | Role::Cell
-        | Role::ColumnHeader
-        | Role::RowHeader
-        | Role::Button
-        | Role::ToggleButton
-        | Role::Switch
-        | Role::CheckBox
-        | Role::RadioButton
-        | Role::ComboBox
-        | Role::TextEntry
-        | Role::PasswordEntry
-        | Role::SpinButton
-        | Role::Slider
-        | Role::ProgressBar
-        | Role::Menu
-        | Role::MenuBar
-        | Role::MenuItem
-        | Role::Popover
-        | Role::Tab
-        | Role::TabList
-        | Role::Tree
-        | Role::TreeItem
-        | Role::Toolbar
-        | Role::StatusBar
-        | Role::Separator
-        | Role::Label
-        | Role::StaticText
-        | Role::Terminal
-        | Role::Landmark => {}
-    }
-    out
 }
 
 /// Windows whose static text is read on open: dialogs and alerts (ARIA `alertdialog`).
@@ -937,7 +880,7 @@ impl Reader {
         if self.window_silenced(&snap) {
             return;
         }
-        let lead = lead_segments(&snap);
+        let lead = self.window_lead(&snap);
         let texts = if reads_content(snap.role) {
             self.window_texts(window, None)
         } else {
@@ -1030,7 +973,7 @@ impl Reader {
             self.win.led = None;
             return;
         }
-        let mut lead: SmallVec<[Segment; 6]> = lead_segments(&win).into_iter().collect();
+        let mut lead: SmallVec<[Segment; 6]> = self.window_lead(&win).into_iter().collect();
         let mut texts = Vec::new();
         if reads_content(win.role) {
             texts = self.window_texts(window, Some(focus));
@@ -1125,7 +1068,8 @@ impl Reader {
             if near {
                 // The focus utterance is still playing: replace it by the complete line in
                 // reading order (title, role, text, focus), so the focus is never heard twice.
-                let segs: SmallVec<[Segment; 8]> = lead_segments(snap)
+                let segs: SmallVec<[Segment; 8]> = self
+                    .window_lead(snap)
                     .into_iter()
                     .chain(content_segments(&led.spoken))
                     .chain(led.tail.iter().cloned())
@@ -1141,7 +1085,7 @@ impl Reader {
                 let lead = if led.title_done {
                     SmallVec::new()
                 } else {
-                    lead_segments(snap)
+                    self.window_lead(snap)
                 };
                 led.title_done = true;
                 led.mode = LedMode::Queued;
@@ -1158,7 +1102,7 @@ impl Reader {
             let lead = if led.title_done {
                 SmallVec::new()
             } else {
-                lead_segments(snap)
+                self.window_lead(snap)
             };
             if lead.is_empty() && fresh.is_empty() {
                 return;
@@ -1417,8 +1361,10 @@ pub(crate) mod tests {
         let d = snap(&node(1, Role::Dialog, "Save", &[]));
         let w = snap(&node(2, Role::Window, "Files", &[]));
         let n = snap(&node(3, Role::Window, "", &[]));
+        let f = fixture(&[node(1, Role::Dialog, "Save", &[])]);
         let words = |s: &NodeSnapshot| -> Vec<String> {
-            lead_segments(s)
+            f.reader
+                .window_lead(s)
                 .iter()
                 .map(|g| g.text.to_string())
                 .collect()
