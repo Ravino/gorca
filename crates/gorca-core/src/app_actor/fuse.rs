@@ -11,7 +11,7 @@
 //! the pump's events, under a time budget (the focus chain first: the engine's priority classes).
 //! What does not fit stays queued or dirty for the next step. Nothing here waits on the
 //! application, and speech does not read this entry yet (dual-carry): the web overlay of the Reader
-//! reads the document actor's entries (`NodeMeta::sem`), the presenter switches in M22b.
+//! reads the document actor's entries (`NodeData::sem`), the presenter switches in M22b.
 //!
 //! The entry attached to a snapshot is read through [`gorca_fuse::Ivm::entry_view`], never the
 //! unmasked one (ADR-0024 review: a silenced source must not leak through the cache).
@@ -26,7 +26,9 @@ use gorca_fuse::{
     Write, parse_inexpressible, parse_pi,
 };
 use gorca_mirror::MirrorWriter;
-use gorca_model::sem::{Group, SemEntry, SemText, SrcRecord};
+#[cfg(test)]
+use gorca_model::sem::SemEntry;
+use gorca_model::sem::{Group, SemText, SrcRecord};
 use gorca_model::{NodeKey, NodeSnapshot, SemTables};
 
 use crate::plugin_port::{
@@ -64,8 +66,6 @@ const INVAL_SWEEP_CHUNK: usize = 512;
 const ORPHAN_CAP: usize = 4096;
 /// Longest chain of ancestors handed to the engine as the focus chain.
 const FOCUS_CHAIN: usize = 64;
-/// Disagreements one writer logs (the counters keep counting past it).
-const MAX_AGREEMENT_WARNINGS: u16 = 64;
 /// Fusions a step makes even when its time is spent (the focus chain comes first).
 const FLOOR_FUSIONS: usize = 4;
 /// Default time budget of one [`FuseWriter::step`].
@@ -93,9 +93,6 @@ pub struct FuseStats {
     pub resets: AtomicU64,
     /// `step` calls that left work behind.
     pub carried: AtomicU64,
-    /// Legacy-agreement checks made (by node and group) and their disagreements.
-    pub agree_checked: AtomicU64,
-    pub agree_mismatch: AtomicU64,
 }
 
 /// A plain copy of [`FuseStats`].
@@ -110,8 +107,6 @@ pub struct FuseStatsView {
     pub attach_missed: u64,
     pub resets: u64,
     pub carried: u64,
-    pub agree_checked: u64,
-    pub agree_mismatch: u64,
 }
 
 impl FuseStats {
@@ -127,8 +122,6 @@ impl FuseStats {
             attach_missed: g(&self.attach_missed),
             resets: g(&self.resets),
             carried: g(&self.carried),
-            agree_checked: g(&self.agree_checked),
-            agree_mismatch: g(&self.agree_mismatch),
         }
     }
 }
@@ -261,10 +254,6 @@ pub(super) struct FuseWriter {
     plugins: Option<AppPlugins>,
     started: Instant,
     stats: Arc<FuseStats>,
-    /// Tests: a legacy disagreement panics (`debug_assert`) instead of only being counted.
-    strict: bool,
-    /// Disagreements logged so far: a page full of them must not flood the log.
-    warned: std::cell::Cell<u16>,
 }
 
 impl std::fmt::Debug for FuseWriter {
@@ -332,8 +321,6 @@ impl FuseWriter {
             plugins: None,
             started: Instant::now(),
             stats: Arc::new(FuseStats::default()),
-            strict: false,
-            warned: std::cell::Cell::new(0),
         }
     }
 
@@ -384,10 +371,6 @@ impl FuseWriter {
 
     pub(super) fn stats(&self) -> &Arc<FuseStats> {
         &self.stats
-    }
-
-    pub(super) fn set_strict(&mut self, strict: bool) {
-        self.strict = strict;
     }
 
     /// The application announced itself with its profile tables: rebuild the engine for them.
@@ -858,52 +841,12 @@ impl FuseWriter {
                 }
                 continue;
             };
-            if cfg!(any(debug_assertions, feature = "legacy-agree")) {
-                self.check_agreement(mirror, &a, &entry);
-            }
             if mirror.attach_sem(a.key, &a.rec, entry) {
                 bump(&self.stats.attached, 1);
             } else {
                 bump(&self.stats.attach_missed, 1);
             }
         }
-    }
-
-    /// The dual-carry check (ADR-0022 section 2.11): the legacy fields of the snapshot the entry
-    /// was fused from must agree with it, group by group, outside the documented deviations.
-    fn check_agreement(&self, mirror: &MirrorWriter, a: &Awaiting, entry: &SemEntry) {
-        use gorca_mirror::MirrorRead;
-        let Some(snap) = mirror
-            .reader()
-            .get(a.key)
-            .hit()
-            .filter(|s| s.sem.rec.as_ref().is_some_and(|r| Arc::ptr_eq(r, &a.rec)))
-        else {
-            return;
-        };
-        let report = super::agree::check(&snap, &a.rec, entry);
-        bump(&self.stats.agree_checked, report.checked);
-        super::agree::note_checked(report.checked);
-        for m in &report.mismatches {
-            bump(&self.stats.agree_mismatch, 1);
-            super::agree::note_mismatch();
-            let n = self.warned.get();
-            if n < MAX_AGREEMENT_WARNINGS {
-                self.warned.set(n + 1);
-                tracing::warn!(
-                    node = ?snap.key,
-                    group = m.group.name(),
-                    legacy = m.legacy,
-                    fused = m.fused,
-                    "legacy agreement: the fused entry disagrees with the legacy snapshot"
-                );
-            }
-        }
-        debug_assert!(
-            !self.strict || report.mismatches.is_empty(),
-            "legacy agreement broken: {:?}",
-            report.mismatches
-        );
     }
 }
 

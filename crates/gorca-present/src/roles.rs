@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The native role table (ADR-0022 section 2.5, M-10): `SemRole` to the catalog word the native
 //! focus row speaks, and the class that drives the state words. One exhaustive `match`, so a new
-//! model role cannot be added without deciding what native focus says for it. It replaces the
-//! detour through the legacy `Role` set (`SemRole::legacy_family`).
+//! model role cannot be added without deciding what native focus says for it.
 //!
 //! Web content has its own table (slice 3: NVDA words); this one is for native toolkits.
 
@@ -200,30 +199,5 @@ mod tests {
             native_role(SemRole::StaticText, Press::NotToggle).word,
             Some(M::RoleLabel)
         );
-    }
-
-    #[test]
-    fn every_role_word_agrees_with_the_legacy_family_unless_improved() {
-        // The table started as `legacy_family`; the differences are the documented improvements.
-        for code in 0..=u16::MAX {
-            let Some(role) = SemRole::from_code(code) else {
-                continue;
-            };
-            let fam = role.legacy_family();
-            let got = native_role(role, Press::NotToggle).word;
-            let want = (fam != gorca_model::Role::Unknown).then(|| fam.msg());
-            if got != want {
-                assert!(
-                    matches!(
-                        role,
-                        SemRole::StaticText
-                            | SemRole::Scrollbar
-                            | SemRole::Tooltip
-                            | SemRole::Switch
-                    ),
-                    "{role:?}: table {got:?} vs legacy {want:?}"
-                );
-            }
-        }
     }
 }

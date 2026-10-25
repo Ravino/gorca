@@ -22,8 +22,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gorca_doc::web::{NodeFlags, NodeView, WebDoc};
-use gorca_doc_source_api::web_attrs;
-use gorca_model::{DocNodeId, Role};
+use gorca_model::DocNodeId;
 
 /// Regions tracked per document; further regions are ignored.
 pub const MAX_REGIONS: usize = 64;
@@ -82,7 +81,6 @@ pub(super) struct Props {
     alert: bool,
 }
 
-#[allow(dead_code)] // used by the replay of the gate until the tracker switches to it
 impl Props {
     /// The properties of a region root from the node's fused semantics (ADR-0022 section 8):
     /// `live.root` is a region root (an `aria-live`, or the implicit live roles alert, status and
@@ -120,113 +118,14 @@ impl Props {
 
 /// The properties of the region root `v` is, from its fused entry; `None` for an ordinary node,
 /// a hidden one, and a node with no entry.
-#[allow(dead_code)] // used by the replay of the gate until the tracker switches to it
 pub(super) fn props_from_sem(v: &NodeView<'_>) -> Option<Props> {
     Props::from_sem(v.sem_ref()?, v.flags.contains(NodeFlags::HIDDEN))
 }
 
-fn attr<'a>(v: &'a NodeView<'_>, k: gorca_model::AttrKey) -> Option<&'a str> {
-    v.meta
-        .and_then(|m| m.attrs.iter().find(|(a, _)| *a == k).map(|(_, x)| &**x))
-}
-
-fn has_role(v: &NodeView<'_>, tok: &str) -> bool {
-    attr(v, web_attrs::XML_ROLES).is_some_and(|r| r.split_ascii_whitespace().any(|t| t == tok))
-}
-
-/// The live properties of a node that is a region root; `None` for an ordinary node. The
-/// properties still come from the node's attributes (dual-carry); a node with a fused entry is
-/// checked against it.
+/// The live properties of a node that is a region root; `None` for an ordinary node. They come
+/// from the node's fused entry (ADR-0022 section 8).
 pub(super) fn props_of(v: &NodeView<'_>) -> Option<Props> {
-    let legacy = legacy_props(v);
-    if let Some(e) = v.meta.and_then(|m| m.sem.as_deref()) {
-        check_props(v, legacy, e);
-    }
-    legacy
-}
-
-/// The legacy region properties against the fused entry (M22a-C2 agreement). A region root the
-/// legacy parse calls `off` (explicit `live=off`, a timer or marquee) is no live region in the
-/// model, where `off` is the absence of a `Live`. Two documented deviations: the legacy parse
-/// treats `alertdialog` as an assertive atomic region (the model does not: only `alert` is
-/// implicitly live), and it makes `status` atomic only when the role token is present, while the
-/// model gives every `status` (an `<output>` too) ARIA's implicit `aria-atomic=true`.
-fn check_props(v: &NodeView<'_>, legacy: Option<Props>, e: &gorca_model::sem::SemEntry) {
-    use gorca_model::sem::Relevant;
-    if !e.known.has(gorca_model::sem::Group::Live) || v.flags.contains(NodeFlags::HIDDEN) {
-        return;
-    }
-    let fused = e.sem.live.filter(|l| l.root);
-    let bad = match (legacy.filter(|p| p.politeness != Politeness::Off), fused) {
-        (None, None) => None,
-        (Some(p), Some(l)) => {
-            let pol = match l.politeness {
-                gorca_model::event::Politeness::Polite => Politeness::Polite,
-                gorca_model::event::Politeness::Assertive => Politeness::Assertive,
-            };
-            let implicit_status =
-                e.sem.role == gorca_model::sem::SemRole::Status && l.atomic && !p.atomic;
-            if pol != p.politeness {
-                Some("politeness")
-            } else if l.atomic != p.atomic && !implicit_status {
-                Some("atomic")
-            } else if l.relevant.contains(Relevant::REMOVALS) != p.removals {
-                Some("relevant")
-            } else {
-                None
-            }
-        }
-        (Some(p), None) => (!(p.alert && e.sem.role == gorca_model::sem::SemRole::AlertDialog))
-            .then_some("legacy region root, no fused live"),
-        (None, Some(_)) => Some("fused region root, no legacy live"),
-    };
-    if let Some(why) = bad {
-        let detail = format!(
-            "{why}: attrs live {:?} atomic {:?} relevant {:?}, roles {:?}; legacy {legacy:?}, fused {:?}",
-            attr(v, web_attrs::LIVE),
-            attr(v, web_attrs::ATOMIC),
-            attr(v, web_attrs::RELEVANT),
-            attr(v, web_attrs::XML_ROLES),
-            e.sem.live,
-        );
-        super::agree::flag(super::agree::Aspect::LiveProps, v.role, &detail);
-    }
-}
-
-pub(super) fn legacy_props(v: &NodeView<'_>) -> Option<Props> {
-    if v.flags.contains(NodeFlags::HIDDEN) {
-        return None;
-    }
-    let alert = v.role == Role::Alert || has_role(v, "alert") || has_role(v, "alertdialog");
-    let status = has_role(v, "status");
-    let log = has_role(v, "log");
-    let quiet_role = has_role(v, "timer") || has_role(v, "marquee");
-    let explicit = attr(v, web_attrs::LIVE);
-    let politeness = match explicit {
-        Some("assertive") => Politeness::Assertive,
-        Some("polite") => Politeness::Polite,
-        Some("off") => Politeness::Off,
-        _ if alert => Politeness::Assertive,
-        _ if status || log => Politeness::Polite,
-        _ if quiet_role => Politeness::Off,
-        _ => return None,
-    };
-    let relevant = attr(v, web_attrs::RELEVANT).unwrap_or("");
-    let removals = relevant
-        .split_ascii_whitespace()
-        .any(|t| t == "removals" || t == "all");
-    let atomic = match attr(v, web_attrs::ATOMIC) {
-        Some("true") => true,
-        Some(_) => false,
-        None => alert || (status && !log),
-    };
-    Some(Props {
-        politeness,
-        atomic,
-        removals,
-        busy: attr(v, web_attrs::BUSY) == Some("true"),
-        alert,
-    })
+    props_from_sem(v)
 }
 
 /// The region that owns a change at `id`: the nearest ancestor-or-self that is a region root.
@@ -624,7 +523,8 @@ impl LiveTracker {
 
 #[cfg(test)]
 mod tests {
-    use gorca_doc::web::{Cat, DocOp, NodeMeta, NodeSpec, SubtreeSpec};
+    use gorca_doc::web::{Cat, DocOp, NodeData, NodeSpec, SubtreeSpec};
+    use gorca_model::Role;
 
     use super::*;
 
@@ -694,15 +594,43 @@ mod tests {
         assert!(!b.take(t0 + Duration::from_millis(1200)));
     }
 
+    /// The node data of a region root: a fused entry whose live group is `politeness`
+    /// (`"polite"`, `"assertive"`, or `"off"` for the explicit `aria-live=off` flag).
+    fn region_data(politeness: &str, role: gorca_model::sem::SemRole) -> NodeData {
+        use gorca_model::sem::{Group, Live, Relevant, SemEntry, SemFlags};
+        let mut e = SemEntry::default();
+        e.sem.role = role;
+        match politeness {
+            "off" => e.sem.flags |= SemFlags::LIVE_OFF,
+            p => {
+                e.sem.live = Some(Live {
+                    politeness: if p == "assertive" {
+                        gorca_model::event::Politeness::Assertive
+                    } else {
+                        gorca_model::event::Politeness::Polite
+                    },
+                    atomic: false,
+                    relevant: Relevant::default(),
+                    root: true,
+                });
+            }
+        }
+        e.known.set(Group::Live, true);
+        e.known.set(Group::Flags, true);
+        NodeData {
+            sem: Some(Arc::new(e)),
+            ..NodeData::default()
+        }
+    }
+
     fn page(text: &str, live: &str) -> (WebDoc, DocNodeId) {
         let mut d = WebDoc::new(1);
-        let mut m = NodeMeta::default();
-        m.attrs.push((web_attrs::LIVE, Arc::from(live)));
+        let m = region_data(live, gorca_model::sem::SemRole::Generic);
         let region = SubtreeSpec::with_children(
             NodeSpec::new(Role::Panel)
                 .flags(NodeFlags::BLOCK | NodeFlags::LIVE)
                 .name("Flood region")
-                .meta(Arc::new(m)),
+                .data(Arc::new(m)),
             vec![SubtreeSpec::leaf(
                 NodeSpec::new(Role::StaticText).text(text),
             )],
@@ -743,7 +671,12 @@ mod tests {
         let _ = t.tick(&d, t0 + Duration::from_millis(700));
         let later = t0 + Duration::from_secs(5);
         let alert = SubtreeSpec::with_children(
-            NodeSpec::new(Role::Alert).flags(NodeFlags::BLOCK),
+            NodeSpec::new(Role::Alert)
+                .flags(NodeFlags::BLOCK)
+                .data(Arc::new(region_data(
+                    "assertive",
+                    gorca_model::sem::SemRole::Alert,
+                ))),
             vec![SubtreeSpec::leaf(
                 NodeSpec::new(Role::StaticText).text("Payment failed"),
             )],
@@ -870,23 +803,11 @@ mod tests {
         assert!(summaries <= 2, "summaries {summaries}");
     }
 
-    // ---- agreement with the fused entry (M22a-C2) ----------------------------------------------
+    // ---- the properties come from the fused entry --------------------------------------------
 
-    /// A one-node document whose root region has these attributes and this fused entry.
-    fn fused_region(live_attr: &str, live: Option<gorca_model::sem::Live>) -> (WebDoc, DocNodeId) {
-        use gorca_model::sem::{Group, GroupMask, SemEntry};
-        let mut e = SemEntry::default();
-        e.sem.live = live;
-        e.known = GroupMask::EMPTY;
-        e.known.set(Group::Live, true);
-        let mut m = NodeMeta::default();
-        m.attrs.push((web_attrs::LIVE, Arc::from(live_attr)));
-        m.sem = Some(Arc::new(e));
-        let node = SubtreeSpec::leaf(
-            NodeSpec::new(Role::Panel)
-                .flags(NodeFlags::BLOCK | NodeFlags::LIVE)
-                .meta(Arc::new(m)),
-        );
+    /// A one-node document whose root carries `data`.
+    fn one_node(data: NodeData, flags: NodeFlags) -> (WebDoc, DocNodeId) {
+        let node = SubtreeSpec::leaf(NodeSpec::new(Role::Panel).flags(flags).data(Arc::new(data)));
         let mut d = WebDoc::new(1);
         assert!(
             d.apply(&DocOp::InsertSubtree {
@@ -900,25 +821,18 @@ mod tests {
         (d, r)
     }
 
-    fn live(politeness: gorca_model::event::Politeness, atomic: bool) -> gorca_model::sem::Live {
-        gorca_model::sem::Live {
-            politeness,
-            atomic,
-            relevant: gorca_model::sem::Relevant::default(),
-            root: true,
-        }
-    }
-
     #[test]
-    fn a_region_the_tracker_and_the_entry_both_see_agrees() {
-        use gorca_model::event::Politeness as P;
-        let (d, r) = fused_region("polite", Some(live(P::Polite, false)));
+    fn a_region_root_reads_its_politeness_from_the_entry() {
+        use gorca_model::sem::SemRole;
+        let (d, r) = one_node(region_data("polite", SemRole::Generic), NodeFlags::BLOCK);
         let (_, p) = region_of(&d, r).unwrap();
         assert_eq!(p.politeness, Politeness::Polite);
-        let (d, r) = fused_region("assertive", Some(live(P::Assertive, false)));
-        assert!(region_of(&d, r).is_some());
-        // `off` is a region root for the tracker and the absence of a live region in the model.
-        let (d, r) = fused_region("off", None);
+        assert!(!p.alert);
+        let (d, r) = one_node(region_data("assertive", SemRole::Alert), NodeFlags::BLOCK);
+        let (_, p) = region_of(&d, r).unwrap();
+        assert_eq!((p.politeness, p.alert), (Politeness::Assertive, true));
+        // `off` is a region root for the tracker: it mutes the enclosing region.
+        let (d, r) = one_node(region_data("off", SemRole::Generic), NodeFlags::BLOCK);
         assert_eq!(
             region_of(&d, r).map(|(_, p)| p.politeness),
             Some(Politeness::Off)
@@ -926,9 +840,30 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "legacy agreement")]
-    fn a_region_the_entry_does_not_see_is_a_disagreement() {
-        let (d, r) = fused_region("polite", None);
-        let _ = region_of(&d, r);
+    fn a_node_without_a_live_group_or_an_entry_is_no_region() {
+        let (d, r) = one_node(NodeData::default(), NodeFlags::BLOCK);
+        assert!(region_of(&d, r).is_none());
+        let plain = NodeData {
+            sem: Some(Arc::new(gorca_model::sem::SemEntry::default())),
+            ..NodeData::default()
+        };
+        let (d, r) = one_node(plain, NodeFlags::BLOCK);
+        assert!(region_of(&d, r).is_none());
+    }
+
+    #[test]
+    fn a_hidden_region_is_no_region_and_busy_is_read_from_the_flags() {
+        use gorca_model::sem::{SemFlags, SemRole};
+        let (d, r) = one_node(
+            region_data("polite", SemRole::Generic),
+            NodeFlags::BLOCK | NodeFlags::HIDDEN,
+        );
+        assert!(region_of(&d, r).is_none());
+        let mut data = region_data("polite", SemRole::Generic);
+        let mut e = (**data.sem.as_ref().unwrap()).clone();
+        e.sem.flags |= SemFlags::BUSY;
+        data.sem = Some(Arc::new(e));
+        let (d, r) = one_node(data, NodeFlags::BLOCK);
+        assert!(region_of(&d, r).unwrap().1.busy);
     }
 }

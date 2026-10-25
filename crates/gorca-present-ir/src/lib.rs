@@ -68,8 +68,12 @@ pub enum Reason {
     Window,
     /// A notification or alert that appeared (M22b4).
     Notice,
+    /// Words an extension said: `host.speak`, the answer of an extension command, an on-event
+    /// rewrite, an "extension disabled" notice (M22b4). The producer is in `Origin::via`; there
+    /// is no fused entry behind it.
+    Ext,
     /// A reason of a newer host: edits must leave the IR unedited. The code is never a registered
-    /// one (`0..=10`): [`UnknownReason`] has a private field and is made only by
+    /// one (`0..=11`): [`UnknownReason`] has a private field and is made only by
     /// [`Reason::unknown`] or [`Reason::from_code`], which map a registered code to its own
     /// variant.
     Unknown(UnknownReason),
@@ -102,6 +106,7 @@ impl Reason {
             Reason::WhereAmI => 8,
             Reason::Window => 9,
             Reason::Notice => 10,
+            Reason::Ext => 11,
             Reason::Unknown(u) => u.0,
         }
     }
@@ -123,6 +128,7 @@ impl Reason {
             8 => Reason::WhereAmI,
             9 => Reason::Window,
             10 => Reason::Notice,
+            11 => Reason::Ext,
             c => Reason::Unknown(UnknownReason(c)),
         }
     }
@@ -765,9 +771,10 @@ mod tests {
             Reason::WhereAmI,
             Reason::Window,
             Reason::Notice,
+            Reason::Ext,
         ];
         let codes: Vec<u16> = all.iter().map(|r| r.code()).collect();
-        assert_eq!(codes, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(codes, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
         for r in all {
             assert_eq!(Reason::from_code(r.code(), true, 0b101), r);
         }
@@ -1017,6 +1024,7 @@ mod tests {
             | Reason::WhereAmI
             | Reason::Window
             | Reason::Notice
+            | Reason::Ext
             | Reason::Unknown(_) => (),
         };
         let _ = |a: ArgVal| match a {

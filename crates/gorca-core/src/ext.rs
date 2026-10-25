@@ -28,7 +28,7 @@ use gorca_config::{ChordSpec, ContextName};
 use gorca_ext_api::terminal::{Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot};
 use gorca_input_api::CmdId;
 use gorca_model::sem::{Group, SemEntry, SemRole};
-use gorca_model::{AppId, AppInfo, NodeEvent, NodeKey, NodeSnapshot, Segment};
+use gorca_model::{AppId, AppInfo, NodeEvent, NodeKey, NodeSnapshot, Segment, SegmentKind};
 
 use crate::commands::ContextMask;
 use crate::present::PresentContext;
@@ -44,8 +44,9 @@ pub enum ExtVerdict {
     Pass,
     /// Drop the event: it is neither routed to the Reader nor spoken.
     Suppress,
-    /// Drop the event and speak these segments instead.
-    Rewrite(Vec<Segment>),
+    /// Drop the event and say these words instead: they replace the event's own as the fields of
+    /// a `PresIr` (`Reason::Ext`), their origin tagged with the rewriting hook.
+    Replace(Vec<Segment>),
     /// Route as usual, and ask the app actor to revalidate its mirror.
     ReEvaluate,
 }
@@ -55,7 +56,7 @@ impl ExtVerdict {
     pub fn then(self, next: ExtVerdict) -> ExtVerdict {
         match self {
             ExtVerdict::Pass => next,
-            ExtVerdict::Suppress | ExtVerdict::Rewrite(_) | ExtVerdict::ReEvaluate => self,
+            ExtVerdict::Suppress | ExtVerdict::Replace(_) | ExtVerdict::ReEvaluate => self,
         }
     }
 }
@@ -283,8 +284,11 @@ static NOTICE_RETRIES: std::sync::atomic::AtomicUsize = std::sync::atomic::Atomi
 impl ExtSink for BackgroundSink {
     fn notice(&self, text: String) {
         use std::sync::atomic::Ordering;
-        let msg = crate::BackgroundMsg::ExtSpeech {
-            text: Arc::from(text),
+        let msg = crate::BackgroundMsg::ExtSay {
+            ir: Box::new(ext_words_ir(
+                [(SegmentKind::Said, text.as_str())],
+                VIA_EXT_SAY,
+            )),
             interrupt: false,
         };
         let msg = match self.tx.try_send(msg) {
@@ -313,14 +317,46 @@ impl ExtSink for BackgroundSink {
 
     fn speak(&self, text: String, interrupt: bool) {
         // A full lane drops the notice: extension speech is never worth stalling anyone.
-        let _ = self.tx.try_send(crate::BackgroundMsg::ExtSpeech {
-            text: Arc::from(text),
+        let _ = self.tx.try_send(crate::BackgroundMsg::ExtSay {
+            ir: Box::new(ext_words_ir(
+                [(SegmentKind::Said, text.as_str())],
+                VIA_EXT_SAY,
+            )),
             interrupt,
         });
     }
 }
 
-/// Segments to one string for the speech lane's text path.
+/// The producer tag (`Origin::via`) of words an extension said on its own: `host.speak`, a
+/// command's answer, a notice.
+pub const VIA_EXT_SAY: u32 = 3;
+/// The producer tag of an on-event rewrite.
+pub const VIA_EXT_REWRITE: u32 = 4;
+
+/// The IR of words an extension said (`Reason::Ext`): one `TEXT` field per token, each tagged
+/// with the producer `via`. There is no node behind it, so the key is the null key.
+pub fn ext_words_ir<'a>(
+    tokens: impl IntoIterator<Item = (SegmentKind, &'a str)>,
+    via: u32,
+) -> gorca_present::PresIr {
+    let key = NodeKey {
+        app: AppId {
+            connector: gorca_model::ConnectorId(0),
+            serial: 0,
+        },
+        local: gorca_model::LocalId(0),
+    };
+    gorca_present::PresIr::new(
+        gorca_present::Reason::Ext,
+        key,
+        0,
+        gorca_present::fields_from_tokens(tokens, via)
+            .into_iter()
+            .collect(),
+    )
+}
+
+/// Segments to one string (a test helper and the extension host's answer cap).
 pub fn segments_text(segs: &[Segment]) -> String {
     let mut out = String::new();
     for s in segs {

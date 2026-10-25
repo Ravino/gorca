@@ -601,7 +601,7 @@ mod fused {
         let (_, id) = r.join.get(nk(local))?;
         r.handle.read.with(|d| {
             d.node(id)
-                .and_then(|v| v.meta)
+                .and_then(|v| v.data)
                 .and_then(|m| m.sem.as_ref())
                 .and_then(|e| e.name.as_deref().map(str::to_owned))
         })
@@ -611,7 +611,7 @@ mod fused {
         let (_, id) = r.join.get(nk(local))?;
         r.handle.read.with(|d| {
             d.node(id)
-                .and_then(|v| v.meta)
+                .and_then(|v| v.data)
                 .and_then(|m| m.sem.as_ref())
                 .map(|e| e.sem.role)
         })

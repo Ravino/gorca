@@ -10,7 +10,6 @@
 # Known gap, tracked for M14: settings and keymap diagnostics (compile.rs, config_task.rs) are read
 # out by settings.report_problems in English; they quote paths and values. The rest below is not
 # speech: log text, internal ids, match patterns, protocol names.
-crates/gorca-core/src/app_actor/agree.rs | *
 crates/gorca-core/src/app_actor/fuse.rs | *
 crates/gorca-core/src/commands/diag.rs | *
 crates/gorca-core/src/browse/latency.rs | *
@@ -34,14 +33,6 @@ crates/gorca-core/src/commands/compile.rs | extension `{}` default chord `{chord
 crates/gorca-core/src/commands/info.rs | node {} of application {}, role {}, {}, {} ancestors known, {} states, name {}
 crates/gorca-core/src/commands/info.rs | no listed
 crates/gorca-core/src/commands/keys.rs | focused node never presented: presenting it again at a key
-crates/gorca-core/src/doc_actor/agree.rs | legacy and fused values disagree
-crates/gorca-core/src/doc_actor/agree.rs | legacy name {} bytes #{:08x}, fused name {} bytes #{:08x}
-crates/gorca-core/src/doc_actor/agree.rs | ; legacy {:?}, fused {:?}
-crates/gorca-core/src/doc_actor/agree.rs | legacy agreement: {} disagrees on a {:?} node (see the gorca_agree log)
-crates/gorca-core/src/doc_actor/agree.rs | legacy agreement: {} disagrees on a {role:?} node: {detail}
-crates/gorca-core/src/doc_actor/live.rs | legacy region root, no fused live
-crates/gorca-core/src/doc_actor/live.rs | fused region root, no legacy live
-crates/gorca-core/src/doc_actor/live.rs | {why}: attrs live {:?} atomic {:?} relevant {:?}, roles {:?}; legacy {legacy:?}, fused {:?}
 crates/gorca-core/src/doc_actor/mod.rs | document fusion stage retired
 crates/gorca-core/src/doc_actor/translate.rs | \u{FFFC}
 crates/gorca-core/src/ext.rs | default chord `{0}` must use the gorca modifier (an extension never grabs a plain key)

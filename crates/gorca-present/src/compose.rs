@@ -353,6 +353,7 @@ pub fn compose(
         | Reason::SayAll
         | Reason::Change { .. }
         | Reason::ListEntry
+        | Reason::Ext
         | Reason::Unknown { .. } => Err(ComposeError::Unsupported(reason.code())),
     }
 }

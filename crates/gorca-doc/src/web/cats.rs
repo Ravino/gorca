@@ -6,7 +6,7 @@ use std::ops::BitOr;
 use std::sync::Arc;
 
 use gorca_model::sem::SemEntry;
-use gorca_model::{AttrMap, LocalId, Role, SrcNodeId, StateSet, Value};
+use gorca_model::{LocalId, Role, SrcNodeId, Value};
 
 /// Set of navigation categories (bit mask). A node's own `Cat` is a pure function of
 /// `(role, level, flags)`; queries pass the union they are interested in.
@@ -305,16 +305,18 @@ pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
 }
 
 /// What the mirror keeps about a node besides what the treap needs (ADR-0003 AM-6, browse-mode
-/// design TR-6): the source identity, the transport key for the focus join, states, description,
-/// value and the attribute map. Categories stay a pure function of `(role, level, flags)`.
+/// design TR-6): the source identity, the transport key for the focus join, the contents of a
+/// field and the fused semantics. Every presentation fact (states, description, attributes) is a
+/// group of the fused entry (ADR-0022 section 8.1); categories stay a pure function of
+/// `(role, level, flags)`.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NodeMeta {
+pub struct NodeData {
     pub src: Option<SrcNodeId>,
     pub local: Option<LocalId>,
-    pub states: StateSet,
-    pub description: Option<Arc<str>>,
     pub value: Option<Value>,
-    pub attrs: AttrMap,
+    /// The page itself made the node an article (its DOM tag is `article`): the flag stays when
+    /// an add-on patch takes the fused role away.
+    pub article_tag: bool,
     /// The fused semantics of the node (ADR-0022 SM-8: produced by `FUSE` in the document actor,
     /// the node's single writer, before the batch is published). `None` until the node was
     /// fused, for synthetic nodes and for sources that do not normalise. Read it through the
@@ -334,7 +336,7 @@ pub struct NodeSpec {
     pub name: Option<Arc<str>>,
     /// Own text (scalar-indexed). Contributes to the flat text in preorder.
     pub text: Option<Arc<str>>,
-    pub meta: Option<Arc<NodeMeta>>,
+    pub data: Option<Arc<NodeData>>,
 }
 
 impl NodeSpec {
@@ -346,13 +348,13 @@ impl NodeSpec {
             sig: 0,
             name: None,
             text: None,
-            meta: None,
+            data: None,
         }
     }
 
     #[must_use]
-    pub fn meta(mut self, meta: Arc<NodeMeta>) -> Self {
-        self.meta = Some(meta);
+    pub fn data(mut self, data: Arc<NodeData>) -> Self {
+        self.data = Some(data);
         self
     }
 
@@ -426,7 +428,7 @@ pub struct PropsPatch {
     pub flags: Option<NodeFlags>,
     pub sig: Option<u64>,
     pub name: Option<Option<Arc<str>>>,
-    pub meta: Option<Option<Arc<NodeMeta>>>,
+    pub data: Option<Option<Arc<NodeData>>>,
 }
 
 #[cfg(test)]

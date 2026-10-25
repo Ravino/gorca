@@ -28,7 +28,7 @@ use gorca_present::{ComposeCtx, Reason, RenderOpts, ReportFlags, compose, render
 use crate::golden_tests::{
     FAMILIES, Family, describe, esc, fuse, kind_mismatch_reason, no_entry_reason, web_flags,
 };
-use crate::legacy_agreement_tests::{page, pages_of, root};
+use crate::recorded_corpus_tests::{page, pages_of, root};
 
 struct Record {
     corpus: String,

@@ -38,7 +38,6 @@ use crate::health::{AppHealth, HealthEffect, HealthMsg, HealthStepCtx};
 use crate::reader::{BackgroundMsg, FocusLaneMsg};
 use crate::text::TextMsg;
 
-pub mod agree;
 mod doc_route;
 pub mod fuse;
 #[cfg(test)]
@@ -486,7 +485,7 @@ impl AppActor {
     }
 
     /// Read handle of this app's mirror.
-    /// The counters of this app's fusion writer and legacy-agreement checks (M22a-C1b).
+    /// The counters of this app's fusion writer (M22a-C1b).
     pub fn fuse_stats(&self) -> fuse::FuseStatsView {
         self.fuse.stats().view()
     }
@@ -500,11 +499,6 @@ impl AppActor {
     /// writer is idle.
     pub fn fuse_work_left(&self) -> usize {
         self.fuse.work_left()
-    }
-
-    /// Tests: a disagreement between the legacy fields and the fused entry panics.
-    pub fn set_strict_agreement(&mut self, strict: bool) {
-        self.fuse.set_strict(strict);
     }
 
     pub fn mirror(&self) -> &MirrorHandle {
@@ -1165,12 +1159,15 @@ impl AppActor {
         match app_ext.on_event(ev) {
             crate::ExtVerdict::Pass => false,
             crate::ExtVerdict::Suppress => !bookkeeping,
-            crate::ExtVerdict::Rewrite(segs) => {
-                let text = crate::segments_text(&segs);
-                if !text.is_empty() {
+            crate::ExtVerdict::Replace(segs) => {
+                if segs.iter().any(|s| !s.text.is_empty()) {
+                    let ir = crate::ext::ext_words_ir(
+                        segs.iter().map(|s| (s.kind, &*s.text)),
+                        crate::ext::VIA_EXT_REWRITE,
+                    );
                     self.forward_background(
-                        BackgroundMsg::ExtSpeech {
-                            text: Arc::from(text),
+                        BackgroundMsg::ExtSay {
+                            ir: Box::new(ir),
                             interrupt: false,
                         },
                         route,

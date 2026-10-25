@@ -15,10 +15,6 @@ fn main() -> Result<ExitCode> {
         println!("gorca {}", env!("GORCA_GIT_REV"));
         return Ok(ExitCode::SUCCESS);
     }
-    // CI opt-in: page text in the legacy-agreement log lines (default off, it can be private).
-    if std::env::var_os("GORCA_AGREE_NAMES").is_some_and(|v| v == "1") {
-        gorca_core::set_agreement_log_names(true);
-    }
     // Opt-in: segment text in the `debug.explain_last` log (default off, it can be private).
     if std::env::var_os("GORCA_EXPLAIN_TEXT").is_some_and(|v| v == "1") {
         gorca_core::set_explain_text(true);

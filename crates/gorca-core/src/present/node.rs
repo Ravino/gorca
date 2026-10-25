@@ -318,6 +318,44 @@ impl Reader {
             .collect()
     }
 
+    /// Say the words of an extension (`Reason::Ext`): a message reference of the extension's
+    /// catalog is resolved in the UI language, then `render` makes the utterance. `interrupt`
+    /// answers a key the user pressed; otherwise the words are news no key caused and survive a
+    /// focus change. `explain` can list the origin of what was said.
+    pub(crate) fn say_ext_ir(
+        &mut self,
+        ir: &PresIr,
+        interrupt: bool,
+        fx: &mut crate::reader::ReaderEffects,
+    ) {
+        let mut ir = ir.clone();
+        let lang = gorca_i18n::language();
+        for f in &mut ir.fields {
+            if let gorca_present::Content::Text(t) = &f.content {
+                let said = gorca_i18n::ext::resolve(t, lang);
+                f.content = gorca_present::Content::Text(Arc::from(&*said));
+            }
+        }
+        let id = self.utt_id();
+        let prio = if interrupt {
+            Prio::Interrupt
+        } else {
+            Prio::Message
+        };
+        let mut u = self.utterance_of(&ir, id, self.epoch.current(), prio, None);
+        if u.segments.is_empty() {
+            return;
+        }
+        u.survives_focus_change = !interrupt;
+        *self
+            .last_ir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((id, ir.redacted()));
+        fx.push(crate::reader::ReaderEffect::Speak(
+            crate::present::SpeechIntent { utterance: u },
+        ));
+    }
+
     /// Render `ir` into the utterance the speech lane takes.
     fn utterance_of(
         &self,

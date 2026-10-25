@@ -9,9 +9,6 @@
 //! the DOM tag of the source record (a typed field, not an attribute). Nothing here reads
 //! `SrcNode::attrs`.
 
-// Used by the replay of the gate until the translator switches to it.
-#![allow(dead_code)]
-
 use gorca_doc::web::NodeFlags;
 use gorca_model::sem::{Invalid, SemFlags, SemRole, Semantics};
 use gorca_model::{Role, SrcNode, StateSet};
@@ -153,5 +150,200 @@ pub fn flags_of(
         (Some(e), _) => flags_from_sem(n, &e.sem, tag, nested_doc),
         (None, Some(r)) => flags_from_sem(n, &r.sem, tag, nested_doc),
         (None, None) => flags_from_sem(n, &Semantics::default(), tag, nested_doc),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use gorca_model::sem::{Live, Relevant, SemFlags, SemRole, SrcRecord, TagName};
+    use gorca_model::{SrcNodeId, StateSet};
+
+    use super::*;
+
+    fn node(role: Role, tag: &str) -> SrcNode {
+        let r = SrcRecord {
+            tag: TagName::new(tag).0,
+            ..SrcRecord::default()
+        };
+        SrcNode {
+            id: SrcNodeId(1),
+            role,
+            states: StateSet::VISIBLE,
+            name: None,
+            text: None,
+            attrs: smallvec::SmallVec::default(),
+            local: None,
+            rec: Some(Arc::new(r)),
+        }
+    }
+
+    fn sem(role: SemRole) -> Semantics {
+        Semantics {
+            role,
+            ..Semantics::default()
+        }
+    }
+
+    #[test]
+    fn hidden_and_visited_follow_the_source_states() {
+        let mut n = node(Role::Link, "a");
+        n.states = StateSet::VISITED | StateSet::FOCUSABLE;
+        let (f, _) = flags_from_sem(&n, &sem(SemRole::Link), "a", false);
+        assert!(f.contains(NodeFlags::HIDDEN | NodeFlags::VISITED | NodeFlags::FOCUSABLE));
+    }
+
+    #[test]
+    fn block_follows_the_display_class_then_the_role_and_cells_stay_inline() {
+        let n = node(Role::Paragraph, "p");
+        let mut s = sem(SemRole::Paragraph);
+        assert!(
+            flags_from_sem(&n, &s, "p", false)
+                .0
+                .contains(NodeFlags::BLOCK)
+        );
+        s.flags |= SemFlags::DISPLAY_INLINE;
+        assert!(
+            !flags_from_sem(&n, &s, "p", false)
+                .0
+                .contains(NodeFlags::BLOCK)
+        );
+        let span = node(Role::StaticText, "span");
+        let mut s = sem(SemRole::StaticText);
+        s.flags |= SemFlags::DISPLAY_BLOCK;
+        assert!(
+            flags_from_sem(&span, &s, "span", false)
+                .0
+                .contains(NodeFlags::BLOCK)
+        );
+        let cell = node(Role::Cell, "td");
+        let mut s = sem(SemRole::Cell);
+        s.flags |= SemFlags::DISPLAY_BLOCK;
+        let (f, _) = flags_from_sem(&cell, &s, "td", false);
+        assert!(f.contains(NodeFlags::CELL) && !f.contains(NodeFlags::BLOCK));
+    }
+
+    #[test]
+    fn article_region_listbox_and_annotation_follow_tag_and_role() {
+        let n = node(Role::Paragraph, "article");
+        assert!(
+            flags_from_sem(&n, &sem(SemRole::Generic), "article", false)
+                .0
+                .contains(NodeFlags::ARTICLE)
+        );
+        let n = node(Role::Paragraph, "div");
+        assert!(
+            flags_from_sem(&n, &sem(SemRole::Article), "div", false)
+                .0
+                .contains(NodeFlags::ARTICLE)
+        );
+        let n = node(Role::Landmark, "section");
+        assert!(
+            flags_from_sem(&n, &sem(SemRole::Region), "section", false)
+                .0
+                .contains(NodeFlags::REGION)
+        );
+        // A region the fused model derived (doc-chapter) is no authored region.
+        let n = node(Role::Landmark, "div");
+        assert!(
+            !flags_from_sem(&n, &sem(SemRole::Region), "div", false)
+                .0
+                .contains(NodeFlags::REGION)
+        );
+        let n = node(Role::List, "select");
+        assert!(
+            flags_from_sem(&n, &sem(SemRole::List), "select", false)
+                .0
+                .contains(NodeFlags::LISTBOX)
+        );
+        let n = node(Role::StaticText, "ins");
+        assert!(
+            flags_from_sem(&n, &sem(SemRole::Insertion), "ins", false)
+                .0
+                .contains(NodeFlags::ANNOTATION)
+        );
+    }
+
+    #[test]
+    fn live_roots_are_flagged_except_a_node_the_engine_calls_an_alert() {
+        let live = Live {
+            politeness: gorca_model::event::Politeness::Polite,
+            atomic: false,
+            relevant: Relevant::default(),
+            root: true,
+        };
+        let mut s = sem(SemRole::Generic);
+        s.live = Some(live);
+        let n = node(Role::Panel, "div");
+        assert!(
+            flags_from_sem(&n, &s, "div", false)
+                .0
+                .contains(NodeFlags::LIVE)
+        );
+        let n = node(Role::Alert, "div");
+        assert!(
+            !flags_from_sem(&n, &s, "div", false)
+                .0
+                .contains(NodeFlags::LIVE)
+        );
+        let n = node(Role::Panel, "div");
+        assert!(
+            flags_from_sem(&n, &sem(SemRole::Log), "div", false)
+                .0
+                .contains(NodeFlags::LIVE)
+        );
+    }
+
+    #[test]
+    fn invalid_fields_other_than_edits_are_errors_and_headings_carry_their_level() {
+        let mut n = node(Role::Table, "table");
+        n.states |= StateSet::INVALID;
+        assert!(
+            flags_from_sem(&n, &sem(SemRole::Table), "table", false)
+                .0
+                .contains(NodeFlags::ERROR)
+        );
+        let mut e = node(Role::TextEntry, "input");
+        e.states |= StateSet::INVALID;
+        assert!(
+            !flags_from_sem(&e, &sem(SemRole::TextBox), "input", false)
+                .0
+                .contains(NodeFlags::ERROR)
+        );
+        let h = node(Role::Heading, "h3");
+        let mut s = sem(SemRole::Heading);
+        s.level = 3;
+        assert_eq!(flags_from_sem(&h, &s, "h3", false).1, 3);
+        s.level = 9;
+        assert_eq!(flags_from_sem(&h, &s, "h3", false).1, 0);
+    }
+
+    #[test]
+    fn a_layout_table_and_a_nested_document_are_marked() {
+        let t = node(Role::Table, "table");
+        let mut s = sem(SemRole::Table);
+        s.flags |= SemFlags::LAYOUT_TABLE;
+        assert!(
+            flags_from_sem(&t, &s, "table", false)
+                .0
+                .contains(NodeFlags::LAYOUT)
+        );
+        assert!(
+            flags_from_sem(&t, &sem(SemRole::Presentation), "table", false)
+                .0
+                .contains(NodeFlags::LAYOUT)
+        );
+        let d = node(Role::DocumentWeb, "iframe");
+        assert!(
+            flags_from_sem(&d, &sem(SemRole::DocumentWeb), "iframe", true)
+                .0
+                .contains(NodeFlags::FRAME)
+        );
+        assert!(
+            !flags_from_sem(&d, &sem(SemRole::DocumentWeb), "iframe", false)
+                .0
+                .contains(NodeFlags::FRAME)
+        );
     }
 }

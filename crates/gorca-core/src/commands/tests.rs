@@ -1044,16 +1044,22 @@ fn an_extension_presentation_replaces_the_core_one() {
 fn extension_speech_interrupts_for_answers_and_survives_focus_for_notices() {
     let mut f = fixture();
     let fx = f.reader.handle(
-        ReaderMsg::Background(crate::BackgroundMsg::ExtSpeech {
-            text: Arc::from("answer"),
+        ReaderMsg::Background(crate::BackgroundMsg::ExtSay {
+            ir: Box::new(crate::ext::ext_words_ir(
+                [(gorca_model::SegmentKind::Said, "answer")],
+                crate::ext::VIA_EXT_SAY,
+            )),
             interrupt: true,
         }),
         f.now,
     );
     assert_eq!(spoken(&fx), ["answer"]);
     let fx = f.reader.handle(
-        ReaderMsg::Background(crate::BackgroundMsg::ExtSpeech {
-            text: Arc::from("notice"),
+        ReaderMsg::Background(crate::BackgroundMsg::ExtSay {
+            ir: Box::new(crate::ext::ext_words_ir(
+                [(gorca_model::SegmentKind::Said, "notice")],
+                crate::ext::VIA_EXT_SAY,
+            )),
             interrupt: false,
         }),
         f.now,

@@ -26,14 +26,11 @@ use std::sync::Arc;
 
 use super::fuse::SemLookup;
 use gorca_doc::web::{
-    ChildSpec, DocError, DocOp, DocWriter, NodeFlags, NodeMeta, NodeSpec, PropsPatch, SubtreeSpec,
+    ChildSpec, DocError, DocOp, DocWriter, NodeData, NodeFlags, NodeSpec, PropsPatch, SubtreeSpec,
     WebDoc,
 };
-use gorca_doc_source_api::web_attrs;
 use gorca_model::sem::SemEntry;
-use gorca_model::{
-    AttrKey, DocDelta, DocNodeId, LocalId, Role, SrcNode, SrcNodeId, StateSet, TextEdit,
-};
+use gorca_model::{DocDelta, DocNodeId, LocalId, Role, SrcNode, SrcNodeId, StateSet, TextEdit};
 
 use gorca_doc_source_api::limits::{
     MAX_CHILDREN, MAX_DOC_NODES, MAX_NODE_TEXT_BYTES, MAX_PENDING_IDS as MAX_PENDING,
@@ -140,165 +137,19 @@ fn placeholder_node(id: SrcNodeId) -> SrcNode {
     }
 }
 
-fn attr(n: &SrcNode, k: AttrKey) -> Option<&str> {
-    n.attrs.iter().find(|(a, _)| *a == k).map(|(_, v)| &**v)
-}
-
-fn has_token(list: Option<&str>, tok: &str) -> bool {
-    list.is_some_and(|l| l.split_ascii_whitespace().any(|t| t == tok))
-}
-
-/// CSS `display` values that start a new line (FT-4). Everything else is inline-level.
-fn display_is_block(d: &str) -> bool {
-    matches!(
-        d,
-        "block"
-            | "list-item"
-            | "table"
-            | "table-row"
-            | "table-row-group"
-            | "table-header-group"
-            | "table-footer-group"
-            | "table-cell"
-            | "table-caption"
-            | "flex"
-            | "grid"
-            | "flow-root"
-            | "-webkit-box"
-            | "details"
-    )
-}
-
-fn role_is_block(r: Role) -> bool {
-    matches!(
-        r,
-        Role::Paragraph
-            | Role::Heading
-            | Role::List
-            | Role::ListItem
-            | Role::Table
-            | Role::Row
-            | Role::Landmark
-            | Role::Separator
-            | Role::Document
-            | Role::DocumentWeb
-            | Role::Dialog
-            | Role::Alert
-    )
-}
-
-/// The node flags that follow from the source's data (everything but the break flags).
-pub fn derive_flags(n: &SrcNode, nested_doc: bool) -> (NodeFlags, u8) {
-    let mut f = NodeFlags::NONE;
-    // `showing` is viewport state and flips without events (TBD-WEB-1): only `visible` counts.
-    if !n.states.contains(StateSet::VISIBLE) {
-        f = f | NodeFlags::HIDDEN;
-    }
-    if n.states.contains(StateSet::VISITED) {
-        f = f | NodeFlags::VISITED;
-    }
-    if n.states.contains(StateSet::FOCUSABLE) {
-        f = f | NodeFlags::FOCUSABLE;
-    }
-    let tag = attr(n, web_attrs::TAG);
-    let xml = attr(n, web_attrs::XML_ROLES);
-    if n.role == Role::Landmark && (has_token(xml, "region") || tag == Some("section")) {
-        f = f | NodeFlags::REGION;
-    }
-    if tag == Some("article") || has_token(xml, "article") {
-        f = f | NodeFlags::ARTICLE;
-    }
-    if tag == Some("blockquote") {
-        f = f | NodeFlags::BLOCKQUOTE;
-    }
-    if n.role == Role::Table && attr(n, web_attrs::LAYOUT_GUESS) == Some("true") {
-        f = f | NodeFlags::LAYOUT;
-    }
-    if matches!(attr(n, web_attrs::LIVE), Some("polite" | "assertive"))
-        || ["status", "log", "marquee", "timer"]
-            .iter()
-            .any(|t| has_token(xml, t))
-    {
-        f = f | NodeFlags::LIVE;
-    }
-    if n.role == Role::List && (has_token(xml, "listbox") || tag == Some("select")) {
-        f = f | NodeFlags::LISTBOX;
-    }
-    if matches!(tag, Some("ins" | "del"))
-        || ["comment", "suggestion", "insertion", "deletion"]
-            .iter()
-            .any(|t| has_token(xml, t))
-    {
-        f = f | NodeFlags::ANNOTATION;
-    }
-    // A form field that is invalid is announced as the field; W finds the marked-up text.
-    if n.states.contains(StateSet::INVALID)
-        && !matches!(
-            n.role,
-            Role::TextEntry
-                | Role::PasswordEntry
-                | Role::ComboBox
-                | Role::SpinButton
-                | Role::Slider
-        )
-    {
-        f = f | NodeFlags::ERROR;
-    }
-    if n.role == Role::DocumentWeb && nested_doc {
-        f = f | NodeFlags::FRAME;
-    }
-    // Table cells stay inline: a row is one line, cells separated by a space (NVDA screen layout).
-    let cell = matches!(n.role, Role::Cell | Role::ColumnHeader | Role::RowHeader);
-    if cell {
-        f = f | NodeFlags::CELL;
-    }
-    let block = !cell
-        && match attr(n, web_attrs::DISPLAY) {
-            Some(d) => display_is_block(d),
-            None => role_is_block(n.role),
-        };
-    if block {
-        f = f | NodeFlags::BLOCK;
-    }
-    let level = if n.role == Role::Heading {
-        attr(n, web_attrs::LEVEL)
-            .and_then(|l| l.parse::<u8>().ok())
-            .filter(|l| (1..=6).contains(l))
-            .unwrap_or(0)
-    } else {
-        0
-    };
-    (f, level)
-}
-
-fn meta_of(n: &SrcNode, sem: Option<Arc<SemEntry>>) -> Arc<NodeMeta> {
-    Arc::new(NodeMeta {
+fn data_of(n: &SrcNode, sem: Option<Arc<SemEntry>>) -> Arc<NodeData> {
+    Arc::new(NodeData {
         src: Some(n.id),
         local: n.local,
-        states: n.states,
-        description: n
-            .attrs
-            .iter()
-            .find(|(k, _)| *k == web_attrs::DESCRIPTION)
-            .map(|(_, v)| Arc::clone(v)),
         value: None,
-        attrs: n.attrs.clone(),
+        article_tag: n.rec.as_ref().is_some_and(|r| r.tag.as_str() == "article"),
         sem,
     })
 }
 
 /// A node's mirror spec (without break flags, which depend on the siblings).
 pub fn spec_of(n: &SrcNode, nested_doc: bool, sem: Option<Arc<SemEntry>>) -> NodeSpec {
-    let (flags, level) = derive_flags(n, nested_doc);
-    if let Some(e) = &sem {
-        super::agree::check(n, flags, level, e);
-    }
-    // The fused role is the one everything downstream reads: an add-on that makes a node an
-    // article (a patch, ADR-0026) makes it one for the categories and the announcement too.
-    let flags = match &sem {
-        Some(e) if e.sem.role == gorca_model::sem::SemRole::Article => flags | NodeFlags::ARTICLE,
-        Some(_) | None => flags,
-    };
+    let (flags, level) = super::flags_sem::flags_of(n, sem.as_deref(), nested_doc);
     let mut s = NodeSpec::new(n.role).level(level).flags(flags);
     // A page can put a megabyte in aria-label: the translator applies the source's cap again.
     s.name = n.name.as_ref().map(|a| {
@@ -314,7 +165,7 @@ pub fn spec_of(n: &SrcNode, nested_doc: bool, sem: Option<Arc<SemEntry>>) -> Nod
         }
     });
     s.text = clip_arc(n.text.as_ref());
-    s.meta(meta_of(n, sem))
+    s.data(data_of(n, sem))
 }
 
 fn without_breaks(f: NodeFlags) -> NodeFlags {
@@ -405,7 +256,7 @@ impl Translator {
     pub fn resync(&mut self, doc: &WebDoc) {
         self.by_src.clear();
         for id in doc.preorder() {
-            if let Some(src) = doc.node(id).and_then(|v| v.meta).and_then(|m| m.src) {
+            if let Some(src) = doc.node(id).and_then(|v| v.data).and_then(|m| m.src) {
                 self.by_src.insert(src, id);
             }
         }
@@ -450,7 +301,7 @@ impl Translator {
     ) -> Result<BatchOutcome, DocError> {
         // The nodes get the entries a source would have given them (see `legacy_sem`).
         let sem = super::legacy_sem_tests::LegacySem::of(&batch);
-        super::agree::unchecked(|| self.apply_fused(w, batch, &sem, &[]))
+        self.apply_fused(w, batch, &sem, &[])
     }
 
     /// [`Translator::apply`] with the fusion stage's answers: every node the batch builds or
@@ -693,14 +544,14 @@ impl Translator {
                     let doc = w.doc();
                     doc.preorder()
                         .filter(|i| *i != root_id)
-                        .filter_map(|i| doc.node(i).and_then(|v| v.meta).and_then(|m| m.local))
+                        .filter_map(|i| doc.node(i).and_then(|v| v.data).and_then(|m| m.local))
                         .collect()
                 };
                 out.join_del.extend(old_locals);
                 if let Some(old_local) = w
                     .doc()
                     .node(root_id)
-                    .and_then(|v| v.meta)
+                    .and_then(|v| v.data)
                     .and_then(|m| m.local)
                 {
                     out.join_del.push(old_local);
@@ -715,7 +566,7 @@ impl Translator {
                     level: Some(spec.level),
                     flags: Some(without_breaks(spec.flags)),
                     name: Some(spec.name.clone()),
-                    meta: Some(spec.meta.clone()),
+                    data: Some(spec.data.clone()),
                     ..PropsPatch::default()
                 };
                 w.apply(DocOp::SetProps { id: root_id, patch })?;
@@ -851,7 +702,7 @@ impl Translator {
         for (src, id) in order.iter().zip(created) {
             self.by_src.insert(*src, *id);
             touched.insert(*id);
-            if let Some(l) = doc.node(*id).and_then(|v| v.meta).and_then(|m| m.local) {
+            if let Some(l) = doc.node(*id).and_then(|v| v.data).and_then(|m| m.local) {
                 out.join_add.push((l, *id));
             }
         }
@@ -999,16 +850,12 @@ impl Translator {
             patch.name = Some(spec.name.clone());
             any = true;
         }
-        let old_local = cur.meta.and_then(|m| m.local);
-        let meta_same = cur.meta.is_some_and(|m| {
-            m.src == Some(n.id)
-                && m.local == n.local
-                && m.states == n.states
-                && m.attrs == n.attrs
-                && m.sem.as_ref() == sem
-        });
+        let old_local = cur.data.and_then(|m| m.local);
+        let meta_same = cur
+            .data
+            .is_some_and(|m| m.src == Some(n.id) && m.local == n.local && m.sem.as_ref() == sem);
         if !meta_same {
-            patch.meta = Some(spec.meta.clone());
+            patch.data = Some(spec.data.clone());
             any = true;
         }
         let cur_text = cur.text;
@@ -1037,37 +884,33 @@ impl Translator {
         Ok(())
     }
 
-    /// Replace the fused entry in the node's meta (everything else of the meta stays).
+    /// Replace the fused entry in the node's data (everything else of the data stays).
     fn patch_sem(w: &mut DocWriter, id: DocNodeId, e: Arc<SemEntry>) -> Result<(), DocError> {
         let Some(view) = w.doc().node(id) else {
             return Ok(());
         };
-        let (meta, cur_flags) = match view.meta {
+        let (data, cur_flags) = match view.data {
             Some(m) => (m, view.flags),
             None => return Ok(()),
         };
         // The fused role decides the article flag (an add-on patch can make a node an article or
-        // take the role away again); the page's own tag or role token keeps it either way.
-        let raw = {
-            let find = |k: AttrKey| meta.attrs.iter().find(|(a, _)| *a == k).map(|(_, v)| &**v);
-            find(web_attrs::TAG) == Some("article")
-                || has_token(find(web_attrs::XML_ROLES), "article")
-        };
-        let article = raw || e.sem.role == gorca_model::sem::SemRole::Article;
+        // take the role away again); the page's own `<article>` keeps it either way, so a
+        // re-spec (`flags_of`) and a patch agree.
+        let article = data.article_tag || e.sem.role == gorca_model::sem::SemRole::Article;
         let flags = if article {
             cur_flags | NodeFlags::ARTICLE
         } else {
             NodeFlags(cur_flags.0 & !NodeFlags::ARTICLE.0)
         };
-        if meta.sem.as_ref() == Some(&e) && flags == cur_flags {
+        if data.sem.as_ref() == Some(&e) && flags == cur_flags {
             return Ok(());
         }
-        let patched = NodeMeta {
+        let patched = NodeData {
             sem: Some(e),
-            ..meta.clone()
+            ..data.clone()
         };
         let patch = PropsPatch {
-            meta: Some(Some(Arc::new(patched))),
+            data: Some(Some(Arc::new(patched))),
             flags: (flags != cur_flags).then_some(flags),
             ..PropsPatch::default()
         };
@@ -1218,7 +1061,7 @@ impl Translator {
             let doc = w.doc();
             for r in &roots {
                 for id in doc.subtree(*r) {
-                    if let Some(m) = doc.node(id).and_then(|v| v.meta) {
+                    if let Some(m) = doc.node(id).and_then(|v| v.data) {
                         if let Some(s) = m.src
                             && self.by_src.get(&s) == Some(&id)
                         {
@@ -1240,6 +1083,7 @@ impl Translator {
 mod tests {
     use super::*;
     use gorca_doc::web::channel;
+    use gorca_doc_source_api::web_attrs;
 
     fn n(id: u64, role: Role) -> SrcNode {
         SrcNode {
@@ -1905,5 +1749,92 @@ mod tests {
             "{ids} + {}",
             t.orphans.len()
         );
+    }
+
+    /// A lookup whose answer a test changes between batches.
+    struct Swap(std::cell::RefCell<Arc<SemEntry>>);
+
+    impl SemLookup for Swap {
+        fn sem(&self, _: SrcNodeId) -> Option<Arc<SemEntry>> {
+            Some(Arc::clone(&self.0.borrow()))
+        }
+    }
+
+    fn entry_with(role: gorca_model::sem::SemRole) -> Arc<SemEntry> {
+        let mut e = SemEntry::default();
+        e.sem.role = role;
+        Arc::new(e)
+    }
+
+    fn article_flag(w: &mut DocWriter, t: &Translator) -> bool {
+        let id = t.id_of(SrcNodeId(2)).unwrap();
+        w.doc()
+            .node(id)
+            .is_some_and(|v| v.flags.contains(NodeFlags::ARTICLE))
+    }
+
+    fn article_node(tag: &str) -> SrcNode {
+        let mut x = n(2, Role::Paragraph);
+        let r = gorca_model::sem::SrcRecord {
+            tag: gorca_model::sem::TagName::new(tag).0,
+            ..Default::default()
+        };
+        x.rec = Some(Arc::new(r));
+        x
+    }
+
+    fn article_batch(tag: &str) -> Vec<DocDelta> {
+        vec![
+            DocDelta::Reset {
+                root: SrcNodeId(1),
+                nav_id: 1,
+            },
+            DocDelta::Upsert(vec![n(1, Role::DocumentWeb), article_node(tag)]),
+            list(1, &[2]),
+            DocDelta::Settled { batch: 1 },
+        ]
+    }
+
+    #[test]
+    fn a_real_article_keeps_its_flag_through_a_patch_and_a_re_spec() {
+        use gorca_model::sem::SemRole;
+        let (mut w, _r) = channel(1);
+        let mut t = Translator::new();
+        let lookup = Swap(std::cell::RefCell::new(entry_with(SemRole::Article)));
+        t.apply_fused(&mut w, article_batch("article"), &lookup, &[])
+            .unwrap();
+        assert!(article_flag(&mut w, &t), "initially");
+        // An add-on patch takes the role away: the page's own <article> stays one.
+        *lookup.0.borrow_mut() = entry_with(SemRole::Generic);
+        t.apply_fused(&mut w, vec![], &lookup, &[SrcNodeId(2)])
+            .unwrap();
+        assert!(article_flag(&mut w, &t), "after the patch");
+        // The node is rebuilt from its source: the tag gives it back, no flip-flop.
+        t.apply_fused(
+            &mut w,
+            vec![
+                DocDelta::Upsert(vec![article_node("article")]),
+                DocDelta::Settled { batch: 2 },
+            ],
+            &lookup,
+            &[],
+        )
+        .unwrap();
+        assert!(article_flag(&mut w, &t), "after the re-spec");
+    }
+
+    #[test]
+    fn an_article_made_by_the_role_alone_loses_the_flag_with_the_role() {
+        use gorca_model::sem::SemRole;
+        let (mut w, _r) = channel(1);
+        let mut t = Translator::new();
+        let lookup = Swap(std::cell::RefCell::new(entry_with(SemRole::Article)));
+        t.apply_fused(&mut w, article_batch("div"), &lookup, &[])
+            .unwrap();
+        assert!(article_flag(&mut w, &t));
+        *lookup.0.borrow_mut() = entry_with(SemRole::Generic);
+        t.apply_fused(&mut w, vec![], &lookup, &[SrcNodeId(2)])
+            .unwrap();
+        assert!(!article_flag(&mut w, &t));
     }
 }

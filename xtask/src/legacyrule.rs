@@ -1,35 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Rule 12: no paths back into the past (ADR-0022 section 8, the cut-over and no-legacy rule).
 //!
-//! Until the M22b cut-over, presentation facts are still read outside the fused semantic model
-//! (`SemEntry`) and `PresIr`: the legacy presenters, the `aria` word tables, the mirror's
-//! `NodeMeta` and its `AttrMap`, the reader-side `subtree_label` fallback, `Role::spoken`. This
-//! rule lists those APIs ([`BANS`]) and fails on every use that is not in `xtask/legacy.allow`.
+//! The M22b cut-over is complete: presentation facts are read from the fused semantic model
+//! (`SemEntry`) and spoken from `PresIr`, and nothing else. This rule lists the legacy APIs that
+//! existed before it ([`BANS`]: the legacy presenters, the `aria` word tables, the mirror's
+//! `NodeMeta` and its `AttrMap`, the reader-side `subtree_label` fallback, `Role::spoken`, the
+//! flat extension speech) and fails on every use. There is no allowlist: a use is a violation,
+//! whatever the file.
 //!
-//! The allowlist is a ratchet. Each row names a ban, a file, the exact number of uses, an expiry
-//! date and the M22b slice that deletes the use. The rule fails when
-//!
-//! * a use is not covered by a row, or a file has more uses than its row allows (the list grows);
-//! * a file has fewer uses than its row says (the row must be lowered or removed in the same
-//!   change that deleted the use, so the list only shrinks);
-//! * a row has expired (its date is before today) or its date is later than [`LAST_EXPIRY`].
+//! The cut-over hook is part of the rule: every surface of the cut-over plan needs a passing,
+//! tracked gate report made on an ancestor of `HEAD` (`cargo xtask cutover --check`).
 //!
 //! Scope: non-test sources under `crates/*/src` and `extensions/*/src`. Comments, text after the
 //! first `#[cfg(test)]` block, files named `tests.rs` or `*_tests.rs`, and `tests/`, `benches/`
-//! and `examples/` directories are not scanned: test code of a legacy path is deleted with it.
-//! The bench crates and xtask are exempt. Extensions and plugins (ADR-0026) are in scope of every
-//! ban that lists `extensions/` or the extension host: they get no legacy data, ever.
+//! and `examples/` directories are not scanned. The bench crates and xtask are exempt.
+//! Extensions and plugins (ADR-0026) are in scope of every ban that lists `extensions/` or the
+//! extension host: they get no legacy data, ever.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
-
-/// The latest date any allowlist row may carry: the end of the last M22b slice (b4).
-pub const LAST_EXPIRY: Date = Date(2026, 12, 12);
-
-/// Repo-relative allowlist file.
-const ALLOW_FILE: &str = "xtask/legacy.allow";
+use anyhow::{Context, Result};
 
 /// A calendar date, ordered year, month, day.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -82,7 +73,7 @@ impl std::fmt::Display for Date {
 
 /// One banned API or path.
 pub struct Ban {
-    /// Stable id used by allowlist rows.
+    /// Stable id of the ban, named in the violation.
     pub id: &'static str,
     /// The identifier or path fragment to find. Matched on identifier boundaries.
     pub needle: &'static str,
@@ -130,8 +121,7 @@ const PROVISIONAL: &str = "provisional S4 fact in the model (ADR-0022 section 8.
 const SEMENTRY: &str =
     "typed SemEntry groups; raw attributes stay inside the connector (SrcRecord)";
 
-/// The banned legacy APIs. A new surface is never allowed to start using one: add a row to the
-/// allowlist only in a review that names the slice that deletes it.
+/// The banned legacy APIs. Nothing may use one; port the code to the fused model instead.
 pub const BANS: &[Ban] = &[
     ban("subtree-label", "subtree_label", ALL, PROVISIONAL),
     ban("web-overlay", "web_overlay", ALL, FUSED),
@@ -290,14 +280,29 @@ pub fn scan(file: &str, source: &str) -> Vec<Hit> {
     while let Some((i, line)) = lines.next() {
         let t = line.trim_start();
         if t.starts_with("#[cfg(test)]") {
-            // `#[cfg(test)] mod x;` hides one declaration; a block ends the production text.
-            match lines.peek() {
-                Some((_, next)) if next.trim_end().ends_with(';') => {
-                    lines.next();
+            // Skip exactly the item the attribute is on: a declaration ends at `;`, a block at
+            // its closing brace. The text after it is production code again.
+            let (mut depth, mut open) = (0i64, false);
+            for (_, l) in lines.by_ref() {
+                let c = code_of(l);
+                if c.trim_start().starts_with("#[") && !open {
                     continue;
                 }
-                _ => break,
+                for ch in c.chars() {
+                    match ch {
+                        '{' => {
+                            depth += 1;
+                            open = true;
+                        }
+                        '}' => depth -= 1,
+                        _ => {}
+                    }
+                }
+                if (open && depth <= 0) || (!open && c.trim_end().ends_with(';')) {
+                    break;
+                }
             }
+            continue;
         }
         if t.starts_with("//") {
             continue;
@@ -372,55 +377,8 @@ pub fn scan_workspace(root: &Path) -> Result<Vec<Hit>> {
     Ok(hits)
 }
 
-/// One allowlist row.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Allow {
-    pub ban: String,
-    pub file: String,
-    pub max: usize,
-    pub expires: Date,
-    pub slice: String,
-}
-
-/// Parse `ban | file | max | expires | slice` rows; `#` starts a comment.
-pub fn parse_allow(text: &str) -> Result<Vec<Allow>> {
-    let mut rows = Vec::new();
-    for (i, raw) in text.lines().enumerate() {
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let n = i + 1;
-        let f: Vec<&str> = line.split('|').map(str::trim).collect();
-        let [ban, file, max, expires, slice] = f[..] else {
-            bail!("{ALLOW_FILE}:{n}: want `ban | file | max | expires | slice`");
-        };
-        if !BANS.iter().any(|b| b.id == ban) {
-            bail!("{ALLOW_FILE}:{n}: unknown ban `{ban}`");
-        }
-        let Some(expires) = Date::parse(expires) else {
-            bail!("{ALLOW_FILE}:{n}: bad expiry date `{expires}` (want YYYY-MM-DD)");
-        };
-        let Ok(max) = max.parse::<usize>() else {
-            bail!("{ALLOW_FILE}:{n}: bad count `{max}`");
-        };
-        if slice.is_empty() {
-            bail!("{ALLOW_FILE}:{n}: every row names the slice that deletes the use");
-        }
-        rows.push(Allow {
-            ban: ban.to_owned(),
-            file: file.to_owned(),
-            max,
-            expires,
-            slice: slice.to_owned(),
-        });
-    }
-    Ok(rows)
-}
-
-/// Check `hits` against `allow` as of `today`. Returns the violations, one line each.
-pub fn judge(hits: &[Hit], allow: &[Allow], today: Date) -> Vec<String> {
-    let mut out = Vec::new();
+/// The violations among `hits`, one line each: every legacy use is one.
+pub fn judge(hits: &[Hit]) -> Vec<String> {
     let replacement = |id: &str| {
         BANS.iter()
             .find(|b| b.id == id)
@@ -432,51 +390,18 @@ pub fn judge(hits: &[Hit], allow: &[Allow], today: Date) -> Vec<String> {
             .or_default()
             .push(h.line);
     }
-    let mut seen = std::collections::BTreeSet::new();
-    for a in allow {
-        if !seen.insert((a.ban.as_str(), a.file.as_str())) {
-            out.push(format!("allowlist: duplicate row `{} | {}`", a.ban, a.file));
-        }
-        if a.expires < today {
-            out.push(format!(
-                "allowlist: `{} | {}` expired on {}; delete the legacy path ({}) now",
-                a.ban, a.file, a.expires, a.slice
-            ));
-        }
-        if a.expires > LAST_EXPIRY {
-            out.push(format!(
-                "allowlist: `{} | {}` expires {} which is after {LAST_EXPIRY}",
-                a.ban, a.file, a.expires
-            ));
-        }
-        let n = used
-            .get(&(a.ban.as_str(), a.file.as_str()))
-            .map_or(0, Vec::len);
-        if n < a.max {
-            out.push(format!(
-                "allowlist: `{} | {}` allows {} but the file has {n}; lower the row (it may only shrink)",
-                a.ban, a.file, a.max
-            ));
-        }
-    }
-    for ((ban, file), lines) in &used {
-        let max = allow
-            .iter()
-            .find(|a| a.ban == *ban && a.file == *file)
-            .map_or(0, |a| a.max);
-        if lines.len() > max {
-            out.push(format!(
-                "legacy use `{ban}` in {file} (lines {lines:?}): {max} allowed, {} found; use: {}",
-                lines.len(),
+    used.iter()
+        .map(|((ban, file), lines)| {
+            format!(
+                "legacy use `{ban}` in {file} (lines {lines:?}); use: {}",
                 replacement(ban)
-            ));
-        }
-    }
-    out
+            )
+        })
+        .collect()
 }
 
 /// Run rule 12 over the repository this crate lives in. `true` when clean. `--print` lists the
-/// current uses as `ban | file | count` (to build or check the file; it changes nothing).
+/// current uses as `ban | file | count` (it changes nothing).
 pub fn run(print: bool) -> Result<bool> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let hits = scan_workspace(&root)?;
@@ -490,19 +415,11 @@ pub fn run(print: bool) -> Result<bool> {
         }
         return Ok(true);
     }
-    let text = std::fs::read_to_string(root.join(ALLOW_FILE))
-        .with_context(|| format!("reading {ALLOW_FILE}"))?;
-    let allow = parse_allow(&text)?;
-    let mut problems = judge(&hits, &allow, Date::today()?);
-    // A surface whose slice has no row left is cut over: it needs a passing gate report.
-    let live: std::collections::BTreeSet<String> = allow.iter().map(|a| a.slice.clone()).collect();
-    problems.extend(crate::cutover::check_reports(&root, &live));
+    let mut problems = judge(&hits);
+    // Every surface is cut over: each needs a passing gate report.
+    problems.extend(crate::cutover::check_reports(&root));
     if problems.is_empty() {
-        println!(
-            "legacy rule: ok ({} allowlisted rows, {} uses; they only shrink)",
-            allow.len(),
-            hits.len()
-        );
+        println!("legacy rule: ok (no use of a legacy API; no allowlist)");
         return Ok(true);
     }
     for p in &problems {
@@ -516,18 +433,7 @@ pub fn run(print: bool) -> Result<bool> {
 mod tests {
     use super::*;
 
-    const TODAY: Date = Date(2026, 10, 24);
     const F: &str = "crates/gorca-core/src/a.rs";
-
-    fn row(ban: &str, file: &str, max: usize, expires: Date) -> Allow {
-        Allow {
-            ban: ban.to_owned(),
-            file: file.to_owned(),
-            max,
-            expires,
-            slice: "M22b1-5".to_owned(),
-        }
-    }
 
     fn hit(ban: &'static str, file: &str, line: usize) -> Hit {
         Hit {
@@ -546,6 +452,18 @@ mod tests {
                    #[cfg(test)]\n\
                    mod tests { fn t() { subtree_label(d); } }\n";
         assert_eq!(scan(F, src), vec![hit("subtree-label", F, 1)]);
+    }
+
+    #[test]
+    fn a_cfg_test_item_in_the_middle_hides_only_itself() {
+        let src = "fn a() { present_focus(n); }\n\
+                   #[cfg(test)]\n\
+                   fn only_tests() {\n    present_focus(n);\n}\n\
+                   fn b() {\n    present_focus(n);\n}\n\
+                   #[cfg(test)]\n\
+                   mod tests { fn t() { present_focus(n); } }\n";
+        let lines: Vec<usize> = scan(F, src).iter().map(|h| h.line).collect();
+        assert_eq!(lines, vec![1, 7]);
     }
 
     #[test]
@@ -584,61 +502,16 @@ mod tests {
     }
 
     #[test]
-    fn a_new_use_fails() {
-        let v = judge(&[hit("present-focus", F, 3)], &[], TODAY);
+    fn every_use_fails_and_there_is_no_allowlist() {
+        let v = judge(&[hit("present-focus", F, 3), hit("present-focus", F, 9)]);
         assert_eq!(v.len(), 1, "{v:?}");
-        assert!(v[0].contains("present-focus"));
-    }
-
-    #[test]
-    fn the_allowlist_may_not_grow_for_a_file() {
-        let allow = [row("present-focus", F, 1, Date(2026, 11, 7))];
-        let hits = [hit("present-focus", F, 3), hit("present-focus", F, 9)];
-        let v = judge(&hits, &allow, TODAY);
-        assert_eq!(v.len(), 1, "{v:?}");
-        assert!(v[0].contains("1 allowed, 2 found"));
-    }
-
-    #[test]
-    fn a_deleted_use_forces_the_row_down() {
-        let allow = [row("present-focus", F, 2, Date(2026, 11, 7))];
-        let v = judge(&[hit("present-focus", F, 3)], &allow, TODAY);
-        assert_eq!(v.len(), 1, "{v:?}");
-        assert!(v[0].contains("may only shrink"));
-        assert_eq!(judge(&[], &allow, TODAY).len(), 1);
-    }
-
-    #[test]
-    fn an_expired_row_fails_even_when_the_use_is_still_there() {
-        let allow = [row("present-focus", F, 1, Date(2026, 10, 23))];
-        let v = judge(&[hit("present-focus", F, 3)], &allow, TODAY);
-        assert_eq!(v.len(), 1, "{v:?}");
-        assert!(v[0].contains("expired on 2026-10-23"));
-        // The expiry day itself is still valid.
-        let ok = [row("present-focus", F, 1, TODAY)];
-        assert!(judge(&[hit("present-focus", F, 3)], &ok, TODAY).is_empty());
-    }
-
-    #[test]
-    fn no_row_may_outlive_the_last_slice() {
-        let allow = [row("present-focus", F, 1, Date(2026, 12, 13))];
-        let v = judge(&[hit("present-focus", F, 3)], &allow, TODAY);
-        assert_eq!(v.len(), 1, "{v:?}");
-        assert!(v[0].contains("after 2026-12-12"));
-    }
-
-    #[test]
-    fn rows_parse_and_reject_garbage() {
-        let ok = "# c\npresent-focus | crates/a.rs | 2 | 2026-11-07 | M22b1-5\n";
-        assert_eq!(
-            parse_allow(ok).unwrap(),
-            vec![row("present-focus", "crates/a.rs", 2, Date(2026, 11, 7))]
+        assert!(v[0].contains("present-focus") && v[0].contains("[3, 9]"));
+        assert!(judge(&[]).is_empty());
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        assert!(
+            !root.join("xtask/legacy.allow").exists(),
+            "the allowlist mechanism is gone: port the code, do not allow it"
         );
-        assert!(parse_allow("nope | a.rs | 1 | 2026-11-07 | s").is_err());
-        assert!(parse_allow("present-focus | a.rs | 1 | 15.12.2026 | s").is_err());
-        assert!(parse_allow("present-focus | a.rs | x | 2026-11-07 | s").is_err());
-        assert!(parse_allow("present-focus | a.rs | 1 | 2026-11-07 | ").is_err());
-        assert!(parse_allow("present-focus | a.rs | 1 | 2026-11-07").is_err());
     }
 
     #[test]
@@ -661,15 +534,13 @@ mod tests {
         );
     }
 
-    /// The real workspace obeys the rule today: every legacy use is allowlisted with a live
-    /// expiry. This is the check `cargo xtask deps` and `cargo xtask legacy` run.
+    /// The real workspace obeys the rule: no legacy use anywhere. This is the check `cargo xtask
+    /// deps` and `cargo xtask legacy` run.
     #[test]
     fn the_workspace_obeys_the_rule() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
         let hits = scan_workspace(&root).unwrap();
-        let allow = parse_allow(&std::fs::read_to_string(root.join(ALLOW_FILE)).unwrap()).unwrap();
-        // The calendar is not under test here: judge as of the day the rows were written.
-        let v = judge(&hits, &allow, TODAY);
+        let v = judge(&hits);
         assert!(v.is_empty(), "{v:#?}");
     }
 }

@@ -660,3 +660,21 @@ command per surface (`focus`, `change`, `browse`, `quicknav`, `review`, `window`
   empties the slice's rows cannot land without one. `cargo xtask cutover --check` runs only this.
 * **Order of events for a surface:** gate PASS, commit the report, tag main `legacy/<surface>-last`
   (annotated), delete the legacy path and its rows (this section, 8.3), run the tests.
+
+### 8.7 Status after M22b4 part 4 (2026-10-25)
+
+Done: the mirror node carries the fused entry only (`NodeData`: source id, transport key, field
+value, entry); presentation, extension words (`Reason::Ext`), explain and the document carriers
+read the fused model; rule 12 has no allowlist.
+
+Not done, moved to the named follow-up slice **M22c**: the promises of 8.1 and 8.5 that
+`NodeSnapshot` fields become private and that legacy `Role` and `StateSet` leave the node record
+(about 1330 `Role::` uses in 91 files and 395 `StateSet` uses in 48 files of production code).
+M22c makes the snapshot fields private, moves each consumer to the fused entry and deletes the
+legacy `Role`/`StateSet` from the record. The semantic-model epoch is closed by M22c, not before.
+
+Known difference to record: label inference in the document actor skips a control whose role the
+author set by `ROLE_AUTHORED` (a valid role token). The retired check skipped on any non-empty
+role attribute, so a control with an unknown role token, or a focusable presentation node, now gets
+an inferred label where Orca (`has_role_from_aria`) would not infer one. Accepted until M22c; the
+fix is a `ROLE_AUTHORED`-like bit for "any role token present".

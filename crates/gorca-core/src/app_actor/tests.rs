@@ -803,7 +803,7 @@ impl crate::AppExt for FakeApp {
         if let NodeEvent::Announcement { text, .. } = ev {
             match &**text {
                 "suppress" => crate::ExtVerdict::Suppress,
-                "rewrite" => crate::ExtVerdict::Rewrite(vec![gorca_model::Segment::new(
+                "rewrite" => crate::ExtVerdict::Replace(vec![gorca_model::Segment::new(
                     Arc::from("said instead"),
                     gorca_model::SegmentKind::Text,
                 )]),
@@ -876,8 +876,20 @@ fn on_event_verdicts_decide_what_the_reader_hears() {
                     BackgroundMsg::Announcement { text, .. } => {
                         Some(format!("announcement:{text}"))
                     }
-                    BackgroundMsg::ExtSpeech { text, interrupt } => {
-                        Some(format!("ext:{text}:{interrupt}"))
+                    BackgroundMsg::ExtSay { ir, interrupt } => {
+                        let text: Vec<&str> = ir
+                            .fields
+                            .iter()
+                            .filter_map(|f| match &f.content {
+                                gorca_present::Content::Text(t) => Some(&**t),
+                                gorca_present::Content::Msg { .. }
+                                | gorca_present::Content::Ext(_)
+                                | gorca_present::Content::UnknownMsg(_)
+                                | gorca_present::Content::Opaque { .. } => None,
+                            })
+                            .collect();
+                        assert_eq!(ir.reason, gorca_present::Reason::Ext);
+                        Some(format!("ext:{}:{interrupt}", text.join(" ")))
                     }
                     BackgroundMsg::Window(_)
                     | BackgroundMsg::Showing { .. }

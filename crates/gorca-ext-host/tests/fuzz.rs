@@ -304,7 +304,7 @@ fn garbage_answers_are_clamped() {
         node: rand_key(&mut Rng(7)),
     };
     match uninterrupted(&h, || ae.on_event(&ev)) {
-        ExtVerdict::Rewrite(s) => {
+        ExtVerdict::Replace(s) => {
             assert!(s.len() <= MAX_SEGMENTS);
             let total: usize = s.iter().map(|x| x.text.chars().count()).sum();
             assert!(total <= gorca_ext_host::MAX_ANSWER_CHARS, "{total}");

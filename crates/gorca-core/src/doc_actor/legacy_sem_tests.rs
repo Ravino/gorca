@@ -210,6 +210,44 @@ impl SemLookup for LegacySem {
     }
 }
 
+/// What a test says about a hand-built node besides its role and name: the legacy state set, the
+/// attributes of the page and the description. They are not part of the node's data any more
+/// (the data holds the fused entry only), so they travel next to the spec, keyed by the spec's
+/// signature, until [`fuse_spec`] turns them into the entry.
+#[derive(Clone, Debug, Default)]
+struct Hint {
+    states: StateSet,
+    attrs: Vec<(gorca_model::AttrKey, Arc<str>)>,
+    description: Option<Arc<str>>,
+}
+
+thread_local! {
+    static HINTS: std::cell::RefCell<HashMap<u64, Hint>> = std::cell::RefCell::new(HashMap::new());
+}
+
+/// `n` with the states, attributes and description a test gives it (see [`Hint`]).
+pub(crate) fn hinted(
+    mut n: gorca_doc::web::NodeSpec,
+    states: StateSet,
+    attrs: &[(gorca_model::AttrKey, &str)],
+    description: Option<&str>,
+) -> gorca_doc::web::NodeSpec {
+    HINTS.with(|h| {
+        let mut h = h.borrow_mut();
+        let sig = 0xF000_0000_0000_0000 + h.len() as u64 + 1;
+        n.sig = sig;
+        h.insert(
+            sig,
+            Hint {
+                states,
+                attrs: attrs.iter().map(|(k, v)| (*k, Arc::from(*v))).collect(),
+                description: description.map(Arc::from),
+            },
+        );
+    });
+    n
+}
+
 /// The tree of a document spec with every node carrying the entry its legacy role, states, name
 /// and attributes give it (and a content name where the role takes one and the node has none).
 pub(crate) fn fuse_spec(s: gorca_doc::web::SubtreeSpec) -> gorca_doc::web::SubtreeSpec {
@@ -224,19 +262,23 @@ pub(crate) fn fuse_spec(s: gorca_doc::web::SubtreeSpec) -> gorca_doc::web::Subtr
         }
     }
     fn go(mut s: gorca_doc::web::SubtreeSpec) -> gorca_doc::web::SubtreeSpec {
-        let old = s.node.meta.as_deref().cloned().unwrap_or_default();
-        let old_description = old.description.clone();
+        let hint = HINTS
+            .with(|h| h.borrow().get(&s.node.sig).cloned())
+            .unwrap_or_default();
+        if s.node.sig >= 0xF000_0000_0000_0000 {
+            s.node.sig = 0;
+        }
         let mut node = SrcNode {
             id: SrcNodeId(0),
             role: s.node.role,
-            states: old.states,
+            states: hint.states,
             name: s.node.name.clone(),
             text: None,
-            attrs: old.attrs.iter().cloned().collect(),
+            attrs: hint.attrs.iter().cloned().collect(),
             local: None,
             rec: None,
         };
-        if let Some(d) = old_description.as_ref() {
+        if let Some(d) = hint.description.as_ref() {
             node.attrs.push((web_attrs::DESCRIPTION, Arc::clone(d)));
         }
         if s.node.role == Role::Heading && s.node.level > 0 {
@@ -272,9 +314,9 @@ pub(crate) fn fuse_spec(s: gorca_doc::web::SubtreeSpec) -> gorca_doc::web::Subtr
                 node.name = Some(Arc::from(name));
             }
         }
-        let mut meta = old;
-        meta.sem = Some(entry_of(&node));
-        s.node.meta = Some(Arc::new(meta));
+        let mut data = s.node.data.as_deref().cloned().unwrap_or_default();
+        data.sem = Some(entry_of(&node));
+        s.node.data = Some(Arc::new(data));
         s.children = s.children.into_iter().map(go).collect();
         s
     }

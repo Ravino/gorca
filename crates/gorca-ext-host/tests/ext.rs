@@ -70,7 +70,7 @@ fn verdicts_pass_suppress_and_rewrite() {
             "{b:?}"
         );
         match ae.on_event(&announce("rewrite:spoken instead")) {
-            ExtVerdict::Rewrite(s) => assert_eq!(segments_text(&s), "spoken instead", "{b:?}"),
+            ExtVerdict::Replace(s) => assert_eq!(segments_text(&s), "spoken instead", "{b:?}"),
             v => panic!("{b:?}: {v:?}"),
         }
         // Events outside the WIT subset are never offered.
@@ -88,7 +88,7 @@ fn std_hashmap_and_clocks_work_inside_the_sandbox() {
         let (h, _sink, _) = host(b);
         let ae = attach(&h, 1, "x");
         match ae.on_event(&announce("std")) {
-            ExtVerdict::Rewrite(s) => assert_eq!(segments_text(&s), "std ok", "{b:?}"),
+            ExtVerdict::Replace(s) => assert_eq!(segments_text(&s), "std ok", "{b:?}"),
             v => panic!("{b:?}: {v:?}"),
         }
         assert_eq!(h.stats().faults, 0, "{b:?}");
@@ -499,7 +499,7 @@ fn a_rewrite_on_every_event_cannot_flood_speech() {
         let mut spoken = 0;
         for _ in 0..200 {
             match ae.on_event(&announce("rewrite:chatter")) {
-                ExtVerdict::Rewrite(_) => spoken += 1,
+                ExtVerdict::Replace(_) => spoken += 1,
                 ExtVerdict::Suppress => {}
                 v => panic!("{b:?}: {v:?}"),
             }

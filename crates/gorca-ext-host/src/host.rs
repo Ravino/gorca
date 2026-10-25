@@ -614,7 +614,7 @@ impl AppExt for AppExts {
                     slot.record_decision(kind, Decision::Consume);
                     // Over its speech budget the rewrite still consumes the event, silently.
                     if slot.allow_speech() {
-                        ExtVerdict::Rewrite(segments_from_ext(slot.name(), s))
+                        ExtVerdict::Replace(segments_from_ext(slot.name(), s))
                     } else {
                         ExtVerdict::Suppress
                     }

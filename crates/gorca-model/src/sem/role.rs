@@ -2,7 +2,6 @@
 //! `SemRole`: the fine-grained, ARIA 1.2 based role (ADR-0022 section 2.1).
 
 use super::coded::coded_enum;
-use crate::role::Role;
 
 coded_enum! {
     /// ARIA 1.2 core roles, the ADR-0022 r2 additions and native-only roles. The DPUB and
@@ -164,91 +163,6 @@ impl SemRole {
                 | SemRole::Toolbar
                 | SemRole::TabList
         )
-    }
-
-    /// The legacy role a model role stands for (what the legacy mapping gives for the engine role the
-    /// model role comes from). `Unknown` for model roles the legacy set has no word for.
-    pub fn legacy_family(self) -> Role {
-        use SemRole as S;
-        match self {
-            S::Application => Role::Application,
-            S::Window => Role::Window,
-            S::Dialog | S::AlertDialog => Role::Dialog,
-            S::Alert => Role::Alert,
-            S::Status => Role::StatusBar,
-            S::Generic | S::Group | S::Presentation => Role::Panel,
-            S::Document => Role::Document,
-            S::DocumentWeb => Role::DocumentWeb,
-            S::Heading => Role::Heading,
-            S::Paragraph => Role::Paragraph,
-            S::Link => Role::Link,
-            S::Img => Role::Image,
-            S::List | S::Listbox | S::Feed | S::DescriptionList => Role::List,
-            S::ListItem | S::Option | S::Term | S::Definition => Role::ListItem,
-            S::Table | S::Grid | S::TreeGrid => Role::Table,
-            S::Row => Role::Row,
-            S::Cell | S::GridCell => Role::Cell,
-            S::ColumnHeader => Role::ColumnHeader,
-            S::RowHeader => Role::RowHeader,
-            S::Button => Role::Button,
-            S::Switch => Role::ToggleButton,
-            S::Checkbox | S::MenuItemCheckbox => Role::CheckBox,
-            S::Radio | S::MenuItemRadio => Role::RadioButton,
-            S::Combobox => Role::ComboBox,
-            S::TextBox | S::SearchBox => Role::TextEntry,
-            S::PasswordBox => Role::PasswordEntry,
-            S::SpinButton => Role::SpinButton,
-            S::Slider | S::Scrollbar => Role::Slider,
-            S::ProgressBar | S::Meter => Role::ProgressBar,
-            S::Menu => Role::Menu,
-            S::Menubar => Role::MenuBar,
-            S::MenuItem => Role::MenuItem,
-            S::Popover | S::Tooltip => Role::Popover,
-            S::Tab => Role::Tab,
-            S::TabList => Role::TabList,
-            S::Tree => Role::Tree,
-            S::TreeItem => Role::TreeItem,
-            S::Toolbar => Role::Toolbar,
-            S::Separator => Role::Separator,
-            S::Caption => Role::Label,
-            S::StaticText => Role::StaticText,
-            S::Terminal => Role::Terminal,
-            S::Region
-            | S::Banner
-            | S::Complementary
-            | S::ContentInfo
-            | S::Main
-            | S::Navigation
-            | S::Search
-            | S::Article => Role::Landmark,
-            // The legacy set has no word for these: an unlisted new role must be placed here.
-            S::Unknown
-            | S::Blockquote
-            | S::Code
-            | S::Deletion
-            | S::Figure
-            | S::Form
-            | S::Insertion
-            | S::Log
-            | S::Mark
-            | S::Marquee
-            | S::Math
-            | S::Note
-            | S::RadioGroup
-            | S::RowGroup
-            | S::TabPanel
-            | S::Timer
-            | S::Comment
-            | S::Suggestion
-            | S::Details
-            | S::Summary
-            | S::Time
-            | S::Iframe
-            | S::Emphasis
-            | S::Strong
-            | S::Subscript
-            | S::Superscript => Role::Unknown,
-        }
     }
 }
 

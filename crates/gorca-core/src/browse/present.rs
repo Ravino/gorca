@@ -629,11 +629,11 @@ pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
 mod tests {
     use std::sync::Arc;
 
-    use gorca_doc::web::{DocOp, NodeMeta, NodeSpec, SubtreeSpec};
+    use gorca_doc::web::{DocOp, NodeSpec, SubtreeSpec};
     use gorca_doc_source_api::web_attrs;
 
     use super::*;
-    use crate::doc_actor::legacy_sem_tests::fuse_spec;
+    use crate::doc_actor::legacy_sem_tests::{fuse_spec, hinted};
     use gorca_model::{Role, StateSet};
 
     fn leaf(role: Role) -> NodeSpec {
@@ -641,10 +641,7 @@ mod tests {
     }
 
     fn with_states(n: NodeSpec, st: StateSet) -> NodeSpec {
-        n.meta(Arc::new(NodeMeta {
-            states: st,
-            ..NodeMeta::default()
-        }))
+        hinted(n, st, &[], None)
     }
 
     // body: h2 "Products", p ["Go to " link "docs" " now"], a check box and an image "logo".
@@ -748,17 +745,13 @@ mod tests {
         let ul =
             SubtreeSpec::with_children(leaf(Role::List).flags(blk), vec![li("One"), li("Two")]);
         let main = SubtreeSpec::with_children(
-            named(Role::Landmark, "Main content")
-                .flags(blk)
-                .meta(Arc::new(NodeMeta {
-                    attrs: [
-                        (web_attrs::TAG, Arc::<str>::from("main")),
-                        (web_attrs::XML_ROLES, Arc::<str>::from("main")),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    ..NodeMeta::default()
-                })),
+            hinted(
+                named(Role::Landmark, "Main content"),
+                StateSet::empty(),
+                &[(web_attrs::TAG, "main"), (web_attrs::XML_ROLES, "main")],
+                None,
+            )
+            .flags(blk),
             vec![ul],
         );
         let edit = SubtreeSpec::leaf(with_states(
@@ -861,12 +854,7 @@ mod tests {
         attrs: &[(gorca_model::AttrKey, &str)],
         desc: Option<&str>,
     ) -> NodeSpec {
-        leaf(role).meta(Arc::new(NodeMeta {
-            states: st,
-            description: desc.map(Arc::from),
-            attrs: attrs.iter().map(|(k, v)| (*k, Arc::from(*v))).collect(),
-            ..NodeMeta::default()
-        }))
+        hinted(leaf(role), st, attrs, desc)
     }
 
     fn blk() -> NodeFlags {
