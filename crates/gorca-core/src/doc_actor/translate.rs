@@ -1775,8 +1775,10 @@ mod tests {
 
     fn article_node(tag: &str) -> SrcNode {
         let mut x = n(2, Role::Paragraph);
-        let mut r = gorca_model::sem::SrcRecord::default();
-        r.tag = gorca_model::sem::TagName::new(tag).0;
+        let r = gorca_model::sem::SrcRecord {
+            tag: gorca_model::sem::TagName::new(tag).0,
+            ..Default::default()
+        };
         x.rec = Some(Arc::new(r));
         x
     }

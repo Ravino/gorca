@@ -163,8 +163,10 @@ mod tests {
     use super::*;
 
     fn node(role: Role, tag: &str) -> SrcNode {
-        let mut r = SrcRecord::default();
-        r.tag = TagName::new(tag).0;
+        let r = SrcRecord {
+            tag: TagName::new(tag).0,
+            ..SrcRecord::default()
+        };
         SrcNode {
             id: SrcNodeId(1),
             role,
