@@ -173,6 +173,11 @@ bitflags! {
         /// has one `StaticText` role for it and for the engine's static text; object review keeps
         /// a label out of its stops (ADR-0006 5.1) and reaches its text through flat review.
         const TEXT_LABEL = 1 << 17;
+        /// The source says this is a secret field (the toolkit's password entry), whatever role
+        /// fusion settles on: an author's token or a quirk may turn the fused role into a text
+        /// box, and the text must stay unspoken, unlogged and unmirrored. Every sink asks the one
+        /// helper (`gorca_present::is_secret_entry`, `gorca_model::is_secret_node`).
+        const SECRET = 1 << 21;
     }
 }
 

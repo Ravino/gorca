@@ -1414,42 +1414,7 @@ impl Reader {
         let b = self.web.as_ref()?;
         let (doc, id) = b.join.get(node)?;
         let h = b.docs.get(doc)?;
-        h.read.with(|d| {
-            let v = d.node(id)?;
-            // A document root keeps the full path: its title, the mode word and the first line
-            // are arranged around the fetch (BM-5, W3).
-            if v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN)
-                || matches!(v.role, SemRole::DocumentWeb | SemRole::Document)
-            {
-                return None;
-            }
-            let name = v.name.filter(|n| !n.is_empty())?;
-            let entry = v.sem_ref()?;
-            // An invalid control whose error text the mirror lacks (the source reads a bounded
-            // number per fetch) takes the full focus fetch, which reads it (M8b).
-            if entry.sem.invalid != gorca_model::sem::Invalid::No
-                && gorca_doc_source_api::takes_error_text_sem(v.role)
-                && entry
-                    .sem
-                    .text
-                    .as_deref()
-                    .is_none_or(|t| t.error_text.is_none())
-            {
-                return None;
-            }
-            // A password's value is never spoken, not even from the mirror.
-            let value = v
-                .field_value()
-                .cloned()
-                .filter(|_| !gorca_present::is_secret_role(v.role));
-            Some(gorca_model::NodeSnapshot::from_fused(
-                node,
-                v.sem()?,
-                Arc::from(name),
-                value,
-                Instant::now(),
-            ))
-        })
+        h.read.with(|d| focus_snapshot_of(d, id, node))
     }
 
     /// N2: the focus fetch failed and nothing is cached: speak a web node from the document
@@ -3675,6 +3640,69 @@ enum PointerClass {
     Leaf,
     /// Holds other things: its centre may be empty space.
     Container,
+}
+
+/// The focus snapshot of a document node for the tests.
+#[cfg(test)]
+pub(super) fn focus_snapshot_of_for_test(
+    d: &WebDoc,
+    id: DocNodeId,
+) -> Option<gorca_model::NodeSnapshot> {
+    focus_snapshot_of(
+        d,
+        id,
+        NodeKey {
+            app: AppId {
+                connector: gorca_model::ConnectorId(1),
+                serial: 1,
+            },
+            local: gorca_model::LocalId(77),
+        },
+    )
+}
+
+/// The focus snapshot of document node `id` as `node`: `None` for a document root, a hidden node,
+/// a nameless one, or an invalid control whose error text the mirror lacks. The value of a secret
+/// field never enters it, and the snapshot of one is sensitive (`NodeSnapshot::is_sensitive`).
+fn focus_snapshot_of(
+    d: &WebDoc,
+    id: DocNodeId,
+    node: NodeKey,
+) -> Option<gorca_model::NodeSnapshot> {
+    let v = d.node(id)?;
+    // A document root keeps the full path: its title, the mode word and the first line are
+    // arranged around the fetch (BM-5, W3).
+    if v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN)
+        || matches!(v.role, SemRole::DocumentWeb | SemRole::Document)
+    {
+        return None;
+    }
+    let name = v.name.filter(|n| !n.is_empty())?;
+    let entry = v.sem_ref()?;
+    // An invalid control whose error text the mirror lacks (the source reads a bounded number
+    // per fetch) takes the full focus fetch, which reads it (M8b).
+    if entry.sem.invalid != gorca_model::sem::Invalid::No
+        && gorca_doc_source_api::takes_error_text_sem(v.role)
+        && entry
+            .sem
+            .text
+            .as_deref()
+            .is_none_or(|t| t.error_text.is_none())
+    {
+        return None;
+    }
+    // A password's value is never spoken, not even from the mirror.
+    let value = v
+        .field_value()
+        .cloned()
+        .filter(|_| !super::selmirror::node_is_secret(&v));
+    Some(gorca_model::NodeSnapshot::from_fused(
+        node,
+        v.sem()?,
+        Arc::from(name),
+        value,
+        Instant::now(),
+    ))
 }
 
 fn pointer_class(role: SemRole) -> PointerClass {

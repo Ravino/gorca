@@ -165,13 +165,20 @@ fn ancestors(d: &WebDoc, from: DocNodeId) -> Vec<DocNodeId> {
 }
 
 /// True when `id` or an ancestor is a password field: its text is never mirrored or copied.
+/// Whether a document node is a secret field: its fused entry says so (the role or the source's
+/// mark), or, without an entry, its role. Every sink of browse mode asks this.
+pub(super) fn node_is_secret(v: &gorca_doc::web::NodeView<'_>) -> bool {
+    v.sem().as_deref().map_or_else(
+        || gorca_present::is_secret_role(v.role),
+        gorca_present::is_secret_entry,
+    )
+}
+
 fn secret(d: &WebDoc, id: DocNodeId) -> bool {
     let mut cur = Some(id);
     for _ in 0..64 {
         let Some(n) = cur else { return false };
-        if d.node(n)
-            .is_some_and(|v| gorca_present::is_secret_role(v.role))
-        {
+        if d.node(n).is_some_and(|v| node_is_secret(&v)) {
             return true;
         }
         cur = d.parent(n);
@@ -215,7 +222,7 @@ fn atoms(d: &WebDoc, lo: u32, hi: u32) -> Option<(Hit, Hit)> {
         let leaf = is_leaf(d, id);
         let object = !leaf && is_object(d, id);
         if v.flags.contains(NodeFlags::HIDDEN) || !(leaf || object) {
-            if gorca_present::is_secret_role(v.role) {
+            if node_is_secret(&v) {
                 // Never mirror (and so never copy) a password field: the range stops before it.
                 break;
             }

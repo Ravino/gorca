@@ -50,6 +50,7 @@
 )]
 
 mod regressions;
+#[path = "world_tests.rs"]
 mod world;
 
 use std::panic::{AssertUnwindSafe, catch_unwind};

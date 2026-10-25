@@ -270,6 +270,7 @@ pub const SEM_FLAGS: &[Row] = &[
     ("DISPLAY_BLOCK", 524_288),
     ("DISPLAY_INLINE", 1_048_576),
     ("TEXT_LABEL", 131_072),
+    ("SECRET", 2_097_152),
 ];
 
 /// `Relevant` bit values.

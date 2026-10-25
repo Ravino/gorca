@@ -4223,3 +4223,83 @@ fn the_cursor_follows_its_item_by_dom_id_across_a_re_render() {
         .with(|d| d.node(cur.node).and_then(|v| v.text.map(str::to_owned)));
     assert_eq!(text.as_deref(), Some("Second message"));
 }
+
+// ---- a toolkit password entry stays secret when the fusion settles on a text box -------------
+
+/// body > p > ["pre ", a text box the source marks secret (fused role `TextBox`), whose value and
+/// text are "hunter2", " post"].
+fn toolkit_password_doc() -> gorca_doc::web::WebDoc {
+    use gorca_doc::web::{NodeData, NodeFlags, NodeSpec, SubtreeSpec, WebDoc};
+    use gorca_model::sem::{SemEntry, SemFlags, SemRole};
+    let mut e = SemEntry::default();
+    e.sem.role = SemRole::TextBox;
+    e.sem.flags |= SemFlags::SECRET | SemFlags::FOCUSABLE;
+    e.name = Some(Arc::from("Password"));
+    let data = NodeData {
+        value: Some(gorca_model::Value::Text(Arc::from("hunter2"))),
+        sem: Some(Arc::new(e)),
+        ..NodeData::default()
+    };
+    let blk = NodeFlags::BLOCK | NodeFlags::BREAK_BEFORE;
+    let field = SubtreeSpec::with_children(
+        NodeSpec::new(SemRole::TextBox)
+            .name("Password")
+            .data(Arc::new(data)),
+        vec![SubtreeSpec::leaf(
+            NodeSpec::new(SemRole::StaticText).text("hunter2"),
+        )],
+    );
+    let para = SubtreeSpec::with_children(
+        NodeSpec::new(SemRole::Paragraph).flags(blk),
+        vec![
+            SubtreeSpec::leaf(NodeSpec::new(SemRole::StaticText).text("pre ")),
+            field,
+            SubtreeSpec::leaf(NodeSpec::new(SemRole::StaticText).text(" post")),
+        ],
+    );
+    let root = SubtreeSpec::with_children(NodeSpec::new(SemRole::DocumentWeb), vec![para]);
+    let mut d = WebDoc::new(3);
+    assert!(
+        d.apply(&gorca_doc::web::DocOp::InsertSubtree {
+            parent: None,
+            before: None,
+            subtree: Arc::new(root),
+        })
+        .is_ok()
+    );
+    d
+}
+
+#[test]
+fn a_toolkit_password_entry_with_a_fused_text_box_role_is_secret_in_every_browse_sink() {
+    let d = toolkit_password_doc();
+    let field = d
+        .preorder()
+        .find(|id| d.node(*id).is_some_and(|v| v.name == Some("Password")))
+        .expect("field");
+    // The one helper says so, from the source's mark and not from the fused role.
+    let v = d.node(field).expect("node");
+    assert_eq!(v.role, gorca_model::sem::SemRole::TextBox);
+    assert!(super::selmirror::node_is_secret(&v));
+    // Quick navigation and the browse description never carry the value or the text.
+    let said = format!("{:?}", super::present::describe_node(&d, field));
+    assert!(!said.contains("hunter2"), "{said}");
+    // The selection mirror stops before the field and never copies it.
+    let lo = d
+        .preorder()
+        .find(|id| d.node(*id).is_some_and(|v| v.text == Some("pre ")))
+        .and_then(|id| d.offset_of(id))
+        .expect("start");
+    let hi = d
+        .preorder()
+        .find(|id| d.node(*id).is_some_and(|v| v.text == Some(" post")))
+        .and_then(|id| d.offset_of(id))
+        .expect("end")
+        + 3;
+    let p = super::selmirror::plan(&d, lo, hi).expect("a plan");
+    assert_eq!(p.spans.last().expect("a span").range.end, 4);
+    // The focus snapshot carries no value, and it is sensitive.
+    let snap = super::commands::focus_snapshot_of_for_test(&d, field).expect("snapshot");
+    assert!(snap.value.is_none());
+    assert!(snap.is_sensitive());
+}

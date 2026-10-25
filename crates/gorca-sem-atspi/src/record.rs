@@ -281,6 +281,11 @@ pub fn normalise(raw: &RawNode<'_>) -> SrcRecord {
     ) {
         known.set(Group::Flags, true);
     }
+    // The toolkit's password entry stays secret whatever role the fusion settles on.
+    if have_role && rec.raw_role == raw_role::PASSWORD_TEXT {
+        sem.flags |= SemFlags::SECRET;
+        known.set(Group::Flags, true);
+    }
     // The engine's `label` role is the one static text the model keeps apart from the engine's
     // static text, for object review. A role the author's token replaced is not a label.
     if have_role && rec.raw_role == raw_role::LABEL && sem.role == SemRole::StaticText {
@@ -483,6 +488,17 @@ mod tests {
         let r = normalise(&node(fetched, 38, StateBits(0), &[]));
         assert!(!r.known.has(Group::Flags));
         assert!(!r.sem.flags.contains(SemFlags::ROLE_AUTHORED));
+    }
+
+    #[test]
+    fn the_toolkits_password_entry_is_marked_secret_whatever_role_the_author_gives_it() {
+        let fetched = PropMask::ROLE | PropMask::NAME | PropMask::ATTRS;
+        let plain = normalise(&node(fetched, raw_role::PASSWORD_TEXT, StateBits(0), &[]));
+        assert_eq!(plain.sem.role, SemRole::PasswordBox);
+        assert!(plain.sem.flags.contains(SemFlags::SECRET));
+        assert!(plain.known.has(Group::Flags));
+        let entry = normalise(&node(fetched, raw_role::ENTRY, StateBits(0), &[]));
+        assert!(!entry.sem.flags.contains(SemFlags::SECRET));
     }
 
     #[test]

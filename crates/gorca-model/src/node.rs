@@ -404,7 +404,11 @@ impl NodeSnapshot {
         }
         NodeSnapshot {
             key,
-            role: Role::from(sem.role),
+            role: if crate::redact::entry_is_secret(&entry) {
+                Role::PasswordEntry
+            } else {
+                Role::from(sem.role)
+            },
             states,
             name: Some(name),
             description: sem.text.as_deref().and_then(|t| t.description.clone()),

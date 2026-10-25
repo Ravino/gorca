@@ -24,7 +24,10 @@ use gorca_ext_api::terminal::{
     Urgency,
 };
 use gorca_input_api::{KeyEvent, KeyIntent, Modifiers, static_keycode};
-use gorca_model::{Epoch, NodeKey, NodeSnapshot, Prio, Role, TextDelta, Utterance};
+use gorca_model::sem::SemRole;
+use gorca_model::{Epoch, NodeKey, NodeSnapshot, Prio, TextDelta, Utterance};
+
+use crate::nodekind::role_of;
 use gorca_rt::BudgetClass;
 use gorca_speech::How;
 
@@ -304,7 +307,7 @@ impl Reader {
     pub(crate) fn term_untracked_focus(&self, node: NodeKey) -> Option<Arc<NodeSnapshot>> {
         let p = self.presented.as_ref()?;
         (p.node == node
-            && p.snap.role == Role::Terminal
+            && role_of(&p.snap) == SemRole::Terminal
             && !self.term_is(node)
             && self.dir.text_window_follows(node.app))
         .then(|| Arc::clone(&p.snap))
@@ -484,7 +487,7 @@ impl Reader {
             self.focus,
             crate::focus::FocusState::Focused { node, .. } if node == p.node
         );
-        if p.snap.role != Role::Terminal
+        if role_of(&p.snap) != SemRole::Terminal
             || !focused_here
             || self.selection_node == Some(p.node)
             || !self.dir.text_window_follows(p.node.app)

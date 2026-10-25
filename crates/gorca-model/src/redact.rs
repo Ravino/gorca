@@ -22,7 +22,13 @@ pub fn is_sensitive(role: Role) -> bool {
 /// role and the fused role are two signals; a sink that asks only one leaks when the other
 /// disagrees (an engine reporting a password over a text-box token).
 pub fn is_secret_node(role: Role, entry: Option<&crate::SemEntry>) -> bool {
-    is_sensitive(role) || entry.is_some_and(|e| e.sem.role == crate::sem::SemRole::PasswordBox)
+    is_sensitive(role) || entry.is_some_and(entry_is_secret)
+}
+
+/// Does a fused entry say its node is a secret field: the fused role, or the source's mark?
+pub fn entry_is_secret(e: &crate::SemEntry) -> bool {
+    e.sem.role == crate::sem::SemRole::PasswordBox
+        || e.sem.flags.contains(crate::sem::SemFlags::SECRET)
 }
 
 impl NodeSnapshot {
@@ -31,11 +37,10 @@ impl NodeSnapshot {
     /// are asked, any one of them says it is a password.
     pub fn is_sensitive(&self) -> bool {
         is_secret_node(self.role, self.sem.entry.as_deref())
-            || self
-                .sem
-                .rec
-                .as_ref()
-                .is_some_and(|r| r.sem.role == crate::sem::SemRole::PasswordBox)
+            || self.sem.rec.as_ref().is_some_and(|r| {
+                r.sem.role == crate::sem::SemRole::PasswordBox
+                    || r.sem.flags.contains(crate::sem::SemFlags::SECRET)
+            })
     }
 }
 

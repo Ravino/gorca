@@ -223,3 +223,4 @@ groups errortext 23
 sem_flags LIVE_OFF 262144
 sem_flags DISPLAY_BLOCK 524288
 sem_flags DISPLAY_INLINE 1048576
+sem_flags SECRET 2097152

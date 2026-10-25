@@ -441,6 +441,11 @@ fn describe_node_from_fields(doc: &WebDoc, id: DocNodeId, from: Option<u32>) -> 
         head.append(&mut items);
         items = head;
     }
+    // A secret field is named and announced, never read: whatever text the mirror holds under it
+    // stays out of the description.
+    if super::selmirror::node_is_secret(&v) {
+        items.retain(|i| i.kind != FieldKind::TEXT && i.kind != FieldKind::VALUE);
+    }
     let announced_here = items.iter().any(|i| i.kind == FieldKind::ROLE);
     if !announced_here
         && announced_node(doc, id, &v)

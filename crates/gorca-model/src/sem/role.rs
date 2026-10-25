@@ -126,6 +126,32 @@ impl SemRole {
         )
     }
 
+    /// Roles whose accessible name is computed from their content (B-1 P9-3): a name change of a
+    /// descendant label changes the name of such an ancestor without an event on it.
+    pub const fn takes_name_from_content(self) -> bool {
+        matches!(
+            self,
+            SemRole::Heading
+                | SemRole::Link
+                | SemRole::ListItem
+                | SemRole::Option
+                | SemRole::Row
+                | SemRole::Cell
+                | SemRole::GridCell
+                | SemRole::ColumnHeader
+                | SemRole::RowHeader
+                | SemRole::Button
+                | SemRole::Switch
+                | SemRole::Checkbox
+                | SemRole::Radio
+                | SemRole::MenuItem
+                | SemRole::MenuItemCheckbox
+                | SemRole::MenuItemRadio
+                | SemRole::Tab
+                | SemRole::TreeItem
+        )
+    }
+
     /// Roles on which a disabled state is meaningful (SM-5). Static and structural roles are
     /// `NotApplicable`, never "unavailable". The one list: the AT-SPI state mapping and the fusion
     /// applicability rules both read it.

@@ -123,19 +123,13 @@ const fn ban(
 /// Modules already moved off the legacy node record (M22c ratchet, ADR-0022 section 8.7): they
 /// read the fused entry only. A module joins this list in the commit that ports it and never
 /// leaves; the rule then fails on every legacy `Role`, `StateSet` or interface read in it.
-const PORTED: &[&str] = &[
-    "crates/gorca-core/src/review/",
-    "crates/gorca-core/src/text/",
-    "crates/gorca-core/src/commands/",
-    "crates/gorca-core/src/present/",
-    "crates/gorca-core/src/doc_actor/flags_sem.rs",
-    "crates/gorca-core/src/doc_actor/translate.rs",
-    "crates/gorca-core/src/doc_actor/live.rs",
-    "crates/gorca-core/src/doc_actor/mod.rs",
-    "crates/gorca-core/src/doc_actor/repair.rs",
-    "crates/gorca-core/src/browse/",
-    "crates/gorca-core/src/focus.rs",
-    "crates/gorca-core/src/nodekind.rs",
+const PORTED: &[&str] = &["crates/gorca-core/src/"];
+/// Files of [`PORTED`] that are not ported yet: the two bridges that hand a snapshot's raw state
+/// bits to the plugin watch rows (`plugin_port::Row`), which another slice owns. They leave this
+/// list when `Row` carries the fused facts; the list never grows.
+const UNPORTED: &[&str] = &[
+    "crates/gorca-core/src/app_actor/fuse.rs",
+    "crates/gorca-core/src/doc_actor/fuse.rs",
 ];
 const LEGACY_ROLE: &str =
     "SemRole from the fused entry (`review::zone::entry_of`, `Ivm::entry_view`)";
@@ -330,6 +324,7 @@ pub fn scan(file: &str, source: &str) -> Vec<Hit> {
     let bans: Vec<&Ban> = BANS
         .iter()
         .filter(|b| b.scope.iter().any(|p| file.starts_with(p)))
+        .filter(|b| !(std::ptr::eq(b.scope, PORTED) && UNPORTED.contains(&file)))
         .collect();
     let mut hits = Vec::new();
     let mut lines = source.lines().enumerate().peekable();
@@ -567,8 +562,11 @@ mod tests {
                 ("snapshot-states", 3),
             ]
         );
-        // The same text elsewhere is not in the ratchet yet.
-        assert!(scan("crates/gorca-core/src/browse/x.rs", src).is_empty());
+        // The same text elsewhere is not in the ratchet (the model defines these types).
+        assert!(scan("crates/gorca-model/src/x.rs", src).is_empty());
+        // The plugin bridges are the listed exceptions inside the ratcheted tree.
+        assert!(scan("crates/gorca-core/src/doc_actor/fuse.rs", src).is_empty());
+        assert!(!scan("crates/gorca-core/src/doc_actor/live.rs", src).is_empty());
     }
 
     #[test]

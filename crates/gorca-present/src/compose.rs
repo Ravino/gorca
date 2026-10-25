@@ -232,7 +232,7 @@ const fn tri_state_word(class: Class) -> Option<M> {
 /// [`FieldFlags::SECRET`] and goes through [`PresIr::redacted`] before any sink that must not see it.
 #[must_use]
 pub fn is_secret_entry(entry: &SemEntry) -> bool {
-    is_secret_role(entry.sem.role)
+    is_secret_role(entry.sem.role) || entry.sem.flags.contains(gorca_model::sem::SemFlags::SECRET)
 }
 
 /// The same rule for a bare fused role (plugin rows and source records are not entries yet).
@@ -467,6 +467,18 @@ fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_secret_mark_makes_an_entry_secret_whatever_its_fused_role() {
+        let mut e = SemEntry::default();
+        e.sem.role = SemRole::TextBox;
+        assert!(!is_secret_entry(&e));
+        e.sem.flags |= gorca_model::sem::SemFlags::SECRET;
+        assert!(is_secret_entry(&e));
+        let mut p = SemEntry::default();
+        p.sem.role = SemRole::PasswordBox;
+        assert!(is_secret_entry(&p));
+    }
+
     use gorca_model::sem::SemText;
     use gorca_model::{AppId, ConnectorId, LocalId};
 

@@ -782,3 +782,14 @@ Goldens: `docflags.tsv` 6 records, `quicknav.{en,ru}.tsv` +18 nodes each, `brows
 * 2026-10-25: `meter` stays without an object marker (it never had one); the model role `Meter`
   is not in the marker roles.
 
+#### M22c part 2: the secret mark (2026-10-25, security review)
+
+A toolkit password entry stays secret when the fusion settles on another role (an author token or a
+quirk turning it into a text box). `SemFlags::SECRET` (1<<21, code 2097152, appended to the codes
+snapshot) is set by the normaliser for the engine's password role and travels in the fused entry;
+`gorca_present::is_secret_entry` and `gorca_model::is_secret_node` ask the role *or* the mark, and
+`NodeSnapshot::from_fused` turns a secret entry into a password-entry snapshot, so
+`is_sensitive()` holds. Every browse sink asks `selmirror::node_is_secret` (selection mirror,
+focus snapshot, description); the description of a secret node also drops any text or value the
+mirror holds under it. Test: `a_toolkit_password_entry_with_a_fused_text_box_role_is_secret_in_every_browse_sink`.
+

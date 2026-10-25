@@ -27,6 +27,7 @@ use gorca_mirror::fill::{
     AppClass, DemandOutcome, DemandWhy, FillInput, FillPolicy, FillReqId, HealthView, NullPolicy,
 };
 use gorca_mirror::{FillLimits, MirrorHandle, MirrorRead, MirrorWriter, RemovalCause, SweepStats};
+use gorca_model::sem::SemRole;
 use gorca_model::{
     AppId, AppLifecycle, NodeEvent, NodeKey, NodeSnapshot, PropMask, SnapshotBatch, WindowKind,
 };
@@ -993,7 +994,7 @@ impl AppActor {
                 break;
             };
             self.invalidate_node(a, PropMask::NAME, now);
-            if !v.snap.role.takes_name_from_content() {
+            if !crate::nodekind::role_of(&v.snap).takes_name_from_content() {
                 break;
             }
             cur = v.snap.parent;
@@ -1127,9 +1128,10 @@ impl AppActor {
             return;
         }
         let level = self.read.view(node).hit().is_none_or(|v| {
+            // A level bar is a `meter` to the model.
             matches!(
-                v.snap.role,
-                gorca_model::Role::ProgressBar | gorca_model::Role::Slider
+                crate::nodekind::role_of(&v.snap),
+                SemRole::ProgressBar | SemRole::Slider | SemRole::Meter
             )
         });
         if level && self.level_budget.take(Instant::now()) {
