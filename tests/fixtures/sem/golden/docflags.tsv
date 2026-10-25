@@ -3211,7 +3211,7 @@ firefox/exotic-time	6	flags	NodeFlags(256) level 0
 firefox/forms	1	flags	NodeFlags(2304) level 0
 firefox/forms	2	flags	NodeFlags(2048) level 0
 firefox/forms	3	flags	NodeFlags(2048) level 1
-firefox/forms	4	flags	NodeFlags(133120) level 0
+firefox/forms	4	flags	NodeFlags(2048) level 0
 firefox/forms	5	flags	NodeFlags(0) level 0
 firefox/forms	6	flags	NodeFlags(256) level 0
 firefox/forms	7	flags	NodeFlags(256) level 0
@@ -3345,8 +3345,8 @@ firefox/m8-forms	1	flags	NodeFlags(2304) level 0
 firefox/m8-forms	2	flags	NodeFlags(2048) level 1
 firefox/m8-forms	3	flags	NodeFlags(2048) level 0
 firefox/m8-forms	4	flags	NodeFlags(256) level 0
-firefox/m8-forms	5	flags	NodeFlags(133120) level 0
-firefox/m8-forms	6	flags	NodeFlags(133120) level 0
+firefox/m8-forms	5	flags	NodeFlags(2048) level 0
+firefox/m8-forms	6	flags	NodeFlags(2048) level 0
 firefox/m8-forms	7	flags	NodeFlags(2048) level 0
 firefox/m8-forms	8	flags	NodeFlags(2048) level 0
 firefox/m8-forms	9	flags	NodeFlags(0) level 0
@@ -3686,7 +3686,7 @@ firefox/m8-quicknav	101	flags	NodeFlags(65536) level 0
 firefox/m8-quicknav	102	flags	NodeFlags(0) level 0
 firefox/m8-quicknav	103	flags	NodeFlags(67584) level 0
 firefox/m8-quicknav	104	flags	NodeFlags(2048) level 0
-firefox/m8-quicknav	105	flags	NodeFlags(131072) level 0
+firefox/m8-quicknav	105	flags	NodeFlags(0) level 0
 firefox/m8-quicknav	106	flags	NodeFlags(256) level 0
 firefox/m8-quicknav	107	flags	NodeFlags(2048) level 0
 firefox/m8-quicknav	108	flags	NodeFlags(2048) level 0
@@ -3821,7 +3821,7 @@ firefox/m8-tables	81	flags	NodeFlags(2048) level 2
 firefox/m8-tables	82	flags	NodeFlags(2048) level 0
 firefox/m8b-forms	1	flags	NodeFlags(2304) level 0
 firefox/m8b-forms	2	flags	NodeFlags(2048) level 1
-firefox/m8b-forms	3	flags	NodeFlags(133120) level 0
+firefox/m8b-forms	3	flags	NodeFlags(2048) level 0
 firefox/m8b-forms	4	flags	NodeFlags(2048) level 0
 firefox/m8b-forms	5	flags	NodeFlags(0) level 0
 firefox/m8b-forms	6	flags	NodeFlags(256) level 0

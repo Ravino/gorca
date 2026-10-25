@@ -294,6 +294,7 @@ pub(crate) fn fuse_spec(s: gorca_doc::web::SubtreeSpec) -> gorca_doc::web::Subtr
             attrs: hint.attrs.iter().cloned().collect(),
             local: None,
             rec: None,
+            synth_role: gorca_model::testing::sem_role(role),
         };
         if let Some(d) = hint.description.as_ref() {
             node.attrs.push((web_attrs::DESCRIPTION, Arc::clone(d)));

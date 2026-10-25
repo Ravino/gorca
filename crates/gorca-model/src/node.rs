@@ -376,6 +376,8 @@ pub struct NodeSnapshot {
     /// The source's own role is a password field (a mark only the connector sets, beside the
     /// source record's).
     native_secret: bool,
+    /// The source role is a window, a dialog or the application (see `ends_ancestry`).
+    chain_end: bool,
     /// Test support: the role and states `with_source` was given, so a fixture can describe a
     /// node by them and re-derive its source record (`testing` feature only).
     #[cfg(feature = "testing")]
@@ -403,6 +405,7 @@ impl NodeSnapshot {
             structure: StructFlags::empty(),
             diag: SrcDiag::NONE,
             native_secret: false,
+            chain_end: false,
             #[cfg(feature = "testing")]
             test_src: (Role::Unknown, StateSet::empty()),
         }
@@ -572,6 +575,7 @@ impl NodeSnapshot {
         self.structure = struct_flags_of(states);
         self.diag = SrcDiag::of(role, states);
         self.native_secret = crate::redact::is_sensitive(role);
+        self.chain_end = matches!(role, Role::Window | Role::Dialog | Role::Application);
         #[cfg(feature = "testing")]
         {
             self.test_src = (role, states);
@@ -689,6 +693,7 @@ impl NodeSnapshot {
             structure: struct_flags_of(states) & StructFlags::FOCUSABLE,
             diag,
             native_secret: false,
+            chain_end: false,
             #[cfg(feature = "testing")]
             test_src: (Role::Unknown, states),
             sem: NodeSem {
@@ -698,18 +703,10 @@ impl NodeSnapshot {
         }
     }
 
-    /// The model role of the node: the fused entry's, else its source record's, else `Unknown`
-    /// (a snapshot nothing has normalised). Structure, for the mirror's own walks (prefetch).
-    pub fn model_role(&self) -> crate::SemRole {
-        match (&self.sem.entry, &self.sem.rec) {
-            (Some(e), _) => e.sem.role,
-            (None, Some(r)) => r.sem.role,
-            // Test builds describe a bare snapshot by the source role it was given.
-            #[cfg(feature = "testing")]
-            (None, None) => crate::testing::sem_role(self.test_src.0),
-            #[cfg(not(feature = "testing"))]
-            (None, None) => crate::SemRole::Unknown,
-        }
+    /// The source says the node is a window, a dialog or the application: the end of an ancestor
+    /// walk (the mirror's prefetch chain). Structure from the connector, as the states are.
+    pub fn ends_ancestry(&self) -> bool {
+        self.chain_end
     }
 
     /// The capabilities the source claimed for the node (see [`NodeCaps`]).

@@ -51,6 +51,12 @@ fn role_is_block(r: SemRole) -> bool {
     )
 }
 
+/// The normaliser's `invalid` group of the node's source record: set from the `invalid` state on
+/// any role, a form container included, where the fused group is only given for fields.
+fn source_invalid(n: &SrcNode) -> bool {
+    n.rec.as_ref().is_some_and(|r| r.sem.invalid != Invalid::No)
+}
+
 /// The node flags that follow from the source node and its fused semantics `sem` (everything but
 /// the break flags), and the heading level. `tag` is the DOM tag of the source record.
 #[must_use]
@@ -112,7 +118,7 @@ pub fn flags_from_sem(
         f = f | NodeFlags::ANNOTATION;
     }
     // A form field that is invalid is announced as the field; W finds the marked-up text.
-    if (sem.invalid != Invalid::No || n.reports_invalid())
+    if (sem.invalid != Invalid::No || source_invalid(n))
         && !matches!(
             role,
             SemRole::TextBox
@@ -197,6 +203,7 @@ mod tests {
             attrs: smallvec::SmallVec::default(),
             local: None,
             rec: Some(Arc::new(r)),
+            synth_role: gorca_model::testing::sem_role(role),
         }
     }
 
@@ -320,17 +327,24 @@ mod tests {
         );
     }
 
+    fn invalid_record(role: SemRole) -> gorca_model::sem::SrcRecord {
+        let mut r = gorca_model::sem::SrcRecord::default();
+        r.sem.role = role;
+        r.sem.invalid = Invalid::True;
+        r
+    }
+
     #[test]
     fn invalid_fields_other_than_edits_are_errors_and_headings_carry_their_level() {
         let mut n = node(Role::Table, "table");
-        n.states |= StateSet::INVALID;
+        n.rec = Some(Arc::new(invalid_record(SemRole::Table)));
         assert!(
             flags_from_sem(&n, &sem(SemRole::Table), "table", false)
                 .0
                 .contains(NodeFlags::ERROR)
         );
         let mut e = node(Role::TextEntry, "input");
-        e.states |= StateSet::INVALID;
+        e.rec = Some(Arc::new(invalid_record(SemRole::TextBox)));
         assert!(
             !flags_from_sem(&e, &sem(SemRole::TextBox), "input", false)
                 .0

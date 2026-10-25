@@ -31,7 +31,7 @@ use std::mem::size_of;
 use std::time::{Duration, Instant};
 
 use gorca_ingress::DirtySet;
-use gorca_model::{ChildList, NodeEvent, NodeKey, NodeSnapshot, PropMask, SemRole};
+use gorca_model::{ChildList, NodeEvent, NodeKey, NodeSnapshot, PropMask};
 use gorca_rt::BudgetClass;
 use smallvec::SmallVec;
 
@@ -234,10 +234,6 @@ fn child_count(n: &NodeSnapshot) -> Option<usize> {
         ChildList::Count(c) => usize::try_from(*c).ok(),
         ChildList::Unknown => None,
     }
-}
-
-fn is_window(r: SemRole) -> bool {
-    matches!(r, SemRole::Window | SemRole::Dialog)
 }
 
 fn recently(ring: &[(NodeKey, Instant)], k: NodeKey, now: Instant, gap: Duration) -> bool {
@@ -462,7 +458,7 @@ impl FocusPrefetch {
             let Some(v) = cx.mirror.view(cur).hit() else {
                 return false;
             };
-            if is_window(v.snap.model_role()) || v.snap.model_role() == SemRole::Application {
+            if v.snap.ends_ancestry() {
                 return true;
             }
             match v.snap.parent() {

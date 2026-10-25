@@ -1179,6 +1179,7 @@ impl AtspiDocSource {
                 attrs: amap,
                 local,
                 rec: Some(rec),
+                synth_role: gorca_model::SemRole::Unknown,
             },
             info,
         )

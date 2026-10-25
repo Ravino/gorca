@@ -619,3 +619,35 @@ fn masking_retracts_the_facts_so_an_unmask_cannot_bring_back_stale_ones() {
         "{ops:?}"
     );
 }
+
+/// The WIT `states` contract (`host.states`, `view-node.states`): the `flags` group in bits 0..31
+/// as the registry numbers them, the structural bits of the source's states from bit 32.
+#[test]
+fn the_state_bits_of_a_row_have_the_layout_the_wit_documents() {
+    use gorca_model::StructFlags;
+    use gorca_model::sem::SemFlags;
+    assert_eq!(state_bits(SemFlags::empty(), StructFlags::empty()), 0);
+    assert_eq!(state_bits(SemFlags::REQUIRED, StructFlags::empty()), 1);
+    assert_eq!(
+        state_bits(SemFlags::FOCUSABLE, StructFlags::empty()),
+        1 << 7
+    );
+    assert_eq!(state_bits(SemFlags::SECRET, StructFlags::empty()), 1 << 21);
+    for (f, bit) in [
+        (StructFlags::SHOWING, 32),
+        (StructFlags::VISIBLE, 33),
+        (StructFlags::DEFUNCT, 34),
+        (StructFlags::FOCUSABLE, 35),
+        (StructFlags::FOCUSED, 36),
+        (StructFlags::MULTILINE, 37),
+        (StructFlags::ACTIVE, 38),
+    ] {
+        assert_eq!(state_bits(SemFlags::empty(), f), 1u64 << bit, "{f:?}");
+    }
+    assert_eq!(
+        state_bits(SemFlags::SECRET | SemFlags::BUSY, StructFlags::SHOWING),
+        (1 << 21) | (1 << 2) | (1 << 32)
+    );
+    // The flags group never reaches the structural half.
+    assert_eq!(state_bits(SemFlags::all(), StructFlags::empty()) >> 32, 0);
+}

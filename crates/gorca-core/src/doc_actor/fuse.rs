@@ -765,6 +765,7 @@ mod tests {
             attrs: AttrMap::default(),
             local: None,
             rec: Some(rec(role, name)),
+            synth_role: gorca_model::testing::sem_role(Role::Unknown),
         }
     }
 

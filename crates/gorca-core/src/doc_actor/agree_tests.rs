@@ -240,6 +240,7 @@ pub(crate) fn build(
             attrs: attrs.into_iter().collect(),
             local: None,
             rec: Some(rec),
+            synth_role: gorca_model::testing::sem_role(role),
         });
     }
     let Some(setup) = fuse_setup(&info(engine, app)) else {
@@ -454,6 +455,7 @@ fn syn_node(id: u64, role: Role, rec: Option<Arc<SrcRecord>>, text: Option<&str>
         attrs: gorca_model::AttrMap::default(),
         local: None,
         rec,
+        synth_role: gorca_model::testing::sem_role(role),
     }
 }
 fn syn_add(

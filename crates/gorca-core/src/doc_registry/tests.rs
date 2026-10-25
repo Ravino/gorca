@@ -57,6 +57,7 @@ fn page() -> Vec<DocDelta> {
         attrs: smallvec::SmallVec::default(),
         local: local.map(LocalId),
         rec: None,
+        synth_role: gorca_model::testing::sem_role(role),
     };
     vec![
         DocDelta::Reset {

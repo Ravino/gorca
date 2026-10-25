@@ -81,6 +81,9 @@ pub struct SrcNode {
     /// never in the core). `None` for synthetic nodes (text runs, placeholders) and for sources
     /// that do not normalise. Shared, never mutated: the document actor feeds it to the fusion.
     pub rec: Option<Arc<SrcRecord>>,
+    /// The model role of a node that has no record (a synthetic one: a text run is static text,
+    /// a placeholder is unknown). Ignored when `rec` is set.
+    pub synth_role: crate::SemRole,
 }
 
 impl SrcNode {
@@ -95,6 +98,7 @@ impl SrcNode {
             attrs: smallvec::SmallVec::default(),
             local: None,
             rec: None,
+            synth_role: crate::SemRole::Unknown,
         }
     }
 
@@ -104,14 +108,7 @@ impl SrcNode {
         match (entry, &self.rec) {
             (Some(e), _) => e.sem.role,
             (None, Some(r)) => r.sem.role,
-            // Test builds describe a synthetic node by the source role (`testing::sem_role`).
-            #[cfg(feature = "testing")]
-            (None, None) => crate::testing::sem_role(self.role),
-            #[cfg(not(feature = "testing"))]
-            (None, None) => match self.role {
-                Role::StaticText => crate::SemRole::StaticText,
-                _ => crate::SemRole::Unknown,
-            },
+            (None, None) => self.synth_role,
         }
     }
 
@@ -125,12 +122,6 @@ impl SrcNode {
     /// only exists for nodes whose states the source fetched).
     pub fn is_focusable(&self) -> bool {
         self.states.contains(StateSet::FOCUSABLE)
-    }
-
-    /// The source reported the node as invalid (an `invalid` state on any role, a form
-    /// container included, which the fused `invalid` group is only given for fields).
-    pub fn reports_invalid(&self) -> bool {
-        self.states.contains(StateSet::INVALID)
     }
 
     /// The source reported the node as visible (viewport-independent: `showing` is not asked).

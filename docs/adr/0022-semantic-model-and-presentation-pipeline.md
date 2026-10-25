@@ -768,7 +768,7 @@ snapshot of a document node (`web_focus_snapshot`) is built by `NodeSnapshot::fr
 model, which derives the legacy fields there for the consumers that remain (`impl From<SemRole>
 for Role`). `doc_actor/fuse.rs` is not in the ratchet yet: its `row_of` hands raw state bits to the
 plugin watch rows (`plugin_port::Row`), a bridge another slice owns. `SrcNode` keeps
-`is_visible`, `is_focusable` and `reports_invalid` for the structural facts the source reports even
+`is_visible` and `is_focusable` for the structural facts the source reports even
 where the fused flags group was not fetched.
 
 Goldens: `docflags.tsv` 6 records, `quicknav.{en,ru}.tsv` +18 nodes each, `browse.*` unchanged.
@@ -855,7 +855,7 @@ re-derive its record). `NodeSpec::new` takes a `SemRole`. The plugin watch rows
 
 Not moved, by decision: `SrcNode` (the document source's node: `role`, `states`, `attrs`) keeps
 its producer-side fields; the core reads it through `model_role`, `is_focusable`,
-`reports_invalid`, `is_visible` and `struct_flags` only (rule 12 bans the reads in `gorca-core`).
+`is_visible` and `struct_flags` only (rule 12 bans the reads in `gorca-core`).
 
 * 2026-10-25: the mirror's merge of a partial reply no longer carries `attrs` (the field is gone;
   the `ATTRS` bit of `have` is still carried), and the byte counter no longer counts attribute
@@ -863,10 +863,16 @@ its producer-side fields; the core reads it through `model_role`, `is_focusable`
 * 2026-10-25: a plugin sees `states` as the `flags` group (bits 0..31) plus the structural bits
   (showing, visible, defunct, focusable, focused, multi-line, active; bits 32..39) instead of the
   toolkit bit layout. No shipped plugin reads it.
-* 2026-10-25: the prefetch chain walk stops at a node whose model role is `Window` or `Dialog`
-  (the raw role set it used before folded into the same two roles; an ARIA `alertdialog` is not
-  one).
+* 2026-10-25: review fixes. The prefetch chain walk stops at the connector's window, dialog and
+  application roles as before (`NodeSnapshot::ends_ancestry`, structure set by `with_source`);
+  the fused role would also have stopped it at a file chooser, a desktop frame and an input
+  method window. `SrcNode::reports_invalid` is deleted; the document flags read the normaliser's
+  `invalid` group of the source record (`flags_sem::source_invalid`). Five nodes of the recorded
+  Firefox form pages lose the `ERROR` flag in `docflags.tsv` and two nodes per language leave
+  `quicknav.{en,ru}.tsv` (a form container and a spelling-error span): the fixture handed the
+  recorded `invalid` state of roles the document source never asks states for
+  (`StatePolicy::Stateful`, the default), so production never flagged them. The `testing`-feature
+  fallbacks of `model_role` are gone: a record-less `SrcNode` carries `synth_role`.
 
-Gates: goldens unchanged (`tests/fixtures/sem/golden/`, the review, whereami, docflags, quicknav
-suites pass), `cargo xtask cutover --check` ok, shell e2e `run_p1.sh` 9 steps 0 failed
+Gates: goldens unchanged except the rows above (`tests/fixtures/sem/golden/`, all golden suites pass), `cargo xtask cutover --check` ok, shell e2e `run_p1.sh` 9 steps 0 failed
 (`bench/results/e2e/m22c3-p1/`).

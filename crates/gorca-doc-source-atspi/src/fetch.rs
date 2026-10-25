@@ -523,6 +523,7 @@ async fn complete(
                 attrs,
                 local: targets.get(i).map(|p| gorca_dbus::drain::local_id(p)),
                 rec: Some(rec),
+                synth_role: gorca_model::SemRole::Unknown,
             });
         }
         let completeness = match (opts.states, opts.text) {
