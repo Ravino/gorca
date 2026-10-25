@@ -327,7 +327,7 @@ pub struct PluginOptions {
     /// Costs at most 0.3 ms of one core per focus change.
     pub writer_spin: Option<Duration>,
     /// Pre-armed workers replay their last interactive job once per arming to warm their caches
-    /// (default on; the benchmarks switch it off to compare).
+    /// (default off: an extra invocation of plugin code, pending the owner).
     pub warm_on_arm: Option<bool>,
     /// `[plugins] scheduler`: the scheduling policy of the interactive handoff.
     pub scheduler: SchedulerPolicy,
@@ -571,7 +571,7 @@ impl PluginRuntime {
             wants_url,
             prewake,
             writer_spin: opts.writer_spin.unwrap_or(D_WINDOW),
-            warm_on_arm: opts.warm_on_arm.unwrap_or(true),
+            warm_on_arm: opts.warm_on_arm.unwrap_or(false),
             policy: opts.scheduler,
             sps_k_max: opts.sps_k_max,
             sched_log: opts.sched_log.clone(),
@@ -586,7 +586,7 @@ impl PluginRuntime {
             wants_url: false,
             prewake: Arc::new(Prewake::default()),
             writer_spin: D_WINDOW,
-            warm_on_arm: true,
+            warm_on_arm: false,
             policy: SchedulerPolicy::default(),
             sps_k_max: None,
             sched_log: None,
@@ -1281,8 +1281,8 @@ impl Exec for ResolvingExec {
     fn warm(&mut self) {
         self.inner.warm();
     }
-    fn warm_call(&mut self, job: &DeriveJob) {
-        self.inner.warm_call(job);
+    fn warm_call(&mut self, job: &DeriveJob) -> Option<gorca_plugin_host::slot::FaultKind> {
+        self.inner.warm_call(job)
     }
 }
 
@@ -1534,6 +1534,34 @@ impl PluginScope {
                 | PluginReply::Fault { job, .. }
                 | PluginReply::Cancelled { job, .. } => *job,
             };
+            if id == gorca_plugin_host::call::WARM_JOB {
+                // A fault of a warm call: the strike machine and the mask treat it like the
+                // fault of a real call; a warm call carries no facts.
+                if let PluginReply::Fault {
+                    plugin,
+                    kind,
+                    slot_epoch,
+                    ..
+                } = r
+                    && let Some(p) = self.plugins.get_mut(plugin as usize)
+                {
+                    let was_masked = p.masked;
+                    let _ = p.slot.on_reply(slot_epoch, Event::Fault(kind), now);
+                    tracing::warn!(plugin = %p.meta.name, ?kind, "warm call faulted");
+                    let masked = Self::masked_now(p);
+                    self.runner.set_warm(plugin, false);
+                    if masked && !was_masked {
+                        p.masked = true;
+                        out.push(Reply {
+                            plugin: plugin as usize,
+                            t: 0,
+                            targets: Vec::new(),
+                            body: ReplyBody::Masked,
+                        });
+                    }
+                }
+                continue;
+            }
             if waited_only
                 && !self
                     .jobs
@@ -1616,6 +1644,12 @@ impl PluginScope {
                 }
             };
             let masked = Self::masked_now(p);
+            // Warming is allowed only while the plugin is unmasked, in `Ready`, and its call
+            // returned normally.
+            self.runner.set_warm(
+                u32::try_from(info.plugin).unwrap_or(u32::MAX),
+                !masked && matches!(body, ReplyBody::Done { .. }),
+            );
             out.push(Reply {
                 plugin: info.plugin,
                 t: info.t,
@@ -2497,6 +2531,42 @@ mod tests {
         assert!(sum.replies >= 8, "{sum:?}");
         assert!(sum.exec_p50_us >= 50, "{sum:?}");
         assert_eq!(s.fallback(), None);
+    }
+
+    #[test]
+    fn a_fault_of_a_warm_call_strikes_the_slot_like_a_real_fault() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let (mut scope, _sps) = sps_scope(
+            vec![(
+                Duration::from_micros(50),
+                Priority::Interactive,
+                TrustTier::FirstParty,
+            )],
+            &seen,
+        );
+        let mut out = Vec::new();
+        // Three faults in a window back the slot off and mask the plugin (as for real calls);
+        // each strike moves the slot epoch, so each report carries the current one.
+        for _ in 0..3 {
+            let slot_epoch = scope.plugins[0].slot.slot_epoch();
+            scope.sink.send(PluginReply::Fault {
+                plugin: 0,
+                job: gorca_plugin_host::call::WARM_JOB,
+                slot_epoch,
+                kind: gorca_plugin_host::slot::FaultKind::Trap,
+                exec: Duration::ZERO,
+            });
+            scope.poll(&mut out);
+        }
+        assert!(
+            out.iter().any(|r| matches!(r.body, ReplyBody::Masked)),
+            "the plugin is masked"
+        );
+        assert!(
+            !out.iter().any(|r| matches!(r.body, ReplyBody::Done { .. })),
+            "a warm call carries no facts"
+        );
+        assert!(scope.plugins[0].masked);
     }
 
     /// Counts the DP-1 hook calls.

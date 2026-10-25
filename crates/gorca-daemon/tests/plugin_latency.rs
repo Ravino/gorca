@@ -318,7 +318,7 @@ fn writer_delay_with_ten_plugins_against_none() {
                 .and_then(|v| gorca_daemon::plugins::SchedulerPolicy::parse(&v))
                 .unwrap_or_default(),
             // GORCA_BENCH_SPIN_US=10 is the old parking writer; unset is the whole window.
-            warm_on_arm: std::env::var("GORCA_BENCH_NO_WARM").ok().map(|_| false),
+            warm_on_arm: std::env::var("GORCA_BENCH_WARM").ok().map(|_| true),
             writer_spin: std::env::var("GORCA_BENCH_SPIN_US")
                 .ok()
                 .and_then(|v| v.parse().ok())

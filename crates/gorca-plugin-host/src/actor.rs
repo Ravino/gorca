@@ -56,7 +56,10 @@ pub struct Config {
     /// A pre-armed worker re-runs its last interactive job once per arming and drops the result
     /// ("warm call"): after an idle period the code and data a call touches are cold (a first call
     /// costs 4-6 times a warm one on this host), and the spin of the pre-wake keeps the core awake
-    /// but touches none of it. Same job, same grant, same imports, no effect is kept.
+    /// but touches none of it. Same job, same grant, same imports, no effect is kept. Only for a worker that a plan armed
+    /// (not a blanket arm), whose plugin is enabled and unmasked (`ActorRunner::set_warm`); a
+    /// fault or overrun of the replay is reported as a fault of the plugin and ends warming for
+    /// that worker. Default off: it is an extra invocation of plugin code.
     pub warm_on_arm: bool,
 }
 
@@ -67,7 +70,7 @@ impl Default for Config {
             tail: Duration::from_micros(30),
             idle_spin: Duration::from_micros(40),
             lost_after: Duration::from_millis(50),
-            warm_on_arm: true,
+            warm_on_arm: false,
         }
     }
 }
@@ -198,6 +201,13 @@ struct Actor {
     /// Until this `CLOCK_MONOTONIC` instant an idle worker spins instead of parking (key-down
     /// pre-wake): it is already running when the focus change brings its job.
     spin_until: AtomicU64,
+    /// The `spin_until` of the last arming that came from a plan (`prewake_set`); a blanket arm
+    /// leaves it alone, so only plan-selected workers warm.
+    warm_arm: AtomicU64,
+    /// The writer says the plugin is enabled and unmasked and its last real call returned.
+    warm_ok: AtomicBool,
+    /// Set when the writer revoked warming (mask, fault, backoff): the worker forgets its job.
+    warm_drop: AtomicBool,
     inc: AtomicU64,
     running: Mutex<Option<Running>>,
     running_since: AtomicU64,
@@ -233,6 +243,9 @@ impl Actor {
             parking,
             parked: AtomicU32::new(0),
             spin_until: AtomicU64::new(0),
+            warm_arm: AtomicU64::new(0),
+            warm_ok: AtomicBool::new(false),
+            warm_drop: AtomicBool::new(false),
             inc: AtomicU64::new(0),
             running: Mutex::new(None),
             running_since: AtomicU64::new(0),
@@ -449,15 +462,17 @@ fn worker_main(
     // next started cold. A spinning worker (idle tail or pre-armed) takes it hot.
     let mut went_to_park = false;
     // The last interactive job and the arming (`spin_until`) it was last replayed for.
-    let mut last: Option<DeriveJob> = None;
+    let mut last: Option<(DeriveJob, Arc<dyn ReplySink>)> = None;
     let mut warmed_for: u64 = 0;
+    // A fault of a replay ends warming for this worker.
+    let mut warm_dead = false;
     loop {
         if actor.stop.load(Acquire) || actor.inc.load(Acquire) != inc {
             return;
         }
         if let Some(q) = actor.take(inc) {
-            if cfg.warm_on_arm && q.job.interactive {
-                last = Some(q.job.clone());
+            if cfg.warm_on_arm && !warm_dead && q.job.interactive {
+                last = Some((q.job.clone(), Arc::clone(&q.sink)));
             }
             if !execute(actor, inc, exec.as_mut(), q, gate, went_to_park) {
                 return;
@@ -471,14 +486,44 @@ fn worker_main(
         // Armed and not yet warmed for this arming: replay the last job (at least 1 ms of lead
         // left, so a real job is not made to wait behind it).
         if cfg.warm_on_arm {
+            if warm_dead || actor.warm_drop.swap(false, AcqRel) {
+                // Masked, in backoff or faulted: the saved job is forgotten.
+                last = None;
+            }
             let until = actor.spin_until.load(Acquire);
             let now = monotonic_ns();
-            if let Some(job) = &last
+            if let Some((job, sink)) = &last
+                && actor.warm_ok.load(Acquire)
                 && until > now.saturating_add(1_000_000)
                 && until != warmed_for
+                && actor.warm_arm.load(Acquire) == until
             {
                 warmed_for = until;
-                exec.warm_call(job);
+                // The wedged-actor detector covers the replay like a real call.
+                actor.running_since.store(now.max(1), Release);
+                let r = catch_unwind(AssertUnwindSafe(|| exec.warm_call(job)));
+                if actor.inc.load(Acquire) != inc {
+                    return;
+                }
+                actor.running_since.store(0, Release);
+                let fault = match r {
+                    Ok(f) => f,
+                    Err(_) => {
+                        exec.reset();
+                        Some(FaultKind::Trap)
+                    }
+                };
+                if let Some(kind) = fault {
+                    sink.send(PluginReply::Fault {
+                        plugin: job.plugin,
+                        job: crate::call::WARM_JOB,
+                        slot_epoch: job.slot_epoch,
+                        kind,
+                        exec: Duration::ZERO,
+                    });
+                    warm_dead = true;
+                    last = None;
+                }
                 continue;
             }
         }
@@ -555,6 +600,7 @@ impl Core {
         let mut mask = 0;
         for a in &self.actors {
             if a.plugin < 64 && who & (1 << a.plugin) != 0 {
+                a.warm_arm.store(until_ns, Release);
                 a.spin_until.store(until_ns, Release);
                 mask |= a.wake_mask();
             }
@@ -730,6 +776,17 @@ impl ActorRunner {
     #[must_use]
     pub fn replaced(&self, plugin: PluginId) -> u32 {
         self.actor(plugin).map_or(0, |a| a.replaced.load(Relaxed))
+    }
+
+    /// The writer's word on a plugin: warming is allowed only while it is enabled and unmasked
+    /// and its last real call returned. `false` also drops the worker's saved job.
+    pub fn set_warm(&self, plugin: PluginId, ok: bool) {
+        if let Some(a) = self.actor(plugin) {
+            a.warm_ok.store(ok, Release);
+            if !ok {
+                a.warm_drop.store(true, Release);
+            }
+        }
     }
 
     fn actor(&self, plugin: PluginId) -> Option<&Arc<Actor>> {
