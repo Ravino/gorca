@@ -216,9 +216,39 @@ pub fn verified_identity(pid: u32, start: u64) -> Option<String> {
 }
 
 fn identity_unchecked(pid: u32) -> Option<String> {
-    let ours = mount_ns("self");
-    let theirs = mount_ns(&pid.to_string());
-    let same_ns = ours.is_some() && ours == theirs;
+    identity_in(
+        pid,
+        mount_ns(&pid.to_string()).as_deref(),
+        mount_ns("self").as_deref(),
+        std::fs::read_link(format!("/proc/{pid}/ns/user"))
+            .ok()
+            .as_deref(),
+    )
+}
+
+/// The initial user namespace (`PROC_USER_INIT_INO`): where the session's own processes live.
+const INIT_USER_NS: &str = "user:[4026531837]";
+
+/// [`identity_unchecked`] with the namespaces given: the peer's mount namespace, gorca's own and
+/// the peer's user namespace.
+///
+/// A peer in gorca's own mount namespace is the plain case. gorca as a hardened systemd unit
+/// (`PrivateTmp=`, `ProtectSystem=`) lives in mount and user namespaces of its own, so every
+/// ordinary desktop application looked foreign (the live bug: no native application was ever
+/// verified, so no URL-scoped plugin opened). An unprivileged process can only get a private
+/// mount namespace through a user namespace of its own, so a peer in a foreign mount namespace
+/// but the **initial user namespace** was placed there by privileged software and is as native
+/// as one in gorca's. A peer in a foreign mount namespace that is not in the initial user
+/// namespace (an `unshare -Ur` impostor, a user-namespace sandbox) needs sandbox evidence.
+/// Either way the executable must be the very file (device, inode) that gorca sees at that path.
+fn identity_in(
+    pid: u32,
+    theirs: Option<&std::path::Path>,
+    ours: Option<&std::path::Path>,
+    peer_user_ns: Option<&std::path::Path>,
+) -> Option<String> {
+    let same_ns = theirs.is_some() && theirs == ours;
+    let privileged_ns = peer_user_ns == Some(std::path::Path::new(INIT_USER_NS));
     // Snap: the kernel's enforced confinement label, then the executable under /snap/<name>/.
     if let Ok(label) = std::fs::read_to_string(format!("/proc/{pid}/attr/apparmor/current"))
         && let Some(name) = snap_identity(&label)
@@ -229,12 +259,19 @@ fn identity_unchecked(pid: u32) -> Option<String> {
         return (under && exe_is_file(pid, &canon)).then(|| format!("snap:{name}"));
     }
     if !same_ns {
-        // Another mount namespace without a snap label: a flatpak sandbox, or an impostor.
-        let info = std::fs::read_to_string(format!("/proc/{pid}/root/.flatpak-info")).ok()?;
-        let scope = std::fs::read_to_string(format!("/proc/{pid}/cgroup"))
-            .ok()
-            .and_then(|s| parse_cgroup(&s));
-        return flatpak_identity(&info, scope.as_deref()).map(|id| format!("flatpak:{id}"));
+        // Another mount namespace without a snap label: a flatpak sandbox, or an impostor, or
+        // (when it is in the initial user namespace) software started by privileged code.
+        let info = std::fs::read_to_string(format!("/proc/{pid}/root/.flatpak-info"));
+        match info {
+            Ok(info) => {
+                let scope = std::fs::read_to_string(format!("/proc/{pid}/cgroup"))
+                    .ok()
+                    .and_then(|s| parse_cgroup(&s));
+                return flatpak_identity(&info, scope.as_deref()).map(|id| format!("flatpak:{id}"));
+            }
+            Err(_) if privileged_ns && theirs.is_some() => {}
+            Err(_) => return None,
+        }
     }
     let target = std::fs::read_link(format!("/proc/{pid}/exe")).ok()?;
     if target.to_str()?.ends_with(" (deleted)") {
@@ -419,6 +456,57 @@ mod tests {
                 "a system binary in a foreign mount namespace is not verified"
             );
         }
+    }
+
+    #[test]
+    fn a_system_binary_is_verified_when_gorca_runs_in_a_private_unit_namespace() {
+        // gorca as a hardened systemd unit: mount and user namespaces of its own; the peer is
+        // an ordinary session process (foreign mount namespace, initial user namespace).
+        let mut c = spawn("/usr/bin/sleep");
+        let pid = c.id();
+        let theirs = mount_ns(&pid.to_string());
+        let other = std::path::PathBuf::from("mnt:[1]");
+        let init = std::path::PathBuf::from(INIT_USER_NS);
+        let sandboxed_user = std::path::PathBuf::from("user:[4026539999]");
+        let unit = identity_in(pid, theirs.as_deref(), Some(&other), Some(&init));
+        let impostor = identity_in(pid, theirs.as_deref(), Some(&other), Some(&sandboxed_user));
+        let unknown_user = identity_in(pid, theirs.as_deref(), Some(&other), None);
+        let unreadable = identity_in(pid, None, None, Some(&init));
+        let _ = c.kill();
+        let _ = c.wait();
+        assert_eq!(unit.as_deref(), Some("sleep"));
+        assert_eq!(
+            impostor, None,
+            "a foreign user namespace needs sandbox evidence"
+        );
+        assert_eq!(unknown_user, None);
+        assert_eq!(unreadable, None);
+    }
+
+    /// Probe for a live session (read-only): `GORCA_PROBE_PID=<pid> GORCA_PROBE_OURS=mnt:[N]
+    /// cargo test -p gorca-connector-atspi --lib live_peer -- --ignored --nocapture` prints the
+    /// identity gorca would verify for `pid` when it runs in the mount namespace `OURS`.
+    #[test]
+    #[ignore = "needs a live pid"]
+    fn live_peer_identity_probe() {
+        let Some(pid) = std::env::var("GORCA_PROBE_PID")
+            .ok()
+            .and_then(|p| p.parse::<u32>().ok())
+        else {
+            return;
+        };
+        let ours = std::env::var("GORCA_PROBE_OURS")
+            .ok()
+            .map(std::path::PathBuf::from);
+        let id = identity_in(
+            pid,
+            mount_ns(&pid.to_string()).as_deref(),
+            ours.as_deref(),
+            std::fs::read_link(format!("/proc/{pid}/ns/user"))
+                .ok()
+                .as_deref(),
+        );
+        println!("identity of {pid}: {id:?}");
     }
 
     #[test]

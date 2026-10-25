@@ -88,11 +88,27 @@ pub fn chat_name(cells: &[Cell]) -> Option<Name> {
     let join = |p: Part| -> String {
         texts
             .get(&p)
-            .map(|v| v.join(" "))
+            .map(|v| {
+                // A lone colon (Web A prints "sender" ":" "text" as three leaves) sticks to the
+                // word before it: "Alex: hi", not "Alex : hi".
+                let mut out = String::new();
+                for t in v {
+                    if t.trim() == ":" && !out.is_empty() {
+                        out.push(':');
+                    } else {
+                        if !out.is_empty() {
+                            out.push(' ');
+                        }
+                        out.push_str(t);
+                    }
+                }
+                out
+            })
             .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "))
             .unwrap_or_default()
     };
     let mut title = join(Part::Title);
+    let titled_by_class = !title.is_empty();
     let mut preview = join(Part::Preview);
     let mut time = join(Part::Time);
     if title.is_empty() && part_of_cell.contains(&Some(Part::Avatar)) {
@@ -131,7 +147,22 @@ pub fn chat_name(cells: &[Cell]) -> Option<Name> {
     if title.is_empty() {
         return None;
     }
-    let unread = join(Part::Badge);
+    let mut unread = join(Part::Badge);
+    if unread.is_empty() && titled_by_class {
+        // Web A (2026-10) names the counter by a hashed CSS-module class (`NT-X2xr9 ...`): the
+        // only stable mark is its place and shape, a bare count right under the row.
+        unread = cells
+            .iter()
+            .enumerate()
+            .find(|(i, c)| {
+                // Its own cell or the run leaf under a hashed-class block, never under a part.
+                part_of_cell[*i].is_none()
+                    && looks_like_count(c.text.trim())
+                    && under_row_only_unmarked(cells, &part_of_cell, *i)
+            })
+            .map(|(_, c)| c.text.trim().to_owned())
+            .unwrap_or_default();
+    }
     Some(Name {
         title,
         unread: (!unread.is_empty()).then_some(unread),
@@ -227,6 +258,34 @@ fn split_merged(s: &str) -> Option<(String, String, String)> {
     None
 }
 
+/// True when cell `i` reaches the row (cell 0) within three steps through cells that belong to no
+/// part: it is the row's own loose text, not the text of a title, preview or time.
+fn under_row_only_unmarked(cells: &[Cell], part_of_cell: &[Option<Part>], i: usize) -> bool {
+    let mut cur = i;
+    for _ in 0..3 {
+        match cells[cur].parent {
+            Some(0) => return true,
+            Some(p) if part_of_cell.get(p).is_some_and(Option::is_none) => cur = p,
+            _ => return false,
+        }
+    }
+    false
+}
+
+/// An unread counter as Telegram prints it: `3`, `529`, `1,2K`, `182,6K`, `2M`.
+fn looks_like_count(s: &str) -> bool {
+    let body = s.strip_suffix(['K', 'k', 'M', 'm']).unwrap_or(s);
+    let suffixed = body.len() != s.len();
+    let mut parts = body.split(['.', ',']);
+    let int_ok = parts
+        .next()
+        .is_some_and(|p| (1..=6).contains(&p.len()) && p.bytes().all(|b| b.is_ascii_digit()));
+    let frac_ok = parts.next().is_none_or(|f| {
+        suffixed && (1..=2).contains(&f.len()) && f.bytes().all(|b| b.is_ascii_digit())
+    });
+    int_ok && frac_ok && parts.next().is_none()
+}
+
 /// `15:00`, `9:41`, `15:00:30` (a message time); not a date or a count.
 fn looks_like_time(s: &str) -> bool {
     let mut parts = s.split(':');
@@ -259,7 +318,7 @@ mod tests {
             cell(Some(4), "title", ""),
             cell(Some(5), "fullName", ""),
             cell(Some(6), "", "Alice"),
-            cell(Some(4), "time", "") ,
+            cell(Some(4), "time", ""),
             cell(Some(8), "", "15:00"),
             cell(Some(4), "last-message", ""),
             cell(Some(10), "", "see you soon"),
@@ -356,7 +415,10 @@ mod tests {
             chat_name(&cells).map(|n| n.english()).as_deref(),
             Some("Alice, see you soon, 15:00")
         );
-        assert_eq!(split_merged("Carol14:58lunch at noon?"), Some(("Carol".into(), "14:58".into(), "lunch at noon?".into())));
+        assert_eq!(
+            split_merged("Carol14:58lunch at noon?"),
+            Some(("Carol".into(), "14:58".into(), "lunch at noon?".into()))
+        );
         assert_eq!(split_merged("14:58 only time"), None);
         assert_eq!(split_merged("no time here"), None);
     }
@@ -373,8 +435,67 @@ mod tests {
         assert_eq!(n(None, "hi", "15:00").key(), "row-011");
         assert_eq!(n(Some("2"), "", "15:00").key(), "row-101");
         assert_eq!(n(Some("2"), "hi", "15:00").key(), "row-111");
-        let names: Vec<String> = n(Some("2"), "hi", "15:00").args().into_iter().map(|a| a.0).collect();
+        let names: Vec<String> = n(Some("2"), "hi", "15:00")
+            .args()
+            .into_iter()
+            .map(|a| a.0)
+            .collect();
         assert_eq!(names, ["title", "n", "preview", "time"]);
+    }
+
+    #[test]
+    fn web_a_2026_10_row_with_a_hashed_badge_class_says_unread() {
+        // Read from the live tree (Firefox ESR, Telegram Web A, 2026-10-25): the row is
+        // `a.ListItem-button`, the badge has only hashed CSS-module classes.
+        let cells = vec![
+            cell(None, "ListItem-button", ""),
+            cell(Some(0), "Avatar size-large peer-color-0 no-photo", ""),
+            cell(Some(1), "inner", ""),
+            cell(Some(2), "letters", "Q"),
+            cell(Some(0), "fullName _8IVW0azL", "Q148"),
+            cell(Some(0), "time", "22:28"),
+            cell(Some(0), "last-message shared-canvas-container", ""),
+            cell(Some(6), "sender-name", "Алексей"),
+            cell(Some(6), "colon", ":"),
+            cell(Some(6), "last-message-summary", "QBrailleXLWin.addon"),
+            cell(Some(0), "NT-X2xr9 yf73Yld8 npoDLolY", "529"),
+        ];
+        let n = chat_name(&cells).expect("name");
+        assert_eq!(n.unread.as_deref(), Some("529"));
+        assert_eq!(n.title, "Q148");
+        assert_eq!(n.time, "22:28");
+        // The same row with the run leaf under the hashed block (Firefox splits container text).
+        let runs = vec![
+            cell(None, "ListItem-button", ""),
+            cell(Some(0), "fullName", ""),
+            cell(Some(1), "", "Q148"),
+            cell(Some(0), "last-message", ""),
+            cell(Some(3), "sender-name", "Алексей"),
+            cell(Some(3), "colon", ":"),
+            cell(Some(3), "last-message-summary", "hello"),
+            cell(Some(0), "NT-X2xr9 yf73Yld8 npoDLolY", ""),
+            cell(Some(7), "", "529"),
+        ];
+        let n = chat_name(&runs).expect("name");
+        assert_eq!(n.unread.as_deref(), Some("529"));
+        assert_eq!(n.preview, "Алексей: hello");
+        // A read chat has no counter and a numeric preview is not one.
+        let read = vec![
+            cell(None, "ListItem-button", ""),
+            cell(Some(0), "fullName", "Bob"),
+            cell(Some(0), "last-message", "42"),
+        ];
+        assert_eq!(chat_name(&read).and_then(|n| n.unread), None);
+    }
+
+    #[test]
+    fn count_shapes() {
+        for t in ["3", "529", "182,6K", "1.2K", "2M"] {
+            assert!(looks_like_count(t), "{t}");
+        }
+        for t in ["", "22:28", "Q148", "1,2", "12345678", "K", "1,234K"] {
+            assert!(!looks_like_count(t), "{t}");
+        }
     }
 
     #[test]

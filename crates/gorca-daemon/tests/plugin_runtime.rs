@@ -125,6 +125,41 @@ const CHAT_A: &[N] = &[
     (14, Some(13), "", "", "1"),
 ];
 
+/// Web A as read from the live Firefox ESR tree (2026-10-25): the row is a link, the badge has
+/// only hashed CSS-module classes, text sits in run leaves, the preview has a sender and a colon.
+const CHAT_A_LIVE: &[N] = &[
+    (0, None, "div", "", ""),
+    (1, Some(0), "a", "ListItem-button", ""),
+    (
+        2,
+        Some(1),
+        "div",
+        "Avatar size-large peer-color-0 no-photo",
+        "",
+    ),
+    (3, Some(2), "div", "inner", ""),
+    (4, Some(3), "div", "letters", "Q"),
+    (5, Some(1), "button", "fullName _8IVW0azL", ""),
+    (6, Some(5), "", "", "Q148"),
+    (7, Some(1), "div", "time", ""),
+    (8, Some(7), "", "", "22:28"),
+    (
+        9,
+        Some(1),
+        "div",
+        "last-message shared-canvas-container",
+        "",
+    ),
+    (10, Some(9), "div", "sender-name", ""),
+    (11, Some(10), "", "", "Алексей"),
+    (12, Some(9), "div", "colon", ""),
+    (13, Some(12), "", "", ":"),
+    (14, Some(9), "div", "last-message-summary", ""),
+    (15, Some(14), "", "", "see you soon"),
+    (16, Some(1), "div", "NT-X2xr9 yf73Yld8 npoDLolY", ""),
+    (17, Some(16), "", "", "529"),
+];
+
 /// Web K: `a.chatlist-chat` whose avatar label doubles the title.
 const CHAT_K: &[N] = &[
     (0, None, "ul", "", ""),
@@ -237,6 +272,26 @@ fn the_real_plugin_names_a_web_a_chat_row_without_initials_and_says_unread() {
     );
     // First party: an S1 patch, plain (T0).
     assert!(matches!(ops[0], FactOp::Patch { .. }));
+}
+
+#[test]
+fn the_live_web_a_row_with_a_hashed_badge_class_gets_its_unread_count() {
+    let rt = runtime(PluginOptions::default());
+    let mut b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/#728451375", true),
+    )
+    .expect("scope");
+    let tree = feed(&mut b, CHAT_A_LIVE);
+    let ops = collect(&mut b, &tree, Duration::from_secs(5));
+    assert_eq!(
+        names(&ops),
+        vec![(
+            1,
+            "Q148, 529 unread, Алексей: see you soon, 22:28".to_owned()
+        )],
+        "{ops:?}"
+    );
 }
 
 #[test]
