@@ -697,3 +697,204 @@ fn run<S: NavSource>(w: &mut Walk<'_, S>, nav: NodeKey, mv: NavMove) -> StepResu
         Err(s @ Stop::Miss(_)) => StepResult::Stop(s),
     }
 }
+
+#[cfg(test)]
+mod entry_tests {
+    use gorca_model::sem::{SemText, Semantics};
+
+    use super::*;
+
+    fn entry(role: SemRole, name: &str) -> SemEntry {
+        SemEntry {
+            sem: Semantics {
+                role,
+                ..Semantics::default()
+            },
+            name: (!name.is_empty()).then(|| Arc::from(name)),
+            ..SemEntry::default()
+        }
+    }
+
+    fn st(f: StructFlags) -> StructState {
+        StructState::known(f)
+    }
+
+    const ON: StructFlags = StructFlags::SHOWING.union(StructFlags::VISIBLE);
+
+    #[test]
+    fn the_class_is_a_function_of_the_entry_and_the_structural_state() {
+        let button = entry(SemRole::Button, "OK");
+        assert_eq!(class_entry(&button, st(ON), false), PresClass::Content);
+        assert_eq!(
+            class_entry(&button, st(StructFlags::DEFUNCT | ON), false),
+            PresClass::Unavailable
+        );
+        assert_eq!(
+            class_entry(&button, st(StructFlags::empty()), false),
+            PresClass::Unavailable,
+            "states were read and nothing shows"
+        );
+        assert_eq!(
+            class_entry(&button, StructState::UNKNOWN, false),
+            PresClass::Content,
+            "states never fetched: present"
+        );
+    }
+
+    #[test]
+    fn showing_alone_counts_and_visible_alone_counts_in_a_web_document_only() {
+        let button = entry(SemRole::Button, "OK");
+        assert_eq!(
+            class_entry(&button, st(StructFlags::SHOWING), false),
+            PresClass::Content
+        );
+        assert_eq!(
+            class_entry(&button, st(StructFlags::VISIBLE), false),
+            PresClass::Unavailable
+        );
+        assert_eq!(
+            class_entry(&button, st(StructFlags::VISIBLE), true),
+            PresClass::Content
+        );
+    }
+
+    #[test]
+    fn a_window_or_landmark_is_a_stop_only_with_a_name_or_a_description() {
+        for role in [
+            SemRole::Window,
+            SemRole::Main,
+            SemRole::Form,
+            SemRole::Region,
+        ] {
+            assert_eq!(
+                class_entry(&entry(role, ""), st(ON), false),
+                PresClass::Layout,
+                "{role:?}"
+            );
+            assert_eq!(
+                class_entry(&entry(role, "  "), st(ON), false),
+                PresClass::Layout,
+                "{role:?} with a blank name"
+            );
+            assert_eq!(
+                class_entry(&entry(role, "Title"), st(ON), false),
+                PresClass::Content,
+                "{role:?}"
+            );
+            let mut described = entry(role, "");
+            described.sem.text = Some(Arc::new(SemText {
+                description: Some(Arc::from("tip")),
+                ..SemText::default()
+            }));
+            assert_eq!(
+                class_entry(&described, st(ON), false),
+                PresClass::Content,
+                "{role:?} with a description"
+            );
+        }
+    }
+
+    #[test]
+    fn layout_roles_are_never_stops_and_controls_always_are() {
+        for role in [
+            SemRole::Generic,
+            SemRole::Group,
+            SemRole::Paragraph,
+            SemRole::Separator,
+            SemRole::Caption,
+            SemRole::Unknown,
+        ] {
+            assert_eq!(
+                class_entry(&entry(role, "named"), st(ON), false),
+                PresClass::Layout,
+                "{role:?}"
+            );
+        }
+        for role in [
+            SemRole::Button,
+            SemRole::Link,
+            SemRole::TextBox,
+            SemRole::Slider,
+        ] {
+            assert_eq!(
+                class_entry(&entry(role, ""), st(ON), false),
+                PresClass::Content,
+                "{role:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn static_text_is_a_stop_and_a_label_is_not() {
+        let text = entry(SemRole::StaticText, "Hello");
+        assert_eq!(class_entry(&text, st(ON), false), PresClass::Content);
+        let mut label = text.clone();
+        label.sem.flags |= SemFlags::TEXT_LABEL;
+        assert_eq!(class_entry(&label, st(ON), false), PresClass::Layout);
+        // The bit is a label's: a button that carries it by mistake is still a stop.
+        let mut button = entry(SemRole::Button, "OK");
+        button.sem.flags |= SemFlags::TEXT_LABEL;
+        assert_eq!(class_entry(&button, st(ON), false), PresClass::Content);
+    }
+
+    #[test]
+    fn every_model_role_has_a_class() {
+        let mut layout = 0;
+        let mut content = 0;
+        for code in 0..=u16::MAX {
+            let Some(role) = SemRole::from_code(code) else {
+                continue;
+            };
+            match role_class(role) {
+                RoleClass::Layout => layout += 1,
+                RoleClass::LayoutIfNameless | RoleClass::Content => content += 1,
+            }
+        }
+        assert!(
+            layout > 10 && content > 50,
+            "{layout} layout, {content} content"
+        );
+    }
+
+    #[test]
+    fn the_structural_state_reads_only_the_structural_bits() {
+        use gorca_model::{
+            AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeSem, NodeSnapshot,
+            PropMask, Role, StateSet,
+        };
+        let mut snap = NodeSnapshot {
+            key: NodeKey {
+                app: AppId {
+                    connector: ConnectorId(1),
+                    serial: 1,
+                },
+                local: LocalId(1),
+            },
+            role: Role::Button,
+            states: StateSet::empty(),
+            name: Some(Arc::from("OK")),
+            description: None,
+            value: None,
+            parent: None,
+            children: ChildList::Unknown,
+            interfaces: Ifaces::empty(),
+            attrs: gorca_model::AttrMap::default(),
+            relations: gorca_model::Relations::default(),
+            bounds: None,
+            have: PropMask::NAME | PropMask::ROLE,
+            confirmed_seq: 0,
+            fresh: Freshness::Defunct,
+            sem: NodeSem::NONE,
+        };
+        assert!(!snap.struct_state().is_known(), "states were never fetched");
+        // With the states read, the structural bits decide, and nothing spoken leaks in.
+        snap.have |= PropMask::STATES;
+        snap.states =
+            StateSet::SHOWING | StateSet::VISIBLE | StateSet::CHECKED | StateSet::DISABLED;
+        let s = snap.struct_state();
+        assert!(s.is_known());
+        assert_eq!(s.flags(), ON);
+        snap.states |= StateSet::DEFUNCT;
+        assert!(snap.struct_state().is_defunct());
+    }
+}

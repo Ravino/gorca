@@ -871,6 +871,7 @@ mod tests {
 
     use super::*;
     use crate::render::TokenText;
+    use gorca_i18n::MsgId as M;
 
     fn l(kind: SegmentKind, s: &str) -> LegacyToken {
         LegacyToken {
@@ -1379,5 +1380,279 @@ mod tests {
                 new_only: 0
             }
         );
+    }
+
+    // ---- review (M22b3) ---------------------------------------------------------------------
+
+    fn review(role: SemRole, set: &dyn Fn(&mut DiffCtx<'static>)) -> DiffCtx<'static> {
+        let mut c = DiffCtx {
+            surface: "review",
+            role,
+            ..DiffCtx::FOCUS
+        };
+        set(&mut c);
+        c
+    }
+
+    /// The classifiers the review surface has rows for (the rows of `deviations.toml`).
+    const REVIEW_IDS: &[&str] = &[
+        "content-derived-name",
+        "marker-stripped-name",
+        "name-whitespace",
+        "name-cap-differs",
+        "blank-name-not-spoken",
+        "role-from-model",
+        "unavailable-static",
+        "role-word-improved",
+        "toggle-state-word",
+        "pressed-without-toggle",
+        "value-text-spoken",
+        "value-from-attrs",
+        "wrapper-word-dropped",
+        "unworded-role-is-object",
+        "class-role-from-model",
+        "layout-table-class",
+        "static-text-word",
+    ];
+
+    fn rows() -> Deviations {
+        use std::fmt::Write as _;
+        let mut src = String::new();
+        for id in REVIEW_IDS {
+            let _ = write!(
+                src,
+                "[[deviation]]\nid = \"{id}\"\nsurface = \"review\"\nreason = \"test\"\nepoch = \"m22b3\"\nuntil = \"2099-01-01\"\n"
+            );
+        }
+        Deviations::parse(&src).expect("rows parse")
+    }
+
+    #[test]
+    fn the_review_ids_are_the_rows_of_the_checked_in_list() {
+        let builtin = Deviations::builtin();
+        let mut have = builtin.ids_for("review");
+        have.retain(|id| id != "walk-follows-class");
+        have.sort();
+        let mut want: Vec<String> = REVIEW_IDS.iter().map(|s| (*s).to_owned()).collect();
+        want.sort();
+        assert_eq!(have, want, "update REVIEW_IDS with deviations.toml");
+        let mut web = builtin.ids_for("review-web");
+        web.retain(|id| id != "walk-follows-class");
+        web.sort();
+        assert_eq!(web, want, "review and review-web carry the same rows");
+    }
+
+    #[test]
+    fn a_blank_name_is_not_spoken_but_a_word_is() {
+        let ctx = review(SemRole::StaticText, &|_| ());
+        let silent = [l(SegmentKind::Text, "  \u{a0}")];
+        assert_eq!(
+            diff(&silent, &[], &rows(), ctx),
+            DiffOutcome::Allowed("blank-name-not-spoken")
+        );
+        let said = [l(SegmentKind::Text, "Save")];
+        assert!(matches!(
+            diff(&said, &[], &rows(), ctx),
+            DiffOutcome::Different { .. }
+        ));
+        // The row is on the review surface only.
+        let focus = DiffCtx::FOCUS;
+        assert!(matches!(
+            diff(&silent, &[], &rows(), focus),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn a_panel_word_is_dropped_only_for_a_role_without_a_word() {
+        let t = |m| gorca_i18n::t_in(Lang::En, m);
+        let legacy = [
+            l(SegmentKind::Text, "Fig"),
+            l(SegmentKind::Role, t(M::RolePanel)),
+        ];
+        let new = [n(SegmentKind::Text, "Fig")];
+        assert_eq!(
+            diff(&legacy, &new, &rows(), review(SemRole::Figure, &|_| ())),
+            DiffOutcome::Allowed("wrapper-word-dropped")
+        );
+        assert_eq!(
+            diff(&legacy, &new, &rows(), review(SemRole::Option, &|_| ())),
+            DiffOutcome::Allowed("wrapper-word-dropped")
+        );
+        // A button has a word of its own: losing the panel word there is no catch-all drop.
+        assert!(matches!(
+            diff(&legacy, &new, &rows(), review(SemRole::Button, &|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // Another legacy word is a real loss.
+        let other = [
+            l(SegmentKind::Text, "Fig"),
+            l(SegmentKind::Role, t(M::RoleLink)),
+        ];
+        assert!(matches!(
+            diff(&other, &new, &rows(), review(SemRole::Figure, &|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // The model said a word: the row does not apply.
+        let said = [
+            n(SegmentKind::Text, "Fig"),
+            n(SegmentKind::Role, t(M::RoleList)),
+        ];
+        assert!(matches!(
+            diff(&legacy, &said, &rows(), review(SemRole::Figure, &|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn an_unworded_role_is_object_and_nothing_else_is() {
+        let t = |m| gorca_i18n::t_in(Lang::En, m);
+        let new = [n(SegmentKind::Role, t(M::WordObject))];
+        // The legacy mapping said nothing, or its catch-all panel.
+        for legacy in [vec![], vec![l(SegmentKind::Role, t(M::RolePanel))]] {
+            assert_eq!(
+                diff(&legacy, &new, &rows(), review(SemRole::Log, &|_| ())),
+                DiffOutcome::Allowed("unworded-role-is-object")
+            );
+        }
+        // A role that has a word never becomes "object".
+        assert!(matches!(
+            diff(&[], &new, &rows(), review(SemRole::Button, &|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // A specific legacy word is a loss.
+        let legacy = [l(SegmentKind::Role, t(M::RoleLink))];
+        assert!(matches!(
+            diff(&legacy, &new, &rows(), review(SemRole::Log, &|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn a_class_changes_only_where_the_model_knows_the_role() {
+        let layout = [l(SegmentKind::Text, "Layout")];
+        let content = [n(SegmentKind::Text, "Content")];
+        let coarse = |c: &mut DiffCtx<'static>| c.legacy_coarse = true;
+        assert_eq!(
+            diff(
+                &layout,
+                &content,
+                &rows(),
+                review(SemRole::Article, &coarse)
+            ),
+            DiffOutcome::Allowed("class-role-from-model")
+        );
+        assert_eq!(
+            diff(&layout, &content, &rows(), review(SemRole::Option, &coarse)),
+            DiffOutcome::Allowed("class-role-from-model")
+        );
+        // The legacy role was a real one (not Unknown, Panel or Paragraph): no row.
+        assert!(matches!(
+            diff(
+                &layout,
+                &content,
+                &rows(),
+                review(SemRole::Article, &|_| ())
+            ),
+            DiffOutcome::Different { .. }
+        ));
+        // A role the model does not list.
+        assert!(matches!(
+            diff(&layout, &content, &rows(), review(SemRole::Button, &coarse)),
+            DiffOutcome::Different { .. }
+        ));
+        // Never the other direction: a stop that disappears needs its own row.
+        let content_l = [l(SegmentKind::Text, "Content")];
+        let layout_n = [n(SegmentKind::Text, "Layout")];
+        assert!(matches!(
+            diff(
+                &content_l,
+                &layout_n,
+                &rows(),
+                review(SemRole::Article, &coarse)
+            ),
+            DiffOutcome::Different { .. }
+        ));
+        assert_eq!(
+            diff(
+                &content_l,
+                &layout_n,
+                &rows(),
+                review(SemRole::Presentation, &|_| ())
+            ),
+            DiffOutcome::Allowed("layout-table-class")
+        );
+        assert!(matches!(
+            diff(
+                &content_l,
+                &layout_n,
+                &rows(),
+                review(SemRole::Table, &|_| ())
+            ),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn a_stand_in_role_word_is_not_a_role_the_legacy_mapping_knew() {
+        let t = |m| gorca_i18n::t_in(Lang::En, m);
+        let fallback = |c: &mut DiffCtx<'static>| c.legacy_fallback = true;
+        // The zone of a silent actionable object said "object"; the model knows the role.
+        let legacy = [l(SegmentKind::Role, t(M::WordObject))];
+        let new = [n(SegmentKind::Role, t(M::RoleScrollBar))];
+        assert_eq!(
+            diff(
+                &legacy,
+                &new,
+                &rows(),
+                review(SemRole::Scrollbar, &fallback)
+            ),
+            DiffOutcome::Allowed("role-from-model")
+        );
+        // Without the stand-in flag the legacy role word was a real word, now lost.
+        assert!(matches!(
+            diff(&legacy, &new, &rows(), review(SemRole::Scrollbar, &|_| ())),
+            DiffOutcome::Different { .. }
+        ));
+        // A derived name replaces the stand-in too.
+        let legacy = [l(SegmentKind::Role, t(M::RoleRow))];
+        let new = [n(SegmentKind::Text, "Alex 10:31")];
+        let derived = |c: &mut DiffCtx<'static>| {
+            c.legacy_fallback = true;
+            c.name_derived = true;
+        };
+        assert_eq!(
+            diff(&legacy, &new, &rows(), review(SemRole::Row, &derived)),
+            DiffOutcome::Allowed("content-derived-name")
+        );
+        let not_derived = |c: &mut DiffCtx<'static>| c.legacy_fallback = true;
+        assert!(matches!(
+            diff(&legacy, &new, &rows(), review(SemRole::Row, &not_derived)),
+            DiffOutcome::Different { .. }
+        ));
+    }
+
+    #[test]
+    fn static_structure_is_not_unavailable_on_the_review_surface() {
+        let t = |m| gorca_i18n::t_in(Lang::En, m);
+        let legacy = [
+            l(SegmentKind::Role, t(M::RolePanel)),
+            l(SegmentKind::State, t(M::StateUnavailable)),
+        ];
+        let new = [n(SegmentKind::Role, t(M::RolePanel))];
+        let na = |c: &mut DiffCtx<'static>| c.avail_na = true;
+        assert_eq!(
+            diff(&legacy, &new, &rows(), review(SemRole::Generic, &na)),
+            DiffOutcome::Allowed("unavailable-static")
+        );
+        // A control the model has not declared static keeps the word.
+        assert!(matches!(
+            diff(&legacy, &new, &rows(), review(SemRole::Button, &na)),
+            DiffOutcome::Different { .. }
+        ));
+        assert!(matches!(
+            diff(&legacy, &new, &rows(), review(SemRole::Generic, &|_| ())),
+            DiffOutcome::Different { .. }
+        ));
     }
 }

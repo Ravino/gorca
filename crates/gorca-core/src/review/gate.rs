@@ -14,7 +14,7 @@ pub use super::model::ReviewLimits;
 pub use super::objnav::{
     NavMove, NavSource, PresClass, StepResult, class, class_in, class_of_snapshot, step_with,
 };
-pub use super::zone::{join_tokens, object_tokens, role_word, zone_tokens};
+pub use super::zone::{join_tokens, object_text, object_tokens, role_word, zone_tokens};
 
 use super::cluster::{BuildNode, legacy_zone_tokens};
 use crate::present::flat_zone_tokens;
@@ -47,6 +47,7 @@ pub fn actionable(snap: &NodeSnapshot) -> bool {
 }
 
 /// A page of snapshots as a [`NavSource`], every node fresh.
+#[derive(Debug)]
 pub struct PageSource(pub HashMap<NodeKey, Arc<NodeSnapshot>>);
 
 impl NavSource for PageSource {

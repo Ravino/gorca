@@ -266,7 +266,7 @@ pub const SEM_FLAGS: &[Row] = &[
     ("SELECTION_FOLLOWS_FOCUS", 16384),
     ("SYNTHETIC", 32768),
     ("ROLE_AUTHORED", 65536),
-    ("TEXT_LABEL", 131072),
+    ("TEXT_LABEL", 131_072),
 ];
 
 /// `Relevant` bit values.
