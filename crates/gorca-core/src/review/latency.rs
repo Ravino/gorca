@@ -57,8 +57,8 @@ fn page(rows: usize) -> Page {
         let (panel, label, entry, button, check) = (next, next + 1, next + 2, next + 3, next + 4);
         next += 5;
         row_ids.push(panel);
-        let y = 10 + (i as i32) * 24;
-        let mut node = |id, role, name: &str, parent, kids: &[u64], x: i32, w: u32| {
+        let y = 10 + i32::try_from(i).unwrap_or(0) * 24;
+        let node = |id, role, name: &str, parent, kids: &[u64], x: i32, w: u32| {
             let mut s = snap(id, role, name, Some(parent), kids);
             s.bounds = Some(Rect { x, y, w, h: 20 });
             s.have |= PropMask::BOUNDS;
