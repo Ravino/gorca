@@ -77,6 +77,20 @@ voice = ""                    # optional, a voice name from your voicego engine
 | `if_covered` | `"refuse"` | `"refuse"`, `"click"` | What an item click does when something covers the target: say what covers it and click nothing, or click whatever is at that point. |
 | `announce_move` | `true` | `true`, `false` | Say "Mouse moved" after moving the pointer to the review position. |
 
+## Plugins
+
+`[plugins]` is read once, when gorca starts. It does nothing unless `enabled = true`.
+
+| Key | Default | Allowed values | Meaning |
+|---|---|---|---|
+| `enabled` | `false` | `true`, `false` | Load WASM plugin packages (first-party directory and `$XDG_DATA_HOME/gorca/plugins`). |
+| `scheduler` | `"labels"` | `"labels"`, `"sps"` | How gorca waits for plugins when focus moves: wake every worker and wait for each non-refinement plugin, or learn which workers to wake and how long to wait for each. |
+| `placement` | `"auto"` | `"auto"`, `"off"` | CPU placement on a hybrid CPU (performance, efficiency and low-power cores). `"auto"` (with `scheduler = "sps"`) keeps the writer's wait and the plugins it waits for on the performance cores (an affinity mask, not single-core pins, so the kernel still balances load; at most all but one performance core are used by waited-for workers, the rest may also use efficiency cores) and refinement and third-party plugins on the efficiency cores, never on the low-power cores for the wait path. On a CPU without that split, when the topology cannot be read, or with `scheduler = "labels"` (it wakes every worker on every key, and a performance-core mask starves them), nothing is pinned and gorca logs one line saying so. `"off"` leaves every thread to the kernel. |
+| `idle_lease` | `"auto"` | `"auto"`, `"off"` | Hold a `/dev/cpu_dma_latency` lease of 20 microseconds while plugins are active, so the CPUs stay out of the deep idle states (C2/C3) whose wake-up tail dominates a parked plugin worker's first call. Taken by a key that wakes plugin workers, released 2 seconds after the last one (and cut and retaken after 30 s of continuous holding). It costs some power and heat only while held. Needs write access to the device: install `packaging/udev/70-gorca-cpu-dma-latency.rules` (see `packaging/udev/README.md`); without it gorca logs one line and carries on. `"off"` never opens the device. |
+
+Placement only changes which cores gorca's own threads may use. It does not change what a plugin
+may do, its limits or its capabilities.
+
 ## Default configuration
 
 ```toml

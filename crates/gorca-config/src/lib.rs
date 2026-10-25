@@ -29,8 +29,8 @@ pub use save::{SaveError, save};
 pub use settings::{
     Apply, Backend, BoundaryMode, Caps, Confirmations, EchoSettings, EditingSettings,
     IfCoveredPolicy, InterruptPolicy, ItemClick, KeyScope, KeyboardSettings, Layout, ModeDefault,
-    MouseSettings, Overlay, PluginScheduler, PluginsSettings, Preset, ProfilesSettings, Punct,
-    SCHEMA, SETTINGS, SettingDef, SettingType, Settings, SpeechSettings, TextSettings, Verbosity,
-    VerbositySettings, WordLevel, defaults_toml, defaults_toml_commented, resolve_language,
-    sections,
+    MouseSettings, Overlay, PluginIdleLease, PluginPlacement, PluginScheduler, PluginsSettings,
+    Preset, ProfilesSettings, Punct, SCHEMA, SETTINGS, SettingDef, SettingType, Settings,
+    SpeechSettings, TextSettings, Verbosity, VerbositySettings, WordLevel, defaults_toml,
+    defaults_toml_commented, resolve_language, sections,
 };

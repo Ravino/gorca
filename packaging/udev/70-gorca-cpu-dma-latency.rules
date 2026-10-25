@@ -1,0 +1,6 @@
+# gorca (ADR-0026 DP-1 option b): let the logged-in user on the active seat open /dev/cpu_dma_latency.
+# gorca writes a 20 us latency target to it only while screen-reader plugins are active; the kernel
+# drops the request when the file is closed or the process dies. Effect while held: the CPUs avoid
+# the deep idle states C2/C3 (a little more power and heat). Same mechanism as the kvm and rfkill
+# nodes in 70-uaccess.rules.
+SUBSYSTEM=="misc", KERNEL=="cpu_dma_latency", TAG+="uaccess"

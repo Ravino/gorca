@@ -317,6 +317,18 @@ fn writer_delay_with_ten_plugins_against_none() {
                 .ok()
                 .and_then(|v| gorca_daemon::plugins::SchedulerPolicy::parse(&v))
                 .unwrap_or_default(),
+            placement: std::env::var("GORCA_PLUGIN_PLACEMENT")
+                .ok()
+                .and_then(|v| gorca_daemon::plugins::PlacementPolicy::parse(&v))
+                .unwrap_or_default(),
+            idle_lease: if std::env::var("GORCA_IDLE_LEASE").is_ok() {
+                gorca_daemon::plugins::IdleLeasePolicy::Auto
+            } else {
+                gorca_daemon::plugins::IdleLeasePolicy::Off
+            },
+            placement_variant: std::env::var("GORCA_PLACEMENT_VARIANT")
+                .ok()
+                .and_then(|v| v.parse().ok()),
             // GORCA_BENCH_SPIN_US=10 is the old parking writer; unset is the whole window.
             warm_on_arm: std::env::var("GORCA_BENCH_WARM").ok().map(|_| true),
             writer_spin: std::env::var("GORCA_BENCH_SPIN_US")
@@ -528,10 +540,16 @@ fn writer_delay_with_ten_plugins_against_none() {
         .to_string();
     let sched = std::env::var("GORCA_PLUGIN_SCHEDULER").unwrap_or_else(|_| "default".into());
     let spacing_ms = spacing().as_millis();
+    let placement_label = format!(
+        "{}{}",
+        std::env::var("GORCA_PLUGIN_PLACEMENT").unwrap_or_else(|_| "auto".into()),
+        std::env::var("GORCA_PLACEMENT_VARIANT")
+            .map_or_else(|_| String::new(), |v| format!("-v{v}"))
+    );
     let line = format!(
         "PX-6 plugins={PLUGINS} trials={TRIALS} on_us p50={:.1} p99={:.1} max={:.1} off_us p50={:.1} p99={:.1} \
          delta_p99_us={:.1} facts_at_first_utterance overall={:.3} min_plugin={:.3} per_plugin={:?} \
-         min_eventually_within_15ms={:.3} proc_cpu_pct_of_core={cpu_pct:.1} governor={gov} scheduler={sched} spacing_ms={spacing_ms} load1={load1:.1} cores={cores} release={release} debug_log={} prewake={} spin_us={} refinement_dummies={} dummy_tier={} quiet_violated={}",
+         min_eventually_within_15ms={:.3} proc_cpu_pct_of_core={cpu_pct:.1} governor={gov} scheduler={sched} spacing_ms={spacing_ms} load1={load1:.1} cores={cores} release={release} debug_log={} prewake={} spin_us={} refinement_dummies={} dummy_tier={} quiet_violated={} placement={} turn_displaced={} turn_on_fast={} idle_lease={} lease_takes={}",
         pct(&on_ns, 0.5) as f64 / 1e3,
         pct(&on_ns, 0.99) as f64 / 1e3,
         *on_ns.last().unwrap() as f64 / 1e3,
@@ -548,6 +566,11 @@ fn writer_delay_with_ten_plugins_against_none() {
         std::env::var("GORCA_BENCH_REFINEMENT_DUMMIES").is_ok(),
         std::env::var("GORCA_BENCH_DUMMY_TIER").unwrap_or_else(|_| "third".into()),
         !quiet,
+        placement_label,
+        gorca_rt::topology::turn_counts().0,
+        gorca_rt::topology::turn_counts().1,
+        std::env::var("GORCA_IDLE_LEASE").is_ok(),
+        gorca_rt::pmqos::takes(),
     );
     eprintln!("{line}");
     if let Ok(path) = std::env::var("GORCA_BENCH_OUT") {
