@@ -39,7 +39,16 @@ const TRIALS: usize = 400;
 const PLUGINS: usize = 10;
 /// Spacing of the focus changes: a fast typist; above the writer's own once-per-20-ms limit so
 /// every turn takes the wait.
-const SPACING: Duration = Duration::from_millis(24);
+const SPACING_DEFAULT: Duration = Duration::from_millis(24);
+
+/// `GORCA_BENCH_SPACING_MS` overrides the spacing: 24 is a stress rate (41 keys/s) that the
+/// pre-wake CPU bucket of SPS cannot serve for every plugin; 100-200 ms is a navigation rate.
+fn spacing() -> Duration {
+    std::env::var("GORCA_BENCH_SPACING_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map_or(SPACING_DEFAULT, Duration::from_millis)
+}
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -131,6 +140,16 @@ fn mark(bridge: &PluginBridge, ops: &[FactOp], want: &str, seen: &mut [bool]) {
     }
 }
 
+/// Process CPU time (user + system, all threads) in microseconds, from `/proc/self/stat`.
+fn proc_cpu_us() -> u64 {
+    let stat = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
+    let tail = stat.rsplit(')').next().unwrap_or("");
+    let f: Vec<&str> = tail.split_whitespace().collect();
+    let tick = 10_000u64; // USER_HZ = 100
+    let get = |i: usize| f.get(i).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+    (get(11) + get(12)) * tick
+}
+
 fn pct(sorted: &[u64], p: f64) -> u64 {
     let i = ((sorted.len() as f64) * p).ceil() as usize;
     sorted[i.saturating_sub(1).min(sorted.len() - 1)]
@@ -180,12 +199,43 @@ fn writer_delay_with_ten_plugins_against_none() {
             std::fs::copy(dist.join("gorca.telegram-web/i18n").join(f), cat.join(f)).unwrap();
         }
     }
-    let pins = parse_pins(&std::fs::read_to_string(root().join("plugins/pins.txt")).unwrap());
+    let mut pins = parse_pins(&std::fs::read_to_string(root().join("plugins/pins.txt")).unwrap());
+    // GORCA_BENCH_DUMMY_TIER=first pins the nine copies (the same component), so they are
+    // first-party plugins: the C-4 fixture of ADR-0026 section 2.4.7.12 where no tier cap
+    // applies. The default (third parties, sideloaded) is the harsher reading: a third party has
+    // one hot place, a 100 us hold and is never waited for when its deadline was clipped.
+    if std::env::var("GORCA_BENCH_DUMMY_TIER").as_deref() == Ok("first") {
+        let base = pins[0].sha256;
+        for i in 1..PLUGINS {
+            let id: &'static str = Box::leak(format!("example.dummy{i}").into_boxed_str());
+            pins.push(gorca_plugin_host::package::Pin { id, sha256: base });
+        }
+    }
+    let dummies_first = std::env::var("GORCA_BENCH_DUMMY_TIER").as_deref() == Ok("first");
+    if dummies_first {
+        // Installed packages only can be first party: the original goes next to its copies.
+        let t = user.path().join("gorca.telegram-web");
+        std::fs::create_dir_all(t.join("i18n")).unwrap();
+        for f in ["manifest.toml", "plugin.wasm", "i18n/en.msg", "i18n/ru.msg"] {
+            std::fs::copy(dist.join("gorca.telegram-web").join(f), t.join(f)).unwrap();
+        }
+    }
     let rt = PluginRuntime::load_with_pins(
         &PluginOptions {
-            first_party_dir: Some(dist),
-            user_dir: Some(user.path().to_path_buf()),
+            first_party_dir: Some(if dummies_first {
+                user.path().to_path_buf()
+            } else {
+                dist
+            }),
+            user_dir: (!dummies_first).then(|| user.path().to_path_buf()),
             allow_sideloaded: true,
+            sps_k_max: std::env::var("GORCA_SPS_KMAX")
+                .ok()
+                .and_then(|v| v.parse().ok()),
+            scheduler: std::env::var("GORCA_PLUGIN_SCHEDULER")
+                .ok()
+                .and_then(|v| gorca_daemon::plugins::SchedulerPolicy::parse(&v))
+                .unwrap_or_default(),
             // GORCA_BENCH_SPIN_US=10 is the old parking writer; unset is the whole window.
             writer_spin: std::env::var("GORCA_BENCH_SPIN_US")
                 .ok()
@@ -257,8 +307,10 @@ fn writer_delay_with_ten_plugins_against_none() {
     let mut all_in_time = 0usize;
     // Facts in by the end of the 15 ms that follow (first utterance or refinement).
     let mut refined = [0usize; PLUGINS];
+    let cpu0 = proc_cpu_us();
+    let wall0 = Instant::now();
     for trial in 0..TRIALS {
-        std::thread::sleep(SPACING);
+        std::thread::sleep(spacing());
         // A new view of the row each time (the badge counts up): every plugin has to re-derive.
         let text = format!("{}", 2 + trial);
         // Plugins off: the same turn without the call (the writer's own work is identical).
@@ -327,6 +379,7 @@ fn writer_delay_with_ten_plugins_against_none() {
             );
         }
     }
+    let cpu_pct = (proc_cpu_us() - cpu0) as f64 / 1e4 / wall0.elapsed().as_secs_f64().max(1e-3);
     on_ns.sort_unstable();
     off_ns.sort_unstable();
     let delta_p99 = pct(&on_ns, 0.99).saturating_sub(pct(&off_ns, 0.99));
@@ -350,10 +403,16 @@ fn writer_delay_with_ten_plugins_against_none() {
         st.handoff_waited_ns as f64 / 1e3 / TRIALS as f64,
         st.handoff_drain_ns as f64 / 1e3 / TRIALS as f64
     );
+    let gov = std::fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let sched = std::env::var("GORCA_PLUGIN_SCHEDULER").unwrap_or_else(|_| "default".into());
+    let spacing_ms = spacing().as_millis();
     let line = format!(
         "PX-6 plugins={PLUGINS} trials={TRIALS} on_us p50={:.1} p99={:.1} max={:.1} off_us p50={:.1} p99={:.1} \
          delta_p99_us={:.1} facts_at_first_utterance overall={:.3} min_plugin={:.3} per_plugin={:?} \
-         min_eventually_within_15ms={:.3} load1={load1:.1} cores={cores} release={release} debug_log={} prewake={} spin_us={} refinement_dummies={} quiet_violated={}",
+         min_eventually_within_15ms={:.3} proc_cpu_pct_of_core={cpu_pct:.1} governor={gov} scheduler={sched} spacing_ms={spacing_ms} load1={load1:.1} cores={cores} release={release} debug_log={} prewake={} spin_us={} refinement_dummies={} dummy_tier={} quiet_violated={}",
         pct(&on_ns, 0.5) as f64 / 1e3,
         pct(&on_ns, 0.99) as f64 / 1e3,
         *on_ns.last().unwrap() as f64 / 1e3,
@@ -368,6 +427,7 @@ fn writer_delay_with_ten_plugins_against_none() {
         use_prewake,
         std::env::var("GORCA_BENCH_SPIN_US").unwrap_or_else(|_| "window".into()),
         std::env::var("GORCA_BENCH_REFINEMENT_DUMMIES").is_ok(),
+        std::env::var("GORCA_BENCH_DUMMY_TIER").unwrap_or_else(|_| "third".into()),
         !quiet,
     );
     eprintln!("{line}");

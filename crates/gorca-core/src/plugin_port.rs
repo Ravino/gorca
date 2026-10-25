@@ -292,8 +292,18 @@ pub trait ScopeRunner: Send {
     fn background(&mut self, jobs: Vec<Job>);
     /// Take the replies that have arrived.
     fn poll(&mut self, out: &mut Vec<Reply>);
+    /// Take the replies of the jobs the writer waited for in the handoff that just ended. The
+    /// others stay queued for a later turn (they are refinements: admitting them now would spend
+    /// the writer's budget on facts nobody waited for). Default: everything that arrived.
+    fn poll_waited(&mut self, out: &mut Vec<Reply>) {
+        self.poll(out);
+    }
     /// Replies are still outstanding.
     fn outstanding(&self) -> bool;
+    /// After an interactive handoff: admitting `replies` replies after the wait took `admit_ns`.
+    /// The runner may use it to leave room for that cost inside the next wait (the writer's
+    /// delay is bounded by `D` only if what follows the wait fits). Default: ignore.
+    fn turn_done(&mut self, _admit_ns: u64, _replies: u32) {}
 }
 
 /// The daemon's plugin runtime as the writers see it.
@@ -495,6 +505,8 @@ pub struct PluginBridge {
     last_wait_ns: u64,
     stats: BridgeStats,
     replies: Vec<Reply>,
+    /// Replies taken by the last [`PluginBridge::drain`].
+    drained: u32,
 }
 
 impl std::fmt::Debug for PluginBridge {
@@ -537,6 +549,7 @@ impl PluginBridge {
             last_wait_ns: 0,
             stats: BridgeStats::default(),
             replies: Vec::new(),
+            drained: 0,
         }
     }
 
@@ -883,8 +896,10 @@ impl PluginBridge {
         self.stats.handoff_arrived += u64::from(h.arrived);
         self.stats.handoff_waited_ns += h.waited_ns;
         let t = now_ns();
-        let any = self.drain();
-        self.stats.handoff_drain_ns += now_ns().saturating_sub(t);
+        let any = self.drain_with(true);
+        let admit_ns = now_ns().saturating_sub(t);
+        self.stats.handoff_drain_ns += admit_ns;
+        self.runner.turn_done(admit_ns, self.drained);
         any
     }
 
@@ -921,10 +936,20 @@ impl PluginBridge {
 
     /// Admit the replies that arrived (late facts, refinements).
     pub fn drain(&mut self) -> bool {
+        self.drain_with(false)
+    }
+
+    /// `drain`, taking only the replies of the jobs the handoff waited for when `waited_only`.
+    fn drain_with(&mut self, waited_only: bool) -> bool {
         let mut replies = std::mem::take(&mut self.replies);
         replies.clear();
-        self.runner.poll(&mut replies);
+        if waited_only {
+            self.runner.poll_waited(&mut replies);
+        } else {
+            self.runner.poll(&mut replies);
+        }
         let any = !replies.is_empty();
+        self.drained = u32::try_from(replies.len()).unwrap_or(u32::MAX);
         for r in replies.drain(..) {
             self.admit(r);
         }

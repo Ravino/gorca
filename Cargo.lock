@@ -1214,6 +1214,7 @@ dependencies = [
  "gorca-model",
  "gorca-output-api",
  "gorca-plugin-host",
+ "gorca-plugin-sched",
  "gorca-rt",
  "gorca-shell-helper",
  "gorca-speech",
@@ -1457,6 +1458,10 @@ dependencies = [
  "tracing",
  "wasmtime",
 ]
+
+[[package]]
+name = "gorca-plugin-sched"
+version = "0.0.0"
 
 [[package]]
 name = "gorca-present"

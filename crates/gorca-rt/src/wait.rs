@@ -14,6 +14,17 @@ use std::sync::atomic::AtomicU32;
 /// [`crate::process::monotonic_ns`]). Returns `true` when woken, interrupted or the value
 /// differed, `false` on timeout.
 pub fn futex_wait_abs(addr: &AtomicU32, expected: u32, deadline_ns: u64) -> bool {
+    futex_wait_bitset_abs(
+        addr,
+        expected,
+        deadline_ns,
+        libc::FUTEX_BITSET_MATCH_ANY.cast_unsigned(),
+    )
+}
+
+/// As [`futex_wait_abs`], but only a [`futex_wake_bitset`] whose mask shares a bit with `mask`
+/// wakes the waiter. Many threads can park on one word and be woken selectively by one call.
+pub fn futex_wait_bitset_abs(addr: &AtomicU32, expected: u32, deadline_ns: u64, mask: u32) -> bool {
     let ts = libc::timespec {
         tv_sec: libc::time_t::try_from(deadline_ns / 1_000_000_000).unwrap_or(libc::time_t::MAX),
         tv_nsec: libc::c_long::try_from(deadline_ns % 1_000_000_000).unwrap_or(0),
@@ -29,7 +40,7 @@ pub fn futex_wait_abs(addr: &AtomicU32, expected: u32, deadline_ns: u64) -> bool
             expected,
             &raw const ts,
             std::ptr::null::<u32>(),
-            libc::FUTEX_BITSET_MATCH_ANY,
+            mask,
         )
     };
     if r == 0 {
@@ -51,6 +62,24 @@ pub fn futex_wake(addr: &AtomicU32) {
             0,
             0,
             0,
+        );
+    }
+}
+
+/// Wake up to `count` waiters on `addr` whose wait mask shares a bit with `mask`, with one system
+/// call (ADR-0026 section 2.4.7.4 step 2: one wake for all the cold jobs of a handoff).
+pub fn futex_wake_bitset(addr: &AtomicU32, count: i32, mask: u32) {
+    // SAFETY: `addr` points at a live AtomicU32; FUTEX_WAKE_BITSET reads no other memory and the
+    // remaining arguments are unused for this operation.
+    unsafe {
+        libc::syscall(
+            libc::SYS_futex,
+            std::ptr::from_ref(addr),
+            libc::FUTEX_WAKE_BITSET | libc::FUTEX_PRIVATE_FLAG,
+            count,
+            0,
+            0,
+            mask,
         );
     }
 }
@@ -91,6 +120,34 @@ mod tests {
         assert!(!woke);
         assert!(dt >= 300_000, "woke early: {dt}");
         assert!(dt < 20_000_000, "woke very late: {dt}");
+    }
+
+    #[test]
+    #[allow(clippy::disallowed_methods)] // a test thread, not a lane
+    fn one_bitset_wake_wakes_exactly_the_matching_waiters() {
+        use std::sync::Arc;
+        use std::sync::atomic::AtomicU32;
+        let w = Arc::new(AtomicU32::new(0));
+        let woke = Arc::new(AtomicU32::new(0));
+        let mut hs = Vec::new();
+        for bit in 0..3u32 {
+            let (w, woke) = (Arc::clone(&w), Arc::clone(&woke));
+            hs.push(std::thread::spawn(move || {
+                let t0 = monotonic_ns();
+                // Each waiter has its own bit; the value never changes, only a wake ends it.
+                let _ = futex_wait_bitset_abs(&w, 0, t0 + 400_000_000, 1 << bit);
+                if monotonic_ns() - t0 < 300_000_000 {
+                    woke.fetch_or(1 << bit, Ordering::SeqCst);
+                }
+            }));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        futex_wake_bitset(&w, i32::MAX, 0b101);
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        assert_eq!(woke.load(Ordering::SeqCst), 0b101, "bit 1 stays asleep");
+        for h in hs {
+            h.join().unwrap();
+        }
     }
 
     #[test]

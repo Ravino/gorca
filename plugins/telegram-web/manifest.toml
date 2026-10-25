@@ -5,6 +5,7 @@
 id = "gorca.telegram-web"
 version = "0.1.0"
 world = "site"
+class = "interactive"
 
 [permissions]
 # Names of the chat rows' parts, their CSS classes, and the facts the plugin derives.

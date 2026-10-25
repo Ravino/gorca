@@ -11,6 +11,12 @@
 //! * A busy plugin is never skipped: its newest job is sent anyway and displaces the queued one
 //!   (the displaced job's nodes are re-queued by the core), so one slow plugin cannot starve.
 //! * An unverified application identity gets first-party, non-URL-scoped plugins only.
+//! * Scheduling of the interactive handoff is the statistical scheduler SPS (ADR-0026 section
+//!   2.4.7, crate `gorca-plugin-sched`) or, behind `[plugins] scheduler = "labels"`, the fixed
+//!   interim policy. Under SPS the key-down hub ([`Prewake`]) pre-wakes a few plugin workers per
+//!   key under a CPU token bucket, every focus change gets a plan (placement, fuel share, hold
+//!   per plugin) and the writer waits for each waited plugin up to its own hold, never past the
+//!   absolute clamp `t0 + D - fuse reserve`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -24,7 +30,7 @@ use gorca_core::plugin_port::{
 use gorca_plugin_host::actor::{ActorRunner, Config as ActorConfig};
 use gorca_plugin_host::cache::CwasmCache;
 use gorca_plugin_host::call::{
-    DeriveJob, Exec, PluginExec, PluginReply, ReplySink, Turn, WLaneRunner,
+    DeriveJob, Exec, PlannedJob, PluginExec, PluginReply, ReplySink, ReplyTiming, Turn, WLaneRunner,
 };
 use gorca_plugin_host::host::{Effect, Target, Value};
 use gorca_plugin_host::instance::{DirtyNode, EngineOptions, Loaded, build_engine};
@@ -36,56 +42,232 @@ use gorca_plugin_host::slot::{Action, Event, JobId, Slot, SlotState};
 use gorca_plugin_host::trust::{Perms, SystemScope, TrustTier};
 use gorca_plugin_host::urlmatch::UrlPattern;
 use gorca_plugin_host::view::{ModelView, ScopeInfo};
+use gorca_plugin_sched::{
+    Assignment, KeyClass, Label, Observation, Params as SchedParams, PlaceMode, Scheduler,
+    SpinBucket, Start, Tier, Triggered, TurnTimes,
+};
 
 /// The bounded wait window `D` (ADR-0026 r4).
 const D_WINDOW: Duration = Duration::from_micros(300);
 
-/// How long a key-down keeps the idle plugin workers spinning: the focus change that follows a
-/// key arrives within a few milliseconds, and a running worker answers it without a wake-up.
+/// How long a key-down keeps the idle plugin workers spinning under the `labels` policy: the
+/// focus change that follows a key arrives within a few milliseconds, and a running worker
+/// answers it without a wake-up.
 const PREWAKE_SPIN: Duration = Duration::from_millis(8);
-/// Pre-wakes at most this often (a typist's repeat rate must not keep every core hot).
+/// Under `labels`, pre-wakes at most this often (a typist's repeat rate must not keep every core
+/// hot).
 const PREWAKE_EVERY_NS: u64 = 20_000_000;
+/// Reserved inside `D` for fusing after the wait, on top of admitting the replies (ADR section
+/// 2.4.7.3: default 8 us).
+const FUSE_RESERVE: Duration = Duration::from_micros(8);
+/// Prior for the cost unit of admitting replies after the wait, until a turn has measured it.
+/// Admitting `n` replies costs about `unit * (n + 1)`: a fixed part about as large as one reply
+/// (measured: 1 reply 12 us, 10 replies 60-90 us).
+const ADMIT_UNIT_PRIOR_NS: u64 = 5_000;
+/// The reserve never exceeds this, whatever the smoothed cost says (the wait keeps at least
+/// `D` minus this for the snapshot and the plugins).
+const RESERVE_CAP_NS: u64 = 100_000;
 
-/// The key-down hook of the plugin runtime: the keyboard pump calls [`Prewake::key_down`] before
-/// the key reaches the Reader; every open scope's workers are already running when the writer
-/// turn of the resulting focus change starts its bounded wait. Never blocks.
-#[derive(Debug, Default)]
+/// Which policy schedules the interactive handoff (`[plugins] scheduler`, ADR-0026 section
+/// 2.4.7.12, C-4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SchedulerPolicy {
+    /// The statistical scheduler. Opt-in: C-4 has not passed on a quiet host yet (see
+    /// `docs/reports/m18a-3-sps.md`).
+    Sps,
+    /// The fixed interim policy: pre-wake every worker on every key (rate-limited), wait for
+    /// every non-refinement plugin up to `D`, serial-equivalent fuel shares.
+    #[default]
+    Labels,
+}
+
+impl SchedulerPolicy {
+    /// `"sps"` or `"labels"`.
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "sps" => Some(Self::Sps),
+            "labels" => Some(Self::Labels),
+            _ => None,
+        }
+    }
+
+    /// The name used in the settings file.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Sps => "sps",
+            Self::Labels => "labels",
+        }
+    }
+}
+
+/// Hook point for the host idle-state decision DP-1 (ADR-0026 section 2.4.7.10, **pending the
+/// owner**). **No implementation ships and nothing is installed**: `Prewake` has no hook unless a
+/// caller sets one, so the behaviour is DP-1 option (a), accept the host's idle states.
+///
+/// If the owner picks option (b), a `/dev/cpu_dma_latency` lease implements this trait: take (or
+/// renew) the lease in [`IdleStateHook::plugins_active`], release it 2 s after the last call and
+/// force a re-take after 30 s of continuous holding (section 2.4.7.10, "Definition of plugins
+/// active"). A failure to open the node must be logged once (`pm-qos-unavailable`, errno) and must
+/// not change anything else. No udev rule or other system change belongs in this crate.
+pub trait IdleStateHook: Send + Sync + std::fmt::Debug {
+    /// Plugins became active: a key-down armed at least one worker. Called from the keyboard
+    /// pump, so it must not block (an atomic store and at most one non-blocking syscall).
+    fn plugins_active(&self, now_ns: u64);
+}
+
+/// The SPS state of one scope: written by the scope's writer (plan, observe) and by the key-down
+/// hub (pre-wake). Both hold the lock for microseconds; the hub only `try_lock`s.
+#[derive(Debug)]
+struct Sps {
+    sched: Mutex<Scheduler>,
+}
+
+/// One registered scope.
+#[derive(Debug)]
+struct Hook {
+    handle: gorca_plugin_host::actor::PrewakeHandle,
+    sps: Option<Arc<Sps>>,
+}
+
+/// The key-down hook of the plugin runtime: the keyboard pump calls [`Prewake::key_down_class`]
+/// before the key reaches the Reader, so the workers that the focus change will need are already
+/// running when the writer turn starts its bounded wait. Never blocks.
+///
+/// Under SPS each scope's scheduler decides how many workers and which to arm, and all scopes
+/// draw on one CPU token bucket (SPS-9: at most 200 ms of burst and 150 ms of spin per second,
+/// per process). Under `labels` every worker of every scope is armed, at most once per 20 ms.
+#[derive(Debug)]
 pub struct Prewake {
-    handles: Mutex<Vec<gorca_plugin_host::actor::PrewakeHandle>>,
+    scopes: Mutex<Vec<Hook>>,
     last_ns: std::sync::atomic::AtomicU64,
+    bucket: Mutex<SpinBucket>,
+    /// Key-downs that found a lock busy and did nothing (diagnostics).
+    contended: std::sync::atomic::AtomicU64,
+    /// The DP-1 hook point; unset (the default) means no lease and no system change.
+    idle_hook: OnceLock<Arc<dyn IdleStateHook>>,
+}
+
+impl Default for Prewake {
+    fn default() -> Self {
+        Self {
+            scopes: Mutex::new(Vec::new()),
+            last_ns: std::sync::atomic::AtomicU64::new(0),
+            bucket: Mutex::new(SpinBucket::standard()),
+            contended: std::sync::atomic::AtomicU64::new(0),
+            idle_hook: OnceLock::new(),
+        }
+    }
 }
 
 impl Prewake {
-    fn register(&self, h: gorca_plugin_host::actor::PrewakeHandle) {
-        lock(&self.handles).push(h);
+    /// Install the DP-1 hook (once; a second call is ignored). Default off: nothing calls this in
+    /// the product until the owner decides DP-1.
+    pub fn set_idle_hook(&self, hook: Arc<dyn IdleStateHook>) -> bool {
+        self.idle_hook.set(hook).is_ok()
     }
 
-    /// A key went down. A contended or recent call does nothing.
+    fn register(&self, handle: gorca_plugin_host::actor::PrewakeHandle, sps: Option<Arc<Sps>>) {
+        lock(&self.scopes).push(Hook { handle, sps });
+    }
+
+    /// A key went down (class unknown: treated as navigation). A contended or recent call does
+    /// nothing.
     pub fn key_down(&self) {
-        use std::sync::atomic::Ordering::{AcqRel, Acquire};
+        self.key_down_class(KeyClass::Nav);
+    }
+
+    /// A key event of the keyboard pump: only presses of keys that can change the focus count;
+    /// modifiers alone and releases do nothing.
+    pub fn key_event(&self, ev: &gorca_input_api::KeyEvent) {
+        if let Some(class) = key_class(ev) {
+            self.key_down_class(class);
+        }
+    }
+
+    /// A key of `class` went down.
+    pub fn key_down_class(&self, class: KeyClass) {
+        use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed};
         let now = gorca_rt::process::monotonic_ns();
+        let Ok(mut hooks) = self.scopes.try_lock() else {
+            self.contended.fetch_add(1, Relaxed);
+            return;
+        };
+        // Under `labels` a recent pre-wake is enough; the SPS scopes decide for themselves.
         let last = self.last_ns.load(Acquire);
-        if now.saturating_sub(last) < PREWAKE_EVERY_NS
-            || self
+        let labels_due = now.saturating_sub(last) >= PREWAKE_EVERY_NS
+            && self
                 .last_ns
                 .compare_exchange(last, now, AcqRel, Acquire)
-                .is_err()
-        {
-            return;
+                .is_ok();
+        let mut bucket = self.bucket.try_lock().ok();
+        let mut armed_any = false;
+        hooks.retain(|h| match &h.sps {
+            None => {
+                armed_any |= labels_due;
+                if labels_due {
+                    h.handle.arm(PREWAKE_SPIN)
+                } else {
+                    h.handle.arm_set(0, 0)
+                }
+            }
+            Some(sps) => {
+                let (Ok(mut sched), Some(bucket)) = (sps.sched.try_lock(), bucket.as_mut()) else {
+                    self.contended.fetch_add(1, Relaxed);
+                    return h.handle.arm_set(0, 0);
+                };
+                let pw = sched.on_key_down(class, now / 1000, bucket);
+                armed_any |= pw.threads > 0;
+                h.handle
+                    .arm_set(u64::from(pw.who), pw.until_us.saturating_mul(1000))
+            }
+        });
+        if armed_any && let Some(hook) = self.idle_hook.get() {
+            hook.plugins_active(now);
         }
-        if let Ok(mut hs) = self.handles.try_lock() {
-            hs.retain(|h| h.arm(PREWAKE_SPIN));
-        }
+    }
+
+    /// Key-downs that did nothing because a lock was busy (diagnostics).
+    pub fn contended(&self) -> u64 {
+        self.contended.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Scopes registered and still alive (tests).
     pub fn len(&self) -> usize {
-        lock(&self.handles).len()
+        lock(&self.scopes).len()
     }
 
     /// True when no scope is registered.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+/// The class of a key event for the scheduler, `None` for what cannot change the focus (releases,
+/// modifier keys alone).
+#[must_use]
+pub fn key_class(ev: &gorca_input_api::KeyEvent) -> Option<KeyClass> {
+    use gorca_input_api::Modifiers;
+    if !ev.pressed {
+        return None;
+    }
+    match ev.keysym {
+        // Shift_L .. Hyper_R, Num_Lock, ISO_Level3_Shift: modifiers and locks.
+        0xffe1..=0xffee | 0xff7f | 0xfe03 => None,
+        0xff09 | 0xfe20 => Some(KeyClass::Tab),
+        0xff0d | 0xff8d => Some(KeyClass::Enter),
+        0xff50..=0xff57 | 0xff96..=0xff9c => Some(KeyClass::Nav),
+        _ => {
+            let chord = ev
+                .modifiers
+                .intersects(Modifiers::CONTROL | Modifiers::MOD1 | Modifiers::MOD4);
+            Some(if ev.unichar != 0 && !chord {
+                KeyClass::Type
+            } else {
+                KeyClass::Other
+            })
+        }
     }
 }
 
@@ -145,6 +327,14 @@ pub struct PluginOptions {
     /// (`D`, 0.3 ms): a parked writer wakes late from a deep idle state, a spinning one does not.
     /// Costs at most 0.3 ms of one core per focus change.
     pub writer_spin: Option<Duration>,
+    /// `[plugins] scheduler`: the scheduling policy of the interactive handoff.
+    pub scheduler: SchedulerPolicy,
+    /// Most workers SPS pre-wakes per key (`None`: the ADR default of 6). A diagnostic knob of the
+    /// benchmarks, never read from a file.
+    pub sps_k_max: Option<usize>,
+    /// `GORCA_SCHED_LOG`: append the SPS input log of every scope to this file when the scope
+    /// closes (numbers only, ADR-0026 SPS-6). Set by `main` from the environment.
+    pub sched_log: Option<PathBuf>,
 }
 
 struct Entry {
@@ -203,6 +393,9 @@ pub struct PluginRuntime {
     wants_url: bool,
     prewake: Arc<Prewake>,
     writer_spin: Duration,
+    policy: SchedulerPolicy,
+    sps_k_max: Option<usize>,
+    sched_log: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for PluginRuntime {
@@ -375,6 +568,9 @@ impl PluginRuntime {
             wants_url,
             prewake,
             writer_spin: opts.writer_spin.unwrap_or(D_WINDOW),
+            policy: opts.scheduler,
+            sps_k_max: opts.sps_k_max,
+            sched_log: opts.sched_log.clone(),
         })
     }
 
@@ -386,6 +582,9 @@ impl PluginRuntime {
             wants_url: false,
             prewake: Arc::new(Prewake::default()),
             writer_spin: D_WINDOW,
+            policy: SchedulerPolicy::default(),
+            sps_k_max: None,
+            sched_log: None,
         }
     }
 
@@ -397,6 +596,25 @@ impl PluginRuntime {
     /// Loaded plugin ids (diagnostics).
     pub fn ids(&self) -> Vec<String> {
         self.entries.iter().map(|e| e.manifest.id.clone()).collect()
+    }
+}
+
+/// Entries of the `GORCA_SCHED_LOG` ring of one scope.
+const SCHED_LOG_ENTRIES: usize = 1 << 16;
+
+fn label_of(p: Priority) -> Label {
+    match p {
+        Priority::Interactive => Label::Interactive,
+        Priority::Unlabelled => Label::Unlabelled,
+        Priority::Refinement => Label::Refinement,
+    }
+}
+
+fn tier_of(t: TrustTier) -> Tier {
+    match t {
+        TrustTier::FirstParty => Tier::First,
+        TrustTier::TrustedThirdParty => Tier::Trusted,
+        TrustTier::Untrusted | TrustTier::Dev => Tier::Third,
     }
 }
 
@@ -461,9 +679,31 @@ impl PluginService for PluginRuntime {
                 .with_priority(e.manifest.priority)
             })
             .collect();
-        tracing::info!(app = %scope.app, doc = scope.doc, plugins = matched.len(), "plugin scope opened");
-        self.prewake.register(runner.prewake_handle());
-        Some(Box::new(PluginScope::from_parts(runner, plugins, wake)))
+        tracing::info!(app = %scope.app, doc = scope.doc, plugins = matched.len(), scheduler = self.policy.name(), "plugin scope opened");
+        let sps = (self.policy == SchedulerPolicy::Sps).then(|| {
+            let labels: Vec<(Label, Tier)> = matched
+                .iter()
+                .map(|e| (label_of(e.manifest.priority), tier_of(e.tier)))
+                .collect();
+            let mut sched = Scheduler::new(
+                &labels,
+                SchedParams {
+                    kappa: i64::try_from(KAPPA_PROVISIONAL).unwrap_or(21_739),
+                    k_max: self.sps_k_max.unwrap_or(SchedParams::default().k_max),
+                    ..SchedParams::default()
+                },
+            );
+            if self.sched_log.is_some() {
+                sched.record(SCHED_LOG_ENTRIES);
+            }
+            Arc::new(Sps {
+                sched: Mutex::new(sched),
+            })
+        });
+        self.prewake.register(runner.prewake_handle(), sps.clone());
+        let mut scope = PluginScope::from_parts_sps(runner, plugins, wake, sps);
+        scope.sched_log.clone_from(&self.sched_log);
+        Some(Box::new(scope))
     }
 
     fn governor(&self) -> Arc<Governor> {
@@ -474,7 +714,7 @@ impl PluginService for PluginRuntime {
 // ---- the reply queue ---------------------------------------------------------------------
 
 struct Sink {
-    q: Mutex<Vec<PluginReply>>,
+    q: Mutex<Vec<(PluginReply, Option<ReplyTiming>)>>,
     wake: Arc<dyn Fn() + Send + Sync>,
 }
 
@@ -484,7 +724,12 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 
 impl ReplySink for Sink {
     fn send(&self, reply: PluginReply) {
-        lock(&self.q).push(reply);
+        lock(&self.q).push((reply, None));
+        (self.wake)();
+    }
+
+    fn send_timed(&self, reply: PluginReply, timing: ReplyTiming) {
+        lock(&self.q).push((reply, Some(timing)));
         (self.wake)();
     }
 }
@@ -591,7 +836,19 @@ impl ScopePlugin {
     }
 }
 
+/// What the scheduler decided for a job, kept until its reply is observed.
+#[derive(Clone, Copy)]
+struct PlanInfo {
+    a: Assignment,
+    waited: bool,
+    /// `CLOCK_MONOTONIC` ns at which the plan was made (the send follows within tens of
+    /// microseconds; diagnostics only, the observation uses the actor's own hand-off stamp).
+    sent_ns: u64,
+}
+
 struct JobInfo {
+    /// The SPS decision for an interactive-class job.
+    plan: Option<PlanInfo>,
     /// Sent as an interactive job, with this much time.
     interactive: bool,
     grant: Duration,
@@ -616,6 +873,13 @@ struct PluginScope {
     /// Nanoseconds added to the clock the slots see (tests move a backoff to its end without
     /// waiting).
     skew: Arc<std::sync::atomic::AtomicU64>,
+    /// The statistical scheduler of the scope (`None` under the `labels` policy).
+    sps: Option<Arc<Sps>>,
+    /// Where the scheduler's input log goes when the scope closes.
+    sched_log: Option<PathBuf>,
+    /// Cost unit of admitting replies after the wait, ns: admitting `n` costs about
+    /// `unit * (n + 1)`. Tracks the recent peak (the reserve of the wait covers the tail).
+    admit_unit_ns: u64,
 }
 
 /// The fuel split of an interactive handoff (ADR-0026 section 2.4.2, progressive filling):
@@ -646,10 +910,20 @@ pub fn progressive_fill(
 const C_MAX: Duration = Duration::from_micros(2);
 
 impl PluginScope {
+    #[cfg(test)]
     fn from_parts(
         runner: ActorRunner,
         plugins: Vec<ScopePlugin>,
         wake: Arc<dyn Fn() + Send + Sync>,
+    ) -> Self {
+        Self::from_parts_sps(runner, plugins, wake, None)
+    }
+
+    fn from_parts_sps(
+        runner: ActorRunner,
+        plugins: Vec<ScopePlugin>,
+        wake: Arc<dyn Fn() + Send + Sync>,
+        sps: Option<Arc<Sps>>,
     ) -> Self {
         let metas = plugins.iter().map(|p| p.meta.clone()).collect();
         Self {
@@ -665,6 +939,9 @@ impl PluginScope {
             rotate: 0,
             synthetic: Vec::new(),
             skew: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            sps,
+            sched_log: None,
+            admit_unit_ns: ADMIT_UNIT_PRIOR_NS,
         }
     }
 
@@ -710,6 +987,7 @@ impl PluginScope {
         self.jobs.insert(
             id,
             JobInfo {
+                plan: None,
                 interactive,
                 grant: grant.time,
                 plugin,
@@ -741,6 +1019,143 @@ impl PluginScope {
             grant,
             queued_at: Instant::now(),
         })
+    }
+
+    /// The SPS handoff (ADR-0026 section 2.4.7.4): one `plan` for the triggered set, every job
+    /// dispatched in the same turn in plan order, a hold per waited plugin, and the absolute clamp
+    /// `t0 + D - fuse reserve` on the wait.
+    fn interactive_sps(
+        &mut self,
+        sps: &Arc<Sps>,
+        t0_ns: u64,
+        wait: bool,
+        jobs: Vec<Job>,
+    ) -> Handoff {
+        let now = gorca_core::plugin_port::now_ns();
+        let spent_us = u32::try_from(now.saturating_sub(t0_ns) / 1000).unwrap_or(u32::MAX);
+        // A plugin still busy with an earlier job cannot answer inside this wait; a `refinement`
+        // plugin never gates a turn. Their jobs are dispatched in this turn as background class
+        // (they run next, newest wins) and stay out of the wait.
+        let trig: Vec<Triggered> = jobs
+            .iter()
+            .map(|j| Triggered {
+                pid: j.plugin,
+                busy: self.jobs.values().any(|i| i.plugin == j.plugin),
+            })
+            .collect();
+        let mask = trig
+            .iter()
+            .filter(|t| t.pid < 32)
+            .fold(0u32, |m, t| m | (1 << t.pid));
+        // What follows the wait inside the same turn: fusing, and admitting every reply that
+        // arrived in time. The wait leaves room for it, or the writer's delay exceeds `D`.
+        // Replies of jobs that are not waited for are admitted in a later turn, so only the
+        // waited ones cost anything here: an upper bound of that set is every plugin that is not
+        // busy or a refinement, with third parties counted as one (they get a 100 us hold, and
+        // only when their deadline fits it).
+        let eligible = |t: &&Triggered| {
+            !t.busy
+                && self
+                    .plugins
+                    .get(t.pid)
+                    .is_some_and(|p| p.priority != Priority::Refinement)
+        };
+        let third = |t: &&Triggered| {
+            self.plugins
+                .get(t.pid)
+                .is_some_and(|p| p.meta.tier == PluginTier::Untrusted)
+        };
+        let candidates = trig.iter().filter(eligible).filter(|t| !third(t)).count()
+            + usize::from(trig.iter().filter(eligible).any(|t| third(&t)));
+        let reserve_ns = (u64::try_from(FUSE_RESERVE.as_nanos()).unwrap_or(8_000)
+            + self.admit_unit_ns * (u64::try_from(candidates).unwrap_or(0) + 1))
+            .min(RESERVE_CAP_NS);
+        let plan = {
+            let mut s = lock(&sps.sched);
+            let plan = s.plan_with(
+                &trig,
+                TurnTimes {
+                    now_us: now / 1000,
+                    spent_us: Some(spent_us),
+                },
+                PlaceMode::Own,
+                Some(u32::try_from(reserve_ns / 1000).unwrap_or(u32::MAX)),
+            );
+            s.end_key(mask);
+            plan
+        };
+        let mut slots: Vec<Option<Job>> = jobs.into_iter().map(Some).collect();
+        let mut planned: Vec<PlannedJob> = Vec::with_capacity(slots.len());
+        let kappa = KAPPA_PROVISIONAL;
+        let mut order: Vec<(usize, Option<Assignment>)> = plan
+            .assignments()
+            .iter()
+            .map(|a| (a.pid, Some(*a)))
+            .collect();
+        // Jobs the scheduler does not track (more than 32 plugins) go out as background class.
+        for j in slots.iter().flatten() {
+            if !order.iter().any(|(p, _)| *p == j.plugin) {
+                order.push((j.plugin, None));
+            }
+        }
+        for (pid, a) in order {
+            let Some(job) = slots
+                .iter_mut()
+                .find(|j| j.as_ref().is_some_and(|j| j.plugin == pid))
+                .and_then(Option::take)
+            else {
+                continue;
+            };
+            let refinement = self
+                .plugins
+                .get(pid)
+                .is_some_and(|p| p.priority == Priority::Refinement);
+            let busy = trig.iter().any(|t| t.pid == pid && t.busy);
+            let grant_us = a.map_or(5, |a| (a.grant_fuel / kappa).clamp(5, 200));
+            let grant = FuelGrant::for_time(Duration::from_micros(grant_us), kappa)
+                .with_wall(B2_INTERACTIVE);
+            let Some(mut d) = self.new_job(pid, &job, true, grant) else {
+                continue;
+            };
+            if busy || refinement || a.is_none() {
+                d.interactive = false;
+            }
+            let hold = a
+                .filter(|a| wait && d.interactive && a.hold_us > 0)
+                .map(|a| Duration::from_micros(u64::from(a.hold_us)));
+            if let (Some(a), true, Some(info)) = (a, d.interactive, self.jobs.get_mut(&d.job)) {
+                info.plan = Some(PlanInfo {
+                    a,
+                    waited: hold.is_some(),
+                    sent_ns: now,
+                });
+            }
+            planned.push(PlannedJob { job: d, hold });
+        }
+        if planned.is_empty() {
+            return Handoff::default();
+        }
+        let sink: Arc<dyn ReplySink> = Arc::clone(&self.sink) as Arc<dyn ReplySink>;
+        let turn = Turn::clamped(t0_ns, wait, reserve_ns);
+        let before_send = gorca_core::plugin_port::now_ns();
+        let h = self.runner.interactive_planned(&turn, planned, &sink);
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let end = gorca_core::plugin_port::now_ns();
+            tracing::debug!(
+                snapshot_to_plan_us = spent_us,
+                plan_and_build_us = before_send.saturating_sub(now) / 1000,
+                send_and_wait_us = end.saturating_sub(before_send) / 1000,
+                turn_so_far_us = end.saturating_sub(t0_ns) / 1000,
+                asked = h.asked,
+                arrived = h.arrived,
+                "sps turn"
+            );
+        }
+        Handoff {
+            asked: h.asked,
+            arrived: h.arrived,
+            waited_ns: u64::try_from(h.waited.as_nanos()).unwrap_or(u64::MAX),
+        }
     }
 
     fn masked_now(p: &ScopePlugin) -> bool {
@@ -903,6 +1318,9 @@ impl ScopeRunner for PluginScope {
         if n == 0 {
             return Handoff::default();
         }
+        if let Some(sps) = self.sps.clone() {
+            return self.interactive_sps(&sps, t0_ns, wait, jobs);
+        }
         // Progressive filling over what is left of D after the snapshot and the send.
         let spent = Duration::from_nanos(gorca_core::plugin_port::now_ns().saturating_sub(t0_ns));
         let pool = Duration::from_micros(300)
@@ -974,6 +1392,42 @@ impl ScopeRunner for PluginScope {
     }
 
     fn poll(&mut self, out: &mut Vec<Reply>) {
+        self.poll_inner(out, false);
+    }
+
+    fn poll_waited(&mut self, out: &mut Vec<Reply>) {
+        // Only a scope with a wait set (SPS) tells waited jobs from the rest; the interim policy
+        // takes everything that arrived, as before.
+        self.poll_inner(out, self.sps.is_some());
+    }
+
+    fn turn_done(&mut self, admit_ns: u64, replies: u32) {
+        if replies == 0 || self.sps.is_none() {
+            return;
+        }
+        // Rises at once to what the last turn cost, decays by 1/16 per turn: the reserve covers
+        // the tail, not the mean.
+        let unit = admit_ns / (u64::from(replies) + 1);
+        let fall = self.admit_unit_ns - self.admit_unit_ns / 16;
+        self.admit_unit_ns = unit.max(fall);
+    }
+
+    fn outstanding(&self) -> bool {
+        // A plugin in backoff keeps the writer ticking so the expiry is noticed.
+        !self.jobs.is_empty()
+            || !self.synthetic.is_empty()
+            || self
+                .plugins
+                .iter()
+                .any(|p| matches!(p.slot.state(), SlotState::Backoff { .. }))
+    }
+}
+
+impl PluginScope {
+    /// The replies that arrived, as core replies. With `waited_only`, only those of jobs the
+    /// last handoff waited for; the others stay in the mailbox and the writer is woken again to
+    /// take them in a later turn.
+    fn poll_inner(&mut self, out: &mut Vec<Reply>, waited_only: bool) {
         out.append(&mut self.synthetic);
         let now = self.now();
         // A backoff that has run out lifts the mask; the core re-derives everything watched.
@@ -994,13 +1448,24 @@ impl ScopeRunner for PluginScope {
                 }
             }
         }
-        let replies: Vec<PluginReply> = std::mem::take(&mut *lock(&self.sink.q));
-        for r in replies {
+        let replies = std::mem::take(&mut *lock(&self.sink.q));
+        let mut observed: Vec<(usize, PlanInfo, ReplyTiming, u32, bool)> = Vec::new();
+        let mut deferred = Vec::new();
+        for (r, timing) in replies {
             let id = match &r {
                 PluginReply::Done { job, .. }
                 | PluginReply::Fault { job, .. }
                 | PluginReply::Cancelled { job, .. } => *job,
             };
+            if waited_only
+                && !self
+                    .jobs
+                    .get(&id)
+                    .is_some_and(|i| i.plan.is_some_and(|p| p.waited))
+            {
+                deferred.push((r, timing));
+                continue;
+            }
             let Some(info) = self.jobs.remove(&id) else {
                 continue;
             };
@@ -1038,6 +1503,15 @@ impl ScopeRunner for PluginScope {
                     exec,
                     ..
                 } if !stale => {
+                    if let (Some(plan), Some(t)) = (info.plan, timing) {
+                        observed.push((
+                            info.plugin,
+                            plan,
+                            t,
+                            u32::try_from(exec.as_micros()).unwrap_or(u32::MAX),
+                            !effects.is_empty(),
+                        ));
+                    }
                     tracing::debug!(
                         plugin = %p.meta.name,
                         exec_us = u64::try_from(exec.as_micros()).unwrap_or(u64::MAX),
@@ -1090,22 +1564,71 @@ impl ScopeRunner for PluginScope {
                 });
             }
         }
-    }
-
-    fn outstanding(&self) -> bool {
-        // A plugin in backoff keeps the writer ticking so the expiry is noticed.
-        !self.jobs.is_empty()
-            || !self.synthetic.is_empty()
-            || self
-                .plugins
-                .iter()
-                .any(|p| matches!(p.slot.state(), SlotState::Backoff { .. }))
+        if !deferred.is_empty() {
+            lock(&self.sink.q).extend(deferred);
+            // They were posted before this drain: nothing else will wake the writer for them.
+            (self.sink.wake)();
+        }
+        // What the replies taught the scheduler: start latency (hot or cold), guest time,
+        // response time against the hold, usefulness (ADR-0026 section 2.4.7.6).
+        if let (Some(sps), false) = (&self.sps, observed.is_empty()) {
+            let mut s = lock(&sps.sched);
+            for (plugin, plan, t, exec_us, useful) in observed {
+                tracing::debug!(
+                    plugin,
+                    cold = t.cold,
+                    plan_to_send_us = t.sent_ns.saturating_sub(plan.sent_ns) / 1000,
+                    start_us = u64::try_from(t.start.as_micros()).unwrap_or(u64::MAX),
+                    exec_us,
+                    pickup_to_reply_us = t.at_ns.saturating_sub(t.picked_ns) / 1000,
+                    resp_us = t.at_ns.saturating_sub(plan.sent_ns) / 1000,
+                    hold_us = plan.a.hold_us,
+                    waited = plan.waited,
+                    "sps reply"
+                );
+                s.observe(&Observation {
+                    pid: plugin,
+                    state: if t.cold { Start::Cold } else { Start::Hot },
+                    start_us: u32::try_from(t.start.as_micros()).unwrap_or(u32::MAX),
+                    exec_us,
+                    // From the job's own hand-off to the actor: the holds count from the moment
+                    // the waited jobs are out, so this is never smaller than what a hold sees.
+                    resp_us: u32::try_from(t.at_ns.saturating_sub(t.sent_ns) / 1000)
+                        .unwrap_or(u32::MAX),
+                    assignment: &plan.a,
+                    waited: plan.waited,
+                    useful,
+                });
+            }
+        }
     }
 }
 
 impl Drop for PluginScope {
     fn drop(&mut self) {
         self.runner.shutdown();
+        // `GORCA_SCHED_LOG=<path>`: the input log of the scheduler (numbers only, ADR-0026
+        // SPS-6), appended when the scope closes. A diagnostic: it writes one small file on the
+        // closing writer.
+        if let (Some(path), Some(sps)) = (&self.sched_log, &self.sps)
+            && let Ok(s) = sps.sched.lock()
+            && let Some(ring) = s.recorded()
+        {
+            use std::io::Write as _;
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+            {
+                let _ = writeln!(
+                    f,
+                    "# scope plugins={} entries={}",
+                    self.plugins.len(),
+                    ring.total()
+                );
+                let _ = f.write_all(ring.to_text().as_bytes());
+            }
+        }
     }
 }
 
@@ -1596,6 +2119,395 @@ mod tests {
             load1 >= cores || lag_us.iter().all(|l| *l < 50_000),
             "a refinement took {:?} us",
             lag_us.iter().max()
+        );
+    }
+
+    // ---- SPS (ADR-0026 section 2.4.7) --------------------------------------------------------
+
+    /// Records the content of every job it is given, answers with a name fact after `delay`.
+    struct Rec {
+        seen: Arc<Mutex<Vec<String>>>,
+        delay: Duration,
+    }
+
+    impl Exec for Rec {
+        fn run(&mut self, job: &DeriveJob) -> PluginReply {
+            // Everything the plugin side is told about the job, except its ids and clocks.
+            lock(&self.seen).push(format!(
+                "p{} inter={} epoch={} nodes={:?} fuel={} time={:?} wall={:?}",
+                job.plugin,
+                job.interactive,
+                job.epoch,
+                job.nodes,
+                job.grant.units,
+                job.grant.time,
+                job.grant.wall
+            ));
+            if !self.delay.is_zero() {
+                std::thread::sleep(self.delay);
+            }
+            let nodes: Vec<u32> = job.nodes.iter().map(|d| d.index).collect();
+            PluginReply::Done {
+                plugin: job.plugin,
+                job: job.job,
+                slot_epoch: job.slot_epoch,
+                effects: nodes
+                    .iter()
+                    .map(|n| Effect::Assert {
+                        target: Target::Node(*n),
+                        group: 1,
+                        layer: 0,
+                        value: Value::Text("fact".to_owned()),
+                    })
+                    .collect(),
+                reads: ReadSet {
+                    nodes,
+                    overflow: false,
+                },
+                exec: self.delay.max(Duration::from_micros(1)),
+                queued: Duration::ZERO,
+                fuel_used: 0,
+                wall_overrun: false,
+            }
+        }
+        fn reset(&mut self) {}
+    }
+
+    fn sps_scope(
+        recs: Vec<(Duration, Priority, TrustTier)>,
+        seen: &Arc<Mutex<Vec<String>>>,
+    ) -> (PluginScope, Arc<Sps>) {
+        let execs: Vec<(u32, Box<dyn Exec>)> = recs
+            .iter()
+            .enumerate()
+            .map(|(i, (d, _, _))| {
+                (
+                    i as u32,
+                    Box::new(Rec {
+                        seen: Arc::clone(seen),
+                        delay: *d,
+                    }) as Box<dyn Exec>,
+                )
+            })
+            .collect();
+        let runner = ActorRunner::new(
+            execs,
+            Box::new(|_| None),
+            ActorConfig {
+                lost_after: Duration::from_secs(10),
+                ..ActorConfig::default()
+            },
+        )
+        .unwrap();
+        let plugins: Vec<ScopePlugin> = recs
+            .iter()
+            .enumerate()
+            .map(|(i, (_, p, t))| {
+                ScopePlugin::new(
+                    PluginMeta {
+                        name: Arc::from(format!("p{i}")),
+                        tier: core_tier(*t),
+                    },
+                    vec![Watch {
+                        id: 1,
+                        tag: None,
+                        class: Some("w".into()),
+                        aria_role: None,
+                    }],
+                )
+                .with_priority(*p)
+            })
+            .collect();
+        let labels: Vec<(Label, Tier)> = recs
+            .iter()
+            .map(|(_, p, t)| (label_of(*p), tier_of(*t)))
+            .collect();
+        let sps = Arc::new(Sps {
+            sched: Mutex::new(Scheduler::new(&labels, SchedParams::default())),
+        });
+        (
+            PluginScope::from_parts_sps(runner, plugins, Arc::new(|| {}), Some(Arc::clone(&sps))),
+            sps,
+        )
+    }
+
+    fn w_row(v: usize) -> Row {
+        Row {
+            name: Some(Arc::from(format!("v{v}"))),
+            class: Some(Arc::from("w")),
+            ..Row::default()
+        }
+    }
+
+    #[test]
+    fn key_class_ignores_releases_and_modifiers_and_sorts_the_rest() {
+        use gorca_input_api::{KeyEvent, Modifiers};
+        let ev = |keysym: u32, unichar: u32, modifiers: Modifiers, pressed: bool| KeyEvent {
+            keycode: 0,
+            keysym,
+            unichar,
+            modifiers,
+            pressed,
+        };
+        let none = Modifiers::empty();
+        assert_eq!(key_class(&ev(0xff09, 0, none, true)), Some(KeyClass::Tab));
+        assert_eq!(key_class(&ev(0xff09, 0, none, false)), None, "release");
+        assert_eq!(key_class(&ev(0xffe1, 0, none, true)), None, "Shift_L");
+        assert_eq!(key_class(&ev(0xffe5, 0, none, true)), None, "Caps_Lock");
+        assert_eq!(key_class(&ev(0xff0d, 0, none, true)), Some(KeyClass::Enter));
+        assert_eq!(key_class(&ev(0xff54, 0, none, true)), Some(KeyClass::Nav));
+        assert_eq!(key_class(&ev(0x61, 0x61, none, true)), Some(KeyClass::Type));
+        assert_eq!(
+            key_class(&ev(0x61, 0x61, Modifiers::CONTROL, true)),
+            Some(KeyClass::Other),
+            "a chord is a command, not text"
+        );
+        assert_eq!(key_class(&ev(0xff1b, 0, none, true)), Some(KeyClass::Other));
+    }
+
+    #[test]
+    fn the_message_is_the_same_in_and_out_of_the_wait_set() {
+        // SPS-8: a plugin cannot tell from the job whether the writer waits for it. Two scopes
+        // with the same plugins; in one the writer may wait (the first of its keypress path), in
+        // the other the governor refuses (the path already waited), so nothing is waited for.
+        let run = |gov: Arc<Governor>, another_writer_waited_first: bool| {
+            let seen = Arc::new(Mutex::new(Vec::new()));
+            let (scope, _) = sps_scope(
+                vec![
+                    (Duration::ZERO, Priority::Interactive, TrustTier::FirstParty),
+                    (
+                        Duration::ZERO,
+                        Priority::Unlabelled,
+                        TrustTier::TrustedThirdParty,
+                    ),
+                ],
+                &seen,
+            );
+            let gov2 = Arc::clone(&gov);
+            let mut b = PluginBridge::new(Box::new(scope), gov, ScopeSpec::default());
+            b.begin_turn();
+            b.upsert(1, w_row(1));
+            let t0 = gorca_core::plugin_port::now_ns();
+            if another_writer_waited_first {
+                // The governor has just granted a wait to another writer of this keypress path
+                // (same start instant): this one is refused.
+                assert!(gov2.claim(t0));
+            }
+            b.interactive(&[1], &One, t0);
+            let end = Instant::now() + Duration::from_secs(3);
+            while Instant::now() < end && lock(&seen).len() < 2 {
+                b.background(&One);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            let mut v = lock(&seen).clone();
+            v.sort();
+            (v, b.stats())
+        };
+        let (waited, st_a) = run(Arc::new(Governor::default()), false);
+        let (unwaited, st_b) = run(Arc::new(Governor::default()), true);
+        assert_eq!(st_a.waited, 1);
+        assert_eq!(st_b.no_wait, 1, "the second path did not wait");
+        assert_eq!(waited.len(), 2);
+        assert_eq!(waited, unwaited, "SPS-8: identical messages");
+    }
+
+    #[test]
+    fn a_refinement_plugin_is_dispatched_in_the_turn_and_never_waited_for() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let (scope, sps) = sps_scope(
+            vec![
+                (Duration::ZERO, Priority::Interactive, TrustTier::FirstParty),
+                (
+                    Duration::from_millis(60),
+                    Priority::Refinement,
+                    TrustTier::FirstParty,
+                ),
+            ],
+            &seen,
+        );
+        let mut b = PluginBridge::new(
+            Box::new(scope),
+            Arc::new(Governor::default()),
+            ScopeSpec::default(),
+        );
+        b.begin_turn();
+        b.upsert(1, w_row(1));
+        let t0 = gorca_core::plugin_port::now_ns();
+        b.interactive(&[1], &One, t0);
+        let took = Duration::from_nanos(gorca_core::plugin_port::now_ns() - t0);
+        assert!(
+            took < Duration::from_millis(30),
+            "waited {took:?} for a refinement plugin"
+        );
+        let st = b.stats();
+        // The refinement plugin is never in the wait set. (A debug build can spend the whole
+        // window before the send, then nobody is waited for.)
+        assert!(
+            st.handoff_asked <= 1,
+            "only the interactive plugin may be in the wait set: {st:?}"
+        );
+        // Its facts arrive later, as a refinement.
+        let mut got = Vec::new();
+        let end = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < end && b.live_len() < 2 {
+            b.background(&One);
+            got.extend(b.take_ops());
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(b.live_len(), 2, "both plugins derived the row in the end");
+        // It was never given a hot place or counted toward the pre-wake.
+        let s = lock(&sps.sched);
+        assert_eq!(s.armed_mask(0), 0);
+        assert!(s.stats(1).is_some());
+    }
+
+    #[test]
+    fn replies_teach_the_scheduler_their_start_and_exec_times() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let (scope, sps) = sps_scope(
+            vec![(
+                Duration::from_micros(50),
+                Priority::Interactive,
+                TrustTier::FirstParty,
+            )],
+            &seen,
+        );
+        let mut b = PluginBridge::new(
+            Box::new(scope),
+            Arc::new(Governor::default()),
+            ScopeSpec::default(),
+        );
+        for i in 0..12 {
+            b.begin_turn();
+            b.upsert(1, w_row(i));
+            b.interactive(&[1], &One, gorca_core::plugin_port::now_ns());
+            let end = Instant::now() + Duration::from_secs(2);
+            while Instant::now() < end && b.has_work() {
+                b.background(&One);
+                let _ = b.take_ops();
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let s = lock(&sps.sched);
+        let sum = s.summary(0).unwrap();
+        assert!(sum.replies >= 8, "{sum:?}");
+        assert!(sum.exec_p50_us >= 50, "{sum:?}");
+        assert_eq!(s.fallback(), None);
+    }
+
+    /// Counts the DP-1 hook calls.
+    #[derive(Debug, Default)]
+    struct CountingHook(std::sync::atomic::AtomicU64);
+
+    impl IdleStateHook for CountingHook {
+        fn plugins_active(&self, _now_ns: u64) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    #[test]
+    fn a_key_down_arms_workers_under_sps_and_calls_the_idle_hook_point() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let (scope, sps) = sps_scope(
+            vec![
+                (Duration::ZERO, Priority::Interactive, TrustTier::FirstParty),
+                (Duration::ZERO, Priority::Refinement, TrustTier::FirstParty),
+            ],
+            &seen,
+        );
+        let pw = Prewake::default();
+        // No hook set: the default is DP-1 option (a), no lease, nothing called.
+        pw.register(scope.runner.prewake_handle(), Some(Arc::clone(&sps)));
+        pw.key_down_class(KeyClass::Nav);
+        let hook = Arc::new(CountingHook::default());
+        assert!(pw.set_idle_hook(hook.clone()));
+        assert!(!pw.set_idle_hook(hook.clone()), "set once");
+        std::thread::sleep(Duration::from_millis(1));
+        pw.key_down_class(KeyClass::Nav);
+        assert_eq!(hook.0.load(std::sync::atomic::Ordering::Relaxed), 1);
+        let armed = lock(&sps.sched).armed_mask(gorca_rt::process::monotonic_ns() / 1000);
+        assert_eq!(
+            armed, 0b01,
+            "only the interactive plugin, never the refinement one"
+        );
+        // A typing key learns to wake nothing: many of them, no more hook calls.
+        for _ in 0..80 {
+            pw.key_down_class(KeyClass::Type);
+        }
+        let before = hook.0.load(std::sync::atomic::Ordering::Relaxed);
+        for _ in 0..5 {
+            pw.key_down_class(KeyClass::Type);
+        }
+        assert_eq!(hook.0.load(std::sync::atomic::Ordering::Relaxed), before);
+        drop(scope);
+        pw.key_down_class(KeyClass::Nav);
+        assert!(pw.is_empty(), "a closed scope is forgotten");
+    }
+
+    #[test]
+    fn the_reserve_for_admitting_replies_rises_at_once_and_decays_slowly() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let (mut scope, _) = sps_scope(
+            vec![(Duration::ZERO, Priority::Interactive, TrustTier::FirstParty)],
+            &seen,
+        );
+        assert_eq!(scope.admit_unit_ns, ADMIT_UNIT_PRIOR_NS);
+        // A turn that cost 110 us for ten replies: a unit of 10 us (cost = unit * (n + 1)), at once.
+        scope.turn_done(110_000, 10);
+        assert_eq!(scope.admit_unit_ns, 10_000);
+        // Cheaper turns bring it down by a sixteenth each, not to their own mean.
+        scope.turn_done(11_000, 10);
+        assert_eq!(scope.admit_unit_ns, 10_000 - 10_000 / 16);
+        // One reply that took 12 us is a unit of 6 us: it cannot lower the peak at once.
+        scope.turn_done(12_000, 1);
+        assert!(scope.admit_unit_ns > 8_000);
+        // A turn without replies teaches nothing.
+        let before = scope.admit_unit_ns;
+        scope.turn_done(500_000, 0);
+        assert_eq!(scope.admit_unit_ns, before);
+    }
+
+    #[test]
+    fn replies_nobody_waited_for_are_admitted_in_a_later_turn() {
+        // The refinement plugin answers at once, long before the interactive drain; its reply is
+        // still not admitted by the handoff (that would spend the writer's budget on a fact no
+        // one waited for), only by the next drain.
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let (scope, _) = sps_scope(
+            vec![
+                (
+                    Duration::from_micros(30),
+                    Priority::Interactive,
+                    TrustTier::FirstParty,
+                ),
+                (Duration::ZERO, Priority::Refinement, TrustTier::FirstParty),
+            ],
+            &seen,
+        );
+        let mut b = PluginBridge::new(
+            Box::new(scope),
+            Arc::new(Governor::default()),
+            ScopeSpec::default(),
+        );
+        b.begin_turn();
+        b.upsert(1, w_row(1));
+        b.interactive(&[1], &One, gorca_core::plugin_port::now_ns());
+        // The interactive plugin may or may not make the (debug build's) window; the refinement
+        // one never is admitted by the handoff, however early its reply is in.
+        assert!(
+            b.live_len() <= 1,
+            "only a waited plugin is admitted by the handoff"
+        );
+        let end = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < end && b.live_len() < 2 {
+            b.drain();
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(
+            b.live_len(),
+            2,
+            "the refinement fact follows on the next drain"
         );
     }
 }

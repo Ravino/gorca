@@ -888,7 +888,7 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
 [keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\nlanguage=\"ru\"\noutput_module=\"rhvoice\"\nbackend=\"ssip\"\npunctuation=\"all\"\ncaps=[\"word\"]\ncaps_pitch_change=10\n\
 [echo]\ntyped_characters=false\ntyped_words=true\ncommand_keys=true\ninserted_text=false\n\
 [editing]\nannounce_clipboard=false\nboundary=[\"cue\",\"say\"]\nword=\"coarse\"\n[text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\ndescription_pause=false\nhedge_inferred=true\n\
-[terminal]\nsettle_ms=40\nburst_lines=20\nprompt_markers=[\"> \"]\nprompt_regex=\"^x\"\nsecret_regex=\"y$\"\n[mouse]\nenabled=false\nitem_click=\"pointer\"\nif_covered=\"click\"\nannounce_move=false\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
+[terminal]\nsettle_ms=40\nburst_lines=20\nprompt_markers=[\"> \"]\nprompt_regex=\"^x\"\nsecret_regex=\"y$\"\n[mouse]\nenabled=false\nitem_click=\"pointer\"\nif_covered=\"click\"\nannounce_move=false\n[plugins]\nscheduler=\"sps\"\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
         let l = load_text(text);
         assert!(l.diags.is_empty(), "{:?}", l.diags);
         let d = Settings::default();
@@ -923,7 +923,8 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         assert_eq!(l.settings.mouse.item_click, crate::ItemClick::Pointer);
         assert_eq!(l.settings.mouse.if_covered, crate::IfCoveredPolicy::Click);
         assert!(!l.settings.mouse.announce_move);
-        assert_eq!(SETTINGS.len(), 49);
+        assert_eq!(l.settings.plugins.scheduler, crate::PluginScheduler::Sps);
+        assert_eq!(SETTINGS.len(), 50);
     }
 
     #[test]
