@@ -7,6 +7,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 unit_src="$root/contrib/systemd/gorca.service"
 unit_dst="$HOME/.config/systemd/user/gorca.service"
+id_src="$root/contrib/systemd/gorca-identity.service"
+id_dst="$HOME/.config/systemd/user/gorca-identity.service"
 toggle="$root/tools/gorca-toggle.sh"
 schema=org.gnome.settings-daemon.plugins.media-keys
 base=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings
@@ -29,7 +31,8 @@ find_ours() {
 
 if [ "${1:-}" = "--uninstall" ]; then
     systemctl --user stop gorca.service 2>/dev/null || true
-    rm -f "$unit_dst"
+    systemctl --user stop gorca-identity.service 2>/dev/null || true
+    rm -f "$unit_dst" "$id_dst"
     systemctl --user daemon-reload
     ours=$(find_ours)
     if [ -n "$ours" ]; then
@@ -45,6 +48,7 @@ fi
 
 mkdir -p "$(dirname "$unit_dst")"
 ln -sfn "$unit_src" "$unit_dst"
+ln -sfn "$id_src" "$id_dst"
 systemctl --user daemon-reload
 
 ours=$(find_ours)

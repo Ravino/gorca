@@ -292,9 +292,13 @@ fn identity_in(
     canon.file_name()?.to_str().map(str::to_owned)
 }
 
-/// [`verified_identity`] off the async executor under a deadline.
+/// The verified identity off the async executor under a deadline: [`verified_identity`] where
+/// `/proc` is readable, else (gorca in a private user namespace) the identity helper's answer
+/// ([`crate::identity_svc`]).
 pub async fn exe_of_async(pid: u32, start: u64) -> Option<String> {
-    let job = tokio::task::spawn_blocking(move || verified_identity(pid, start));
+    let job = tokio::task::spawn_blocking(move || {
+        crate::identity_svc::resolve(pid, start, std::time::Duration::from_millis(200))
+    });
     match tokio::time::timeout(std::time::Duration::from_millis(250), job).await {
         Ok(Ok(e)) => e,
         Ok(Err(_)) | Err(_) => None,

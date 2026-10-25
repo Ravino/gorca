@@ -111,3 +111,7 @@ Probe in the transient units (`live_peer_identity_probe`, whole real path): hard
   `ProtectKernelModules=no`, `ProtectControlGroups=no`, `PrivateTmp=no`.
 * Daemon logs a WARN at startup when plugins are enabled and gorca is in a private user namespace.
 * Expected after restart: `plugin scope opened app=firefox-esr doc=true plugins=1`.
+
+## Update 2026-10-26
+
+The unit-side workaround (dropping the namespace options) is superseded: the full sandbox is back and identity comes from the identity helper, see `docs/reports/2026-10-26-linux-platform-identity-helper.md`.

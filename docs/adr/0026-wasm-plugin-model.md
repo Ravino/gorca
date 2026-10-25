@@ -1379,6 +1379,18 @@ connector establishes the **verified identity** of the bus peer (`AppInfo::exe`)
 
 Comparison with a manifest `[match] apps` entry is **case-sensitive**.
 
+*Note 2026-10-26 (identity inside the systemd sandbox).* The evidence above is read from `/proc`. A
+systemd user unit with `ProtectSystem=`, `PrivateTmp=`, `ProtectKernel*=` or `ProtectControlGroups=` runs
+in a private user namespace, where the kernel refuses `/proc/<pid>/exe`, `root` and `ns/*` of every
+process outside it; the shipped unit must keep those options (owner decision), so the reads are made by
+`gorca --identity-helper` (`gorca-identity.service`, no namespace, filtered syscalls, AF_UNIX only) and
+asked over `$XDG_RUNTIME_DIR/gorca/identity.sock` with `ID <pid> <start>` -> `OK <identity>` | `NO`. The
+helper applies the checks above unchanged (same function), both ends verify the peer's systemd unit through
+`SO_PEERCRED` and `/proc/<pid>/cgroup`, and a missing or wrong helper yields *unverified*, never an
+in-sandbox guess (the readable cgroup scope, `cmdline`, `comm` and broker credentials do not prove the
+executable). Outside a private user namespace the daemon reads `/proc` itself. The threat model is
+unchanged. Measurements and rejected options: `docs/reports/2026-10-26-linux-platform-identity-helper.md`.
+
 *Consequence.* A scope whose identity is unverified (or sandboxed-unverified) is served **first-party
 plugins that are not URL-scoped only**; no third-party plugin and no URL-scoped plugin (a URL match
 reads page content) is activated for it. The decision is the plugin service's, taken when the scope

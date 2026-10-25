@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Socket backlog sampling for drain lag detection (D-2).
 //!
-//! The only `unsafe` in this crate (ADR-0001 section 11, rule 6): one `ioctl`.
+//! The only `unsafe` in this crate (ADR-0001 section 11, rule 6): `ioctl` and `getsockopt` calls.
 #![allow(unsafe_code)]
 
 use std::io;
@@ -59,9 +59,42 @@ pub fn set_recv_buffer(sock: impl AsFd, bytes: usize) -> io::Result<usize> {
     Ok(usize::try_from(got).unwrap_or(0))
 }
 
+/// The pid of the process at the other end of a connected Unix socket (`SO_PEERCRED`, as the
+/// kernel recorded it when the connection was made), in the caller's pid namespace.
+pub fn peer_pid(sock: impl AsFd) -> io::Result<u32> {
+    let mut cred = libc::ucred {
+        pid: 0,
+        uid: 0,
+        gid: 0,
+    };
+    let mut len = libc::socklen_t::try_from(std::mem::size_of::<libc::ucred>()).unwrap_or(12);
+    // SAFETY: `sock` is an open descriptor for the call; `cred` and `len` are live locals and
+    // `len` holds the size of the `ucred` the kernel writes.
+    let rc = unsafe {
+        libc::getsockopt(
+            sock.as_fd().as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_PEERCRED,
+            (&raw mut cred).cast(),
+            &raw mut len,
+        )
+    };
+    if rc < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    u32::try_from(cred.pid).map_err(|_| io::Error::other("no peer pid"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_peer_of_a_socketpair_is_this_process() {
+        let (a, _b) = std::os::unix::net::UnixStream::pair().unwrap();
+        assert_eq!(peer_pid(&a).unwrap(), std::process::id());
+    }
+
     use std::io::{Read, Write};
     use std::os::unix::net::UnixStream;
 
