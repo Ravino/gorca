@@ -705,12 +705,13 @@ impl Reader {
         fx: &mut ReaderEffects,
     ) {
         let chain = info::ancestry(&self.dir, snap);
+        let words = self.chain_words(&chain);
         let level = self.cmd.effective.verbosity.level;
         let text = match kind {
-            PendingKind::WhereAmI => info::where_am_i(&chain, repeat, level),
+            PendingKind::WhereAmI => info::where_am_i(&chain, &words, repeat, level),
             PendingKind::WindowTitle => {
                 let app = snap.key.app;
-                let title = info::window_title(&chain).inspect(|t| {
+                let title = info::window_title(&chain, &words).inspect(|t| {
                     self.cmd.last_title = Some((app, t.clone()));
                 });
                 let title = title.or_else(|| {
@@ -726,7 +727,7 @@ impl Reader {
                     None => t(M::WindowTitleUnavailable).to_owned(),
                 }
             }
-            PendingKind::NodeInfo => info::node_info(&chain),
+            PendingKind::NodeInfo => info::node_info(&chain, &words),
         };
         self.say_app(&text, fx);
     }
