@@ -375,16 +375,15 @@ pub async fn startup_backend(path: &Path) -> Option<gorca_config::Backend> {
     )
 }
 
-/// `[plugins] enabled` from the settings file, read once at startup (the plugin runtime is built
-/// then). A missing or unreadable file is "off".
-pub async fn startup_plugins_enabled(path: &Path) -> bool {
+/// `[plugins]` from the settings file, read once at startup (the plugin runtime is built then).
+/// A missing or unreadable file is the default: off.
+pub async fn startup_plugins(path: &Path) -> gorca_config::PluginsSettings {
     let Ok(Some(text)) = read_file(path).await else {
-        return false;
+        return gorca_config::PluginsSettings::default();
     };
     gorca_config::load(Some(&text), &Presets::builtin())
         .settings
         .plugins
-        .enabled
 }
 
 struct State {

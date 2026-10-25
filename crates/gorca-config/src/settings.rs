@@ -773,6 +773,39 @@ pub struct Settings {
 pub struct PluginsSettings {
     /// Load plugin packages and let them add facts to the fused model. Off by default.
     pub enabled: bool,
+    /// How the interactive handoff to plugins is scheduled (ADR-0026 section 2.4.7).
+    pub scheduler: PluginScheduler,
+}
+
+/// `[plugins] scheduler`: the policy of the interactive plugin handoff.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum PluginScheduler {
+    /// The fixed interim policy: pre-wake every plugin worker on a key, wait for every plugin that
+    /// is not labelled `refinement` up to the 0.3 ms window.
+    #[default]
+    Labels,
+    /// The statistical scheduler (SPS): per-key pre-wake of a few workers under a CPU budget, a
+    /// wait of its own length per plugin, learned from the plugins' replies.
+    Sps,
+}
+
+impl PluginScheduler {
+    pub const NAMES: &'static str = "\"labels\" or \"sps\"";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "labels" => Some(PluginScheduler::Labels),
+            "sps" => Some(PluginScheduler::Sps),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            PluginScheduler::Labels => "labels",
+            PluginScheduler::Sps => "sps",
+        }
+    }
 }
 
 /// `[profiles]` (ADR-0016 PF-2): a `Base` section, never inside a profile.
@@ -1192,6 +1225,12 @@ pub static SETTINGS: &[SettingDef] = &[
     row("terminal", "prompt_regex", SettingType::Str, "\"\""),
     row("terminal", "secret_regex", SettingType::Str, "\"\""),
     row("plugins", "enabled", SettingType::Bool, "false"),
+    row(
+        "plugins",
+        "scheduler",
+        SettingType::Enum(PluginScheduler::NAMES),
+        "\"labels\"",
+    ),
     row("mouse", "enabled", SettingType::Bool, "true"),
     row(
         "mouse",
@@ -1365,6 +1404,11 @@ static DOCS: &[(&str, &str, &str)] = &[
         "plugins",
         "enabled",
         "Load WASM plugin packages from the first-party directory and from $XDG_DATA_HOME/gorca/plugins, so they can add facts (names, roles) to what gorca presents. Off by default; takes effect when gorca starts.",
+    ),
+    (
+        "plugins",
+        "scheduler",
+        "How gorca waits for plugins when focus moves: \"labels\" wakes every plugin worker on a key and waits for each one that is not marked refinement; \"sps\" learns from the plugins' replies which workers to wake and how long to wait for each, and spends far less CPU. Takes effect when gorca starts.",
     ),
     (
         "mouse",

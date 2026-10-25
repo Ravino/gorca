@@ -363,14 +363,18 @@ pub async fn run_with_policy(
 /// file. Packages load on a blocking thread; a failure leaves the daemon running without
 /// plugins.
 async fn wire_plugins(core: Core, opts: &Options, prewake: Arc<plugins::Prewake>) -> Core {
-    let enabled = match &opts.config_path {
-        Some(p) => config_task::startup_plugins_enabled(p).await,
-        None => false,
+    let settings = match &opts.config_path {
+        Some(p) => config_task::startup_plugins(p).await,
+        None => gorca_config::PluginsSettings::default(),
     };
-    if !enabled {
+    if !settings.enabled {
         return core;
     }
-    let popts = opts.plugins.clone();
+    let mut popts = opts.plugins.clone();
+    popts.scheduler = match settings.scheduler {
+        gorca_config::PluginScheduler::Labels => plugins::SchedulerPolicy::Labels,
+        gorca_config::PluginScheduler::Sps => plugins::SchedulerPolicy::Sps,
+    };
     match tokio::task::spawn_blocking(move || plugins::PluginRuntime::load_prewake(&popts, prewake))
         .await
     {

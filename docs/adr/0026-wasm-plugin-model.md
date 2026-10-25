@@ -1,6 +1,6 @@
 # ADR-0026: WASM plugin model on the fused semantic model (M18a)
 
-Status: **Proposed** (r6, 2026-10-25, SPS scheduling §2.4.7, DP-1 pending owner; r5 implementation notes, 2026-10-25; r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
+Status: **Proposed** (r6.1 SPS implemented behind `[plugins] scheduler`, default `labels`, 2026-10-25; r6, 2026-10-25, SPS scheduling §2.4.7, DP-1 pending owner; r5 implementation notes, 2026-10-25; r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
 r4 applies the r3 review (`docs/reports/adr-0026-review.md`, section r3): deadline from the turn start, timer slack,
 wait mechanism, one wait per keypress path, tighter benign gates. r3 follows the owner decision of 2026-10-24 (canonical actor model: plugins are actors, **B' is the design
 target**, §2.4.6, §5) and records QP-1..QP-5 as confirmed (§6).
@@ -1198,6 +1198,48 @@ spoken permission review and the trust UI, `route-changed`.
 9. The document URL was missing in the core. The document source reads it from
    `Document.GetAttributes` (`DocURL` in Gecko, `URI` in Blink) and reports it as a `RouteChanged`
    hint after every `Reset`; a route change inside a document does not re-scope yet.
+
+**SPS as implemented (M18a-3, r6.1; `docs/reports/m18a-3-sps.md`).** The pure scheduler is the crate
+`gorca-plugin-sched` (SPS-1..SPS-9 tests, bit-equal replay of the 17 594-call `sps.py` log); the daemon
+runs it behind `[plugins] scheduler = "sps" | "labels"` (default `labels`: C-4 has not passed, see the
+report). Where the implementation differs from §2.4.7:
+1. *Thread per plugin, not a pool.* M18a-1 built one worker thread per plugin actor. A "hot place" is
+   therefore a **pre-armed worker** (`PlaceMode::Own`): `on_key_down` returns *which* workers to arm
+   (top-K by score, at most one third party), a job is hot iff its worker was armed, there is no queue
+   offset and no promotion (a denied job has no queue to be promoted into). The shared-queue model
+   (`PlaceMode::Queues`) stays in the crate because it is what `sps.py` and the replay corpus exercise.
+2. *One wake, no CAS cold queue.* All parked workers of a scope wait on one futex word, each with its
+   own wake bit; the writer wakes the cold workers that have a job with a single `FUTEX_WAKE_BITSET`
+   per handoff (waited jobs first, the rest after). Hot workers need no call. This is the "one wake"
+   fix of §2.4.7.9 for per-actor threads.
+3. *Per-job holds in the gate.* The gate word carries the mask of waited jobs that replied; the writer
+   ends the wait when every waited job has replied or passed its own hold, never past `t0 + D - 8 us`
+   (`Turn::clamped`). Under `labels` the same gate runs with one hold per job to the shared deadline.
+4. *Scheduler state is shared, not writer-owned*: the key-down hub (input pump) and the scope's writer
+   both touch it, behind a `Mutex` the hub only `try_lock`s (a contended key-down does nothing and is
+   counted). The CPU token bucket is one per process, held by the hub and passed in.
+5. *`sps.py` quirks not copied*: with an empty bucket the product gives K = 0 (the reference computes a
+   negative K and refunds the bucket; the replay test sets `reference_negative_bucket` and
+   `reference_prewake_ignores_exclusion`, because `sps.py` also pre-wakes excluded plugins, which
+   §2.4.7.3 forbids and the product does not do); a key that caused no focus change teaches `alpha ~ 0` at the
+   next key-down (the reference calls `observe_context` itself).
+6. *`KeyClass` comes from the keysym only* (`EditArrow` is never produced: the input layer does not
+   know that the caret is in a text field); usefulness `u` is "emitted a fact" (L-4 first form, the
+   fuse-diff bit is M18a-2b); the manifest key is `class` with `priority` kept as an alias, and an
+   absent class is `Unlabelled`; at most 32 plugins per scope are tracked.
+7. *DP-1 is not decided and nothing was installed*: `IdleStateHook` is a documented, default-off hook
+   point that `Prewake` calls when a key-down arms a worker; no implementation ships.
+8. *The reserve after the wait is measured and follows the replies.* Admitting the replies is the
+   largest part of "fuse": about `unit * (n + 1)` with a unit of 5-7 us on the dev host (one reply
+   12 us, ten replies 60-90 us). `ScopeRunner::turn_done` reports the cost of each interactive drain
+   (`unit` = recent peak of cost / (n + 1), capped at 12 us). The wait ends at
+   `t0 + D - fuse - unit * (replies in + 1)`, recomputed as replies arrive (`Turn::per_reply_ns`);
+   the plan's window assumes one reply. A reserve for every candidate, tried first, shrank the
+   window by the cost of replies that then did not arrive (a self-defeating reserve: the
+   first-utterance share fell to ~0). `fuse` itself is 24 us (take_ops and apply in the bench), not 8.
+9. *Replies of jobs nobody waited for are admitted in a later turn* (`ScopeRunner::poll_waited`;
+   the writer is woken again for them), so a refinement or third-party fact never spends the
+   writer's budget. Under `labels` everything that arrived is admitted, as before.
 10. A role patch reached only the entry. The translator now derives the article category flag from the
     fused role (and patches it when a later fact changes the role), and the state-change overlay no
     longer takes back a name whose provenance is Patch or User (it spoke the raw name again).

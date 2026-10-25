@@ -47,7 +47,7 @@ pub async fn pump_keys(
                 }
                 // The plugin workers start running now, ahead of the focus change this key may
                 // cause (a rate-limited, non-blocking atomic store and a futex wake).
-                prewake.key_down();
+                prewake.key_event(&item.event);
                 let out = lane.on_key(item.event, Instant::now());
                 if out.epoch_advanced {
                     speech.notify_epoch();

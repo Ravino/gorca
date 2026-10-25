@@ -1,0 +1,8 @@
+A model defaults (snap 6, fuse 8, exec x1, cold 70)  LABELS ffu=1.000 min=1.000 p99= 217 | SPS ffu=0.996 min=0.986 p99= 272 cpu=11904 us/key
+B measured pre-send 75 + reserve 63                  LABELS ffu=0.977 min=0.857 p99= 300 | SPS ffu=0.967 min=0.821 p99= 300 cpu=22354 us/key
+C B + measured exec (hot reply 125 us => x2.8)       LABELS ffu=0.777 min=0.182 p99= 300 | SPS ffu=0.753 min=0.136 p99= 300 cpu=22391 us/key
+D C + measured cold start median 120                 LABELS ffu=0.777 min=0.182 p99= 300 | SPS ffu=0.738 min=0.132 p99= 300 cpu=23493 us/key
+E all ten plugins trigger, model timings             LABELS ffu=1.000 min=1.000 p99= 160 | SPS ffu=0.998 min=0.996 p99= 237 cpu=17312 us/key
+F all ten trigger, measured (75/63/x2.8/cold120)     LABELS ffu=0.766 min=0.758 p99= 331 | SPS ffu=0.495 min=0.420 p99= 331 cpu=21426 us/key
+G all ten trigger, measured but reserve 8            LABELS ffu=1.000 min=1.000 p99= 302 | SPS ffu=0.705 min=0.614 p99= 303 cpu=21717 us/key
+H all ten trigger, measured but pre-send 6           LABELS ffu=1.000 min=1.000 p99= 288 | SPS ffu=0.722 min=0.640 p99= 300 cpu=21590 us/key

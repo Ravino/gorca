@@ -113,7 +113,8 @@ pub struct Options {
 /// `GORCA_PLUGINS_FIRST_PARTY_DIR` (default `/usr/lib/gorca/addons`), `GORCA_PLUGINS_CACHE_DIR`
 /// (default `$XDG_CACHE_HOME/gorca/plugins-cwasm`) and `GORCA_PLUGINS_URL_EXTRA`
 /// (`id=pattern,id=pattern`: extra URL patterns for a loaded plugin, `file://` allowed; the
-/// private-session test knob).
+/// private-session test knob) and `GORCA_SCHED_LOG` (a file the SPS input log is appended to when
+/// a scope closes; numbers only).
 fn plugin_options_from_env(
     mut o: crate::plugins::PluginOptions,
     get: &impl Fn(&str) -> Option<String>,
@@ -148,6 +149,9 @@ fn plugin_options_from_env(
             .filter_map(|p| p.split_once('='))
             .map(|(id, pat)| (id.trim().to_owned(), pat.trim().to_owned()))
             .collect();
+    }
+    if o.sched_log.is_none() {
+        o.sched_log = var("GORCA_SCHED_LOG").map(PathBuf::from);
     }
     o.portable = get("GORCA_CPU_DISABLE").as_deref() == Some("all");
     o

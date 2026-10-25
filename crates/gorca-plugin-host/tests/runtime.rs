@@ -532,6 +532,7 @@ fn actor_round_trip_and_early_wake() {
     let turn = Turn {
         deadline_ns: t0 + 200_000_000,
         wait: true,
+        per_reply_ns: 0,
     };
     let out = r.interactive(&turn, jobs, &sink);
     assert_eq!(out.asked, 3);

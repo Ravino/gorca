@@ -35,6 +35,7 @@ gorca-speech-voicego = { workspace = true }
 gorca-speech-ssip = { workspace = true }
 gorca-ext-host = { workspace = true }
 gorca-plugin-host = { workspace = true }
+gorca-plugin-sched = { workspace = true }
 thiserror = { workspace = true }
 zbus = { workspace = true }
 serde = { workspace = true }
