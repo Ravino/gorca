@@ -12,7 +12,7 @@
 //! 4. `gorca-model`, `gorca-doc` and `gorca-text` must not depend on `tokio`.
 //! 5. Extensions depend only on `gorca-ext-api` (which re-exports the pure leaf `gorca-i18n`
 //!    for message references, ADR-0010).
-//! 9. The WASM runtime is confined (M5): only `gorca-ext-host` may depend on `wasmtime*`, only
+//! 9. The WASM runtime is confined (M5): only `gorca-ext-host` and `gorca-plugin-host` may depend on `wasmtime*`, only
 //!    `gorca-ext-api` (for the `wasm32` component build) on `wit-bindgen*`, and the host must not
 //!    reach `zbus*` or `atspi*` (an extension sees the core's types, never a connector's).
 //!
@@ -91,6 +91,7 @@ const CONCRETE: &[&str] = &[
     "gorca-input-xkb",
     "gorca-braille-brlapi",
     "gorca-ext-host",
+    "gorca-plugin-host",
 ];
 
 /// One package of the resolved graph.
@@ -194,6 +195,7 @@ fn core_forbidden(name: &str) -> bool {
         || name.starts_with("gorca-speech-")
         || (name.starts_with("gorca-input-") && name != "gorca-input-api")
         || name == "gorca-ext-host"
+        || name == "gorca-plugin-host"
         || (name.starts_with("gorca-doc-source-") && name != "gorca-doc-source-api")
         // The normaliser runs in the connectors, never in the core (H-7); source crates are
         // wired by the daemon only (L-2).
@@ -288,12 +290,13 @@ pub fn check(g: &Graph) -> Vec<Violation> {
     // Rule 9.
     for p in g.pkgs.values().filter(|p| p.in_workspace) {
         if p.name != "gorca-ext-host"
+            && p.name != "gorca-plugin-host"
             && let Some(d) = g.depends_directly(&p.name, is_wasmtime)
         {
             report(
                 9,
                 format!(
-                    "`{}` may not depend on `{d}`; only `gorca-ext-host` runs WASM",
+                    "`{}` may not depend on `{d}`; only `gorca-ext-host` and `gorca-plugin-host` run WASM",
                     p.name
                 ),
             );
@@ -325,15 +328,17 @@ pub fn check(g: &Graph) -> Vec<Violation> {
             );
         }
     }
-    for banned in [is_zbus as fn(&str) -> bool, is_atspi] {
-        if let Some(chain) = g.path_to("gorca-ext-host", banned) {
-            report(
-                9,
-                format!(
-                    "`gorca-ext-host` must not reach a connector transport: {}",
-                    chain.join(" -> ")
-                ),
-            );
+    for host in ["gorca-ext-host", "gorca-plugin-host"] {
+        for banned in [is_zbus as fn(&str) -> bool, is_atspi] {
+            if let Some(chain) = g.path_to(host, banned) {
+                report(
+                    9,
+                    format!(
+                        "`{host}` must not reach a connector transport: {}",
+                        chain.join(" -> ")
+                    ),
+                );
+            }
         }
     }
     v

@@ -1438,6 +1438,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gorca-plugin-host"
+version = "0.0.0"
+dependencies = [
+ "bitflags",
+ "getrandom",
+ "gorca-rt",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "toml_edit",
+ "tracing",
+ "wasmtime",
+]
+
+[[package]]
 name = "gorca-present"
 version = "0.0.0"
 dependencies = [
