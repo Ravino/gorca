@@ -675,7 +675,15 @@ mechanisms and replaces the policies:
 | Gap 7 (busy actor not skipped) and gap 8 (2 ms governor window plus 20 ms limit) | Kept unchanged. The governor window stays until the input layer supplies a keypress id; SPS runs inside the one wait |
 | Review findings S-1, S-2, C-1, P-1 | Independent of SPS and gating; they land before anyone enables plugins (M18a-2 acceptance) |
 
-##### 2.4.7.10 Host idle states: a decision for the owner (DP-1, **PENDING OWNER**)
+##### 2.4.7.10 Host idle states: a decision for the owner (DP-1, **DECIDED 2026-10-25: option (b)**)
+
+**Owner decision, 2026-10-25: DP-1 = (b), a `/dev/cpu_dma_latency` lease held by gorca only while plugins
+are active, access by the udev `uaccess` rule shipped as `packaging/udev/70-gorca-cpu-dma-latency.rules`
+(the owner installs it). Implemented in M18a-5 as `gorca_rt::pmqos::PmQosLease` behind `IdleStateHook`, config
+`[plugins] idle_lease = "auto" | "off"` (default `auto`; a no-op with one `pm-qos-unavailable` info line when
+the device is not writable): taken by a key-down that arms workers, released 2 s after the last one, cut and
+retaken after 30 s of continuous holding, target 20 us (never lower). The text below is the analysis as it
+stood when the question was open.**
 
 **Finding.** Deep C-state exit latency dominates the p99. This host (16 CPUs, `intel_idle` driver,
 `menu` governor) has C2 127 µs and **C3 1048 µs** exit latency, all enabled. A parked pool thread
@@ -1460,6 +1468,7 @@ call model or the placement decision (B').
 | Guarantees | SPS-1..SPS-9 with test obligations; invariant I-P9; I-P8 updated |
 | M18a-2 review §2 | interaction table with the in-flight fixes (§2.4.7.9); the C-state finding becomes owner decision **DP-1** (§2.4.7.10), recommendation (b) via udev `uaccess`, **pending owner** |
 | Slices and metrics | M18a-2a..2f (§2.4.7.12, §2.9 pointer), C-4 A/B, PX-6 default-idle-state rule, PX-10..PX-13, WQ-7, QS-1 |
+| DP-1 decided (2026-10-25) | owner chose (b); `[plugins] idle_lease` replaces the proposed `pm_qos` key; M18a-5 implements the lease and the hybrid-CPU placement (`[plugins] placement`), see `docs/reports/m18a-5-placement.md` |
 
 **r4 (2026-10-24)** — applies the r3 review (`docs/reports/adr-0026-review.md`, section r3). No change to
 the fact model or the placement decision.

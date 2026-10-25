@@ -375,6 +375,14 @@ async fn wire_plugins(core: Core, opts: &Options, prewake: Arc<plugins::Prewake>
         gorca_config::PluginScheduler::Labels => plugins::SchedulerPolicy::Labels,
         gorca_config::PluginScheduler::Sps => plugins::SchedulerPolicy::Sps,
     };
+    popts.idle_lease = match settings.idle_lease {
+        gorca_config::PluginIdleLease::Auto => plugins::IdleLeasePolicy::Auto,
+        gorca_config::PluginIdleLease::Off => plugins::IdleLeasePolicy::Off,
+    };
+    popts.placement = match settings.placement {
+        gorca_config::PluginPlacement::Auto => plugins::PlacementPolicy::Auto,
+        gorca_config::PluginPlacement::Off => plugins::PlacementPolicy::Off,
+    };
     match tokio::task::spawn_blocking(move || plugins::PluginRuntime::load_prewake(&popts, prewake))
         .await
     {
