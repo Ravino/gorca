@@ -15,6 +15,8 @@
 
 #[cfg(test)]
 pub(crate) mod agree_tests;
+#[cfg(test)]
+mod flags_golden_tests;
 pub mod flags_sem;
 pub mod fuse;
 #[cfg(test)]

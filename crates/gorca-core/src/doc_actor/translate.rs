@@ -142,6 +142,7 @@ fn data_of(n: &SrcNode, sem: Option<Arc<SemEntry>>) -> Arc<NodeData> {
         src: Some(n.id),
         local: n.local,
         value: None,
+        article_tag: n.rec.as_ref().is_some_and(|r| r.tag.as_str() == "article"),
         sem,
     })
 }
@@ -893,14 +894,9 @@ impl Translator {
             None => return Ok(()),
         };
         // The fused role decides the article flag (an add-on patch can make a node an article or
-        // take the role away again); a flag the previous entry's role did not give is the page's
-        // own (its tag or role token) and stays either way.
-        let was_role = data
-            .sem
-            .as_ref()
-            .is_some_and(|o| o.sem.role == gorca_model::sem::SemRole::Article);
-        let page_own = cur_flags.contains(NodeFlags::ARTICLE) && !was_role;
-        let article = page_own || e.sem.role == gorca_model::sem::SemRole::Article;
+        // take the role away again); the page's own `<article>` keeps it either way, so a
+        // re-spec (`flags_of`) and a patch agree.
+        let article = data.article_tag || e.sem.role == gorca_model::sem::SemRole::Article;
         let flags = if article {
             cur_flags | NodeFlags::ARTICLE
         } else {
@@ -1753,5 +1749,90 @@ mod tests {
             "{ids} + {}",
             t.orphans.len()
         );
+    }
+
+    /// A lookup whose answer a test changes between batches.
+    struct Swap(std::cell::RefCell<Arc<SemEntry>>);
+
+    impl SemLookup for Swap {
+        fn sem(&self, _: SrcNodeId) -> Option<Arc<SemEntry>> {
+            Some(Arc::clone(&self.0.borrow()))
+        }
+    }
+
+    fn entry_with(role: gorca_model::sem::SemRole) -> Arc<SemEntry> {
+        let mut e = SemEntry::default();
+        e.sem.role = role;
+        Arc::new(e)
+    }
+
+    fn article_flag(w: &mut DocWriter, t: &Translator) -> bool {
+        let id = t.id_of(SrcNodeId(2)).unwrap();
+        w.doc()
+            .node(id)
+            .is_some_and(|v| v.flags.contains(NodeFlags::ARTICLE))
+    }
+
+    fn article_node(tag: &str) -> SrcNode {
+        let mut x = n(2, Role::Paragraph);
+        let mut r = gorca_model::sem::SrcRecord::default();
+        r.tag = gorca_model::sem::TagName::new(tag).0;
+        x.rec = Some(Arc::new(r));
+        x
+    }
+
+    fn article_batch(tag: &str) -> Vec<DocDelta> {
+        vec![
+            DocDelta::Reset {
+                root: SrcNodeId(1),
+                nav_id: 1,
+            },
+            DocDelta::Upsert(vec![n(1, Role::DocumentWeb), article_node(tag)]),
+            list(1, &[2]),
+            DocDelta::Settled { batch: 1 },
+        ]
+    }
+
+    #[test]
+    fn a_real_article_keeps_its_flag_through_a_patch_and_a_re_spec() {
+        use gorca_model::sem::SemRole;
+        let (mut w, _r) = channel(1);
+        let mut t = Translator::new();
+        let lookup = Swap(std::cell::RefCell::new(entry_with(SemRole::Article)));
+        t.apply_fused(&mut w, article_batch("article"), &lookup, &[])
+            .unwrap();
+        assert!(article_flag(&mut w, &t), "initially");
+        // An add-on patch takes the role away: the page's own <article> stays one.
+        *lookup.0.borrow_mut() = entry_with(SemRole::Generic);
+        t.apply_fused(&mut w, vec![], &lookup, &[SrcNodeId(2)])
+            .unwrap();
+        assert!(article_flag(&mut w, &t), "after the patch");
+        // The node is rebuilt from its source: the tag gives it back, no flip-flop.
+        t.apply_fused(
+            &mut w,
+            vec![
+                DocDelta::Upsert(vec![article_node("article")]),
+                DocDelta::Settled { batch: 2 },
+            ],
+            &lookup,
+            &[],
+        )
+        .unwrap();
+        assert!(article_flag(&mut w, &t), "after the re-spec");
+    }
+
+    #[test]
+    fn an_article_made_by_the_role_alone_loses_the_flag_with_the_role() {
+        use gorca_model::sem::SemRole;
+        let (mut w, _r) = channel(1);
+        let mut t = Translator::new();
+        let lookup = Swap(std::cell::RefCell::new(entry_with(SemRole::Article)));
+        t.apply_fused(&mut w, article_batch("div"), &lookup, &[])
+            .unwrap();
+        assert!(article_flag(&mut w, &t));
+        *lookup.0.borrow_mut() = entry_with(SemRole::Generic);
+        t.apply_fused(&mut w, vec![], &lookup, &[SrcNodeId(2)])
+            .unwrap();
+        assert!(!article_flag(&mut w, &t));
     }
 }

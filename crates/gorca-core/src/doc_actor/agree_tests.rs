@@ -160,6 +160,7 @@ fn info(engine: WebEngine, name: &str) -> AppInfo {
 
 /// One recorded page, normalised and fused the way the document actor does it.
 pub(crate) struct Built {
+    pub(crate) nodes: Vec<SrcNode>,
     pub(crate) stage: FuseStage,
     batch: Vec<DocDelta>,
 }
@@ -295,7 +296,11 @@ pub(crate) fn build(
     while stage.pending() > 0 {
         stage.step();
     }
-    Ok(Built { stage, batch })
+    Ok(Built {
+        nodes,
+        stage,
+        batch,
+    })
 }
 
 /// The recorded Text interface of every node, as the document source would read it (`GetText`).

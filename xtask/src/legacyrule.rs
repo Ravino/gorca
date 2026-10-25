@@ -280,14 +280,29 @@ pub fn scan(file: &str, source: &str) -> Vec<Hit> {
     while let Some((i, line)) = lines.next() {
         let t = line.trim_start();
         if t.starts_with("#[cfg(test)]") {
-            // `#[cfg(test)] mod x;` hides one declaration; a block ends the production text.
-            match lines.peek() {
-                Some((_, next)) if next.trim_end().ends_with(';') => {
-                    lines.next();
+            // Skip exactly the item the attribute is on: a declaration ends at `;`, a block at
+            // its closing brace. The text after it is production code again.
+            let (mut depth, mut open) = (0i64, false);
+            for (_, l) in lines.by_ref() {
+                let c = code_of(l);
+                if c.trim_start().starts_with("#[") && !open {
                     continue;
                 }
-                _ => break,
+                for ch in c.chars() {
+                    match ch {
+                        '{' => {
+                            depth += 1;
+                            open = true;
+                        }
+                        '}' => depth -= 1,
+                        _ => {}
+                    }
+                }
+                if (open && depth <= 0) || (!open && c.trim_end().ends_with(';')) {
+                    break;
+                }
             }
+            continue;
         }
         if t.starts_with("//") {
             continue;
@@ -437,6 +452,18 @@ mod tests {
                    #[cfg(test)]\n\
                    mod tests { fn t() { subtree_label(d); } }\n";
         assert_eq!(scan(F, src), vec![hit("subtree-label", F, 1)]);
+    }
+
+    #[test]
+    fn a_cfg_test_item_in_the_middle_hides_only_itself() {
+        let src = "fn a() { present_focus(n); }\n\
+                   #[cfg(test)]\n\
+                   fn only_tests() {\n    present_focus(n);\n}\n\
+                   fn b() {\n    present_focus(n);\n}\n\
+                   #[cfg(test)]\n\
+                   mod tests { fn t() { present_focus(n); } }\n";
+        let lines: Vec<usize> = scan(F, src).iter().map(|h| h.line).collect();
+        assert_eq!(lines, vec![1, 7]);
     }
 
     #[test]

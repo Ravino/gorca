@@ -314,6 +314,9 @@ pub struct NodeData {
     pub src: Option<SrcNodeId>,
     pub local: Option<LocalId>,
     pub value: Option<Value>,
+    /// The page itself made the node an article (its DOM tag is `article`): the flag stays when
+    /// an add-on patch takes the fused role away.
+    pub article_tag: bool,
     /// The fused semantics of the node (ADR-0022 SM-8: produced by `FUSE` in the document actor,
     /// the node's single writer, before the batch is published). `None` until the node was
     /// fused, for synthetic nodes and for sources that do not normalise. Read it through the
