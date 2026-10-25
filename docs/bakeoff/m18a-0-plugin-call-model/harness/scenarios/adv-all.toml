@@ -2,3 +2,4 @@ name = "adv-all"
 kind = "focus"
 desc = "benign fixture + A1..A6 and A13 together"
 adv = ["a1","a2","a3","a4","a5","a6","a13"]
+watchdog_s = 2400

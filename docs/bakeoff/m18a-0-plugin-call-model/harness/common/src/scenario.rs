@@ -89,9 +89,26 @@ pub struct Scenario {
     pub pin_writer: Option<usize>,
     #[serde(default)]
     pub timerslack_ns: Option<u64>,
+    /// Per-scenario run watchdog in seconds (spec clarification C-3). `--watchdog-s` overrides it; when
+    /// absent, `default_watchdog_s` applies.
+    #[serde(default)]
+    pub watchdog_s: Option<u64>,
 }
 
 impl Scenario {
+    /// Watchdog for this scenario: the explicit `watchdog_s`, else for `keypress` 1.5 x (2 legs x pairs x
+    /// leg_s) + 120 s of setup and calibration headroom (1,020 s at 5 x 60 s), else 600 s.
+    pub fn default_watchdog_s(&self) -> u64 {
+        if let Some(w) = self.watchdog_s {
+            return w;
+        }
+        if self.kind == "keypress" {
+            let legs = 2.0 * self.pairs.max(1) as f64 * self.leg_s;
+            return ((legs * 1.5) as u64 + 120).max(600);
+        }
+        600
+    }
+
     pub fn load(path: &std::path::Path) -> anyhow::Result<Scenario> {
         let s = std::fs::read_to_string(path)?;
         Ok(toml::from_str(&s)?)

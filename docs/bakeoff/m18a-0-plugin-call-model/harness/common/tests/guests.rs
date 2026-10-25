@@ -209,12 +209,13 @@ fn cwasm_cache_hits_on_second_load_and_survives_corruption() {
 
 #[test]
 fn forged_handle_reads_none_and_valid_handle_reads_the_node() {
-    let key = 0xA5A5_5A5A_1234_0001u64;
-    let h = mint_handle(key, 1, 5);
-    assert_ne!(h, mint_handle(key, 1, 6));
+    let key = MacKey::random();
+    let other = MacKey::random();
+    let h = mint_handle(&key, 1, 5);
+    assert_ne!(h, mint_handle(&key, 1, 6));
     assert_ne!(
         h,
-        mint_handle(key ^ 1, 1, 5),
+        mint_handle(&other, 1, 5),
         "a handle from another instance must not verify"
     );
 }

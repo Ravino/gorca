@@ -402,3 +402,7 @@ Harness requirements that are easy to get wrong:
 7. `loaded` definition (8 spin + 2 memwalk threads, memory below 2 GiB) is a diagnostic, not a gate.
 8. The default flapping cap `N` = 20 ms is tuned in the allowed-tuning list, and the reported value is
    frozen in the exit report.
+
+## Clarifications C-1..C-5 (after the first arm runs)
+
+See `harness/README.md`, "Spec clarifications": the flapping cap applies only to flap scenarios (C-1), per-run isolation and lock (C-2), per-scenario watchdog (C-3), quiet-host limits (C-4), keyed SipHash handle MAC (C-5). No gate threshold changed.
