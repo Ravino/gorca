@@ -55,6 +55,23 @@ pub struct Surface {
 /// toolkits.
 const WEB_FAMILIES: &[&str] = &["firefox", "chromium", "electron", "telegram"];
 
+/// The families whose recordings hold a window, a dialog or an application top level. The Telegram
+/// fixtures are page-only recordings of a web app (no window node above the document), so there
+/// is no window lead-in to replay for them.
+const WINDOW_FAMILIES: &[&str] = &[
+    "gtk4",
+    "firefox",
+    "chromium",
+    "gtk3",
+    "electron",
+    "gnome-shell",
+    "vte",
+];
+
+/// The families whose recordings hold an alert or a dialog (the roles the Reader reads as a
+/// notice). GTK 3, Electron, Telegram and the terminal recordings hold none.
+const NOTICE_FAMILIES: &[&str] = &["gtk4", "firefox", "chromium", "gnome-shell"];
+
 pub const SURFACES: &[Surface] = &[
     Surface {
         name: "focus",
@@ -99,18 +116,18 @@ pub const SURFACES: &[Surface] = &[
     Surface {
         name: "window",
         slice: "M22b4",
-        ready: false,
-        package: "",
-        test: "",
-        families: &[],
+        ready: true,
+        package: "gorca-connector-atspi",
+        test: "cutover_gate_tests::cutover_emit",
+        families: WINDOW_FAMILIES,
     },
     Surface {
         name: "notification",
         slice: "M22b4",
-        ready: false,
-        package: "",
-        test: "",
-        families: &[],
+        ready: true,
+        package: "gorca-connector-atspi",
+        test: "cutover_gate_tests::cutover_emit",
+        families: NOTICE_FAMILIES,
     },
     Surface {
         name: "explain",
@@ -498,6 +515,14 @@ pub const DROP_REASONS: &[(&str, &str)] = &[
     (
         "node-removed",
         "the real change removed the node; there is nothing left to speak about",
+    ),
+    (
+        "not-a-window-role",
+        "a node that is no window, dialog, alert or application top level: the Reader builds a window lead-in only for the activated window",
+    ),
+    (
+        "not-a-notice-role",
+        "a node that is neither an alert nor a dialog: a notice is read for an alert, and for a dialog when the application's policy says so",
     ),
     (
         "hidden-node",

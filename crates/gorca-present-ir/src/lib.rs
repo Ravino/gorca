@@ -64,8 +64,12 @@ pub enum Reason {
     },
     ListEntry,
     WhereAmI,
+    /// The title an activated window or dialog leads with (M22b4).
+    Window,
+    /// A notification or alert that appeared (M22b4).
+    Notice,
     /// A reason of a newer host: edits must leave the IR unedited. The code is never a registered
-    /// one (`0..=8`): [`UnknownReason`] has a private field and is made only by
+    /// one (`0..=10`): [`UnknownReason`] has a private field and is made only by
     /// [`Reason::unknown`] or [`Reason::from_code`], which map a registered code to its own
     /// variant.
     Unknown(UnknownReason),
@@ -96,6 +100,8 @@ impl Reason {
             Reason::Change { .. } => 6,
             Reason::ListEntry => 7,
             Reason::WhereAmI => 8,
+            Reason::Window => 9,
+            Reason::Notice => 10,
             Reason::Unknown(u) => u.0,
         }
     }
@@ -115,6 +121,8 @@ impl Reason {
             },
             7 => Reason::ListEntry,
             8 => Reason::WhereAmI,
+            9 => Reason::Window,
+            10 => Reason::Notice,
             c => Reason::Unknown(UnknownReason(c)),
         }
     }
@@ -755,9 +763,11 @@ mod tests {
             },
             Reason::ListEntry,
             Reason::WhereAmI,
+            Reason::Window,
+            Reason::Notice,
         ];
         let codes: Vec<u16> = all.iter().map(|r| r.code()).collect();
-        assert_eq!(codes, [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(codes, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         for r in all {
             assert_eq!(Reason::from_code(r.code(), true, 0b101), r);
         }
@@ -1005,6 +1015,8 @@ mod tests {
             | Reason::Change { changed: _ }
             | Reason::ListEntry
             | Reason::WhereAmI
+            | Reason::Window
+            | Reason::Notice
             | Reason::Unknown(_) => (),
         };
         let _ = |a: ArgVal| match a {

@@ -334,7 +334,7 @@ fn gen_content(r: &mut Rng, canonical: bool) -> Content {
 }
 
 fn gen_reason(r: &mut Rng, canonical: bool) -> Reason {
-    match r.below(12) {
+    match r.below(14) {
         0 => Reason::Focus,
         1 => Reason::FocusAncestor,
         2 => Reason::BrowseLine {
@@ -348,10 +348,12 @@ fn gen_reason(r: &mut Rng, canonical: bool) -> Reason {
         },
         7 => Reason::ListEntry,
         8 => Reason::WhereAmI,
+        9 => Reason::Window,
+        10 => Reason::Notice,
         _ => Reason::unknown(if canonical {
-            9 + r.u16() % 0xFFF0
+            11 + r.u16() % 0xFFF0
         } else {
-            r.u16() % 12
+            r.u16() % 14
         }),
     }
 }
@@ -513,13 +515,13 @@ fn p4_3_unknown_reason_content_arg_and_field_kinds_pass_through_byte_for_byte() 
 /// P4.4 an unknown Reason code is carried for every code outside the registered range.
 #[test]
 fn p4_4_every_unregistered_reason_code_is_kept() {
-    for code in 9..=u16::MAX {
+    for code in 11..=u16::MAX {
         let r = Reason::from_code(code, true, 0xFFFF_FFFF);
         assert_eq!(r, Reason::unknown(code));
         assert_eq!(r.code(), code);
     }
     // And the registered range is closed under code()/from_code() with its payloads.
-    for code in 0..9u16 {
+    for code in 0..11u16 {
         for entered in [false, true] {
             for changed in [0u32, 1, 0x8000_0001, u32::MAX] {
                 let r = Reason::from_code(code, entered, changed);
@@ -579,13 +581,13 @@ fn p4_5_lang_id_is_a_table_order_artifact_the_tag_is_the_identity() {
 /// maps a registered code to its own variant, so every constructible value round-trips.
 #[test]
 fn unknown_reason_never_collides_with_a_registered_code() {
-    for code in 0..9u16 {
+    for code in 0..11u16 {
         let r = Reason::unknown(code);
         assert!(!matches!(r, Reason::Unknown { .. }), "code {code}");
         assert_eq!(r.code(), code);
         assert_eq!(Reason::from_code(r.code(), false, 0), r);
     }
-    for code in 9..=u16::MAX {
+    for code in 11..=u16::MAX {
         let r = Reason::unknown(code);
         assert!(matches!(r, Reason::Unknown { .. }));
         assert_eq!(Reason::from_code(r.code(), false, 0), r);
