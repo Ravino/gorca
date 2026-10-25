@@ -35,7 +35,8 @@ const EXEMPT: &[&str] = &[
     // The role resolution of the fusion (an engine password role is never relabelled): it is the
     // source of the fused role, not a sink.
     "crates/gorca-sem-atspi/src/roles.rs",
-    // The entry half of the question.
+    // The definition of `is_secret_role` (one comparison); every sink in the file asks
+    // `is_secret_entry`.
     "crates/gorca-present/src/compose.rs",
     "xtask/",
 ];

@@ -4303,3 +4303,23 @@ fn a_toolkit_password_entry_with_a_fused_text_box_role_is_secret_in_every_browse
     assert!(snap.value.is_none());
     assert!(snap.is_sensitive());
 }
+
+/// Reviewer audit (M22c part 2): line reading and say-all describe a flat range; the text the
+/// mirror holds under a secret field must not be in it either.
+#[test]
+fn audit_line_reading_never_speaks_the_text_under_a_secret_field() {
+    let d = toolkit_password_doc();
+    let lo = d
+        .preorder()
+        .find(|id| d.node(*id).is_some_and(|v| v.text == Some("pre ")))
+        .and_then(|id| d.offset_of(id))
+        .expect("start");
+    let hi = d
+        .preorder()
+        .find(|id| d.node(*id).is_some_and(|v| v.text == Some(" post")))
+        .and_then(|id| d.offset_of(id))
+        .expect("end")
+        + 5;
+    let said = format!("{:?}", super::present::describe(&d, lo, hi));
+    assert!(!said.contains("hunter2"), "{said}");
+}

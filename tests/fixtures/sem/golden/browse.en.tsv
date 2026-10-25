@@ -2235,10 +2235,10 @@ chromium/m8-forms	4	range	Role:link | Said:First link
 chromium/m8-forms	4	range-from	Role:link | Said:First link
 chromium/m8-forms	5	range	Role:link | Said:First link
 chromium/m8-forms	5	range-from	Role:link | Said:First link
-chromium/m8-forms	6	range	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:7 bullet | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:unavailable | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here | Said:Delivery | Said:Post | Role:radio button | State:not checked | Said:Courier | Role:radio button | State:checked | Said:Gift wrap | Role:check box | State:not checked | Said:Mixed box | Role:check box | State:not checked | Said:Size | Role:combo box | State:collapsed | Said:Small | Said:Medium | Said:Large | Said:Toppings | Said:Ham | Said:Cheese | Said:Olive | Said:Level | Role:slider | Said:Quantity | Role:spin button | Said:2 | Role:button | Said:Save profile | Role:button | State:collapsed | State:submenu | Said:Options menu
-chromium/m8-forms	6	range-from	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:7 bullet | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:unavailable | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here | Said:Delivery | Said:Post | Role:radio button | State:not checked | Said:Courier | Role:radio button | State:checked | Said:Gift wrap | Role:check box | State:not checked | Said:Mixed box | Role:check box | State:not checked | Said:Size | Role:combo box | State:collapsed | Said:Small | Said:Medium | Said:Large | Said:Toppings | Said:Ham | Said:Cheese | Said:Olive | Said:Level | Role:slider | Said:Quantity | Role:spin button | Said:2 | Role:button | Said:Save profile | Role:button | State:collapsed | State:submenu | Said:Options menu
-chromium/m8-forms	7	range	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:7 bullet | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:unavailable | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here
-chromium/m8-forms	7	range-from	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:7 bullet | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:unavailable | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here
+chromium/m8-forms	6	range	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:unavailable | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here | Said:Delivery | Said:Post | Role:radio button | State:not checked | Said:Courier | Role:radio button | State:checked | Said:Gift wrap | Role:check box | State:not checked | Said:Mixed box | Role:check box | State:not checked | Said:Size | Role:combo box | State:collapsed | Said:Small | Said:Medium | Said:Large | Said:Toppings | Said:Ham | Said:Cheese | Said:Olive | Said:Level | Role:slider | Said:Quantity | Role:spin button | Said:2 | Role:button | Said:Save profile | Role:button | State:collapsed | State:submenu | Said:Options menu
+chromium/m8-forms	6	range-from	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:unavailable | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here | Said:Delivery | Said:Post | Role:radio button | State:not checked | Said:Courier | Role:radio button | State:checked | Said:Gift wrap | Role:check box | State:not checked | Said:Mixed box | Role:check box | State:not checked | Said:Size | Role:combo box | State:collapsed | Said:Small | Said:Medium | Said:Large | Said:Toppings | Said:Ham | Said:Cheese | Said:Olive | Said:Level | Role:slider | Said:Quantity | Role:spin button | Said:2 | Role:button | Said:Save profile | Role:button | State:collapsed | State:submenu | Said:Options menu
+chromium/m8-forms	7	range	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:unavailable | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here
+chromium/m8-forms	7	range-from	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:unavailable | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here
 chromium/m8-forms	8	range	Said:Account
 chromium/m8-forms	8	range-from	Said:Account
 chromium/m8-forms	9	range	Said:Profile form | Role:form | Said:Account
@@ -2253,16 +2253,16 @@ chromium/m8-forms	13	range	Role:edit | Said:Ada
 chromium/m8-forms	13	range-from	Role:edit | Said:Ada
 chromium/m8-forms	14	range	Role:edit | Said:Ada
 chromium/m8-forms	14	range-from	Role:edit | Said:Ada
-chromium/m8-forms	15	range	Said:Secret | Role:password edit | Said:7 bullet
-chromium/m8-forms	15	range-from	Said:Secret | Role:password edit | Said:7 bullet
+chromium/m8-forms	15	range	Said:Secret | Role:password edit
+chromium/m8-forms	15	range-from	Said:Secret | Role:password edit
 chromium/m8-forms	16	range	Said:Secret
 chromium/m8-forms	16	range-from	Said:Secret
 chromium/m8-forms	17	range	Said:Secret
 chromium/m8-forms	17	range-from	Said:Secret
-chromium/m8-forms	18	range	Role:password edit | Said:7 bullet
-chromium/m8-forms	18	range-from	Role:password edit | Said:7 bullet
-chromium/m8-forms	19	range	Role:password edit | Said:7 bullet
-chromium/m8-forms	19	range-from	Role:password edit | Said:7 bullet
+chromium/m8-forms	18	range	Role:password edit
+chromium/m8-forms	18	range-from	Role:password edit
+chromium/m8-forms	19	range	Role:password edit
+chromium/m8-forms	19	range-from	Role:password edit
 chromium/m8-forms	20	range	Said:Notes | Role:edit | Said:Line one\nLine two
 chromium/m8-forms	20	range-from	Said:Notes | Role:edit | Said:Line one\nLine two
 chromium/m8-forms	21	range	Said:Notes
@@ -2299,12 +2299,12 @@ chromium/m8-forms	34	line
 chromium/m8-forms	34	line-from	
 chromium/m8-forms	34	range	Role:edit | State:unavailable | Said:off
 chromium/m8-forms	34	range-from	Role:edit | State:unavailable | Said:off
-chromium/m8-forms	35	block	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:7 bullet
+chromium/m8-forms	35	block	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit
 chromium/m8-forms	35	line	
 chromium/m8-forms	35	line-from	
 chromium/m8-forms	35	range	Said:Required | Role:edit | State:required | State:blank | Said:Help text for required
 chromium/m8-forms	35	range-from	Said:Required | Role:edit | State:required | State:blank | Said:Help text for required
-chromium/m8-forms	36	block	Said:Profile form | Role:form | Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:7 bullet | Said:Notes | Role:edit | Said:Line one
+chromium/m8-forms	36	block	Said:Profile form | Role:form | Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one
 chromium/m8-forms	36	line	Said:Profile form | Role:form | Said:Account
 chromium/m8-forms	36	line-from	Said:Account
 chromium/m8-forms	36	range	Said:Required
@@ -2323,7 +2323,7 @@ chromium/m8-forms	42	range	Said:Invalid
 chromium/m8-forms	42	range-from	Said:Invalid
 chromium/m8-forms	43	range	Said:Invalid
 chromium/m8-forms	43	range-from	Said:Invalid
-chromium/m8-forms	44	block	Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:7 bullet | Said:Notes | Role:edit | Said:Line one\nLine two
+chromium/m8-forms	44	block	Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two
 chromium/m8-forms	44	line	Said:Full name | Role:edit | Said:Ada
 chromium/m8-forms	44	line-from	Said:Full name | Role:edit | Said:Ada
 chromium/m8-forms	44	range	Role:edit | State:invalid entry | Said:Error text here | Said:bad
@@ -2352,9 +2352,9 @@ chromium/m8-forms	55	range	Said:Size | Role:combo box | State:collapsed | Said:S
 chromium/m8-forms	55	range-from	Said:Size | Role:combo box | State:collapsed | Said:Small | Said:Medium | Said:Large
 chromium/m8-forms	56	range	Said:Size
 chromium/m8-forms	56	range-from	Said:Size
-chromium/m8-forms	57	block	Said:Secret | Role:password edit | Said:7 bullet | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:unavailable | State:read only | Said:fixed
-chromium/m8-forms	57	line	Said:Secret | Role:password edit | Said:7 bullet
-chromium/m8-forms	57	line-from	Said:Secret | Role:password edit | Said:7 bullet
+chromium/m8-forms	57	block	Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:unavailable | State:read only | Said:fixed
+chromium/m8-forms	57	line	Said:Secret | Role:password edit
+chromium/m8-forms	57	line-from	Said:Secret | Role:password edit
 chromium/m8-forms	57	range	Said:Size
 chromium/m8-forms	57	range-from	Said:Size
 chromium/m8-forms	58	range	Role:combo box | State:collapsed | Said:Small | Said:Medium | Said:Large
@@ -11423,10 +11423,10 @@ firefox/m8-forms	4	range	Role:link | Said:First link
 firefox/m8-forms	4	range-from	Role:link | Said:First link
 firefox/m8-forms	5	range	Role:link | Said:First link
 firefox/m8-forms	5	range-from	Role:link | Said:First link
-firefox/m8-forms	6	range	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:●●●●●●● | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:invalid entry | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here | Said:Delivery | Role:radio button | State:not checked | Said:Post | Role:radio button | State:checked | Said:Courier | Role:check box | State:not checked | Said:Gift wrap | Role:check box | State:not checked | Said:Mixed box | Said:Size | Role:combo box | State:collapsed | Said:Toppings | Said:Ham | Said:Cheese | Said:Olive | Said:Level | Role:slider | Said:Quantity | Role:spin button | Said:2 | Role:button | Said:Save profile | Role:button | State:collapsed | State:submenu | Said:Options menu
-firefox/m8-forms	6	range-from	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:●●●●●●● | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:invalid entry | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here | Said:Delivery | Role:radio button | State:not checked | Said:Post | Role:radio button | State:checked | Said:Courier | Role:check box | State:not checked | Said:Gift wrap | Role:check box | State:not checked | Said:Mixed box | Said:Size | Role:combo box | State:collapsed | Said:Toppings | Said:Ham | Said:Cheese | Said:Olive | Said:Level | Role:slider | Said:Quantity | Role:spin button | Said:2 | Role:button | Said:Save profile | Role:button | State:collapsed | State:submenu | Said:Options menu
-firefox/m8-forms	7	range	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:●●●●●●● | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:invalid entry | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here
-firefox/m8-forms	7	range-from	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:●●●●●●● | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:invalid entry | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here
+firefox/m8-forms	6	range	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:invalid entry | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here | Said:Delivery | Role:radio button | State:not checked | Said:Post | Role:radio button | State:checked | Said:Courier | Role:check box | State:not checked | Said:Gift wrap | Role:check box | State:not checked | Said:Mixed box | Said:Size | Role:combo box | State:collapsed | Said:Toppings | Said:Ham | Said:Cheese | Said:Olive | Said:Level | Role:slider | Said:Quantity | Role:spin button | Said:2 | Role:button | Said:Save profile | Role:button | State:collapsed | State:submenu | Said:Options menu
+firefox/m8-forms	6	range-from	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:invalid entry | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here | Said:Delivery | Role:radio button | State:not checked | Said:Post | Role:radio button | State:checked | Said:Courier | Role:check box | State:not checked | Said:Gift wrap | Role:check box | State:not checked | Said:Mixed box | Said:Size | Role:combo box | State:collapsed | Said:Toppings | Said:Ham | Said:Cheese | Said:Olive | Said:Level | Role:slider | Said:Quantity | Role:spin button | Said:2 | Role:button | Said:Save profile | Role:button | State:collapsed | State:submenu | Said:Options menu
+firefox/m8-forms	7	range	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:invalid entry | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here
+firefox/m8-forms	7	range-from	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed | Said:Disabled | Role:edit | State:unavailable | Said:off | Said:Required | Role:edit | State:required | State:invalid entry | State:blank | Said:Help text for required | Said:Invalid | Role:edit | State:invalid entry | Said:bad | Said:Error text here
 firefox/m8-forms	8	range	Said:Account
 firefox/m8-forms	8	range-from	Said:Account
 firefox/m8-forms	9	range	Said:Profile form | Role:form | Said:Account
@@ -11443,18 +11443,18 @@ firefox/m8-forms	14	range	Role:edit | Said:Ada
 firefox/m8-forms	14	range-from	Role:edit | Said:Ada
 firefox/m8-forms	15	range	Role:edit | Said:Ada
 firefox/m8-forms	15	range-from	Role:edit | Said:Ada
-firefox/m8-forms	16	range	Said:Secret | Role:password edit | Said:●●●●●●●
-firefox/m8-forms	16	range-from	Said:Secret | Role:password edit | Said:●●●●●●●
+firefox/m8-forms	16	range	Said:Secret | Role:password edit
+firefox/m8-forms	16	range-from	Said:Secret | Role:password edit
 firefox/m8-forms	17	range	Said:Secret
 firefox/m8-forms	17	range-from	Said:Secret
 firefox/m8-forms	18	range	Said:Secret
 firefox/m8-forms	18	range-from	Said:Secret
 firefox/m8-forms	19	range	
 firefox/m8-forms	19	range-from	
-firefox/m8-forms	20	range	Role:password edit | Said:●●●●●●●
-firefox/m8-forms	20	range-from	Role:password edit | Said:●●●●●●●
-firefox/m8-forms	21	range	Role:password edit | Said:●●●●●●●
-firefox/m8-forms	21	range-from	Role:password edit | Said:●●●●●●●
+firefox/m8-forms	20	range	Role:password edit
+firefox/m8-forms	20	range-from	Role:password edit
+firefox/m8-forms	21	range	Role:password edit
+firefox/m8-forms	21	range-from	Role:password edit
 firefox/m8-forms	22	range	Said:Notes | Role:edit | Said:Line one\nLine two
 firefox/m8-forms	22	range-from	Said:Notes | Role:edit | Said:Line one\nLine two
 firefox/m8-forms	23	block	Role:link | Said:First link | Said:Account
@@ -11487,12 +11487,12 @@ firefox/m8-forms	34	line
 firefox/m8-forms	34	line-from	
 firefox/m8-forms	34	range	Said:Disabled | Role:edit | State:unavailable | Said:off
 firefox/m8-forms	34	range-from	Said:Disabled | Role:edit | State:unavailable | Said:off
-firefox/m8-forms	35	block	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:●●●●●●●
+firefox/m8-forms	35	block	Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit
 firefox/m8-forms	35	line	
 firefox/m8-forms	35	line-from	
 firefox/m8-forms	35	range	Said:Disabled
 firefox/m8-forms	35	range-from	Said:Disabled
-firefox/m8-forms	36	block	Said:Profile form | Role:form | Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:●●●●●●● | Said:Notes | Role:edit | Said:Line one
+firefox/m8-forms	36	block	Said:Profile form | Role:form | Said:Account | Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one
 firefox/m8-forms	36	line	Said:Profile form | Role:form | Said:Account
 firefox/m8-forms	36	line-from	Said:Account
 firefox/m8-forms	36	range	Said:Disabled
@@ -11511,7 +11511,7 @@ firefox/m8-forms	42	range	Said:Required
 firefox/m8-forms	42	range-from	Said:Required
 firefox/m8-forms	43	range	
 firefox/m8-forms	43	range-from	
-firefox/m8-forms	44	block	Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:●●●●●●● | Said:Notes | Role:edit | Said:Line one\nLine two
+firefox/m8-forms	44	block	Said:Full name | Role:edit | Said:Ada | Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two
 firefox/m8-forms	44	line	Said:Full name | Role:edit | Said:Ada
 firefox/m8-forms	44	line-from	Said:Full name | Role:edit | Said:Ada
 firefox/m8-forms	44	range	Role:edit | State:required | State:invalid entry | State:blank
@@ -11542,9 +11542,9 @@ firefox/m8-forms	56	range	Said:Error text here
 firefox/m8-forms	56	range-from	Said:Error text here
 firefox/m8-forms	57	range	Said:Delivery | Role:radio button | State:not checked | Said:Post | Role:radio button | State:checked | Said:Courier | Role:check box | State:not checked | Said:Gift wrap | Role:check box | State:not checked | Said:Mixed box
 firefox/m8-forms	57	range-from	Said:Delivery | Role:radio button | State:not checked | Said:Post | Role:radio button | State:checked | Said:Courier | Role:check box | State:not checked | Said:Gift wrap | Role:check box | State:not checked | Said:Mixed box
-firefox/m8-forms	58	block	Said:Secret | Role:password edit | Said:●●●●●●● | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed
-firefox/m8-forms	58	line	Said:Secret | Role:password edit | Said:●●●●●●●
-firefox/m8-forms	58	line-from	Said:Secret | Role:password edit | Said:●●●●●●●
+firefox/m8-forms	58	block	Said:Secret | Role:password edit | Said:Notes | Role:edit | Said:Line one\nLine two | Said:Read only | Role:edit | State:read only | Said:fixed
+firefox/m8-forms	58	line	Said:Secret | Role:password edit
+firefox/m8-forms	58	line-from	Said:Secret | Role:password edit
 firefox/m8-forms	58	range	Said:Delivery
 firefox/m8-forms	58	range-from	Said:Delivery
 firefox/m8-forms	59	range	Said:Delivery

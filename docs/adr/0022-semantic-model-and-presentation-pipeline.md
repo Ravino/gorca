@@ -722,16 +722,16 @@ recorded node) guards `trackable`.
 legacy fields). Golden case `info-shape` (collection, container, window, application per node).
 
 * 2026-10-25: the container chain of "where am I" names a form, a radio group, a figure, a
-  presentational node, a log, a timer, a row group, a feed and a comment as containers (the old
-  mapping gave most of them a landmark or filler role, some `Unknown`), and an `alertdialog` is a
-  window as a dialog is. The `whereami` goldens change in 38 of their records per language (76
-  lines of 28296 in `whereami.en.tsv`, same in `.ru`): a control in a Chromium alert dialog now
-  starts with the dialog (as in Firefox, where the dialog already was one), a named log or timer
+  presentational node, a log, a timer, a row group, a feed and a comment as containers, and an
+  `alertdialog` is a window as a dialog is; a container the catalog has no role word for
+  (`roles::UNMAPPED`) is skipped unless it is named (review fix: the web row would say "text").
+  The `whereami` goldens change in 40 records per language against the legacy baseline (80 lines
+  of 28296 in `whereami.en.tsv`, same in `.ru`): a control in a Chromium alert dialog now starts
+  with the dialog (as in Firefox, where the dialog already was one), a named log or timer
   (`Chat log`, `Countdown`) is spoken, an ARIA option exported as a filler no longer says
-  `list item`, a layout table no longer says `panel`; 9 records gain an unnamed container whose
-  role word is `text` (a form, timer or comment the old chain skipped). A rule that kept the old
-  behaviour for those could not be written: the fused role does not say which raw role it came
-  from.
+  `list item`, a layout table no longer says `panel`, a GTK label inside a named label container
+  says that container; 9 records lose an unnamed container that the old chain spoke as `text`
+  (a figure, comment or generic filler).
 * 2026-10-25: the application of the chain is an application node without an author token whose
   parent is absent or was never fetched; an embedded object inside the tree is not one.
 
@@ -806,8 +806,9 @@ exists in this tree; when one is added its record must set `SECRET` for a passwo
 
 * 2026-10-25 (security review): quick navigation to a password field no longer speaks the
   mirror's text under it (Chromium "7 bullet", Firefox seven bullet glyphs): a secret node's
-  description is its name and role only, whatever text the source left under it. 2 records per
-  language in `quicknav.*.tsv`. The browse test uses plain text ("hunter2") under the field, so
+  description is its name and role only, whatever text the source left under it, and line reading
+  and say-all skip the text under a secret field the same way (`browse.*.tsv`: 32 lines per
+  language; `quicknav.*.tsv`: 2 records per language). The browse test uses plain text ("hunter2") under the field, so
   it checks the redaction itself and not the source's masking.
 
 Audit of the part-2 diff (8c615c5c to the tip) for removed secret checks: the three
@@ -817,4 +818,12 @@ text layer still asks `is_sensitive`; every `Role::PasswordEntry` that left a ro
 `SemRole::PasswordBox` in its replacement (text role, dialog-read skip, object marker, category
 `EDIT`, pointer class, description request, label planner), and no test fixture lost its password
 case.
+
+Review fixes (reviewer verdict MERGE-WITH-FIXES, 2026-10-25): line reading skips the text under a
+secret field; `compose` decides the IR's secrecy with `is_secret_entry` (the xtask secret-rule
+exemption for `compose.rs` now covers the definition of `is_secret_role` only); the plugin watch
+rows of both fuse bridges ask the record's mark too (`doc_actor::fuse::rec_is_secret`); where-am-I
+skips an unnamed container the catalog has no role word for. Audit tests un-ignored:
+`audit_line_reading_never_speaks_the_text_under_a_secret_field`,
+`audit_a_marked_text_box_value_is_secret_and_redacted`.
 

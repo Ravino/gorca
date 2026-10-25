@@ -221,7 +221,7 @@ fn row_of(snap: &NodeSnapshot, rec: &SrcRecord) -> Row {
         class: rec.class.clone(),
         aria_role: rec.aria_role.clone(),
         dom_id: rec.dom_id.clone(),
-        secret: Row::is_secret_role(rec.sem.role),
+        secret: crate::doc_actor::fuse::rec_is_secret(rec),
     }
 }
 

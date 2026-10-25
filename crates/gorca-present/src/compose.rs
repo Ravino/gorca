@@ -426,7 +426,7 @@ fn native_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr {
         }
     }
 
-    let secret = sem.role == SemRole::PasswordBox;
+    let secret = is_secret_entry(entry);
     if let Some(v) = sem
         .text
         .as_deref()
@@ -685,6 +685,26 @@ mod tests {
                 .of_kind(FieldKind::DESCRIPTION)
                 .next()
                 .is_none()
+        );
+    }
+
+    /// Reviewer audit (M22c part 2): the source's secret mark on a fused text box must flag the
+    /// value as secret too, as `is_secret_entry` says the entry is secret.
+    #[test]
+    fn audit_a_marked_text_box_value_is_secret_and_redacted() {
+        let mut e = entry(SemRole::TextBox, "Password");
+        e.sem.flags |= gorca_model::sem::SemFlags::SECRET;
+        e.sem.text = Some(Arc::new(SemText {
+            value_text: Some(Arc::from("hunter2")),
+            ..SemText::default()
+        }));
+        assert!(is_secret_entry(&e));
+        let ir = compose(&e, key(), Reason::Focus, CTX).expect("focus");
+        assert!(ir.flags.contains(IrFlags::SECRET), "IR not flagged secret");
+        let red = ir.redacted();
+        assert!(
+            !format!("{:?}", red.ir()).contains("hunter2"),
+            "redacted IR still carries the value"
         );
     }
 

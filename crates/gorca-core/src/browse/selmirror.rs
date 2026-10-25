@@ -174,7 +174,8 @@ pub(super) fn node_is_secret(v: &gorca_doc::web::NodeView<'_>) -> bool {
     )
 }
 
-fn secret(d: &WebDoc, id: DocNodeId) -> bool {
+/// Whether `id` or an ancestor is a secret field (its text is never read, mirrored or copied).
+pub(super) fn secret(d: &WebDoc, id: DocNodeId) -> bool {
     let mut cur = Some(id);
     for _ in 0..64 {
         let Some(n) = cur else { return false };

@@ -202,9 +202,9 @@ chromium/aria-props	50	brief	whereami	ориентир | текст
 chromium/aria-props	50	r1	whereami	ориентир | текст
 chromium/aria-props	50	r2	whereami	SEM aria-props документ | ориентир | текст
 chromium/aria-props	50	r3	whereami	текст, без названия
-chromium/aria-props	51	brief	whereami	текст | log (implicit polite) текст
-chromium/aria-props	51	r1	whereami	текст | log (implicit polite) текст
-chromium/aria-props	51	r2	whereami	SEM aria-props документ | ориентир | текст | log (implicit polite) текст
+chromium/aria-props	51	brief	whereami	log (implicit polite) текст
+chromium/aria-props	51	r1	whereami	log (implicit polite) текст
+chromium/aria-props	51	r2	whereami	SEM aria-props документ | ориентир | log (implicit polite) текст
 chromium/aria-props	51	r3	whereami	l o g пробел ( i m p l i c i t пробел p o l i t e )
 chromium/aria-props	52	brief	whereami	ориентир | уведомление
 chromium/aria-props	52	r1	whereami	ориентир | уведомление
@@ -562,13 +562,13 @@ chromium/aria-props	140	brief	whereami	ориентир | текст
 chromium/aria-props	140	r1	whereami	ориентир | текст
 chromium/aria-props	140	r2	whereami	SEM aria-props документ | ориентир | текст
 chromium/aria-props	140	r3	whereami	текст, без названия
-chromium/aria-props	141	brief	whereami	текст | метка
-chromium/aria-props	141	r1	whereami	текст | метка
-chromium/aria-props	141	r2	whereami	SEM aria-props документ | ориентир | текст | метка
+chromium/aria-props	141	brief	whereami	метка
+chromium/aria-props	141	r1	whereami	метка
+chromium/aria-props	141	r2	whereami	SEM aria-props документ | ориентир | метка
 chromium/aria-props	141	r3	whereami	метка, без названия
 chromium/aria-props	142	brief	whereami	Fig caption текст
 chromium/aria-props	142	r1	whereami	Fig caption текст
-chromium/aria-props	142	r2	whereami	SEM aria-props документ | ориентир | текст | Fig caption текст
+chromium/aria-props	142	r2	whereami	SEM aria-props документ | ориентир | Fig caption текст
 chromium/aria-props	142	r3	whereami	F i g пробел c a p t i o n
 chromium/aria-props	143	brief	whereami	ориентир | ad список
 chromium/aria-props	143	r1	whereami	ориентир | ad список
@@ -2218,9 +2218,9 @@ chromium/forms	86	brief	whereami	ориентир | текст
 chromium/forms	86	r1	whereami	ориентир | текст
 chromium/forms	86	r2	whereami	SEM forms документ | ориентир | текст
 chromium/forms	86	r3	whereami	текст, без названия
-chromium/forms	87	brief	whereami	текст | In unnamed form поле ввода
-chromium/forms	87	r1	whereami	текст | In unnamed form поле ввода
-chromium/forms	87	r2	whereami	SEM forms документ | ориентир | текст | In unnamed form поле ввода
+chromium/forms	87	brief	whereami	In unnamed form поле ввода
+chromium/forms	87	r1	whereami	In unnamed form поле ввода
+chromium/forms	87	r2	whereami	SEM forms документ | ориентир | In unnamed form поле ввода
 chromium/forms	87	r3	whereami	I n пробел u n n a m e d пробел f o r m
 chromium/forms	88	brief	whereami	ориентир | Site search ориентир
 chromium/forms	88	r1	whereami	ориентир | Site search ориентир
@@ -3566,17 +3566,17 @@ chromium/m8-landmarks	58	brief	whereami	ориентир | текст
 chromium/m8-landmarks	58	r1	whereami	ориентир | текст
 chromium/m8-landmarks	58	r2	whereami	M8 Landmarks документ | ориентир | текст
 chromium/m8-landmarks	58	r3	whereami	текст, без названия
-chromium/m8-landmarks	59	brief	whereami	текст | текст
-chromium/m8-landmarks	59	r1	whereami	текст | текст
-chromium/m8-landmarks	59	r2	whereami	M8 Landmarks документ | ориентир | текст | текст
+chromium/m8-landmarks	59	brief	whereami	текст
+chromium/m8-landmarks	59	r1	whereami	текст
+chromium/m8-landmarks	59	r2	whereami	M8 Landmarks документ | ориентир | текст
 chromium/m8-landmarks	59	r3	whereami	текст, без названия
 chromium/m8-landmarks	60	brief	whereami	Unnamed form field текст
 chromium/m8-landmarks	60	r1	whereami	Unnamed form field текст
-chromium/m8-landmarks	60	r2	whereami	M8 Landmarks документ | ориентир | текст | Unnamed form field текст
+chromium/m8-landmarks	60	r2	whereami	M8 Landmarks документ | ориентир | Unnamed form field текст
 chromium/m8-landmarks	60	r3	whereami	U n n a m e d пробел f o r m пробел f i e l d
 chromium/m8-landmarks	61	brief	whereami	Unnamed form field поле ввода
 chromium/m8-landmarks	61	r1	whereami	Unnamed form field поле ввода
-chromium/m8-landmarks	61	r2	whereami	M8 Landmarks документ | ориентир | текст | Unnamed form field поле ввода
+chromium/m8-landmarks	61	r2	whereami	M8 Landmarks документ | ориентир | Unnamed form field поле ввода
 chromium/m8-landmarks	61	r3	whereami	U n n a m e d пробел f o r m пробел f i e l d
 chromium/m8-landmarks	62	brief	whereami	M8 Landmarks документ | Related links ориентир
 chromium/m8-landmarks	62	r1	whereami	M8 Landmarks документ | Related links ориентир
@@ -3794,9 +3794,9 @@ chromium/m8-live	39	brief	whereami	M8 Live regions документ | текст
 chromium/m8-live	39	r1	whereami	M8 Live regions документ | текст
 chromium/m8-live	39	r2	whereami	M8 Live regions документ | текст
 chromium/m8-live	39	r3	whereami	текст, без названия
-chromium/m8-live	40	brief	whereami	текст | 00:00 текст
-chromium/m8-live	40	r1	whereami	текст | 00:00 текст
-chromium/m8-live	40	r2	whereami	M8 Live regions документ | текст | 00:00 текст
+chromium/m8-live	40	brief	whereami	00:00 текст
+chromium/m8-live	40	r1	whereami	00:00 текст
+chromium/m8-live	40	r2	whereami	M8 Live regions документ | 00:00 текст
 chromium/m8-live	40	r3	whereami	0 0 : 0 0
 chromium/m8-quicknav	0	brief	whereami	M8 Quick navigation документ
 chromium/m8-quicknav	0	r1	whereami	M8 Quick navigation документ
@@ -4446,9 +4446,9 @@ chromium/m8-quicknav	161	brief	whereami	M8 Quick navigation документ | �
 chromium/m8-quicknav	161	r1	whereami	M8 Quick navigation документ | текст
 chromium/m8-quicknav	161	r2	whereami	M8 Quick navigation документ | текст
 chromium/m8-quicknav	161	r3	whereami	текст, без названия
-chromium/m8-quicknav	162	brief	whereami	текст | Comment body текст
-chromium/m8-quicknav	162	r1	whereami	текст | Comment body текст
-chromium/m8-quicknav	162	r2	whereami	M8 Quick navigation документ | текст | Comment body текст
+chromium/m8-quicknav	162	brief	whereami	Comment body текст
+chromium/m8-quicknav	162	r1	whereami	Comment body текст
+chromium/m8-quicknav	162	r2	whereami	M8 Quick navigation документ | Comment body текст
 chromium/m8-quicknav	162	r3	whereami	C o m m e n t пробел b o d y
 chromium/m8-quicknav	163	brief	whereami	M8 Quick navigation документ | абзац
 chromium/m8-quicknav	163	r1	whereami	M8 Quick navigation документ | абзац
@@ -4518,17 +4518,17 @@ chromium/m8-quicknav	179	brief	whereami	M8 Quick navigation документ | �
 chromium/m8-quicknav	179	r1	whereami	M8 Quick navigation документ | текст
 chromium/m8-quicknav	179	r2	whereami	M8 Quick navigation документ | текст
 chromium/m8-quicknav	179	r3	whereami	текст, без названия
-chromium/m8-quicknav	180	brief	whereami	текст | Figure picture изображение
-chromium/m8-quicknav	180	r1	whereami	текст | Figure picture изображение
-chromium/m8-quicknav	180	r2	whereami	M8 Quick navigation документ | текст | Figure picture изображение
+chromium/m8-quicknav	180	brief	whereami	Figure picture изображение
+chromium/m8-quicknav	180	r1	whereami	Figure picture изображение
+chromium/m8-quicknav	180	r2	whereami	M8 Quick navigation документ | Figure picture изображение
 chromium/m8-quicknav	180	r3	whereami	F i g u r e пробел p i c t u r e
-chromium/m8-quicknav	181	brief	whereami	текст | метка
-chromium/m8-quicknav	181	r1	whereami	текст | метка
-chromium/m8-quicknav	181	r2	whereami	M8 Quick navigation документ | текст | метка
+chromium/m8-quicknav	181	brief	whereami	метка
+chromium/m8-quicknav	181	r1	whereami	метка
+chromium/m8-quicknav	181	r2	whereami	M8 Quick navigation документ | метка
 chromium/m8-quicknav	181	r3	whereami	метка, без названия
 chromium/m8-quicknav	182	brief	whereami	Figure caption text текст
 chromium/m8-quicknav	182	r1	whereami	Figure caption text текст
-chromium/m8-quicknav	182	r2	whereami	M8 Quick navigation документ | текст | Figure caption text текст
+chromium/m8-quicknav	182	r2	whereami	M8 Quick navigation документ | Figure caption text текст
 chromium/m8-quicknav	182	r3	whereami	F i g u r e пробел c a p t i o n пробел t e x t
 chromium/m8-quicknav	183	brief	whereami	M8 Quick navigation документ | Group legend группа
 chromium/m8-quicknav	183	r1	whereami	M8 Quick navigation документ | Group legend группа
@@ -7318,17 +7318,17 @@ chromium/structure	144	brief	whereami	ориентир | текст
 chromium/structure	144	r1	whereami	ориентир | текст
 chromium/structure	144	r2	whereami	SEM structure документ | ориентир | текст
 chromium/structure	144	r3	whereami	текст, без названия
-chromium/structure	145	brief	whereami	текст | A red square изображение
-chromium/structure	145	r1	whereami	текст | A red square изображение
-chromium/structure	145	r2	whereami	SEM structure документ | ориентир | текст | A red square изображение
+chromium/structure	145	brief	whereami	A red square изображение
+chromium/structure	145	r1	whereami	A red square изображение
+chromium/structure	145	r2	whereami	SEM structure документ | ориентир | A red square изображение
 chromium/structure	145	r3	whereami	A пробел r e d пробел s q u a r e
-chromium/structure	146	brief	whereami	текст | метка
-chromium/structure	146	r1	whereami	текст | метка
-chromium/structure	146	r2	whereami	SEM structure документ | ориентир | текст | метка
+chromium/structure	146	brief	whereami	метка
+chromium/structure	146	r1	whereami	метка
+chromium/structure	146	r2	whereami	SEM structure документ | ориентир | метка
 chromium/structure	146	r3	whereami	метка, без названия
 chromium/structure	147	brief	whereami	Figure caption текст
 chromium/structure	147	r1	whereami	Figure caption текст
-chromium/structure	147	r2	whereami	SEM structure документ | ориентир | текст | Figure caption текст
+chromium/structure	147	r2	whereami	SEM structure документ | ориентир | Figure caption текст
 chromium/structure	147	r3	whereami	F i g u r e пробел c a p t i o n
 chromium/structure	148	brief	whereami	ориентир | Alt text изображение
 chromium/structure	148	r1	whereami	ориентир | Alt text изображение
@@ -7482,9 +7482,9 @@ chromium/structure	185	brief	whereami	ориентир | текст
 chromium/structure	185	r1	whereami	ориентир | текст
 chromium/structure	185	r2	whereami	SEM structure документ | ориентир | текст
 chromium/structure	185	r3	whereami	текст, без названия
-chromium/structure	186	brief	whereami	текст | A comment текст
-chromium/structure	186	r1	whereami	текст | A comment текст
-chromium/structure	186	r2	whereami	SEM structure документ | ориентир | текст | A comment текст
+chromium/structure	186	brief	whereami	A comment текст
+chromium/structure	186	r1	whereami	A comment текст
+chromium/structure	186	r2	whereami	SEM structure документ | ориентир | A comment текст
 chromium/structure	186	r3	whereami	A пробел c o m m e n t
 chromium/structure	187	brief	whereami	ориентир | Term role элемент списка
 chromium/structure	187	r1	whereami	ориентир | Term role элемент списка
@@ -12862,9 +12862,9 @@ firefox/forms	75	brief	whereami	ориентир | текст
 firefox/forms	75	r1	whereami	ориентир | текст
 firefox/forms	75	r2	whereami	SEM forms документ | ориентир | текст
 firefox/forms	75	r3	whereami	текст, без названия
-firefox/forms	76	brief	whereami	текст | In unnamed form поле ввода
-firefox/forms	76	r1	whereami	текст | In unnamed form поле ввода
-firefox/forms	76	r2	whereami	SEM forms документ | ориентир | текст | In unnamed form поле ввода
+firefox/forms	76	brief	whereami	In unnamed form поле ввода
+firefox/forms	76	r1	whereami	In unnamed form поле ввода
+firefox/forms	76	r2	whereami	SEM forms документ | ориентир | In unnamed form поле ввода
 firefox/forms	76	r3	whereami	I n пробел u n n a m e d пробел f o r m
 firefox/forms	77	brief	whereami	ориентир | Site search ориентир
 firefox/forms	77	r1	whereami	ориентир | Site search ориентир
@@ -13570,17 +13570,17 @@ firefox/m8-iframes	28	brief	whereami	Form frame документ | текст
 firefox/m8-iframes	28	r1	whereami	Form frame документ | текст
 firefox/m8-iframes	28	r2	whereami	M8 Iframes документ | Form frame документ | текст
 firefox/m8-iframes	28	r3	whereami	текст, без названия
-firefox/m8-iframes	29	brief	whereami	текст | Frame field текст
-firefox/m8-iframes	29	r1	whereami	текст | Frame field текст
-firefox/m8-iframes	29	r2	whereami	M8 Iframes документ | Form frame документ | текст | Frame field текст
+firefox/m8-iframes	29	brief	whereami	Frame field текст
+firefox/m8-iframes	29	r1	whereami	Frame field текст
+firefox/m8-iframes	29	r2	whereami	M8 Iframes документ | Form frame документ | Frame field текст
 firefox/m8-iframes	29	r3	whereami	F r a m e пробел f i e l d
-firefox/m8-iframes	30	brief	whereami	текст | Frame field поле ввода
-firefox/m8-iframes	30	r1	whereami	текст | Frame field поле ввода
-firefox/m8-iframes	30	r2	whereami	M8 Iframes документ | Form frame документ | текст | Frame field поле ввода
+firefox/m8-iframes	30	brief	whereami	Frame field поле ввода
+firefox/m8-iframes	30	r1	whereami	Frame field поле ввода
+firefox/m8-iframes	30	r2	whereami	M8 Iframes документ | Form frame документ | Frame field поле ввода
 firefox/m8-iframes	30	r3	whereami	F r a m e пробел f i e l d
-firefox/m8-iframes	31	brief	whereami	текст | Frame submit кнопка
-firefox/m8-iframes	31	r1	whereami	текст | Frame submit кнопка
-firefox/m8-iframes	31	r2	whereami	M8 Iframes документ | Form frame документ | текст | Frame submit кнопка
+firefox/m8-iframes	31	brief	whereami	Frame submit кнопка
+firefox/m8-iframes	31	r1	whereami	Frame submit кнопка
+firefox/m8-iframes	31	r2	whereami	M8 Iframes документ | Form frame документ | Frame submit кнопка
 firefox/m8-iframes	31	r3	whereami	F r a m e пробел s u b m i t
 firefox/m8-iframes	32	brief	whereami	M8 Iframes документ | Srcdoc frame
 firefox/m8-iframes	32	r1	whereami	M8 Iframes документ | Srcdoc frame
@@ -13834,13 +13834,13 @@ firefox/m8-landmarks	35	brief	whereami	ориентир | текст
 firefox/m8-landmarks	35	r1	whereami	ориентир | текст
 firefox/m8-landmarks	35	r2	whereami	M8 Landmarks документ | ориентир | текст
 firefox/m8-landmarks	35	r3	whereami	текст, без названия
-firefox/m8-landmarks	36	brief	whereami	текст | Unnamed form field текст
-firefox/m8-landmarks	36	r1	whereami	текст | Unnamed form field текст
-firefox/m8-landmarks	36	r2	whereami	M8 Landmarks документ | ориентир | текст | Unnamed form field текст
+firefox/m8-landmarks	36	brief	whereami	Unnamed form field текст
+firefox/m8-landmarks	36	r1	whereami	Unnamed form field текст
+firefox/m8-landmarks	36	r2	whereami	M8 Landmarks документ | ориентир | Unnamed form field текст
 firefox/m8-landmarks	36	r3	whereami	U n n a m e d пробел f o r m пробел f i e l d
 firefox/m8-landmarks	37	brief	whereami	Unnamed form field поле ввода
 firefox/m8-landmarks	37	r1	whereami	Unnamed form field поле ввода
-firefox/m8-landmarks	37	r2	whereami	M8 Landmarks документ | ориентир | текст | Unnamed form field поле ввода
+firefox/m8-landmarks	37	r2	whereami	M8 Landmarks документ | ориентир | Unnamed form field поле ввода
 firefox/m8-landmarks	37	r3	whereami	U n n a m e d пробел f o r m пробел f i e l d
 firefox/m8-landmarks	38	brief	whereami	M8 Landmarks документ | Related links ориентир
 firefox/m8-landmarks	38	r1	whereami	M8 Landmarks документ | Related links ориентир
@@ -16506,33 +16506,33 @@ firefox/tables	28	brief	whereami	Aria table таблица | текст
 firefox/tables	28	r1	whereami	Aria table таблица | текст
 firefox/tables	28	r2	whereami	SEM tables документ | ориентир | Aria table таблица | текст
 firefox/tables	28	r3	whereami	текст, без названия
-firefox/tables	29	brief	whereami	Aria table таблица | текст | Name Qty строка
-firefox/tables	29	r1	whereami	Aria table таблица | текст | Name Qty строка
-firefox/tables	29	r2	whereami	SEM tables документ | ориентир | Aria table таблица | текст | Name Qty строка
+firefox/tables	29	brief	whereami	Aria table таблица | Name Qty строка
+firefox/tables	29	r1	whereami	Aria table таблица | Name Qty строка
+firefox/tables	29	r2	whereami	SEM tables документ | ориентир | Aria table таблица | Name Qty строка
 firefox/tables	29	r3	whereami	N a m e пробел Q t y
 firefox/tables	30	brief	whereami	Aria table таблица | Name Qty строка | Name заголовок столбца
 firefox/tables	30	r1	whereami	Aria table таблица | Name Qty строка | Name заголовок столбца
-firefox/tables	30	r2	whereami	SEM tables документ | ориентир | Aria table таблица | текст | Name Qty строка | Name заголовок столбца
+firefox/tables	30	r2	whereami	SEM tables документ | ориентир | Aria table таблица | Name Qty строка | Name заголовок столбца
 firefox/tables	30	r3	whereami	N a m e
 firefox/tables	31	brief	whereami	Aria table таблица | Name Qty строка | Qty заголовок столбца
 firefox/tables	31	r1	whereami	Aria table таблица | Name Qty строка | Qty заголовок столбца
-firefox/tables	31	r2	whereami	SEM tables документ | ориентир | Aria table таблица | текст | Name Qty строка | Qty заголовок столбца
+firefox/tables	31	r2	whereami	SEM tables документ | ориентир | Aria table таблица | Name Qty строка | Qty заголовок столбца
 firefox/tables	31	r3	whereami	Q t y
 firefox/tables	32	brief	whereami	Aria table таблица | текст
 firefox/tables	32	r1	whereami	Aria table таблица | текст
 firefox/tables	32	r2	whereami	SEM tables документ | ориентир | Aria table таблица | текст
 firefox/tables	32	r3	whereami	текст, без названия
-firefox/tables	33	brief	whereami	Aria table таблица | текст | Widget 7 строка
-firefox/tables	33	r1	whereami	Aria table таблица | текст | Widget 7 строка
-firefox/tables	33	r2	whereami	SEM tables документ | ориентир | Aria table таблица | текст | Widget 7 строка
+firefox/tables	33	brief	whereami	Aria table таблица | Widget 7 строка
+firefox/tables	33	r1	whereami	Aria table таблица | Widget 7 строка
+firefox/tables	33	r2	whereami	SEM tables документ | ориентир | Aria table таблица | Widget 7 строка
 firefox/tables	33	r3	whereami	W i d g e t пробел 7
 firefox/tables	34	brief	whereami	Aria table таблица | Widget 7 строка | Widget заголовок строки
 firefox/tables	34	r1	whereami	Aria table таблица | Widget 7 строка | Widget заголовок строки
-firefox/tables	34	r2	whereami	SEM tables документ | ориентир | Aria table таблица | текст | Widget 7 строка | Widget заголовок строки
+firefox/tables	34	r2	whereami	SEM tables документ | ориентир | Aria table таблица | Widget 7 строка | Widget заголовок строки
 firefox/tables	34	r3	whereami	W i d g e t
 firefox/tables	35	brief	whereami	Aria table таблица | Widget 7 строка | 7 ячейка
 firefox/tables	35	r1	whereami	Aria table таблица | Widget 7 строка | 7 ячейка
-firefox/tables	35	r2	whereami	SEM tables документ | ориентир | Aria table таблица | текст | Widget 7 строка | 7 ячейка
+firefox/tables	35	r2	whereami	SEM tables документ | ориентир | Aria table таблица | Widget 7 строка | 7 ячейка
 firefox/tables	35	r3	whereami	7
 firefox/tables	36	brief	whereami	ориентир | Grid таблица
 firefox/tables	36	r1	whereami	ориентир | Grid таблица

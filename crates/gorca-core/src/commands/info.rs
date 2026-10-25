@@ -188,6 +188,11 @@ pub(crate) fn where_am_i_parts(
     for (i, n) in containers.iter().rev() {
         let mut s = String::new();
         let Some(w) = words.get(*i) else { continue };
+        // A container the catalog has no role word for says nothing unless it is named (the web
+        // row would say "text").
+        if w.name.is_none() && gorca_present::roles::UNMAPPED.contains(&role_of(n)) {
+            continue;
+        }
         if let Some(name) = w.name.as_deref() {
             s.push_str(name);
             s.push(' ');

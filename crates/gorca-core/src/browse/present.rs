@@ -382,7 +382,8 @@ fn describe_from_fields(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Said
             } else {
                 let t = doc.text_in(lo, hi);
                 let t = t.trim_matches('\n');
-                if !t.is_empty() {
+                // The text under a secret field is never read, by line or by say-all.
+                if !t.is_empty() && !super::selmirror::secret(doc, id) {
                     out.push(text_run(t));
                 }
             }

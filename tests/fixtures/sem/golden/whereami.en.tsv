@@ -202,9 +202,9 @@ chromium/aria-props	50	brief	whereami	landmark | text
 chromium/aria-props	50	r1	whereami	landmark | text
 chromium/aria-props	50	r2	whereami	SEM aria-props document | landmark | text
 chromium/aria-props	50	r3	whereami	text, no name
-chromium/aria-props	51	brief	whereami	text | log (implicit polite) text
-chromium/aria-props	51	r1	whereami	text | log (implicit polite) text
-chromium/aria-props	51	r2	whereami	SEM aria-props document | landmark | text | log (implicit polite) text
+chromium/aria-props	51	brief	whereami	log (implicit polite) text
+chromium/aria-props	51	r1	whereami	log (implicit polite) text
+chromium/aria-props	51	r2	whereami	SEM aria-props document | landmark | log (implicit polite) text
 chromium/aria-props	51	r3	whereami	l o g space ( i m p l i c i t space p o l i t e )
 chromium/aria-props	52	brief	whereami	landmark | alert
 chromium/aria-props	52	r1	whereami	landmark | alert
@@ -562,13 +562,13 @@ chromium/aria-props	140	brief	whereami	landmark | text
 chromium/aria-props	140	r1	whereami	landmark | text
 chromium/aria-props	140	r2	whereami	SEM aria-props document | landmark | text
 chromium/aria-props	140	r3	whereami	text, no name
-chromium/aria-props	141	brief	whereami	text | label
-chromium/aria-props	141	r1	whereami	text | label
-chromium/aria-props	141	r2	whereami	SEM aria-props document | landmark | text | label
+chromium/aria-props	141	brief	whereami	label
+chromium/aria-props	141	r1	whereami	label
+chromium/aria-props	141	r2	whereami	SEM aria-props document | landmark | label
 chromium/aria-props	141	r3	whereami	label, no name
 chromium/aria-props	142	brief	whereami	Fig caption text
 chromium/aria-props	142	r1	whereami	Fig caption text
-chromium/aria-props	142	r2	whereami	SEM aria-props document | landmark | text | Fig caption text
+chromium/aria-props	142	r2	whereami	SEM aria-props document | landmark | Fig caption text
 chromium/aria-props	142	r3	whereami	F i g space c a p t i o n
 chromium/aria-props	143	brief	whereami	landmark | ad list
 chromium/aria-props	143	r1	whereami	landmark | ad list
@@ -2218,9 +2218,9 @@ chromium/forms	86	brief	whereami	landmark | text
 chromium/forms	86	r1	whereami	landmark | text
 chromium/forms	86	r2	whereami	SEM forms document | landmark | text
 chromium/forms	86	r3	whereami	text, no name
-chromium/forms	87	brief	whereami	text | In unnamed form edit
-chromium/forms	87	r1	whereami	text | In unnamed form edit
-chromium/forms	87	r2	whereami	SEM forms document | landmark | text | In unnamed form edit
+chromium/forms	87	brief	whereami	In unnamed form edit
+chromium/forms	87	r1	whereami	In unnamed form edit
+chromium/forms	87	r2	whereami	SEM forms document | landmark | In unnamed form edit
 chromium/forms	87	r3	whereami	I n space u n n a m e d space f o r m
 chromium/forms	88	brief	whereami	landmark | Site search landmark
 chromium/forms	88	r1	whereami	landmark | Site search landmark
@@ -3566,17 +3566,17 @@ chromium/m8-landmarks	58	brief	whereami	landmark | text
 chromium/m8-landmarks	58	r1	whereami	landmark | text
 chromium/m8-landmarks	58	r2	whereami	M8 Landmarks document | landmark | text
 chromium/m8-landmarks	58	r3	whereami	text, no name
-chromium/m8-landmarks	59	brief	whereami	text | text
-chromium/m8-landmarks	59	r1	whereami	text | text
-chromium/m8-landmarks	59	r2	whereami	M8 Landmarks document | landmark | text | text
+chromium/m8-landmarks	59	brief	whereami	text
+chromium/m8-landmarks	59	r1	whereami	text
+chromium/m8-landmarks	59	r2	whereami	M8 Landmarks document | landmark | text
 chromium/m8-landmarks	59	r3	whereami	text, no name
 chromium/m8-landmarks	60	brief	whereami	Unnamed form field text
 chromium/m8-landmarks	60	r1	whereami	Unnamed form field text
-chromium/m8-landmarks	60	r2	whereami	M8 Landmarks document | landmark | text | Unnamed form field text
+chromium/m8-landmarks	60	r2	whereami	M8 Landmarks document | landmark | Unnamed form field text
 chromium/m8-landmarks	60	r3	whereami	U n n a m e d space f o r m space f i e l d
 chromium/m8-landmarks	61	brief	whereami	Unnamed form field edit
 chromium/m8-landmarks	61	r1	whereami	Unnamed form field edit
-chromium/m8-landmarks	61	r2	whereami	M8 Landmarks document | landmark | text | Unnamed form field edit
+chromium/m8-landmarks	61	r2	whereami	M8 Landmarks document | landmark | Unnamed form field edit
 chromium/m8-landmarks	61	r3	whereami	U n n a m e d space f o r m space f i e l d
 chromium/m8-landmarks	62	brief	whereami	M8 Landmarks document | Related links landmark
 chromium/m8-landmarks	62	r1	whereami	M8 Landmarks document | Related links landmark
@@ -3794,9 +3794,9 @@ chromium/m8-live	39	brief	whereami	M8 Live regions document | text
 chromium/m8-live	39	r1	whereami	M8 Live regions document | text
 chromium/m8-live	39	r2	whereami	M8 Live regions document | text
 chromium/m8-live	39	r3	whereami	text, no name
-chromium/m8-live	40	brief	whereami	text | 00:00 text
-chromium/m8-live	40	r1	whereami	text | 00:00 text
-chromium/m8-live	40	r2	whereami	M8 Live regions document | text | 00:00 text
+chromium/m8-live	40	brief	whereami	00:00 text
+chromium/m8-live	40	r1	whereami	00:00 text
+chromium/m8-live	40	r2	whereami	M8 Live regions document | 00:00 text
 chromium/m8-live	40	r3	whereami	0 0 : 0 0
 chromium/m8-quicknav	0	brief	whereami	M8 Quick navigation document
 chromium/m8-quicknav	0	r1	whereami	M8 Quick navigation document
@@ -4446,9 +4446,9 @@ chromium/m8-quicknav	161	brief	whereami	M8 Quick navigation document | text
 chromium/m8-quicknav	161	r1	whereami	M8 Quick navigation document | text
 chromium/m8-quicknav	161	r2	whereami	M8 Quick navigation document | text
 chromium/m8-quicknav	161	r3	whereami	text, no name
-chromium/m8-quicknav	162	brief	whereami	text | Comment body text
-chromium/m8-quicknav	162	r1	whereami	text | Comment body text
-chromium/m8-quicknav	162	r2	whereami	M8 Quick navigation document | text | Comment body text
+chromium/m8-quicknav	162	brief	whereami	Comment body text
+chromium/m8-quicknav	162	r1	whereami	Comment body text
+chromium/m8-quicknav	162	r2	whereami	M8 Quick navigation document | Comment body text
 chromium/m8-quicknav	162	r3	whereami	C o m m e n t space b o d y
 chromium/m8-quicknav	163	brief	whereami	M8 Quick navigation document | paragraph
 chromium/m8-quicknav	163	r1	whereami	M8 Quick navigation document | paragraph
@@ -4518,17 +4518,17 @@ chromium/m8-quicknav	179	brief	whereami	M8 Quick navigation document | text
 chromium/m8-quicknav	179	r1	whereami	M8 Quick navigation document | text
 chromium/m8-quicknav	179	r2	whereami	M8 Quick navigation document | text
 chromium/m8-quicknav	179	r3	whereami	text, no name
-chromium/m8-quicknav	180	brief	whereami	text | Figure picture image
-chromium/m8-quicknav	180	r1	whereami	text | Figure picture image
-chromium/m8-quicknav	180	r2	whereami	M8 Quick navigation document | text | Figure picture image
+chromium/m8-quicknav	180	brief	whereami	Figure picture image
+chromium/m8-quicknav	180	r1	whereami	Figure picture image
+chromium/m8-quicknav	180	r2	whereami	M8 Quick navigation document | Figure picture image
 chromium/m8-quicknav	180	r3	whereami	F i g u r e space p i c t u r e
-chromium/m8-quicknav	181	brief	whereami	text | label
-chromium/m8-quicknav	181	r1	whereami	text | label
-chromium/m8-quicknav	181	r2	whereami	M8 Quick navigation document | text | label
+chromium/m8-quicknav	181	brief	whereami	label
+chromium/m8-quicknav	181	r1	whereami	label
+chromium/m8-quicknav	181	r2	whereami	M8 Quick navigation document | label
 chromium/m8-quicknav	181	r3	whereami	label, no name
 chromium/m8-quicknav	182	brief	whereami	Figure caption text text
 chromium/m8-quicknav	182	r1	whereami	Figure caption text text
-chromium/m8-quicknav	182	r2	whereami	M8 Quick navigation document | text | Figure caption text text
+chromium/m8-quicknav	182	r2	whereami	M8 Quick navigation document | Figure caption text text
 chromium/m8-quicknav	182	r3	whereami	F i g u r e space c a p t i o n space t e x t
 chromium/m8-quicknav	183	brief	whereami	M8 Quick navigation document | Group legend grouping
 chromium/m8-quicknav	183	r1	whereami	M8 Quick navigation document | Group legend grouping
@@ -7318,17 +7318,17 @@ chromium/structure	144	brief	whereami	landmark | text
 chromium/structure	144	r1	whereami	landmark | text
 chromium/structure	144	r2	whereami	SEM structure document | landmark | text
 chromium/structure	144	r3	whereami	text, no name
-chromium/structure	145	brief	whereami	text | A red square image
-chromium/structure	145	r1	whereami	text | A red square image
-chromium/structure	145	r2	whereami	SEM structure document | landmark | text | A red square image
+chromium/structure	145	brief	whereami	A red square image
+chromium/structure	145	r1	whereami	A red square image
+chromium/structure	145	r2	whereami	SEM structure document | landmark | A red square image
 chromium/structure	145	r3	whereami	A space r e d space s q u a r e
-chromium/structure	146	brief	whereami	text | label
-chromium/structure	146	r1	whereami	text | label
-chromium/structure	146	r2	whereami	SEM structure document | landmark | text | label
+chromium/structure	146	brief	whereami	label
+chromium/structure	146	r1	whereami	label
+chromium/structure	146	r2	whereami	SEM structure document | landmark | label
 chromium/structure	146	r3	whereami	label, no name
 chromium/structure	147	brief	whereami	Figure caption text
 chromium/structure	147	r1	whereami	Figure caption text
-chromium/structure	147	r2	whereami	SEM structure document | landmark | text | Figure caption text
+chromium/structure	147	r2	whereami	SEM structure document | landmark | Figure caption text
 chromium/structure	147	r3	whereami	F i g u r e space c a p t i o n
 chromium/structure	148	brief	whereami	landmark | Alt text image
 chromium/structure	148	r1	whereami	landmark | Alt text image
@@ -7482,9 +7482,9 @@ chromium/structure	185	brief	whereami	landmark | text
 chromium/structure	185	r1	whereami	landmark | text
 chromium/structure	185	r2	whereami	SEM structure document | landmark | text
 chromium/structure	185	r3	whereami	text, no name
-chromium/structure	186	brief	whereami	text | A comment text
-chromium/structure	186	r1	whereami	text | A comment text
-chromium/structure	186	r2	whereami	SEM structure document | landmark | text | A comment text
+chromium/structure	186	brief	whereami	A comment text
+chromium/structure	186	r1	whereami	A comment text
+chromium/structure	186	r2	whereami	SEM structure document | landmark | A comment text
 chromium/structure	186	r3	whereami	A space c o m m e n t
 chromium/structure	187	brief	whereami	landmark | Term role list item
 chromium/structure	187	r1	whereami	landmark | Term role list item
@@ -12862,9 +12862,9 @@ firefox/forms	75	brief	whereami	landmark | text
 firefox/forms	75	r1	whereami	landmark | text
 firefox/forms	75	r2	whereami	SEM forms document | landmark | text
 firefox/forms	75	r3	whereami	text, no name
-firefox/forms	76	brief	whereami	text | In unnamed form edit
-firefox/forms	76	r1	whereami	text | In unnamed form edit
-firefox/forms	76	r2	whereami	SEM forms document | landmark | text | In unnamed form edit
+firefox/forms	76	brief	whereami	In unnamed form edit
+firefox/forms	76	r1	whereami	In unnamed form edit
+firefox/forms	76	r2	whereami	SEM forms document | landmark | In unnamed form edit
 firefox/forms	76	r3	whereami	I n space u n n a m e d space f o r m
 firefox/forms	77	brief	whereami	landmark | Site search landmark
 firefox/forms	77	r1	whereami	landmark | Site search landmark
@@ -13570,17 +13570,17 @@ firefox/m8-iframes	28	brief	whereami	Form frame document | text
 firefox/m8-iframes	28	r1	whereami	Form frame document | text
 firefox/m8-iframes	28	r2	whereami	M8 Iframes document | Form frame document | text
 firefox/m8-iframes	28	r3	whereami	text, no name
-firefox/m8-iframes	29	brief	whereami	text | Frame field text
-firefox/m8-iframes	29	r1	whereami	text | Frame field text
-firefox/m8-iframes	29	r2	whereami	M8 Iframes document | Form frame document | text | Frame field text
+firefox/m8-iframes	29	brief	whereami	Frame field text
+firefox/m8-iframes	29	r1	whereami	Frame field text
+firefox/m8-iframes	29	r2	whereami	M8 Iframes document | Form frame document | Frame field text
 firefox/m8-iframes	29	r3	whereami	F r a m e space f i e l d
-firefox/m8-iframes	30	brief	whereami	text | Frame field edit
-firefox/m8-iframes	30	r1	whereami	text | Frame field edit
-firefox/m8-iframes	30	r2	whereami	M8 Iframes document | Form frame document | text | Frame field edit
+firefox/m8-iframes	30	brief	whereami	Frame field edit
+firefox/m8-iframes	30	r1	whereami	Frame field edit
+firefox/m8-iframes	30	r2	whereami	M8 Iframes document | Form frame document | Frame field edit
 firefox/m8-iframes	30	r3	whereami	F r a m e space f i e l d
-firefox/m8-iframes	31	brief	whereami	text | Frame submit button
-firefox/m8-iframes	31	r1	whereami	text | Frame submit button
-firefox/m8-iframes	31	r2	whereami	M8 Iframes document | Form frame document | text | Frame submit button
+firefox/m8-iframes	31	brief	whereami	Frame submit button
+firefox/m8-iframes	31	r1	whereami	Frame submit button
+firefox/m8-iframes	31	r2	whereami	M8 Iframes document | Form frame document | Frame submit button
 firefox/m8-iframes	31	r3	whereami	F r a m e space s u b m i t
 firefox/m8-iframes	32	brief	whereami	M8 Iframes document | Srcdoc frame
 firefox/m8-iframes	32	r1	whereami	M8 Iframes document | Srcdoc frame
@@ -13834,13 +13834,13 @@ firefox/m8-landmarks	35	brief	whereami	landmark | text
 firefox/m8-landmarks	35	r1	whereami	landmark | text
 firefox/m8-landmarks	35	r2	whereami	M8 Landmarks document | landmark | text
 firefox/m8-landmarks	35	r3	whereami	text, no name
-firefox/m8-landmarks	36	brief	whereami	text | Unnamed form field text
-firefox/m8-landmarks	36	r1	whereami	text | Unnamed form field text
-firefox/m8-landmarks	36	r2	whereami	M8 Landmarks document | landmark | text | Unnamed form field text
+firefox/m8-landmarks	36	brief	whereami	Unnamed form field text
+firefox/m8-landmarks	36	r1	whereami	Unnamed form field text
+firefox/m8-landmarks	36	r2	whereami	M8 Landmarks document | landmark | Unnamed form field text
 firefox/m8-landmarks	36	r3	whereami	U n n a m e d space f o r m space f i e l d
 firefox/m8-landmarks	37	brief	whereami	Unnamed form field edit
 firefox/m8-landmarks	37	r1	whereami	Unnamed form field edit
-firefox/m8-landmarks	37	r2	whereami	M8 Landmarks document | landmark | text | Unnamed form field edit
+firefox/m8-landmarks	37	r2	whereami	M8 Landmarks document | landmark | Unnamed form field edit
 firefox/m8-landmarks	37	r3	whereami	U n n a m e d space f o r m space f i e l d
 firefox/m8-landmarks	38	brief	whereami	M8 Landmarks document | Related links landmark
 firefox/m8-landmarks	38	r1	whereami	M8 Landmarks document | Related links landmark
@@ -16506,33 +16506,33 @@ firefox/tables	28	brief	whereami	Aria table table | text
 firefox/tables	28	r1	whereami	Aria table table | text
 firefox/tables	28	r2	whereami	SEM tables document | landmark | Aria table table | text
 firefox/tables	28	r3	whereami	text, no name
-firefox/tables	29	brief	whereami	Aria table table | text | Name Qty row
-firefox/tables	29	r1	whereami	Aria table table | text | Name Qty row
-firefox/tables	29	r2	whereami	SEM tables document | landmark | Aria table table | text | Name Qty row
+firefox/tables	29	brief	whereami	Aria table table | Name Qty row
+firefox/tables	29	r1	whereami	Aria table table | Name Qty row
+firefox/tables	29	r2	whereami	SEM tables document | landmark | Aria table table | Name Qty row
 firefox/tables	29	r3	whereami	N a m e space Q t y
 firefox/tables	30	brief	whereami	Aria table table | Name Qty row | Name column header
 firefox/tables	30	r1	whereami	Aria table table | Name Qty row | Name column header
-firefox/tables	30	r2	whereami	SEM tables document | landmark | Aria table table | text | Name Qty row | Name column header
+firefox/tables	30	r2	whereami	SEM tables document | landmark | Aria table table | Name Qty row | Name column header
 firefox/tables	30	r3	whereami	N a m e
 firefox/tables	31	brief	whereami	Aria table table | Name Qty row | Qty column header
 firefox/tables	31	r1	whereami	Aria table table | Name Qty row | Qty column header
-firefox/tables	31	r2	whereami	SEM tables document | landmark | Aria table table | text | Name Qty row | Qty column header
+firefox/tables	31	r2	whereami	SEM tables document | landmark | Aria table table | Name Qty row | Qty column header
 firefox/tables	31	r3	whereami	Q t y
 firefox/tables	32	brief	whereami	Aria table table | text
 firefox/tables	32	r1	whereami	Aria table table | text
 firefox/tables	32	r2	whereami	SEM tables document | landmark | Aria table table | text
 firefox/tables	32	r3	whereami	text, no name
-firefox/tables	33	brief	whereami	Aria table table | text | Widget 7 row
-firefox/tables	33	r1	whereami	Aria table table | text | Widget 7 row
-firefox/tables	33	r2	whereami	SEM tables document | landmark | Aria table table | text | Widget 7 row
+firefox/tables	33	brief	whereami	Aria table table | Widget 7 row
+firefox/tables	33	r1	whereami	Aria table table | Widget 7 row
+firefox/tables	33	r2	whereami	SEM tables document | landmark | Aria table table | Widget 7 row
 firefox/tables	33	r3	whereami	W i d g e t space 7
 firefox/tables	34	brief	whereami	Aria table table | Widget 7 row | Widget row header
 firefox/tables	34	r1	whereami	Aria table table | Widget 7 row | Widget row header
-firefox/tables	34	r2	whereami	SEM tables document | landmark | Aria table table | text | Widget 7 row | Widget row header
+firefox/tables	34	r2	whereami	SEM tables document | landmark | Aria table table | Widget 7 row | Widget row header
 firefox/tables	34	r3	whereami	W i d g e t
 firefox/tables	35	brief	whereami	Aria table table | Widget 7 row | 7 cell
 firefox/tables	35	r1	whereami	Aria table table | Widget 7 row | 7 cell
-firefox/tables	35	r2	whereami	SEM tables document | landmark | Aria table table | text | Widget 7 row | 7 cell
+firefox/tables	35	r2	whereami	SEM tables document | landmark | Aria table table | Widget 7 row | 7 cell
 firefox/tables	35	r3	whereami	7
 firefox/tables	36	brief	whereami	landmark | Grid table
 firefox/tables	36	r1	whereami	landmark | Grid table

@@ -132,6 +132,11 @@ impl Tree for IvmTree<'_> {
 
 /// The S0 row of a source node: the primary's observed values and neutral attributes, never a
 /// fused entry (PF-2).
+/// A record is secret by its role or by the source's mark (`SemFlags::SECRET`).
+pub(crate) fn rec_is_secret(rec: &SrcRecord) -> bool {
+    Row::is_secret_role(rec.sem.role) || rec.sem.flags.contains(gorca_model::sem::SemFlags::SECRET)
+}
+
 fn row_of(n: &SrcNode) -> Row {
     match &n.rec {
         Some(rec) => Row {
@@ -139,14 +144,12 @@ fn row_of(n: &SrcNode) -> Row {
             states: n.states.bits(),
             name: rec.name.clone(),
             // What is typed into a secret field is not for a plugin to see or to count.
-            text: (!Row::is_secret_role(rec.sem.role))
-                .then(|| n.text.clone())
-                .flatten(),
+            text: (!rec_is_secret(rec)).then(|| n.text.clone()).flatten(),
             tag: (!rec.tag.is_empty()).then(|| Arc::from(rec.tag.as_str())),
             class: rec.class.clone(),
             aria_role: rec.aria_role.clone(),
             dom_id: rec.dom_id.clone(),
-            secret: Row::is_secret_role(rec.sem.role),
+            secret: rec_is_secret(rec),
         },
         // A synthetic node (a text run): the text is its content.
         None => Row {
