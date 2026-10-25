@@ -50,6 +50,7 @@ impl Echo {
                         }],
                         reads,
                         overflow: false,
+                        exec_us: 0,
                     },
                 });
             }

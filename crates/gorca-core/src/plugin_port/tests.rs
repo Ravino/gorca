@@ -140,6 +140,7 @@ fn done(plugin: usize, t: u64, target: u32, effects: Vec<FactEffect>, reads: Vec
             effects,
             reads,
             overflow: false,
+            exec_us: 0,
         },
     }
 }
@@ -383,7 +384,10 @@ fn a_displaced_or_skipped_job_is_requeued_not_lost() {
         plugin: 0,
         t,
         targets: vec![1],
-        body: ReplyBody::Failed { requeue: true },
+        body: ReplyBody::Failed {
+            requeue: true,
+            fault: false,
+        },
     });
     b.drain();
     assert_eq!(b.pending_len(), 1, "the displaced job's node runs next");

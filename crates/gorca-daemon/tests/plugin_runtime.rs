@@ -593,3 +593,106 @@ fn a_sideloaded_package_is_not_loaded_by_default() {
     // First party keeps working; the user directory contributes nothing.
     assert_eq!(rt.ids(), vec!["gorca.telegram-web".to_owned()]);
 }
+
+/// Probe (ignored): feed a live document dump (`GORCA_LIVE_TREE=<json>`, a list of
+/// `{i, p, role, name, cls, tag, nch}` in document order) through the real plugin and print what
+/// comes back and every fault. The dump is made with an AT-SPI script (see the diagnosis report).
+#[test]
+#[ignore = "needs GORCA_LIVE_TREE"]
+fn live_tree_probe() {
+    let Some(path) = std::env::var_os("GORCA_LIVE_TREE") else {
+        return;
+    };
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .with_test_writer()
+        .try_init();
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    let limit = std::env::var("GORCA_LIVE_LIMIT")
+        .ok()
+        .and_then(|l| l.parse::<usize>().ok())
+        .unwrap_or(usize::MAX);
+    let list: Vec<_> = v.as_array().unwrap().iter().take(limit).collect();
+    let mut nodes: Vec<N> = Vec::new();
+    let leak = |s: &str| -> &'static str { Box::leak(s.to_owned().into_boxed_str()) };
+    for x in &list {
+        let i = x["i"].as_u64().unwrap() as u32;
+        let p = x["p"].as_i64().unwrap();
+        let name = x["name"].as_str().unwrap_or("");
+        nodes.push((
+            i,
+            (p >= 0).then_some(p as u32),
+            leak(x["tag"].as_str().unwrap_or("")),
+            leak(x["cls"].as_str().unwrap_or("")),
+            leak(name),
+        ));
+    }
+    let rt = runtime(PluginOptions::default());
+    let mut b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/#1", true),
+    )
+    .expect("scope");
+    let tree = feed(&mut b, &nodes);
+    let ops = collect(&mut b, &tree, Duration::from_secs(20));
+    for (n, s) in names(&ops) {
+        println!("name {n}: {s}");
+    }
+    let mut per: std::collections::BTreeMap<u32, usize> = std::collections::BTreeMap::new();
+    for (n, _) in names(&ops) {
+        *per.entry(n).or_default() += 1;
+    }
+    println!("ops per node {per:?}");
+    println!("ops {} stats {:?}", ops.len(), b.stats());
+}
+
+/// A busy Web A chat list: 90 rows with long Cyrillic previews, derived in background batches.
+/// One call must never be asked for more than its grant can pay (Watchdog) nor for more fact
+/// text than a call may return (Malformed); every row gets its name, once.
+#[test]
+fn a_long_busy_chat_list_derives_without_faults_and_without_duplicate_facts() {
+    let rt = runtime(PluginOptions::default());
+    let mut b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/#1", true),
+    )
+    .expect("scope");
+    let long: &'static str = Box::leak(
+        "Привет, это очень длинное сообщение о ничём. "
+            .repeat(14)
+            .into_boxed_str(),
+    );
+    let mut nodes: Vec<N> = vec![(0, None, "div", "", "")];
+    let rows_n = 90u32;
+    for r in 0..rows_n {
+        let base = 1 + r * 8;
+        nodes.push((base, Some(0), "a", "ListItem-button", ""));
+        nodes.push((base + 1, Some(base), "button", "fullName", ""));
+        nodes.push((
+            base + 2,
+            Some(base + 1),
+            "",
+            "",
+            Box::leak(format!("Чат номер {r}").into_boxed_str()),
+        ));
+        nodes.push((base + 3, Some(base), "div", "time", ""));
+        nodes.push((base + 4, Some(base + 3), "", "", "22:28"));
+        nodes.push((base + 5, Some(base), "div", "last-message", ""));
+        nodes.push((base + 6, Some(base + 5), "", "", long));
+        nodes.push((base + 7, Some(base), "div", "NT-X2xr9 yf73Yld8", ""));
+    }
+    let tree = feed(&mut b, &nodes);
+    let ops = collect(&mut b, &tree, Duration::from_secs(20));
+    let got = names(&ops);
+    let mut per: HashMap<u32, usize> = HashMap::new();
+    for (n, _) in &got {
+        *per.entry(*n).or_default() += 1;
+    }
+    assert_eq!(
+        per.len(),
+        rows_n as usize,
+        "every row is named: {:?}",
+        b.stats()
+    );
+    assert!(per.values().all(|c| *c == 1), "one fact per row: {per:?}");
+}
