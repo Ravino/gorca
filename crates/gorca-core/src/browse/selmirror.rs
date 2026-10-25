@@ -168,7 +168,9 @@ fn secret(d: &WebDoc, id: DocNodeId) -> bool {
     let mut cur = Some(id);
     for _ in 0..64 {
         let Some(n) = cur else { return false };
-        if d.node(n).is_some_and(|v| v.role == Role::PasswordEntry) {
+        if d.node(n)
+            .is_some_and(|v| gorca_model::is_secret_node(v.role, v.sem().as_deref()))
+        {
             return true;
         }
         cur = d.parent(n);
@@ -212,7 +214,7 @@ fn atoms(d: &WebDoc, lo: u32, hi: u32) -> Option<(Hit, Hit)> {
         let leaf = is_leaf(d, id);
         let object = !leaf && is_object(d, id);
         if v.flags.contains(NodeFlags::HIDDEN) || !(leaf || object) {
-            if v.role == Role::PasswordEntry {
+            if gorca_model::is_secret_node(v.role, v.sem().as_deref()) {
                 // Never mirror (and so never copy) a password field: the range stops before it.
                 break;
             }

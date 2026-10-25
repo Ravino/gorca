@@ -247,6 +247,8 @@ pub fn explain_utterance(
     sources: &SourceDirectory,
     with_text: bool,
 ) -> ExplainReport {
+    // The text of what was said about a secret field is never shown, opt-in or not.
+    let with_text = with_text && !entry.is_some_and(gorca_present::is_secret_entry);
     let segments = u
         .segments
         .iter()
@@ -338,8 +340,9 @@ pub fn log_report(
     sources: &SourceDirectory,
     u: &Utterance,
     entry: Option<&SemEntry>,
+    secret: bool,
 ) -> ExplainReport {
-    let with_text = EXPLAIN_TEXT.load(Ordering::Relaxed);
+    let with_text = EXPLAIN_TEXT.load(Ordering::Relaxed) && !secret;
     let report = explain_utterance(u, entry, None, sources, with_text);
     for line in report.render() {
         tracing::info!(target: "gorca::explain", "{line}");
@@ -460,5 +463,20 @@ mod tests {
         assert_eq!((r.catalogue(), r.literal()), (1, 1));
         assert_eq!(r.segments[1].origin, 9);
         assert!(r.render().join("\n").contains("msg=catalogue:42 origin=9"));
+    }
+
+    #[test]
+    fn explain_never_shows_the_text_said_about_a_password_field() {
+        let mut e = entry();
+        e.sem.role = gorca_model::sem::SemRole::PasswordBox;
+        let u = utt(&["hunter2-correct-horse"]);
+        let r = explain_utterance(&u, Some(&e), None, &SourceDirectory::new(), true);
+        assert!(r.segments.iter().all(|s| s.text.is_none()), "{r:?}");
+        // The caller knows better than the entry (native role says password): same result.
+        let r = log_report(&SourceDirectory::new(), &u, Some(&entry()), true);
+        assert!(r.segments.iter().all(|s| s.text.is_none()), "{r:?}");
+        // An ordinary node with the opt-in still shows its (cut) text.
+        let r = explain_utterance(&u, Some(&entry()), None, &SourceDirectory::new(), true);
+        assert!(r.segments.iter().all(|s| s.text.is_some()));
     }
 }

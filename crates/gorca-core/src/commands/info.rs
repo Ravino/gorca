@@ -120,15 +120,36 @@ pub(crate) fn spell(text: &str) -> String {
         .join(" ")
 }
 
+/// What the fused entry of one node says about it (`Reason::WhereAmI`, M22b4): the words of the
+/// ancestry answer. Built by the Reader from the node's entry through `gorca-present`; this
+/// module only arranges them.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct Words {
+    /// The name, `None` when the node has none worth saying.
+    pub name: Option<String>,
+    /// The role word(s), joined by a space.
+    pub role: String,
+    /// The state words.
+    pub states: Vec<String>,
+    /// The value (and the contents of a field).
+    pub values: Vec<String>,
+    /// The description, from the entry.
+    pub description: Option<String>,
+}
+
 /// Text of "where am I". `chain` is leaf first. `repeat`: 1 basic, 2 detailed, 3 spell the name.
-pub(crate) fn where_am_i(chain: &[Arc<NodeSnapshot>], repeat: u8, level: Verbosity) -> String {
+pub(crate) fn where_am_i_parts(
+    chain: &[Arc<NodeSnapshot>],
+    repeat: u8,
+    level: Verbosity,
+) -> Vec<String> {
     let Some(leaf) = chain.first() else {
-        return tr(M::NoFocus).to_owned();
+        return vec![tr(M::NoFocus).to_owned()];
     };
     if repeat >= 3 {
         return match named(leaf) {
-            Some(n) => spell(n),
-            None => msg!(InfoNoName, role = leaf.role.spoken()),
+            Some(n) => vec![spell(n)],
+            None => vec![msg!(InfoNoName, role = leaf.role.spoken())],
         };
     }
     let detailed = repeat == 2 || level == Verbosity::Verbose;
@@ -201,7 +222,103 @@ pub(crate) fn where_am_i(chain: &[Arc<NodeSnapshot>], repeat: u8, level: Verbosi
             parts.push(tr(M::InfoOutOfDate).to_owned());
         }
     }
-    parts.join(", ")
+    parts
+}
+
+pub(crate) fn where_am_i(chain: &[Arc<NodeSnapshot>], repeat: u8, level: Verbosity) -> String {
+    where_am_i_parts(chain, repeat, level).join(", ")
+}
+
+/// Text of "where am I". `chain` is leaf first and `words` has the words of each node of it.
+/// `repeat`: 1 basic, 2 detailed, 3 spell the name.
+pub(crate) fn where_am_i_fused_parts(
+    chain: &[Arc<NodeSnapshot>],
+    words: &[Words],
+    repeat: u8,
+    level: Verbosity,
+) -> Vec<String> {
+    let (Some(leaf), Some(lw)) = (chain.first(), words.first()) else {
+        return vec![tr(M::NoFocus).to_owned()];
+    };
+    if repeat >= 3 {
+        return match lw.name.as_deref() {
+            Some(n) => vec![spell(n)],
+            None => vec![msg!(InfoNoName, role = lw.role.as_str())],
+        };
+    }
+    let detailed = repeat == 2 || level == Verbosity::Verbose;
+    let mut parts: Vec<String> = Vec::new();
+    // Application and window.
+    let app = chain
+        .iter()
+        .zip(words)
+        .rev()
+        .find(|(n, _)| n.role == Role::Application);
+    if let Some(a) = app.and_then(|(_, w)| w.name.as_deref())
+        && level != Verbosity::Brief
+    {
+        parts.push(a.to_owned());
+    }
+    let window = chain
+        .iter()
+        .zip(words)
+        .find(|(n, _)| matches!(n.role, Role::Window | Role::Dialog));
+    if let Some((_, w)) = window {
+        parts.push(match w.name.as_deref() {
+            Some(n) => msg!(InfoWindow, name = n, role = w.role.as_str()),
+            None => w.role.clone(),
+        });
+    }
+    // Container chain between the window and the object, outermost first.
+    let mut containers = Vec::new();
+    for (i, n) in chain.iter().enumerate().skip(1) {
+        if matches!(n.role, Role::Window | Role::Dialog | Role::Application) {
+            break;
+        }
+        if is_container(n.role) && (detailed || i == 1 || is_collection(n.role)) {
+            containers.push((i, n));
+        }
+    }
+    for (i, n) in containers.iter().rev() {
+        let mut s = String::new();
+        let Some(w) = words.get(*i) else { continue };
+        if let Some(name) = w.name.as_deref() {
+            s.push_str(name);
+            s.push(' ');
+        }
+        s.push_str(&w.role);
+        // Position of the item inside this container: the previous node in the chain.
+        if let Some(child) = chain.get(i - 1)
+            && let Some((at, of)) = position(n, child.key)
+        {
+            let _ = write!(s, ", {}", msg!(InfoPosition, at = at, of = of));
+        }
+        parts.push(s.trim_end().to_owned());
+    }
+    // The object.
+    let mut obj = String::new();
+    if let Some(n) = lw.name.as_deref() {
+        obj.push_str(n);
+        obj.push(' ');
+    }
+    obj.push_str(&lw.role);
+    let obj = obj.trim().to_owned();
+    if !obj.is_empty() {
+        parts.push(obj);
+    }
+    if !lw.states.is_empty() {
+        parts.push(lw.states.join(" "));
+    }
+    parts.extend(lw.values.iter().cloned());
+    if detailed {
+        if let Some(d) = lw.description.as_deref().filter(|d| !d.is_empty()) {
+            parts.push(d.to_owned());
+        }
+        if matches!(leaf.fresh, Freshness::Stale { .. } | Freshness::Defunct) {
+            parts.push(tr(M::InfoOutOfDate).to_owned());
+        }
+    }
+    parts
 }
 
 /// Title of the window the node is in; `None` when the mirror does not know the chain up to it.

@@ -9,6 +9,7 @@ mod envrule;
 mod ext;
 mod hostfeature;
 mod legacyrule;
+mod secretrule;
 mod strings;
 
 use std::process::ExitCode;
@@ -24,6 +25,7 @@ fn main() -> ExitCode {
                 strings::run(false),
                 legacyrule::run(false),
                 hostfeature::run(),
+                secretrule::run(),
             ];
             let mut ok = true;
             for r in results {

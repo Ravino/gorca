@@ -41,7 +41,7 @@ pub use node::{
     NodeView, PropMask, RelationKind, Relations, SnapshotBatch, StateSet, StructFlags, StructState,
     Value,
 };
-pub use redact::RedactKey;
+pub use redact::{RedactKey, is_secret_node};
 pub use role::Role;
 pub use sem::{SemEntry, SemRole, Semantics};
 #[cfg(feature = "seg-origin")]

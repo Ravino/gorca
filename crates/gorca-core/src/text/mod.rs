@@ -300,7 +300,7 @@ fn trackable(snap: &NodeSnapshot) -> Option<Kind> {
     };
     text_role.then_some(Kind {
         editable,
-        secret: snap.role == Role::PasswordEntry,
+        secret: snap.is_sensitive(),
         multiline: snap.states.contains(StateSet::MULTILINE),
     })
 }

@@ -130,6 +130,14 @@ pub const SURFACES: &[Surface] = &[
         families: NOTICE_FAMILIES,
     },
     Surface {
+        name: "whereami",
+        slice: "M22b4",
+        ready: true,
+        package: "gorca-connector-atspi",
+        test: "cutover_gate_tests::cutover_emit",
+        families: &[],
+    },
+    Surface {
         name: "explain",
         slice: "M22b4",
         ready: false,
@@ -523,6 +531,10 @@ pub const DROP_REASONS: &[(&str, &str)] = &[
     (
         "not-a-notice-role",
         "a node that is neither an alert nor a dialog: a notice is read for an alert, and for a dialog when the application's policy says so",
+    ),
+    (
+        "ancestor-no-entry",
+        "an ancestor of the node is a text leaf or unreadable and has no fused entry, so the ancestry cannot be composed",
     ),
     (
         "hidden-node",
@@ -1101,7 +1113,7 @@ fn write_report(
 /// `cargo xtask cutover <surface> [--seed N]` or `cargo xtask cutover --check`.
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<bool> {
     let first = args.next().context(
-        "usage: cargo xtask cutover <surface> [--seed N] | --check   (surfaces: focus, change, browse, quicknav, review, window, notification, explain)",
+        "usage: cargo xtask cutover <surface> [--seed N] | --check   (surfaces: focus, change, browse, quicknav, review, window, notification, whereami, explain)",
     )?;
     if first == "--check" {
         return check();

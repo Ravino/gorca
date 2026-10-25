@@ -309,7 +309,7 @@ pub(crate) fn web_focus(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> Pre
     if let Some(c) = current_word(sem.current) {
         fields.push(word(FieldKind::STATE, c, Group::Current));
     }
-    let secret = role == SemRole::PasswordBox;
+    let secret = crate::compose::is_secret_entry(entry);
     if let Some(v) = sem
         .text
         .as_deref()

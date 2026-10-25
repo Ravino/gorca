@@ -11,7 +11,7 @@ mod fair;
 mod flow;
 mod job;
 mod log;
-mod node;
+pub(crate) mod node;
 pub(crate) use node::entry_of;
 mod notification;
 mod utterance;

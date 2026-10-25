@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use gorca_model::sem::{SemEntry, SemRole};
+use gorca_model::sem::SemEntry;
 use gorca_model::{NodeSnapshot, SegmentKind};
 use gorca_present::{
     ComposeCtx, IrEdit, PresIr, Reason, RenderOpts, ReportFlags, Token, TokenText, apply_edits,
@@ -48,17 +48,11 @@ fn review_ir(entry: &SemEntry, snap: &NodeSnapshot, contents: Option<&str>) -> P
         )
     });
     if let Some(t) = contents.filter(|t| !t.is_empty())
-        && !is_secret(entry, snap)
+        && !crate::present::node::is_secret(entry, snap)
     {
         apply_edits(&mut ir, &[IrEdit::SetValue(Arc::from(t))]);
     }
     ir
-}
-
-/// A field whose contents must never be read: a password by the fused role or by the toolkit's
-/// own role, whichever says so.
-fn is_secret(entry: &SemEntry, snap: &NodeSnapshot) -> bool {
-    entry.sem.role == SemRole::PasswordBox || snap.role == gorca_model::Role::PasswordEntry
 }
 
 /// The pieces the zone of a whole object says: the name, a role word for controls, the state
@@ -129,7 +123,7 @@ pub fn role_word(snap: &NodeSnapshot, web: bool) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use gorca_model::sem::Semantics;
+    use gorca_model::sem::{SemRole, Semantics};
     use gorca_model::{
         AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSem, PropMask,
         Role, StateSet,

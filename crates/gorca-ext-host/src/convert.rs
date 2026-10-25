@@ -109,7 +109,7 @@ pub fn role_to_ext(r: Role) -> api::Role {
 /// The snapshot as an extension sees it. A password field's name and description are withheld:
 /// nothing marks the text as secret once it is in a sandbox, and no extension needs it.
 pub fn node_to_ext(n: &NodeSnapshot) -> api::Node {
-    let secret = n.role == Role::PasswordEntry;
+    let secret = n.is_sensitive();
     api::Node {
         range: match &n.value {
             Some(gorca_model::Value::Range { current, min, max }) => Some(api::Range {

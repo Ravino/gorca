@@ -185,7 +185,7 @@ pub(crate) fn review(entry: &SemEntry, node: NodeKey, ctx: ComposeCtx) -> PresIr
     if sem.invalid != Invalid::No {
         fields.push(word(FieldKind::STATE, M::StateInvalidEntry, Group::Invalid));
     }
-    let secret = sem.role == SemRole::PasswordBox;
+    let secret = crate::compose::is_secret_entry(entry);
     if let Some(v) = sem
         .text
         .as_deref()

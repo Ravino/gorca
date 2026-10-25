@@ -488,6 +488,42 @@ mod tests {
         Arc::new(s)
     }
 
+    /// A text entry by its native role whose source record or fused entry says password (an engine
+    /// reporting a password over a text-box token): the log must redact it as well.
+    #[test]
+    fn a_password_by_record_or_entry_role_is_redacted_whatever_the_native_role() {
+        use gorca_model::sem::SemRole;
+        let key = RedactKey::from_bytes([4; 16]);
+        for via_entry in [false, true] {
+            let sink = Sink::default();
+            let log = PresentLog::with_key(sink.clone(), Arc::new(NoLabels), key).unwrap();
+            let mut s = (*snap(
+                7,
+                Some("Secret name hunter2"),
+                Some(Value::Text(Arc::from("correct horse"))),
+            ))
+            .clone()
+            .with_test_record();
+            s.role = Role::TextEntry;
+            if via_entry {
+                let mut e = gorca_model::SemEntry::default();
+                e.sem.role = SemRole::PasswordBox;
+                s.sem.entry = Some(Arc::new(e));
+            } else {
+                let mut r = (**s.sem.rec.as_ref().unwrap()).clone();
+                r.sem.role = SemRole::PasswordBox;
+                s.sem.rec = Some(Arc::new(r));
+            }
+            log.record(rec(Arc::new(s), PresentSource::Hit, None));
+            drop(log);
+            let raw = String::from_utf8(sink.0.lock().unwrap().clone()).unwrap();
+            assert!(
+                !raw.contains("hunter2") && !raw.contains("correct horse"),
+                "via_entry {via_entry}: {raw}"
+            );
+        }
+    }
+
     #[test]
     fn password_text_is_never_written_only_its_length_and_a_keyed_hash() {
         let sink = Sink::default();

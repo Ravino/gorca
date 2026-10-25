@@ -1483,7 +1483,7 @@ impl Reader {
             let value = v
                 .field_value()
                 .cloned()
-                .filter(|_| v.role != Role::PasswordEntry);
+                .filter(|_| !gorca_model::is_secret_node(v.role, v.sem().as_deref()));
             if value.is_some() {
                 have |= PropMask::VALUE;
             }

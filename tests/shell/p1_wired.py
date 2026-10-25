@@ -30,6 +30,7 @@ import probe_shell as P  # noqa: E402  (refuses to run outside a private session
 
 TAB, ENTER, SPACE, RIGHT, LEFT, ALT, CTRL, META, ESC, DOWN, S = 15, 28, 57, 106, 105, 56, 29, 125, 1, 108, 31
 HOME = 102
+INSERT = 110  # the screen reader key of the default keymap: Insert+Tab is where-am-I
 KEY_T, KEY_H, KEY_K = 20, 35, 37  # browse-mode quick navigation: table, heading, link
 
 
@@ -291,12 +292,29 @@ class Rig:
         with open(os.path.join(self.out, "p1.json"), "w") as f:
             json.dump({"steps": self.steps, "load": open("/proc/loadavg").read().strip(),
                        "governor": _gov(), "reader": self.gorca,
+                       "rev": _rev()[0], "dirty": _rev()[1],
                        "date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}, f, indent=1)
         with open(os.path.join(self.out, "p1.md"), "w") as f:
+            rev, dirty = _rev()
+            f.write("rev: %s\ndirty: %s\nreader: %s\nload: %s\ngovernor: %s\n\n" % (
+                rev, dirty, self.gorca, open("/proc/loadavg").read().strip(), _gov()))
             f.write("| target | step | result | spoken |\n|---|---|---|---|\n")
             for s in self.steps:
                 f.write("| %s | %s | %s | %s |\n" % (s["target"], s["step"], "PASS" if s["ok"] else "FAIL",
                                                      " / ".join(s["spoken"]).replace("|", "\\|")))
+
+
+def _rev():
+    """The revision of the tree the run was made from and whether tracked files differ from it."""
+    root = os.path.abspath(os.path.join(HERE, "..", ".."))
+    try:
+        rev = subprocess.run(["git", "-C", root, "rev-parse", "HEAD"], capture_output=True, text=True,
+                             timeout=10).stdout.strip()
+        dirty = bool(subprocess.run(["git", "-C", root, "status", "--porcelain", "--untracked-files=no"],
+                                    capture_output=True, text=True, timeout=10).stdout.strip())
+    except (OSError, subprocess.SubprocessError):
+        return "unknown", True
+    return rev or "unknown", dirty
 
 
 def _gov():
@@ -338,6 +356,8 @@ def gtk4(rig):
     rig.tab_to("gtk4", "focus: toggle button", "mute", ("mute", "toggle button", "not pressed"))
     rig.step("gtk4", "change: Space presses", lambda: rig.tap(SPACE), expect=("pressed",), forbid=("not pressed",))
     rig.tab_to("gtk4", "focus: check button", "subscribe", ("subscribe", "check box", "not checked"))
+    rig.step("gtk4", "info: where am I (Insert+Tab)", lambda: rig.tap(INSERT, TAB),
+             expect=("P1 Wired", "Subscribe", "check box"), longest=6)
     rig.step("gtk4", "change: Space checks", lambda: rig.tap(SPACE), expect=("checked",), forbid=("not checked",))
     rig.stop(p)
     return got
@@ -366,6 +386,8 @@ def firefox(rig):
     rig.step("firefox", "browse: Ctrl+Home returns to the top", lambda: rig.tap(CTRL, HOME), expect=("heading",))
     rig.step("firefox", "quicknav: h lands on a heading", lambda: rig.tap(KEY_H), expect=("heading",))
     rig.tab_to("firefox", "focus: check box", "subscribe", ("subscribe", "check box"))
+    rig.step("firefox", "info: where am I (Insert+Tab)", lambda: rig.tap(INSERT, TAB),
+             expect=("P1 Page", "Subscribe", "check box"), longest=6)
     rig.step("firefox", "change: Space checks", lambda: rig.tap(SPACE), expect=("checked",), forbid=("not checked",))
     rig.tab_to("firefox", "focus: disclosure button", "details", ("details", "button", "collapsed"))
     rig.step("firefox", "change: Space expands", lambda: rig.tap(SPACE), expect=("expanded",))
@@ -411,6 +433,8 @@ def shell(rig):
     rig.tab_to("shell", "focus: a toggle button", "toggle button", ("toggle button",), tries=14)
     rig.step("shell", "change: Space flips the toggle", lambda: rig.tap(SPACE), expect=("pressed",))
     rig.step("shell", "change: Space flips it back", lambda: rig.tap(SPACE), expect=("not pressed",))
+    rig.step("shell", "info: where am I (Insert+Tab)", lambda: rig.tap(INSERT, TAB),
+             expect=("Dark Style", "toggle button"), longest=6)
     rig.tap(ESC)
     rig.stop(p1)
     rig.stop(p2)
