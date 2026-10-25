@@ -270,6 +270,7 @@ fn web_flags(snaps: &[Arc<NodeSnapshot>]) -> Vec<bool> {
 /// its state table (legacy suffix, fused suffix): the rest of the part is the same.
 const WORD_PAIRS: &[(&str, &str)] = &[
     ("label", "text"),
+    ("panel", "text"),
     ("panel", "grouping"),
     ("tab list", "tab control"),
     ("tree", "tree view"),

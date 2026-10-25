@@ -344,7 +344,7 @@ until = "2026-12-12"
 id = "role-word-improved"
 surface = "whereami"
 epoch = "m22b4"
-reason = "One word table (gorca-present roles, NVDA words for web content) replaces Role::spoken: label/text, panel/grouping, tab list/tab control, tree view, tool bar, switch, list item, and the fused role where the legacy mapping had a coarser one."
+reason = "One word table (gorca-present roles, NVDA words for web content) replaces Role::spoken: label/text, panel/grouping, a web node of unknown fused role (text), tab list/tab control, tree view, tool bar, switch, list item, and the fused role where the legacy mapping had a coarser one."
 until = "2026-12-12"
 
 [[deviation]]

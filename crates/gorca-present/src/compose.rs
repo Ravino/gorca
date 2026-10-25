@@ -280,10 +280,14 @@ pub fn compose(
             }
             // The answer to "where am I" is never empty: a node the focus rows say nothing for
             // (an unnamed generic container) still names its role.
-            if ir.fields.is_empty()
-                && let Some(w) = native_role(entry.sem.role, entry.sem.press).word
-            {
-                ir.fields.push(word(FieldKind::ROLE, w, Group::Role));
+            if ir.fields.is_empty() {
+                // The engine's text runs have no fused role: in web content they are text.
+                let w = native_role(entry.sem.role, entry.sem.press)
+                    .word
+                    .or_else(|| ctx.web.then_some(M::RoleStaticText));
+                if let Some(w) = w {
+                    ir.fields.push(word(FieldKind::ROLE, w, Group::Role));
+                }
             }
             Ok(ir)
         }
@@ -468,6 +472,10 @@ mod tests {
         let bare = entry(SemRole::Generic, "");
         let ir = compose(&bare, key(), Reason::WhereAmI, CTX).expect("where am i");
         assert!(!ir.fields.is_empty());
+        // A web text run with no fused role is text.
+        let run = entry(SemRole::Unknown, "");
+        let ir = compose(&run, key(), Reason::WhereAmI, web).expect("where am i");
+        assert!(says(&ir, M::RoleStaticText));
     }
 
     #[test]
