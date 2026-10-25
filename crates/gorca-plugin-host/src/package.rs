@@ -11,6 +11,7 @@ use std::path::Path;
 use sha2::{Digest, Sha256};
 use toml_edit::DocumentMut;
 
+use crate::urlmatch::UrlPattern;
 use crate::trust::{PermError, Perms, TrustTier, effective_grants, parse_perm};
 
 /// Component file cap (§2.5.3).
@@ -76,8 +77,9 @@ pub struct Manifest {
     pub memory_mib: u32,
     /// `[match] apps`: application identities (case-insensitive); empty = any application.
     pub apps: Vec<String>,
-    /// `[match] urls`: document URL globs (`*` matches any run); empty = no URL condition.
-    pub urls: Vec<String>,
+    /// `[match] urls`: document URL patterns (structured, see `urlmatch`); empty = no URL
+    /// condition.
+    pub urls: Vec<UrlPattern>,
     /// `[[watch]]` selectors: the nodes the plugin's `derive` is called for.
     pub watches: Vec<Watch>,
 }
@@ -117,42 +119,13 @@ impl Watch {
     }
 }
 
-/// Glob match with `*` as "any run of characters" (case-sensitive; URLs).
-#[must_use]
-pub fn glob_match(pattern: &str, text: &str) -> bool {
-    let p = pattern.as_bytes();
-    let t = text.as_bytes();
-    let (mut pi, mut ti) = (0usize, 0usize);
-    let (mut star, mut mark) = (None::<usize>, 0usize);
-    while ti < t.len() {
-        if pi < p.len() && p[pi] == b'*' {
-            star = Some(pi);
-            pi += 1;
-            mark = ti;
-        } else if pi < p.len() && p[pi] == t[ti] {
-            pi += 1;
-            ti += 1;
-        } else if let Some(s) = star {
-            pi = s + 1;
-            mark += 1;
-            ti = mark;
-        } else {
-            return false;
-        }
-    }
-    while pi < p.len() && p[pi] == b'*' {
-        pi += 1;
-    }
-    pi == p.len()
-}
-
 impl Manifest {
     /// True when `app` (and, when URL globs are declared, `url`) satisfy `[match]`.
     #[must_use]
     pub fn matches_scope(&self, app: &str, url: Option<&str>) -> bool {
         let app_ok = self.apps.is_empty() || self.apps.iter().any(|a| a.eq_ignore_ascii_case(app));
         let url_ok =
-            self.urls.is_empty() || url.is_some_and(|u| self.urls.iter().any(|g| glob_match(g, u)));
+            self.urls.is_empty() || url.is_some_and(|u| self.urls.iter().any(|g| g.matches(u)));
         app_ok && url_ok
     }
 }
@@ -239,7 +212,10 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, PackageError> {
             .ok_or_else(|| PackageError::Manifest("memory-mib out of range".into()))?,
     };
     let apps = string_list(&doc, "apps")?;
-    let urls = string_list(&doc, "urls")?;
+    let urls = string_list(&doc, "urls")?
+        .iter()
+        .map(|u| UrlPattern::parse(u).map_err(|e| PackageError::Manifest(e.to_string())))
+        .collect::<Result<Vec<_>, _>>()?;
     let watches = parse_watches(&doc)?;
     Ok(Manifest {
         id: id.to_string(),
@@ -447,6 +423,10 @@ mod tests {
         assert!(!m.matches_scope("firefox", Some("https://web.telegram.org/k/")));
         assert!(!m.matches_scope("firefox", None));
         assert!(!m.matches_scope("gedit", Some("https://web.telegram.org/a/")));
+        assert!(!m.matches_scope("firefox", Some("https://web.telegram.org.evil.com/a/")));
+        assert!(
+            parse_manifest(&format!("{M}[match]\nurls = [\"https://web.telegram.org*\"]\n")).is_err()
+        );
         assert_eq!(m.watches.len(), 2);
         assert!(m.watches[0].matches(Some("div"), Some("Message x"), None));
         assert!(!m.watches[0].matches(Some("div"), Some("Messages"), None));
@@ -459,15 +439,6 @@ mod tests {
         ] {
             assert!(parse_manifest(&format!("{M}{bad}")).is_err(), "{bad}");
         }
-    }
-
-    #[test]
-    fn globs() {
-        assert!(glob_match("a*c", "abbbc"));
-        assert!(glob_match("*", ""));
-        assert!(glob_match("a*b*c", "aXbYc"));
-        assert!(!glob_match("a*c", "abd"));
-        assert!(glob_match("https://x/*", "https://x/a/b"));
     }
 
     #[test]
