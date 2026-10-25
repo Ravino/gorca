@@ -24,8 +24,8 @@ use std::time::Instant;
 use gorca_connector_api::BackendError;
 use gorca_input_api::{KeyIntent, classify_text_key};
 use gorca_model::{
-    EditQuirks, Epoch, NodeKey, NodeSnapshot, Prio, Role, StateSet, TextDelta, TextGranularity,
-    UttId, Utterance,
+    EditQuirks, Epoch, NodeKey, NodeSnapshot, Prio, StructFlags, TextDelta, TextGranularity, UttId,
+    Utterance,
 };
 use gorca_rt::BudgetClass;
 use gorca_speech::{
@@ -35,9 +35,10 @@ use gorca_text::caret::Say;
 
 use crate::SpeechIntent;
 use crate::mode::Mode;
-use crate::present::message;
+use crate::present::{entry_of, message};
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 use caret::{CaretState, Cfg, Ctx, Edit, In, Kind, LeafDiff, Out, Reply, Spell, Spoken};
+use gorca_model::sem::{SemFlags, SemRole};
 use say_all::{Act, Run, SayAll, Target};
 
 /// Most parent hops followed to place a node inside the focused rich editable.
@@ -247,62 +248,141 @@ pub(crate) fn line_spell_for(rep: u8) -> Spell {
     }
 }
 
+/// Whether the text layer follows a node of this model role.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum TextRole {
+    /// A text field.
+    Always,
+    /// Only when the node is editable (a document, a paragraph, a combo box, a role the engine
+    /// has no word for).
+    IfEditable,
+    Never,
+}
+
+/// One exhaustive `match`: a new model role cannot be added without deciding whether the text
+/// layer follows it.
+fn text_role(role: SemRole) -> TextRole {
+    match role {
+        SemRole::TextBox | SemRole::SearchBox | SemRole::PasswordBox => TextRole::Always,
+        // An editable combo box is a text field with a popup (Firefox's address bar is one).
+        SemRole::Document
+        | SemRole::DocumentWeb
+        | SemRole::Paragraph
+        | SemRole::Unknown
+        | SemRole::Combobox
+        | SemRole::Article
+        | SemRole::Blockquote
+        | SemRole::Code
+        | SemRole::Comment
+        | SemRole::Definition
+        | SemRole::Deletion
+        | SemRole::DescriptionList
+        | SemRole::Details
+        | SemRole::Emphasis
+        | SemRole::Feed
+        | SemRole::Figure
+        | SemRole::Form
+        | SemRole::Iframe
+        | SemRole::Insertion
+        | SemRole::Log
+        | SemRole::Mark
+        | SemRole::Marquee
+        | SemRole::Math
+        | SemRole::Meter
+        | SemRole::Note
+        | SemRole::Strong
+        | SemRole::Subscript
+        | SemRole::Suggestion
+        | SemRole::Summary
+        | SemRole::Superscript
+        | SemRole::Term
+        | SemRole::Time
+        | SemRole::Timer => TextRole::IfEditable,
+        SemRole::Generic
+        | SemRole::Alert
+        | SemRole::AlertDialog
+        | SemRole::Application
+        | SemRole::Banner
+        | SemRole::Button
+        | SemRole::Caption
+        | SemRole::Cell
+        | SemRole::Checkbox
+        | SemRole::ColumnHeader
+        | SemRole::Complementary
+        | SemRole::ContentInfo
+        | SemRole::Dialog
+        | SemRole::Grid
+        | SemRole::GridCell
+        | SemRole::Group
+        | SemRole::Heading
+        | SemRole::Img
+        | SemRole::Link
+        | SemRole::List
+        | SemRole::Listbox
+        | SemRole::ListItem
+        | SemRole::Main
+        | SemRole::Menu
+        | SemRole::Menubar
+        | SemRole::MenuItem
+        | SemRole::MenuItemCheckbox
+        | SemRole::MenuItemRadio
+        | SemRole::Navigation
+        | SemRole::Option
+        | SemRole::Popover
+        | SemRole::Presentation
+        | SemRole::ProgressBar
+        | SemRole::Radio
+        | SemRole::RadioGroup
+        | SemRole::Region
+        | SemRole::Row
+        | SemRole::RowGroup
+        | SemRole::RowHeader
+        | SemRole::Scrollbar
+        | SemRole::Search
+        | SemRole::Separator
+        | SemRole::Slider
+        | SemRole::SpinButton
+        | SemRole::StaticText
+        | SemRole::Status
+        | SemRole::Switch
+        | SemRole::Tab
+        | SemRole::Table
+        | SemRole::TabList
+        | SemRole::TabPanel
+        | SemRole::Terminal
+        | SemRole::Toolbar
+        | SemRole::Tooltip
+        | SemRole::Tree
+        | SemRole::TreeGrid
+        | SemRole::TreeItem
+        | SemRole::Window => TextRole::Never,
+    }
+}
+
 /// Which nodes does the text layer track?
 fn trackable(snap: &NodeSnapshot) -> Option<Kind> {
-    if snap.states.contains(StateSet::DEFUNCT) {
+    let st = snap.struct_state();
+    if st.is_defunct() {
         return None;
     }
-    let editable = snap.states.contains(StateSet::EDITABLE);
-    let text_role = match snap.role {
-        Role::TextEntry | Role::PasswordEntry => true,
-        // An editable combo box is a text field with a popup (Firefox's address bar is one).
-        Role::Document | Role::DocumentWeb | Role::Paragraph | Role::Unknown | Role::ComboBox => {
-            editable
-        }
-        Role::Application
-        | Role::Window
-        | Role::Dialog
-        | Role::Panel
-        | Role::Heading
-        | Role::Link
-        | Role::Image
-        | Role::List
-        | Role::ListItem
-        | Role::Table
-        | Role::Row
-        | Role::Cell
-        | Role::ColumnHeader
-        | Role::RowHeader
-        | Role::Button
-        | Role::ToggleButton
-        | Role::Switch
-        | Role::CheckBox
-        | Role::RadioButton
-        | Role::SpinButton
-        | Role::Slider
-        | Role::ProgressBar
-        | Role::Menu
-        | Role::MenuBar
-        | Role::MenuItem
-        | Role::Popover
-        | Role::Tab
-        | Role::TabList
-        | Role::Tree
-        | Role::TreeItem
-        | Role::Toolbar
-        | Role::StatusBar
-        | Role::Separator
-        | Role::Label
-        | Role::StaticText
-        | Role::Terminal
-        | Role::Landmark
-        | Role::Alert => false,
+    let entry = entry_of(snap);
+    let editable = entry.sem.flags.contains(SemFlags::EDITABLE);
+    let text_role = match text_role(entry.sem.role) {
+        TextRole::Always => true,
+        TextRole::IfEditable => editable,
+        TextRole::Never => false,
     };
     text_role.then_some(Kind {
         editable,
         secret: snap.is_sensitive(),
-        multiline: snap.states.contains(StateSet::MULTILINE),
+        multiline: st.contains(StructFlags::MULTILINE),
     })
+}
+
+/// What the text layer tracks of a node, for the recorded-corpus goldens: whether it follows the
+/// node, and its editable, secret and multi-line bits.
+pub(crate) fn tracked_bits(snap: &NodeSnapshot) -> Option<(bool, bool, bool)> {
+    trackable(snap).map(|k| (k.editable, k.secret, k.multiline))
 }
 
 pub(crate) fn decode(text: Option<&gorca_model::LazyText>) -> Option<String> {
@@ -579,7 +659,7 @@ impl Reader {
         }
         // A terminal has its own arm (M6): the caret machine would speak a screen repaint as
         // inserted text.
-        if snap.role == Role::Terminal {
+        if entry_of(snap).sem.role == SemRole::Terminal {
             self.text_untrack_caret();
             self.term_track(snap, fx);
             return;
@@ -1408,10 +1488,12 @@ impl Reader {
         let snap = self.presented.as_ref().map(|p| Arc::clone(&p.snap));
         match (self.text.caret.is_off(), snap) {
             (true, Some(s))
-                if s.states.contains(StateSet::FOCUSED)
-                    && s.role == Role::Terminal
+                if s.struct_state().contains(StructFlags::FOCUSED)
+                    && entry_of(&s).sem.role == SemRole::Terminal
                     && self.term_resume(s.key, fx) => {}
-            (true, Some(s)) if s.states.contains(StateSet::FOCUSED) => self.text_track(&s, fx),
+            (true, Some(s)) if s.struct_state().contains(StructFlags::FOCUSED) => {
+                self.text_track(&s, fx);
+            }
             (false, _) if fresh_track => {}
             (false, _) => self.text_step(In::Dirty, fx),
             (true, _) => {}

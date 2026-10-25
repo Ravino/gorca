@@ -21,6 +21,12 @@ pub fn actionable(snap: &NodeSnapshot) -> bool {
         || snap.caps().has_action()
 }
 
+/// What the text layer tracks of a node: (editable, secret, multi-line), `None` for a node it does
+/// not follow. The recorded-corpus goldens of the text layer read it.
+pub fn text_tracked(snap: &NodeSnapshot) -> Option<(bool, bool, bool)> {
+    crate::text::tracked_bits(snap)
+}
+
 /// A page of snapshots as a [`NavSource`], every node fresh.
 #[derive(Debug)]
 pub struct PageSource(pub HashMap<NodeKey, Arc<NodeSnapshot>>);

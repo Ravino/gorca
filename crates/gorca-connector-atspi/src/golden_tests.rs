@@ -964,6 +964,18 @@ fn review_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
                     ),
                 );
             }
+            push(
+                s,
+                "text-track",
+                match rr::text_tracked(s) {
+                    Some((editable, secret, multiline)) => {
+                        format!(
+                            "Text:editable={editable} | Text:secret={secret} | Text:multiline={multiline}"
+                        )
+                    }
+                    None => "Text:untracked".to_owned(),
+                },
+            );
             if web_run {
                 push(s, "class-web", class_text(rr::class_of_snapshot(s, true)));
             }
@@ -1093,7 +1105,7 @@ const GATE_CHANGE_RECORDS: usize = 4154;
 /// The review gate (`cargo xtask cutover review`, 8 of 8 families, en and ru) compared 35270
 /// records (flat, zone, noname, class, class-web and walk of 6969 nodes); M22c part 1 added
 /// the `walk-build` case (one record per node, 6969).
-const GATE_REVIEW_RECORDS: usize = 42239;
+const GATE_REVIEW_RECORDS: usize = 49208;
 
 #[test]
 fn the_goldens_hold_every_record_the_gate_compared() {

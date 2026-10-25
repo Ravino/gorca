@@ -702,3 +702,15 @@ review tests. Dated differences, all in which nodes the build asks the app for t
 * 2026-10-25: `MatchRule::showing_status_bar` hides the connector's role and state types from the
   review build; the rule sent is the same.
 
+#### M22c part 2: text layer (2026-10-25)
+
+`crates/gorca-core/src/text/` reads the fused entry (`SemRole`, `SemFlags::EDITABLE`) and
+`struct_state()` (defunct, focused, multi-line). Decision (coordinator, 2026-10-25): `Ifaces` stays
+private structure on the snapshot behind `NodeCaps`. The golden case `text-track` (one row per
+recorded node) guards `trackable`.
+
+* 2026-10-25: Chromium date, time, month and datetime-local inputs are exported with a role the old
+  mapping had no word for (`Unknown`, not editable, so never tracked); the fused role is `TextBox`,
+  which the text layer always follows. 7 recorded nodes. The caret machine now sees their text
+  object; nothing else changes.
+

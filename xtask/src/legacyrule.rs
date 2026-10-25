@@ -123,7 +123,10 @@ const fn ban(
 /// Modules already moved off the legacy node record (M22c ratchet, ADR-0022 section 8.7): they
 /// read the fused entry only. A module joins this list in the commit that ports it and never
 /// leaves; the rule then fails on every legacy `Role`, `StateSet` or interface read in it.
-const PORTED: &[&str] = &["crates/gorca-core/src/review/"];
+const PORTED: &[&str] = &[
+    "crates/gorca-core/src/review/",
+    "crates/gorca-core/src/text/",
+];
 const LEGACY_ROLE: &str =
     "SemRole from the fused entry (`review::zone::entry_of`, `Ivm::entry_view`)";
 const LEGACY_STATES: &str = "StructState (`NodeSnapshot::struct_state`) or the semantic states and flags of the fused entry";

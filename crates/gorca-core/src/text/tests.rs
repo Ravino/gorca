@@ -38,24 +38,27 @@ fn node() -> NodeKey {
 }
 
 fn snap(role: Role, states: StateSet) -> Arc<NodeSnapshot> {
-    Arc::new(NodeSnapshot {
-        key: node(),
-        role,
-        states,
-        name: Some(Arc::from("field")),
-        description: None,
-        value: None,
-        parent: None,
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
-        attrs: gorca_model::AttrMap::default(),
-        relations: gorca_model::Relations::default(),
-        bounds: None,
-        have: PropMask::PRESENT,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    })
+    Arc::new(
+        NodeSnapshot {
+            key: node(),
+            role,
+            states,
+            name: Some(Arc::from("field")),
+            description: None,
+            value: None,
+            parent: None,
+            children: ChildList::Unknown,
+            interfaces: Ifaces::empty(),
+            attrs: gorca_model::AttrMap::default(),
+            relations: gorca_model::Relations::default(),
+            bounds: None,
+            have: PropMask::PRESENT,
+            confirmed_seq: 0,
+            fresh: Freshness::Fresh { at: Instant::now() },
+            sem: gorca_model::NodeSem::NONE,
+        }
+        .with_test_record(),
+    )
 }
 
 struct Rig {
@@ -3622,4 +3625,22 @@ fn the_boundary_words_are_localised() {
     let _ = g.key(0xff53, 0, NONE);
     g.advance(150);
     assert_eq!(spoken(&g.tick(0)), ["конец"]);
+}
+
+#[test]
+fn the_text_layer_follows_fields_and_editable_containers_only() {
+    use super::{TextRole, text_role};
+    use gorca_model::sem::SemRole;
+    assert_eq!(text_role(SemRole::TextBox), TextRole::Always);
+    assert_eq!(text_role(SemRole::PasswordBox), TextRole::Always);
+    assert_eq!(text_role(SemRole::Combobox), TextRole::IfEditable);
+    assert_eq!(text_role(SemRole::Unknown), TextRole::IfEditable);
+    assert_eq!(text_role(SemRole::Button), TextRole::Never);
+    // Not editable: a paragraph is read, not followed; editable: it is a text object.
+    let plain = snap(Role::Paragraph, StateSet::SHOWING);
+    assert!(super::trackable(&plain).is_none());
+    let editor = snap(Role::Paragraph, StateSet::SHOWING | StateSet::EDITABLE);
+    assert!(super::trackable(&editor).is_some_and(|k| k.editable));
+    let gone = snap(Role::TextEntry, StateSet::DEFUNCT);
+    assert!(super::trackable(&gone).is_none());
 }
