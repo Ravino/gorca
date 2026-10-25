@@ -45,6 +45,7 @@ mod quick;
 mod reader;
 mod review;
 mod runtime;
+mod speakable;
 #[cfg(test)]
 mod statemodel;
 mod terminal;

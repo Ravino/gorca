@@ -146,7 +146,7 @@ fn lines_of(doc: &WebDoc, id: DocNodeId) -> Vec<String> {
     let Some((a, b)) = doc.subtree_text_range(id) else {
         return Vec::new();
     };
-    let text = doc.text_in(a, b.min(a.saturating_add(MAX_SNAPSHOT)));
+    let text = crate::speakable::text_in(doc, a, b.min(a.saturating_add(MAX_SNAPSHOT)));
     let mut out: Vec<String> = text
         .split('\n')
         .map(|l| {

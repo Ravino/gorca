@@ -732,7 +732,7 @@ fn title_of(d: &WebDoc) -> Option<String> {
 fn line_items(d: &WebDoc, max_line: u16, off: u32) -> Vec<Item> {
     let sp = WebSpace::new(d, max_line);
     let r = sp.unit_at(off, Unit::Line).ready().unwrap_or(off..off);
-    let end = if r.end > r.start && d.text_in(r.end - 1, r.end) == "\n" {
+    let end = if r.end > r.start && crate::speakable::text_in(d, r.end - 1, r.end) == "\n" {
         r.end - 1
     } else {
         r.end
@@ -741,7 +741,7 @@ fn line_items(d: &WebDoc, max_line: u16, off: u32) -> Vec<Item> {
 }
 
 /// A single character, spoken by name.
-fn single_char(d: &WebDoc, r: &Range<u32>, from: Option<u32>) -> Vec<Item> {
+pub(super) fn single_char(d: &WebDoc, r: &Range<u32>, from: Option<u32>) -> Vec<Item> {
     let items = present::describe_from(d, r.start, r.end, from);
     if let [Item::Text(t)] = items.as_slice() {
         let mut it = t.chars();
@@ -751,7 +751,7 @@ fn single_char(d: &WebDoc, r: &Range<u32>, from: Option<u32>) -> Vec<Item> {
         return vec![Item::Text(t.clone())];
     }
     if items.is_empty() {
-        let t = d.text_in(r.start, r.end);
+        let t = crate::speakable::text_in(d, r.start, r.end);
         return t
             .chars()
             .next()
@@ -3005,7 +3005,11 @@ impl Reader {
                         off
                     };
                     let (lo, hi) = (off0.min(active), off0.max(active));
-                    let span = d.text_in(lo, hi.min(lo.saturating_add(SELECT_SPEAK_CAP)));
+                    let span = crate::speakable::text_in(
+                        d,
+                        lo,
+                        hi.min(lo.saturating_add(SELECT_SPEAK_CAP)),
+                    );
                     Outcome::Moved {
                         cur,
                         off,
@@ -3695,7 +3699,7 @@ fn focus_snapshot_of(
     let value = v
         .field_value()
         .cloned()
-        .filter(|_| !super::selmirror::node_is_secret(&v));
+        .filter(|_| !crate::speakable::node_is_secret(&v));
     Some(gorca_model::NodeSnapshot::from_fused(
         node,
         v.sem()?,

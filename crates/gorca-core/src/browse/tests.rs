@@ -4280,7 +4280,7 @@ fn a_toolkit_password_entry_with_a_fused_text_box_role_is_secret_in_every_browse
     // The one helper says so, from the source's mark and not from the fused role.
     let v = d.node(field).expect("node");
     assert_eq!(v.role, gorca_model::sem::SemRole::TextBox);
-    assert!(super::selmirror::node_is_secret(&v));
+    assert!(crate::speakable::node_is_secret(&v));
     // Quick navigation and the browse description never carry the value or the text under the field.
     let said = format!("{:?}", super::present::describe_node(&d, field));
     assert!(!said.contains("hunter2"), "{said}");
@@ -4322,4 +4322,31 @@ fn audit_line_reading_never_speaks_the_text_under_a_secret_field() {
         + 5;
     let said = format!("{:?}", super::present::describe(&d, lo, hi));
     assert!(!said.contains("hunter2"), "{said}");
+}
+
+#[test]
+fn reading_a_character_of_a_secret_field_never_speaks_a_plaintext_char() {
+    let d = toolkit_password_doc();
+    let run = d
+        .preorder()
+        .find(|id| d.node(*id).is_some_and(|v| v.text == Some("hunter2")))
+        .expect("the text under the field");
+    let at = d.offset_of(run).expect("offset");
+    for o in at..at + 7 {
+        let items = super::commands::single_char(&d, &(o..o + 1), None);
+        let said = format!("{items:?}");
+        for plain in ["h", "u", "n", "t", "e", "r", "2"] {
+            assert!(!said.contains(&format!("\"{plain}\"")), "{said}");
+        }
+    }
+    // The shared accessor masks the range, and only that range.
+    assert_eq!(
+        crate::speakable::text_in(&d, at, at + 7),
+        "\u{2022}".repeat(7)
+    );
+    let around = crate::speakable::text_in(&d, at - 4, at + 12);
+    assert!(
+        around.starts_with("pre ") && !around.contains("hunter2"),
+        "{around}"
+    );
 }

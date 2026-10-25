@@ -21,6 +21,7 @@
 //! between, head of the end branch, for engines that keep several ranges), and `snap`, one range
 //! on the common ancestor that rounds nested ends out to whole children (engines that keep one).
 
+use crate::speakable::{node_is_secret, secret};
 use gorca_doc::web::{NodeFlags, WebDoc};
 use gorca_model::sem::SemRole;
 use gorca_model::{DocNodeId, DocRange, SelSpan};
@@ -162,29 +163,6 @@ fn ancestors(d: &WebDoc, from: DocNodeId) -> Vec<DocNodeId> {
         cur = p;
     }
     v
-}
-
-/// True when `id` or an ancestor is a password field: its text is never mirrored or copied.
-/// Whether a document node is a secret field: its fused entry says so (the role or the source's
-/// mark), or, without an entry, its role. Every sink of browse mode asks this.
-pub(super) fn node_is_secret(v: &gorca_doc::web::NodeView<'_>) -> bool {
-    v.sem().as_deref().map_or_else(
-        || gorca_present::is_secret_role(v.role),
-        gorca_present::is_secret_entry,
-    )
-}
-
-/// Whether `id` or an ancestor is a secret field (its text is never read, mirrored or copied).
-pub(super) fn secret(d: &WebDoc, id: DocNodeId) -> bool {
-    let mut cur = Some(id);
-    for _ in 0..64 {
-        let Some(n) = cur else { return false };
-        if d.node(n).is_some_and(|v| node_is_secret(&v)) {
-            return true;
-        }
-        cur = d.parent(n);
-    }
-    false
 }
 
 /// An atom met by the range, with the scalar offsets of the range inside its text.

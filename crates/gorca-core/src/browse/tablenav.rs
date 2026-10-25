@@ -48,7 +48,7 @@ pub fn table_say(c: CoreCmd) -> Option<bool> {
 fn text_of(doc: &WebDoc, id: DocNodeId) -> String {
     doc.subtree_text_range(id)
         .map(|(a, b)| {
-            doc.text_in(a, b.min(a.saturating_add(present::QUICK_NAV_CAP)))
+            crate::speakable::text_in(doc, a, b.min(a.saturating_add(present::QUICK_NAV_CAP)))
                 .replace(['\n', '\u{FFFC}'], " ")
                 .split_whitespace()
                 .collect::<Vec<_>>()

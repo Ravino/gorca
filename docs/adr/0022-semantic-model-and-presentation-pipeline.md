@@ -827,3 +827,9 @@ skips an unnamed container the catalog has no role word for. Audit tests un-igno
 `audit_line_reading_never_speaks_the_text_under_a_secret_field`,
 `audit_a_marked_text_box_value_is_secret_and_redacted`.
 
+Secret text on every speech path (follow-up, 2026-10-25): `speakable::text_in` is the one reader of
+document text for speech; it masks (with bullets, same length) the text of a secret node or of a
+node under one. Character, word, line, say-all, selection, find and the live-region snapshot
+read through it, and rule 12 bans `.text_in(` in `browse/` and `doc_actor/live.rs` (`raw-text-in`).
+Test: `reading_a_character_of_a_secret_field_never_speaks_a_plaintext_char`.
+

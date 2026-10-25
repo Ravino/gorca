@@ -131,6 +131,12 @@ const UNPORTED: &[&str] = &[
     "crates/gorca-core/src/app_actor/fuse.rs",
     "crates/gorca-core/src/doc_actor/fuse.rs",
 ];
+/// The browse-mode speech paths and the live-region snapshot: they read document text only through
+/// `speakable::text_in`, which masks the text under a secret field.
+const SPEECH_PATHS: &[&str] = &[
+    "crates/gorca-core/src/browse/",
+    "crates/gorca-core/src/doc_actor/live.rs",
+];
 const LEGACY_ROLE: &str =
     "SemRole from the fused entry (`review::zone::entry_of`, `Ivm::entry_view`)";
 const LEGACY_STATES: &str = "StructState (`NodeSnapshot::struct_state`) or the semantic states and flags of the fused entry";
@@ -237,6 +243,12 @@ pub const BANS: &[Ban] = &[
     ban("legacy-ifaces", "Ifaces", PORTED, LEGACY_IFACES),
     ban("legacy-iface", "Iface", PORTED, LEGACY_IFACES),
     ban("snap-interfaces", ".interfaces", PORTED, LEGACY_IFACES),
+    ban(
+        "raw-text-in",
+        ".text_in(",
+        SPEECH_PATHS,
+        "crate::speakable::text_in (masks the text of a secret field)",
+    ),
     Ban {
         id: "snap-role",
         // The snapshot is named `snap` throughout (`v.snap.role`, `r.snap.role`); other receivers
@@ -567,6 +579,18 @@ mod tests {
         // The plugin bridges are the listed exceptions inside the ratcheted tree.
         assert!(scan("crates/gorca-core/src/doc_actor/fuse.rs", src).is_empty());
         assert!(!scan("crates/gorca-core/src/doc_actor/live.rs", src).is_empty());
+    }
+
+    #[test]
+    fn raw_document_text_is_banned_in_the_speech_paths_of_browse() {
+        let src = "let t = d.text_in(a, b);\nlet u = crate::speakable::text_in(d, a, b);\n";
+        let hits = scan("crates/gorca-core/src/browse/cursor.rs", src);
+        assert_eq!(
+            hits.iter().map(|h| (h.ban, h.line)).collect::<Vec<_>>(),
+            vec![("raw-text-in", 1)]
+        );
+        assert!(!scan("crates/gorca-core/src/doc_actor/live.rs", src).is_empty());
+        assert!(scan("crates/gorca-core/src/speakable.rs", src).is_empty());
     }
 
     #[test]

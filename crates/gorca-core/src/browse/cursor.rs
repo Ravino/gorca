@@ -45,7 +45,7 @@ fn ready<T>(l: Lookup<T>) -> Option<T> {
 }
 
 fn text_of(doc: &WebDoc, r: &Range<u32>) -> String {
-    doc.text_in(r.start, r.end)
+    crate::speakable::text_in(doc, r.start, r.end)
 }
 
 /// Does a line contain nothing a user would hear (only line breaks and white space)?
@@ -90,7 +90,7 @@ pub fn content_start(doc: &WebDoc, node: DocNodeId) -> Option<u32> {
     if start >= limit {
         return Some(start);
     }
-    let lead = doc.text_in(start, limit);
+    let lead = crate::speakable::text_in(doc, start, limit);
     let blanks = lead.chars().take_while(|c| *c == '\n').count();
     let blanks = u32::try_from(blanks).unwrap_or(0);
     // All breaks and nothing behind them within the window: stay on the node itself.
@@ -105,7 +105,7 @@ const BLANK_SKIP: u32 = 64;
 
 /// The speakable part of a line: without its terminating line break.
 fn trim_break(doc: &WebDoc, r: Range<u32>) -> Range<u32> {
-    if r.end > r.start && doc.text_in(r.end - 1, r.end) == "\n" {
+    if r.end > r.start && crate::speakable::text_in(doc, r.end - 1, r.end) == "\n" {
         r.start..r.end - 1
     } else {
         r
@@ -192,7 +192,7 @@ pub fn page(doc: &WebDoc, max_line: u16, off: u32, dir: Dir, n: u32) -> Mv {
 }
 
 fn char_is(doc: &WebDoc, p: u32, c: char) -> bool {
-    doc.text_in(p, p + 1).starts_with(c)
+    crate::speakable::text_in(doc, p, p + 1).starts_with(c)
 }
 
 /// Is the `\n` at `p` a whole empty line (blank line), as opposed to the end of a non-empty one?
@@ -354,7 +354,7 @@ fn sentence_end_char(c: char) -> bool {
 pub fn sentence(doc: &WebDoc, off: u32, dir: Dir) -> Mv {
     let len = doc.text_len();
     let (ps, pe) = doc.line_range(off.min(len.saturating_sub(1)));
-    let text: Vec<char> = doc.text_in(ps, pe).chars().collect();
+    let text: Vec<char> = crate::speakable::text_in(doc, ps, pe).chars().collect();
     // Sentence starts within the paragraph, as scalar offsets.
     let mut starts: Vec<u32> = vec![0];
     for (i, c) in text.iter().enumerate() {
@@ -429,7 +429,7 @@ pub fn sentence(doc: &WebDoc, off: u32, dir: Dir) -> Mv {
 /// The first sentence of the paragraph starting at `start`.
 fn sentence_first(doc: &WebDoc, start: u32) -> Mv {
     let (_, pe) = doc.line_range(start);
-    let text: Vec<char> = doc.text_in(start, pe).chars().collect();
+    let text: Vec<char> = crate::speakable::text_in(doc, start, pe).chars().collect();
     let mut end = text.len();
     for (i, c) in text.iter().enumerate() {
         if sentence_end_char(*c) && text.get(i + 1).is_some_and(|n| n.is_whitespace()) {
@@ -507,9 +507,11 @@ mod tests {
 
     fn spoken(doc: &WebDoc, m: &Mv) -> Option<(u32, String, bool)> {
         match m {
-            Mv::Landed { off, speak, blank } => {
-                Some((*off, doc.text_in(speak.start, speak.end), *blank))
-            }
+            Mv::Landed { off, speak, blank } => Some((
+                *off,
+                crate::speakable::text_in(doc, speak.start, speak.end),
+                *blank,
+            )),
             Mv::Edge(_) => None,
         }
     }

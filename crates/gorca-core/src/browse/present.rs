@@ -380,10 +380,10 @@ fn describe_from_fields(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Said
                     out.extend(pb::marker_fields(e));
                 }
             } else {
-                let t = doc.text_in(lo, hi);
+                let t = crate::speakable::text_in(doc, lo, hi);
                 let t = t.trim_matches('\n');
                 // The text under a secret field is never read, by line or by say-all.
-                if !t.is_empty() && !super::selmirror::secret(doc, id) {
+                if !t.is_empty() && !crate::speakable::secret(doc, id) {
                     out.push(text_run(t));
                 }
             }
@@ -444,7 +444,7 @@ fn describe_node_from_fields(doc: &WebDoc, id: DocNodeId, from: Option<u32>) -> 
     }
     // A secret field is named and announced, never read: whatever text or value the mirror holds
     // under it (the source's bullets included) stays out of the description.
-    if super::selmirror::node_is_secret(&v) {
+    if crate::speakable::node_is_secret(&v) {
         items.retain(|i| i.kind != FieldKind::TEXT && i.kind != FieldKind::VALUE);
     }
     let announced_here = items.iter().any(|i| i.kind == FieldKind::ROLE);

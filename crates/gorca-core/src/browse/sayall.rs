@@ -84,7 +84,7 @@ impl Reader {
             let len = d.text_len();
             let base = around.min(len);
             let end = base.saturating_add(2 * FETCH_RADIUS).min(len);
-            (base, d.text_in(base, end), len)
+            (base, crate::speakable::text_in(d, base, end), len)
         }))
     }
 
