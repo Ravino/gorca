@@ -360,12 +360,54 @@ fn overlay_observed(e: &mut SemEntry, rec: &gorca_model::sem::SrcRecord) {
         t.value_text = Some(v);
         o.text = Some(Arc::new(t));
     }
-    if let Some(name) = rec
-        .name
-        .as_ref()
-        .filter(|n| !gorca_present::name_is_blank(Some(n)))
+    // A name an add-on patch or the user set is not the engine's to take back: the engine's own
+    // name is the observed one that the patch deliberately replaced (ADR-0026 section 2.6, S1
+    // beats S0). A genuine change of the observed name re-fuses the node in its document, so the
+    // entry already follows it where the patch no longer applies.
+    let owned = matches!(
+        e.prov.get(Group::Name),
+        Some(gorca_model::sem::ProvCode::Patch | gorca_model::sem::ProvCode::User)
+    );
+    if !owned
+        && let Some(name) = rec
+            .name
+            .as_ref()
+            .filter(|n| !gorca_present::name_is_blank(Some(n)))
     {
         e.name = Some(Arc::clone(name));
+    }
+}
+
+#[cfg(test)]
+mod overlay_tests {
+    use super::*;
+    use gorca_model::sem::{Group, ProvCode, SrcRecord};
+
+    fn rec(name: &str) -> SrcRecord {
+        let mut r = SrcRecord::default();
+        r.name = Some(Arc::from(name));
+        r.known.set(Group::Name, true);
+        r
+    }
+
+    #[test]
+    fn the_observed_name_replaces_an_observed_or_derived_name() {
+        let mut e = SemEntry::default();
+        e.name = Some(Arc::from("old"));
+        e.prov.set(Group::Name, ProvCode::ObservedPrimary);
+        overlay_observed(&mut e, &rec("new"));
+        assert_eq!(e.name.as_deref(), Some("new"));
+    }
+
+    #[test]
+    fn a_patched_or_user_name_survives_the_overlay() {
+        for p in [ProvCode::Patch, ProvCode::User] {
+            let mut e = SemEntry::default();
+            e.name = Some(Arc::from("Alice, 1 unread"));
+            e.prov.set(Group::Name, p);
+            overlay_observed(&mut e, &rec("AL Alice 15:00"));
+            assert_eq!(e.name.as_deref(), Some("Alice, 1 unread"), "{p:?}");
+        }
     }
 }
 

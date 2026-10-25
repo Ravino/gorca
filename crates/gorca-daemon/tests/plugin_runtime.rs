@@ -127,6 +127,30 @@ const CHAT_K: &[N] = &[
     (11, Some(10), "", "", "see you soon"),
 ];
 
+/// Web K in Chromium: the inline spans are gone, title, time and preview are bare text leaves.
+const CHAT_K_CHROMIUM: &[N] = &[
+    (0, None, "ul", "", ""),
+    (
+        1,
+        Some(0),
+        "a",
+        "chatlist-chat chatlist-chat-bigger row-big",
+        "",
+    ),
+    (2, Some(1), "div", "dialog-avatar", "Alice"),
+    (3, Some(1), "", "", "Alice"),
+    (4, Some(1), "", "", "15:00"),
+    (5, Some(1), "", "", "see you soon"),
+    (
+        6,
+        Some(1),
+        "div",
+        "dialog-subtitle-badge badge badge-24 unread",
+        "",
+    ),
+    (7, Some(6), "", "", "1"),
+];
+
 const MESSAGE_A: &[N] = &[
     (0, None, "div", "", ""),
     (1, Some(0), "div", "Message message-list-item", ""),
@@ -199,6 +223,20 @@ fn the_real_plugin_names_a_web_a_chat_row_without_initials_and_says_unread() {
     );
     // First party: an S1 patch, plain (T0).
     assert!(matches!(ops[0], FactOp::Patch { .. }));
+}
+
+#[test]
+fn web_k_in_chromium_is_named_from_its_bare_text_leaves() {
+    let rt = runtime(PluginOptions::default());
+    let mut b =
+        open_bridge(&rt, scope("chromium", "https://web.telegram.org/k/", true)).expect("scope");
+    let tree = feed(&mut b, CHAT_K_CHROMIUM);
+    let ops = collect(&mut b, &tree, Duration::from_secs(5));
+    assert_eq!(
+        names(&ops),
+        vec![(1, "Alice, 1 unread, see you soon, 15:00".to_owned())],
+        "{ops:?}"
+    );
 }
 
 #[test]

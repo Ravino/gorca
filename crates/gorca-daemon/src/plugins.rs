@@ -613,6 +613,7 @@ fn effects_of(effects: Vec<Effect>) -> Vec<FactEffect> {
                     Value::Truth(b) => FactValue::Truth(b),
                     Value::Other => continue,
                 };
+                tracing::debug!(node, group, patch = layer == 0, ?value, "plugin fact");
                 out.push(FactEffect {
                     node,
                     group,
@@ -1040,8 +1041,17 @@ mod tests {
         let delivered: Vec<usize> = (0..N)
             .map(|i| seen[i].iter().filter(|s| s.is_some()).count())
             .collect();
-        eprintln!("first-utterance share per plugin: {:?}", first_ok.iter().map(|c| *c as f64 / TURNS as f64).collect::<Vec<_>>());
-        eprintln!("delivered per plugin: {delivered:?}; late lags (us) max {:?}", lag_us.iter().max());
+        eprintln!(
+            "first-utterance share per plugin: {:?}",
+            first_ok
+                .iter()
+                .map(|c| *c as f64 / TURNS as f64)
+                .collect::<Vec<_>>()
+        );
+        eprintln!(
+            "delivered per plugin: {delivered:?}; late lags (us) max {:?}",
+            lag_us.iter().max()
+        );
         // The gate needs a quiet host (CLAUDE.md: label the conditions, never delete a failing
         // number). On a loaded one the wake latency of ten parked threads dominates, so only the
         // no-starvation properties below are asserted and the run is labelled.
@@ -1051,7 +1061,10 @@ mod tests {
             .unwrap_or(0.0);
         let cores = std::thread::available_parallelism().map_or(1, usize::from) as f64;
         let quiet = load1 < cores / 2.0;
-        eprintln!("host load1 {load1:.1} on {cores} cores: quiet_violated={}", !quiet);
+        eprintln!(
+            "host load1 {load1:.1} on {cores} cores: quiet_violated={}",
+            !quiet
+        );
         for i in (0..N).filter(|i| *i != 7) {
             let share = first_ok[i] as f64 / TURNS as f64;
             if quiet {
@@ -1059,13 +1072,24 @@ mod tests {
                 // wait (600 us: the 0.3 ms deadline plus the wake slack).
                 assert!(share >= 0.97, "plugin {i} first-utterance {share:.3}");
             } else {
-                assert!(share >= 0.5, "plugin {i} first-utterance {share:.3} even on a loaded host");
+                assert!(
+                    share >= 0.5,
+                    "plugin {i} first-utterance {share:.3} even on a loaded host"
+                );
             }
         }
         // The slower one is never starved: its newest job always runs next, so it delivers for
         // nearly every turn (a job superseded by a newer one is replaced by that one's fact),
         // and no refinement waits unboundedly.
-        assert!(delivered[7] as f64 / TURNS as f64 >= 0.9, "slow plugin delivered {} of {TURNS}", delivered[7]);
-        assert!(lag_us.iter().all(|l| *l < 20_000), "a refinement took {:?} us", lag_us.iter().max());
+        assert!(
+            delivered[7] as f64 / TURNS as f64 >= 0.9,
+            "slow plugin delivered {} of {TURNS}",
+            delivered[7]
+        );
+        assert!(
+            lag_us.iter().all(|l| *l < 20_000),
+            "a refinement took {:?} us",
+            lag_us.iter().max()
+        );
     }
 }
