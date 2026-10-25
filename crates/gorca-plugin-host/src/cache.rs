@@ -140,6 +140,15 @@ impl CwasmCache {
         let path = dir.join(SECRET_FILE);
         match fs::symlink_metadata(&path) {
             Ok(m) => {
+                // A crash between create and write leaves a short file of ours: regenerate it.
+                if m.file_type().is_file()
+                    && m.uid() == current_uid()?
+                    && m.permissions().mode() & 0o7777 == 0o600
+                    && m.len() < 32
+                {
+                    fs::remove_file(&path)?;
+                    return Self::load_secret(dir);
+                }
                 if !m.file_type().is_file()
                     || m.uid() != current_uid()?
                     || m.permissions().mode() & 0o7777 != 0o600
@@ -148,7 +157,7 @@ impl CwasmCache {
                     return Err(CacheError::BadSecret("not a 32-byte 0600 user-owned file"));
                 }
                 let mut s = [0u8; 32];
-                fs::File::open(&path)?.read_exact(&mut s)?;
+                crate::fsx::open_regular(&path)?.read_exact(&mut s)?;
                 Ok(s)
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -187,7 +196,7 @@ impl CwasmCache {
     pub fn read_verified(&self, key: &str) -> Result<Option<Vec<u8>>, CacheError> {
         Self::check_dir(&self.dir)?;
         let path = self.path_of(key);
-        let mut f = match fs::File::open(&path) {
+        let mut f = match crate::fsx::open_regular(&path) {
             Ok(f) => f,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e.into()),
@@ -269,13 +278,22 @@ impl CwasmCache {
             }
             Ok(None) => {}
             Err(CacheError::MacMismatch(_) | CacheError::TooLarge(_)) => self.remove(&key),
-            Err(e) => return Err(e),
+            // CD-W2: a cache failure is a miss. A non-private directory is not a failure of the
+            // cache but a security refusal, and propagates.
+            Err(e @ (CacheError::BadDirectory(_) | CacheError::BadSecret(_))) => return Err(e),
+            Err(e) => tracing::warn!(error = %e, "cwasm cache read failed, compiling uncached"),
         }
         self.stats.misses.fetch_add(1, Ordering::Relaxed);
         let bytes = engine
             .precompile_component(wasm)
             .map_err(|e| CacheError::Wasmtime(e.to_string()))?;
-        self.write(&key, &bytes)?;
+        match self.write(&key, &bytes) {
+            Ok(()) => {}
+            Err(e @ CacheError::BadDirectory(_)) => return Err(e),
+            Err(e) => {
+                tracing::warn!(error = %e, "cwasm cache write failed, using the artifact uncached");
+            }
+        }
         // SAFETY: `bytes` was just produced by this engine's `precompile_component` in this
         // process; nothing outside the process touched it.
         unsafe { Component::deserialize(engine, &bytes) }

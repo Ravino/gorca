@@ -6,7 +6,8 @@
 //! 4 read the node name (needs `read-names`). 5 grow memory past any cap. 6 bump an in-guest
 //! counter and assert it (instance state). 7 read the role through the real handle. 8 forge 16
 //! handles. 9 log 1 MiB (over the hostcall cap). 10 log 1 KiB (over the log cap, under hostcall).
-//! 11 speak (needs `speak`).
+//! 11 speak (needs `speak`). 20 loop `text(64K)`. 21 loop `children(256)`. 22 forge 15 handles.
+//! 23 forge 200 anchors. 24 assert the number of children.
 wit_bindgen::generate!({ path: "../../../../wit/gorca-ext-0.10", world: "app-module" });
 
 use exports::gorca::ext::{commands, reactor, rules};
@@ -79,6 +80,32 @@ impl rules::Guest for G {
                 &[output::Part::Text(types::Text::Literal("hi".to_string()))],
                 output::Urgency::Message,
             ),
+            20 => {
+                let mut k = 0u64;
+                loop {
+                    let t = model::text(n, 0, 65535);
+                    k = k.wrapping_add(t.map_or(0, |s| s.len() as u64));
+                    std::hint::black_box(k);
+                }
+            }
+            21 => loop {
+                let c = model::children(n, 256);
+                std::hint::black_box(&c);
+            },
+            22 => {
+                for i in 0..15u64 {
+                    let _ = model::role(n ^ ((i + 1) << 3));
+                }
+            }
+            23 => {
+                for i in 0..200u64 {
+                    facts::retract(facts::FactTarget::Anchor(i), 1, facts::Layer::Inferred);
+                }
+            }
+            24 => {
+                let c = model::children(n, 8);
+                assert_num(n, 24, c.len() as u32);
+            }
             _ => {}
         }
     }

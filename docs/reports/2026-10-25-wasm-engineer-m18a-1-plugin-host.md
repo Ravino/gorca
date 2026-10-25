@@ -34,3 +34,15 @@ Crate: `crates/gorca-plugin-host` (not wired into the daemon). Test guest: `crat
 8. `site` world, R lane, `present` export, pool of actors sharing a thread, MQ-3 progressive filling and MQ-2
    token admission are later slices (the runner only carries the grant and the slot epoch).
 9. Interactive pre-warm of derive code paths (first-call page faults) is not done; only the instance is built.
+
+## Review fixes (r2, docs/reports/m18a-1-review.md)
+- F-1: imports charge fuel before working (`limits::cost`, provisional: base 2000, 1/byte text, 800/child,
+  700/handle check), applied to the store fuel by a `call_hook`; 4x-grant watchdog every 64th import.
+  Release, heavy view, 0.2 ms grant: text loop 183-203 us (was 28-37 ms), children loop 116-126 us (was 67 ms);
+  cold first call ~316 us.
+- F-2: limiter totals over all memories/tables, one memory allowed. F-3: lifetime forgery budget 256 (Malformed,
+  strike, rebuild with a fresh key), anchors capped; 64-bit tags not done.
+- F-4: `ModelView::system_scope`, refused in `node()`/`mint()` and in the dirty-batch match path for third parties.
+- F-5: `Event::Cancelled`. F-6: `fsx::open_regular` (O_NOFOLLOW|O_NONBLOCK, fstat regular). F-7: dead actor
+  fails closed, runner-owned tags, finished threads pruned, bounded shutdown. F-8: index >= 2^24 not minted.
+  F-9 partly: short secret regenerated, cache I/O errors fall back to uncached compile; dir fd/openat not done.

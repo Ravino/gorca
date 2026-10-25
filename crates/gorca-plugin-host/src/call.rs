@@ -13,7 +13,7 @@ use crate::host::Effect;
 use crate::instance::{CallDone, CallFault, DirtyNode, Loaded, PluginInstance};
 use crate::limits::FuelGrant;
 use crate::slot::{Event, FaultKind, JobId};
-use crate::trust::Perms;
+use crate::trust::{Perms, TrustTier};
 use crate::view::ModelView;
 
 /// Plugin id within one runner.
@@ -114,7 +114,7 @@ impl PluginReply {
                 }
             }
             Self::Fault { kind, .. } => vec![Event::Fault(*kind)],
-            Self::Cancelled { .. } => Vec::new(),
+            Self::Cancelled { .. } => vec![Event::Cancelled],
         }
     }
 }
@@ -129,8 +129,6 @@ pub trait ReplySink: Send + Sync {
 /// The wait budget of one writer turn.
 #[derive(Debug, Clone, Copy)]
 pub struct Turn {
-    /// Tag distinguishing turns on the countdown word.
-    pub tag: u16,
     /// Absolute `CLOCK_MONOTONIC` ns of the deadline `D = t0 + 0.3 ms`.
     pub deadline_ns: u64,
     /// False when the writer already waited for this keypress path or flaps: send only.
@@ -140,9 +138,8 @@ pub struct Turn {
 impl Turn {
     /// A turn whose writer started at `t0_ns` (`gorca_rt::process::monotonic_ns`).
     #[must_use]
-    pub fn starting_at(tag: u16, t0_ns: u64, wait: bool) -> Self {
+    pub fn starting_at(t0_ns: u64, wait: bool) -> Self {
         Self {
-            tag,
             deadline_ns: t0_ns + u64::try_from(D_INTERACTIVE.as_nanos()).unwrap_or(300_000),
             wait,
         }
@@ -165,7 +162,9 @@ pub struct HandoffOutcome {
 /// The call model: how the writer hands derive jobs to plugin actors.
 pub trait WLaneRunner: Send {
     /// Send the focus-chain jobs of one turn at once, then wait until all replied or the turn's
-    /// deadline. Replies always arrive through `sink`; the wait only ends early.
+    /// deadline. Replies always arrive through `sink`; the wait only ends early. The calling
+    /// thread's timer slack is set to 1 ns permanently (ADR-0026 r4); call it from writer
+    /// threads, not from arbitrary pool threads.
     fn interactive(
         &mut self,
         turn: &Turn,
@@ -198,6 +197,7 @@ pub trait Exec: Send + 'static {
 pub struct PluginExec {
     loaded: Loaded,
     grants: Perms,
+    tier: TrustTier,
     memory_mib: u32,
     instance: Option<PluginInstance>,
     serial: u64,
@@ -215,10 +215,11 @@ impl std::fmt::Debug for PluginExec {
 impl PluginExec {
     /// An executor with no live instance (`Cold`).
     #[must_use]
-    pub fn new(loaded: Loaded, grants: Perms, memory_mib: u32) -> Self {
+    pub fn new(loaded: Loaded, grants: Perms, tier: TrustTier, memory_mib: u32) -> Self {
         Self {
             loaded,
             grants,
+            tier,
             memory_mib,
             instance: None,
             serial: 0,
@@ -260,6 +261,7 @@ impl Exec for PluginExec {
                 &self.loaded,
                 self.serial,
                 self.grants,
+                self.tier,
                 self.memory_mib,
                 Arc::clone(&job.view),
             ) {
@@ -305,6 +307,7 @@ impl Exec for PluginExec {
                 &self.loaded,
                 self.serial,
                 self.grants,
+                self.tier,
                 self.memory_mib,
                 Arc::new(crate::view::EmptyView),
             )

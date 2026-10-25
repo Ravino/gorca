@@ -111,6 +111,8 @@ pub enum Event {
     CallNeeded(JobId),
     /// The call returned normally.
     CallOk,
+    /// The call was cancelled or displaced before it ran: not a fault, frees the slot.
+    Cancelled,
     /// The call faulted (or the instantiate failed).
     Fault(FaultKind),
     /// Wall overrun, window not necessarily full.
@@ -278,9 +280,11 @@ impl Slot {
                     Action::DropInstanceAndNotice
                 }
                 Event::CallNeeded(_) => Action::Skip,
-                Event::CallOk | Event::Fault(_) | Event::WallOverrun | Event::BackoffExpired => {
-                    Action::Impossible
-                }
+                Event::CallOk
+                | Event::Cancelled
+                | Event::Fault(_)
+                | Event::WallOverrun
+                | Event::BackoffExpired => Action::Impossible,
                 Event::UserReEnable => Action::Nothing,
                 Event::PackageSwapped => Action::Preload,
                 Event::ScopeCloses => {
@@ -295,7 +299,9 @@ impl Slot {
                     self.state = SlotState::Ready { busy: Some(job) };
                     Action::Send
                 }
-                Event::CallOk | Event::WallOverrun | Event::BackoffExpired => Action::Impossible,
+                Event::CallOk | Event::Cancelled | Event::WallOverrun | Event::BackoffExpired => {
+                    Action::Impossible
+                }
                 // A fault from the instantiate itself.
                 Event::Fault(_) => self.escalate(now),
                 Event::UserReEnable => Action::Nothing,
@@ -320,7 +326,7 @@ impl Slot {
                         Action::Send
                     }
                 }
-                Event::CallOk => {
+                Event::CallOk | Event::Cancelled => {
                     self.state = SlotState::Ready { busy: None };
                     Action::Nothing
                 }
@@ -339,9 +345,11 @@ impl Slot {
             },
             SlotState::Backoff { until } => match ev {
                 Event::PreloadDone => Action::Nothing,
-                Event::PreloadFailed | Event::CallOk | Event::Fault(_) | Event::WallOverrun => {
-                    Action::Impossible
-                }
+                Event::PreloadFailed
+                | Event::CallOk
+                | Event::Cancelled
+                | Event::Fault(_)
+                | Event::WallOverrun => Action::Impossible,
                 Event::CallNeeded(_) => {
                     if now >= until {
                         self.clear_windows();
@@ -379,6 +387,7 @@ impl Slot {
                 Event::PreloadDone => Action::Nothing,
                 Event::PreloadFailed
                 | Event::CallOk
+                | Event::Cancelled
                 | Event::Fault(_)
                 | Event::WallOverrun
                 | Event::BackoffExpired => Action::Impossible,
@@ -500,6 +509,18 @@ mod tests {
         assert_eq!(s.event(Event::WallOverrun, now), Action::DropInstance);
         assert_eq!(s.state(), SlotState::Cold);
         assert_eq!(s.strikes(), 1);
+    }
+
+    #[test]
+    fn cancelled_reply_frees_the_slot() {
+        let (mut s, now) = ready();
+        assert_eq!(s.event(Event::CallNeeded(1), now), Action::Send);
+        assert_eq!(
+            s.on_reply(s.slot_epoch(), Event::Cancelled, now),
+            Action::Nothing
+        );
+        assert_eq!(s.state(), SlotState::Ready { busy: None });
+        assert_eq!(s.event(Event::CallNeeded(2), now), Action::Send);
     }
 
     #[test]

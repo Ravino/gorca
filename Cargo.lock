@@ -1444,6 +1444,7 @@ dependencies = [
  "bitflags",
  "getrandom",
  "gorca-rt",
+ "libc",
  "sha2",
  "tempfile",
  "thiserror",

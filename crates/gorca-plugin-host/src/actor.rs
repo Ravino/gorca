@@ -136,6 +136,8 @@ struct Actor {
     running_since: AtomicU64,
     stop: AtomicBool,
     replaced: AtomicU32,
+    /// No worker could be (re)started: every job is answered `ActorLost` at once.
+    dead: AtomicBool,
 }
 
 fn lost(plugin: PluginId, job: JobId, slot_epoch: u64) -> PluginReply {
@@ -168,6 +170,7 @@ impl Actor {
             running_since: AtomicU64::new(0),
             stop: AtomicBool::new(false),
             replaced: AtomicU32::new(0),
+            dead: AtomicBool::new(false),
         })
     }
 
@@ -180,6 +183,13 @@ impl Actor {
 
     /// Writer side: queue a job; a displaced job is answered `Cancelled`.
     fn dispatch(&self, q: Queued, gate: &Gate) {
+        if self.dead.load(Acquire) {
+            q.sink.send(lost(q.job.plugin, q.job.job, q.job.slot_epoch));
+            if let Some(t) = q.tag {
+                gate.done(t);
+            }
+            return;
+        }
         let displaced = {
             let mut s = lock(&self.slots);
             let slot = if q.job.interactive {
@@ -211,6 +221,23 @@ impl Actor {
         };
         if let Some(q) = removed {
             q.sink.send(cancelled(&q.job));
+            if let Some(t) = q.tag {
+                gate.done(t);
+            }
+        }
+    }
+
+    /// Answer every queued job `ActorLost` (the actor has no worker).
+    fn drain_lost(&self, gate: &Gate) {
+        let queued: Vec<Queued> = {
+            let mut s = lock(&self.slots);
+            [s.interactive.take(), s.background.take()]
+                .into_iter()
+                .flatten()
+                .collect()
+        };
+        for q in queued {
+            q.sink.send(lost(q.job.plugin, q.job.job, q.job.slot_epoch));
             if let Some(t) = q.tag {
                 gate.done(t);
             }
@@ -353,6 +380,7 @@ struct Core {
     stop: AtomicBool,
     stop_word: AtomicU32,
     ready: Arc<AtomicU32>,
+    next_tag: AtomicU32,
 }
 
 impl Core {
@@ -382,8 +410,14 @@ impl Core {
                 && self.spawn(a, inc, exec).is_ok()
             {
                 n += 1;
+            } else {
+                // No replacement: fail the actor closed so no job waits forever.
+                a.dead.store(true, Release);
+                a.drain_lost(&self.gate);
             }
         }
+        // Finished (orphaned and returned) threads are dropped here, not kept until shutdown.
+        lock(&self.threads).retain(|h| !h.is_finished());
         n
     }
 }
@@ -440,6 +474,7 @@ impl ActorRunner {
             stop: AtomicBool::new(false),
             stop_word: AtomicU32::new(0),
             ready: Arc::new(AtomicU32::new(0)),
+            next_tag: AtomicU32::new(0),
         });
         let n = u32::try_from(pending.len()).unwrap_or(u32::MAX);
         for (a, e) in pending {
@@ -516,10 +551,13 @@ impl WLaneRunner for ActorRunner {
         let start = monotonic_ns();
         let asked = u32::try_from(jobs.len()).unwrap_or(u32::MAX);
         let gate = Arc::clone(&self.core.gate);
-        gate.arm(turn.tag, asked);
-        let missing = self.send(jobs, sink, Some(turn.tag));
+        // The runner owns turn tags: a caller-supplied tag could be reused while a late reply of
+        // the earlier turn is still in flight and would count down the wrong wait.
+        let tag = u16::try_from(self.core.next_tag.fetch_add(1, Relaxed) % 0xffff).unwrap_or(0) + 1;
+        gate.arm(tag, asked);
+        let missing = self.send(jobs, sink, Some(tag));
         for _ in 0..missing {
-            gate.done(turn.tag);
+            gate.done(tag);
         }
         let mut woke_late = 0;
         if turn.wait {
@@ -577,12 +615,20 @@ impl WLaneRunner for ActorRunner {
             a.stop.store(true, Release);
             a.kick();
         }
-        let hs: Vec<_> = std::mem::take(&mut *lock(&self.core.threads));
-        for h in hs {
-            // A healthy worker finishes its current call (bounded by fuel) and exits. A wedged
-            // one was orphaned; joining it would block, so only finished threads are joined.
-            if h.is_finished() {
+        let mut hs: Vec<_> = std::mem::take(&mut *lock(&self.core.threads));
+        // A healthy worker finishes its current call (bounded by fuel) and exits. Wait a bounded
+        // time for them; a wedged one is detached (it holds no writer state).
+        let end = monotonic_ns() + 100_000_000;
+        while !hs.is_empty() && monotonic_ns() < end {
+            let (done, rest): (Vec<_>, Vec<_>) = hs
+                .into_iter()
+                .partition(std::thread::JoinHandle::is_finished);
+            for h in done {
                 let _ = h.join();
+            }
+            hs = rest;
+            if !hs.is_empty() {
+                futex_wait_abs(&self.core.stop_word, 1, monotonic_ns() + 1_000_000);
             }
         }
         if let Some(s) = self.supervisor.take() {

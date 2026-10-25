@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+libc = { workspace = true }
 gorca-rt = { workspace = true }
 bitflags = { workspace = true }
 getrandom = "0.4"
@@ -20,6 +21,7 @@ wasmtime = { workspace = true, features = [
     "cranelift",
     "runtime",
     "std",
+    "call-hook",
     "parallel-compilation",
 ] }
 

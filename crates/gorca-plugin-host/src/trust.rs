@@ -162,6 +162,13 @@ pub fn tier_may_enter(tier: TrustTier, scope: SystemScope) -> bool {
     }
 }
 
+/// The match-path gate: may a selector of `tier` match a node whose system scope is `scope`?
+/// `None` (an ordinary node) always may.
+#[must_use]
+pub fn selector_may_match(tier: TrustTier, scope: Option<SystemScope>) -> bool {
+    scope.is_none_or(|s| tier_may_enter(tier, s))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,5 +233,19 @@ mod tests {
             Err(PermError::NotInThisVersion(_))
         ));
         assert!(matches!(parse_perm("root"), Err(PermError::Unknown(_))));
+    }
+
+    #[test]
+    fn a_third_party_selector_never_matches_a_system_scope() {
+        for t in THIRD {
+            assert!(selector_may_match(t, None));
+            for s in SystemScope::ALL {
+                assert!(!selector_may_match(t, Some(s)), "{t:?} {s:?}");
+            }
+        }
+        assert!(selector_may_match(
+            TrustTier::FirstParty,
+            Some(SystemScope::SecretNode)
+        ));
     }
 }

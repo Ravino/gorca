@@ -5,7 +5,6 @@
 //! A package directory holds `manifest.toml` and `plugin.wasm`. Sizes are checked from file
 //! metadata before a byte is read.
 
-use std::fs;
 use std::io::Read as _;
 use std::path::Path;
 
@@ -221,7 +220,7 @@ pub struct Package {
 }
 
 fn read_capped(path: &Path, what: &'static str, cap: u64) -> Result<Vec<u8>, PackageError> {
-    let f = fs::File::open(path)?;
+    let f = crate::fsx::open_regular(path)?;
     let size = f.metadata()?.len();
     if size > cap {
         return Err(PackageError::TooLarge { what, size, cap });
@@ -279,6 +278,7 @@ pub fn load_dir(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     const M: &str = "[plugin]\nid = \"example.hello\"\nversion = \"1\"\n";
 
@@ -384,5 +384,37 @@ mod tests {
         assert_eq!(p.tier, TrustTier::Untrusted);
         // `pointer` is dropped for third parties, `speak` kept as declared.
         assert_eq!(p.grants, Perms::SPEAK);
+    }
+
+    #[test]
+    fn fifo_and_symlink_are_refused_without_blocking() {
+        let d = tempfile::tempdir().expect("tmp");
+        fs_write(&d, "manifest.toml", M.as_bytes());
+        let st = std::process::Command::new("mkfifo")
+            .arg(d.path().join("plugin.wasm"))
+            .status()
+            .expect("mkfifo");
+        assert!(st.success());
+        let (tx, rx) = std::sync::mpsc::channel();
+        let p = d.path().to_path_buf();
+        std::thread::spawn(move || {
+            let r = load_dir(&p, Source::Sideloaded, false, Perms::empty(), &[]);
+            let _ = tx.send(r.is_err());
+        });
+        assert_eq!(
+            rx.recv_timeout(std::time::Duration::from_secs(5)),
+            Ok(true),
+            "a FIFO must be refused, not blocked on"
+        );
+        // A symlink (even to a good file) is refused too.
+        std::fs::remove_file(d.path().join("plugin.wasm")).expect("rm");
+        fs_write(&d, "real.wasm", b"\0asm");
+        std::os::unix::fs::symlink(d.path().join("real.wasm"), d.path().join("plugin.wasm"))
+            .expect("ln");
+        assert!(load_dir(d.path(), Source::Sideloaded, false, Perms::empty(), &[]).is_err());
+    }
+
+    fn fs_write(d: &tempfile::TempDir, name: &str, b: &[u8]) {
+        std::fs::write(d.path().join(name), b).expect("w");
     }
 }

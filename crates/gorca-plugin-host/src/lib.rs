@@ -18,6 +18,7 @@
 pub mod actor;
 pub mod cache;
 pub mod call;
+pub mod fsx;
 pub mod handles;
 pub mod host;
 pub mod instance;

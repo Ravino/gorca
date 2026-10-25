@@ -11,14 +11,14 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use wasmtime::component::{Component, HasSelf, Linker};
-use wasmtime::{Config, Engine, Store, Trap};
+use wasmtime::{CallHook, Config, Engine, Store, Trap};
 
 use crate::handles::HandleMinter;
 use crate::host::bindings::{RulesHost, RulesHostPre};
-use crate::host::{Effect, HostState};
+use crate::host::{Effect, HostState, Kill};
 use crate::limits::{FuelGrant, HOSTCALL_LIFT_CAP, MemoryLimits, PluginLimiter};
 use crate::slot::FaultKind;
-use crate::trust::Perms;
+use crate::trust::{Perms, TrustTier};
 use crate::view::ModelView;
 
 /// Engine options.
@@ -125,12 +125,14 @@ impl PluginInstance {
         loaded: &Loaded,
         serial: u64,
         grants: Perms,
+        tier: TrustTier,
         memory_mib: u32,
         view: Arc<dyn ModelView>,
     ) -> Result<Self, FaultKind> {
         let minter = HandleMinter::new(serial).map_err(|_| FaultKind::Instantiate)?;
         let state = HostState::new(
             grants,
+            tier,
             minter,
             view,
             PluginLimiter::new(MemoryLimits::for_mib(memory_mib)),
@@ -138,6 +140,18 @@ impl PluginInstance {
         let mut store = Store::new(&loaded.engine, state);
         store.limiter(|s| &mut s.limiter);
         store.set_hostcall_fuel(HOSTCALL_LIFT_CAP);
+        // Imports charge fuel before they work; the charge is applied to the store's fuel when
+        // control returns to the guest, so guest code and host work draw on one grant.
+        store.call_hook(|mut ctx, kind| {
+            if matches!(kind, CallHook::ReturningFromHost) {
+                let p = std::mem::take(&mut ctx.data_mut().pending_fuel);
+                if p > 0 {
+                    let left = ctx.get_fuel()?;
+                    ctx.set_fuel(left.saturating_sub(p))?;
+                }
+            }
+            Ok(())
+        });
         // Instantiation runs guest start code: give it a bounded grant too.
         store
             .set_fuel(
@@ -182,9 +196,18 @@ impl PluginInstance {
         grant: FuelGrant,
     ) -> Result<CallDone, CallFault> {
         use crate::host::bindings::exports::gorca::ext::rules::{Dirty, RuleCtx};
-        self.store.data_mut().begin_call(Arc::clone(view));
+        self.store.data_mut().begin_call(Arc::clone(view), grant);
+        let tier = self.store.data().tier;
+        let mut scope_denied = 0u64;
         let dirty: Vec<Dirty> = batch
             .iter()
+            .filter(|d| {
+                // The match path: a third-party plugin is never called for a node of a system
+                // scope (SS-1..SS-4), whatever its selector says.
+                let ok = crate::trust::selector_may_match(tier, view.system_scope(d.index));
+                scope_denied += u64::from(!ok);
+                ok
+            })
             .filter_map(|d| {
                 view.generation(d.index).map(|g| Dirty {
                     node: self.store.data().minter.mint(d.index, g),
@@ -193,6 +216,15 @@ impl PluginInstance {
                 })
             })
             .collect();
+        self.store.data_mut().counters.scope_denied += scope_denied;
+        if dirty.is_empty() {
+            return Ok(CallDone {
+                effects: Vec::new(),
+                exec: Duration::ZERO,
+                fuel_used: 0,
+                wall_overrun: false,
+            });
+        }
         let ctx = RuleCtx { epoch, interactive };
         if self.store.set_fuel(grant.units).is_err() {
             return Err(CallFault {
@@ -235,6 +267,12 @@ impl PluginInstance {
         let st = self.store.data();
         if e.downcast_ref::<Trap>() == Some(&Trap::OutOfFuel) {
             FaultKind::OutOfFuel
+        } else if let Some(k) = st.kill {
+            match k {
+                Kill::Budget => FaultKind::OutOfFuel,
+                Kill::Watchdog => FaultKind::Watchdog,
+                Kill::Forgery => FaultKind::Malformed,
+            }
         } else if st.limiter.denied {
             FaultKind::MemoryDenied
         } else if st.malformed || is_hostcall_fuel(e) {

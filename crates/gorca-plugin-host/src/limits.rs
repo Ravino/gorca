@@ -76,6 +76,36 @@ impl Cap {
     }
 }
 
+/// Table elements allowed over all tables of an instance.
+pub const MAX_TABLE_ELEMENTS: usize = 10_000;
+
+/// Host-call costs in fuel units, charged **before** the import does its work (ADR-0026 B-8).
+/// Calibrated against `KAPPA_PROVISIONAL` = 21,739 units/us and release-build measurements of the
+/// M18a-1 probe (loops over `text`/`children` must stay within grant + 50 us); provisional like
+/// kappa itself.
+pub mod cost {
+    /// Every import: the host-call transition and argument handling (~90 ns).
+    pub const BASE: u64 = 2_000;
+    /// Per byte requested from or returned by `text`.
+    pub const PER_TEXT_BYTE: u64 = 1;
+    /// Charged up front for `name`/`attr` (size unknown before the call); the returned bytes are
+    /// charged on top.
+    pub const NAME_PRE: u64 = 1_024;
+    /// Per element of `children` (view read, handle mint, lowering).
+    pub const PER_CHILD: u64 = 800;
+    /// Handle verification (one SipHash).
+    pub const HANDLE_CHECK: u64 = 700;
+}
+
+/// The watchdog checks the wall clock on every Nth import and traps a call that exceeds
+/// `WATCHDOG_FACTOR x` its grant time (ADR-0026 §2.5.2).
+pub const WATCHDOG_EVERY: u32 = 64;
+/// See [`WATCHDOG_EVERY`].
+pub const WATCHDOG_FACTOR: u32 = 4;
+/// Lifetime handle-forgery budget of one instance; exhausted = malformed fault and a rebuild with
+/// a fresh key (review F-3).
+pub const FORGERY_BUDGET: u32 = 256;
+
 /// Facts per call (B-6).
 pub const MAX_FACTS_PER_CALL: usize = 256;
 /// Other effects per call (B-6).
@@ -119,8 +149,11 @@ impl MemoryLimits {
 #[derive(Debug)]
 pub struct PluginLimiter {
     limits: MemoryLimits,
-    start_of_call: usize,
-    current: usize,
+    /// Sum of all linear memories, bytes (wasmtime calls the limiter per memory).
+    total: usize,
+    total_at_call_start: usize,
+    /// Sum of all table elements.
+    table_total: usize,
     /// Set when a growth was denied during the last call.
     pub denied: bool,
 }
@@ -131,15 +164,16 @@ impl PluginLimiter {
     pub fn new(limits: MemoryLimits) -> Self {
         Self {
             limits,
-            start_of_call: 0,
-            current: 0,
+            total: 0,
+            total_at_call_start: 0,
+            table_total: 0,
             denied: false,
         }
     }
 
     /// Called before each guest call: growth is counted per call.
     pub fn begin_call(&mut self) {
-        self.start_of_call = self.current;
+        self.total_at_call_start = self.total;
         self.denied = false;
     }
 }
@@ -147,27 +181,38 @@ impl PluginLimiter {
 impl ResourceLimiter for PluginLimiter {
     fn memory_growing(
         &mut self,
-        _current: usize,
+        current: usize,
         desired: usize,
         _maximum: Option<usize>,
     ) -> wasmtime::Result<bool> {
-        if desired > self.limits.max_bytes
-            || desired.saturating_sub(self.start_of_call) > self.limits.max_growth_per_call
+        // `current`/`desired` are those of one memory: account the delta against the total of
+        // all memories, so several memories cannot each reach the cap.
+        let delta = desired.saturating_sub(current);
+        let total = self.total.saturating_add(delta);
+        if total > self.limits.max_bytes
+            || total.saturating_sub(self.total_at_call_start) > self.limits.max_growth_per_call
         {
             self.denied = true;
             return Err(wasmtime::Error::msg("plugin memory limit"));
         }
-        self.current = desired;
+        self.total = total;
         Ok(true)
     }
 
     fn table_growing(
         &mut self,
-        _current: usize,
+        current: usize,
         desired: usize,
         _maximum: Option<usize>,
     ) -> wasmtime::Result<bool> {
-        Ok(desired <= 10_000)
+        let total = self
+            .table_total
+            .saturating_add(desired.saturating_sub(current));
+        if total > MAX_TABLE_ELEMENTS {
+            return Ok(false);
+        }
+        self.table_total = total;
+        Ok(true)
     }
 
     // A component is several core instances (the guest module and the shims that glue it to the
@@ -180,8 +225,9 @@ impl ResourceLimiter for PluginLimiter {
         8
     }
 
+    // The canonical-ABI shims share the guest's single memory (verified by the test guest).
     fn memories(&self) -> usize {
-        4
+        1
     }
 }
 
@@ -235,5 +281,30 @@ mod tests {
         assert!(l.memory_growing(0, 4 << 20, None).expect("ok"));
         l.begin_call();
         assert!(l.memory_growing(4 << 20, 8 << 20, None).expect("ok"));
+    }
+
+    #[test]
+    fn several_memories_share_one_total_and_one_growth_cap() {
+        // wasmtime calls the limiter once per memory with that memory's (current, desired).
+        let mut l = PluginLimiter::new(MemoryLimits::for_mib(16));
+        l.begin_call();
+        // Four memories growing 0 -> 4 MiB in one call: the second already breaks the 4 MiB cap.
+        assert!(l.memory_growing(0, 4 << 20, None).expect("first"));
+        assert!(l.memory_growing(0, 4 << 20, None).is_err());
+        assert!(l.denied);
+        // Across calls the total, not each memory, is capped at 16 MiB.
+        let mut l = PluginLimiter::new(MemoryLimits::for_mib(16));
+        let mut total = 0usize;
+        'outer: for _ in 0..16 {
+            l.begin_call();
+            for _ in 0..4 {
+                let cur = total / 4;
+                if l.memory_growing(cur, cur + (1 << 20), None).is_err() {
+                    break 'outer;
+                }
+                total += 1 << 20;
+            }
+        }
+        assert!(total <= 16 << 20, "reached {} MiB", total >> 20);
     }
 }

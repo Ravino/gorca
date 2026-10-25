@@ -5,6 +5,8 @@
 //! nodes by host-side `index` only; handles are minted per instance by the runtime. Nothing here
 //! mentions a connector.
 
+use crate::trust::SystemScope;
+
 /// An immutable, `Send + Sync` view of the nodes a job may read.
 pub trait ModelView: Send + Sync + std::fmt::Debug {
     /// Live generation of `index`, or `None` when the slot is gone.
@@ -23,6 +25,12 @@ pub trait ModelView: Send + Sync + std::fmt::Debug {
     fn parent(&self, index: u32) -> Option<u32>;
     /// Child indices, at most `max`.
     fn children(&self, index: u32, max: u16) -> Vec<u32>;
+    /// The system scope (SS-1..SS-4) a node belongs to, if any. The host classifies; the
+    /// runtime refuses every read of such a node for third-party plugins (ADR-0026 §2.7).
+    /// Contract: a node inside a secret subtree reports `SecretNode` for every descendant.
+    fn system_scope(&self, _index: u32) -> Option<SystemScope> {
+        None
+    }
 }
 
 /// A view with no nodes (every read is `none`).

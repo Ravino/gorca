@@ -7,15 +7,17 @@
 //! (all or nothing, ADR-0019 I-3). Plugins see the non-`host` API only.
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use wasmtime::Result;
 
 use crate::handles::{HandleError, HandleMinter};
 use crate::limits::{
-    Cap, MAX_EFFECT_TEXT_PER_CALL, MAX_FACTS_PER_CALL, MAX_FORGED_PER_CALL,
-    MAX_OTHER_EFFECTS_PER_CALL, PluginLimiter, check_len,
+    Cap, FORGERY_BUDGET, FuelGrant, MAX_EFFECT_TEXT_PER_CALL, MAX_FACTS_PER_CALL,
+    MAX_FORGED_PER_CALL, MAX_OTHER_EFFECTS_PER_CALL, PluginLimiter, WATCHDOG_EVERY,
+    WATCHDOG_FACTOR, check_len, cost,
 };
-use crate::trust::Perms;
+use crate::trust::{Perms, TrustTier, tier_may_enter};
 use crate::view::ModelView;
 
 #[allow(
@@ -147,6 +149,19 @@ pub struct Counters {
     pub dead: u64,
     /// Over-cap arguments seen by the host.
     pub oversize: u64,
+    /// Reads refused because the node is in a system scope and the tier is third-party.
+    pub scope_denied: u64,
+}
+
+/// Why the host stopped a call from inside an import.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kill {
+    /// Host-call fuel exhausted (imports are metered against the grant).
+    Budget,
+    /// The wall-clock watchdog (4 x grant time) fired.
+    Watchdog,
+    /// Too many forged handles (per call or lifetime).
+    Forgery,
 }
 
 /// Per-call state of one plugin instance.
@@ -165,6 +180,17 @@ pub struct HostState {
     pub counters: Counters,
     /// Set when the call produced a malformed effect: the whole call is rejected.
     pub malformed: bool,
+    /// Trust tier of the package (system-scope enforcement).
+    pub tier: TrustTier,
+    /// Set when an import stopped the call.
+    pub kill: Option<Kill>,
+    /// Fuel the imports charged since the last return to the guest (applied by the call hook).
+    pub pending_fuel: u64,
+    host_left: u64,
+    imports: u32,
+    call_start: Instant,
+    call_limit: Duration,
+    forged_lifetime: u32,
     facts: usize,
     other: usize,
     text_bytes: usize,
@@ -185,6 +211,7 @@ impl HostState {
     #[must_use]
     pub fn new(
         grants: Perms,
+        tier: TrustTier,
         minter: HandleMinter,
         view: Arc<dyn ModelView>,
         limiter: PluginLimiter,
@@ -197,6 +224,14 @@ impl HostState {
             effects: Vec::new(),
             counters: Counters::default(),
             malformed: false,
+            tier,
+            kill: None,
+            pending_fuel: 0,
+            host_left: 0,
+            imports: 0,
+            call_start: Instant::now(),
+            call_limit: Duration::ZERO,
+            forged_lifetime: 0,
             facts: 0,
             other: 0,
             text_bytes: 0,
@@ -205,8 +240,14 @@ impl HostState {
     }
 
     /// Reset the per-call buffers before a guest call.
-    pub fn begin_call(&mut self, view: Arc<dyn ModelView>) {
+    pub fn begin_call(&mut self, view: Arc<dyn ModelView>, grant: FuelGrant) {
         self.view = view;
+        self.kill = None;
+        self.pending_fuel = 0;
+        self.host_left = grant.units;
+        self.imports = 0;
+        self.call_start = Instant::now();
+        self.call_limit = grant.time * WATCHDOG_FACTOR;
         self.effects.clear();
         self.malformed = false;
         self.facts = 0;
@@ -214,6 +255,55 @@ impl HostState {
         self.text_bytes = 0;
         self.forged_in_call = 0;
         self.limiter.begin_call();
+    }
+
+    /// Account host work without refusing it (used where the API cannot fail); the next
+    /// `charge` stops the call when the grant is spent.
+    fn meter(&mut self, units: u64) {
+        self.pending_fuel = self.pending_fuel.saturating_add(units);
+        self.host_left = self.host_left.saturating_sub(units);
+        if self.host_left == 0 && self.kill.is_none() {
+            self.kill = Some(Kill::Budget);
+        }
+    }
+
+    /// Charge an import **before** it does its work. The work is refused (the guest traps) when
+    /// it does not fit in what is left of the call's grant, or when the watchdog fires.
+    fn charge(&mut self, units: u64) -> Result<()> {
+        if self.kill.is_none() && units > self.host_left {
+            self.kill = Some(Kill::Budget);
+        }
+        if self.kill.is_none() {
+            self.meter(units);
+            self.imports = self.imports.wrapping_add(1);
+            if self.imports.is_multiple_of(WATCHDOG_EVERY)
+                && self.call_start.elapsed() > self.call_limit
+            {
+                self.kill = Some(Kill::Watchdog);
+            }
+        }
+        match self.kill {
+            None => Ok(()),
+            Some(Kill::Budget) => Err(wasmtime::Error::msg("host-call fuel exhausted")),
+            Some(Kill::Watchdog) => Err(wasmtime::Error::msg("host watchdog")),
+            Some(Kill::Forgery) => Err(wasmtime::Error::msg("too many forged handles")),
+        }
+    }
+
+    /// A handle that did not verify. Per call 16 reject the call; the instance lifetime budget
+    /// (`FORGERY_BUDGET`) ends the instance (malformed fault, strike, rebuild with a fresh key).
+    fn bad_handle(&mut self, forged: bool) {
+        if forged {
+            self.counters.forged += 1;
+            self.forged_lifetime += 1;
+        } else {
+            self.counters.dead += 1;
+        }
+        self.forged_in_call += 1;
+        if self.forged_in_call >= MAX_FORGED_PER_CALL || self.forged_lifetime > FORGERY_BUDGET {
+            self.malformed = true;
+            self.kill = Some(Kill::Forgery);
+        }
     }
 
     fn allowed(&mut self, p: Perms) -> bool {
@@ -228,24 +318,39 @@ impl HostState {
     /// Verify a guest handle; a bad one reads `none`, is counted, and 16 in a call reject the
     /// call (§2.3.3).
     fn node(&mut self, h: u64) -> Option<u32> {
+        self.meter(cost::HANDLE_CHECK);
         let view = Arc::clone(&self.view);
         match self.minter.verify(h, |i| view.generation(i)) {
-            Ok(v) => Some(v.index),
+            Ok(v) => {
+                if self.scope_refused(v.index) {
+                    return None;
+                }
+                Some(v.index)
+            }
             Err(e) => {
-                match e {
-                    HandleError::Forged => self.counters.forged += 1,
-                    HandleError::Dead => self.counters.dead += 1,
-                }
-                self.forged_in_call += 1;
-                if self.forged_in_call >= MAX_FORGED_PER_CALL {
-                    self.malformed = true;
-                }
+                self.bad_handle(e == HandleError::Forged);
                 None
             }
         }
     }
 
-    fn mint(&self, index: u32) -> Option<u64> {
+    /// SS-1..SS-4: a third-party tier never reads a node of a system scope.
+    fn scope_refused(&mut self, index: u32) -> bool {
+        match self.view.system_scope(index) {
+            Some(s) if !tier_may_enter(self.tier, s) => {
+                self.counters.scope_denied += 1;
+                true
+            }
+            Some(_) | None => false,
+        }
+    }
+
+    /// Mint a handle. Indices above 24 bits and system-scope nodes of third-party tiers are not
+    /// mintable (a wrapped index would verify as a different node).
+    fn mint(&mut self, index: u32) -> Option<u64> {
+        if index >= (1 << 24) || self.scope_refused(index) {
+            return None;
+        }
         self.view
             .generation(index)
             .map(|g| self.minter.mint(index, g))
@@ -286,10 +391,8 @@ impl HostState {
             facts::FactTarget::Node(h) => self.node(*h).map(Target::Node),
             // Anchors are minted by the host through `anchor-of`, which returns `none` in this
             // slice, so any anchor the guest passes is forged.
-            facts::FactTarget::Anchor(h) => {
-                self.counters.forged += 1;
-                self.forged_in_call += 1;
-                let _ = h;
+            facts::FactTarget::Anchor(_) => {
+                self.bad_handle(true);
                 None
             }
             facts::FactTarget::Selector(s) => Some(Target::Selector(*s)),
@@ -301,6 +404,7 @@ impl types::Host for HostState {}
 
 impl model::Host for HostState {
     fn app(&mut self) -> Result<types::AppInfo> {
+        self.charge(cost::BASE)?;
         Ok(types::AppInfo {
             name: String::new(),
             engine: 0,
@@ -308,81 +412,107 @@ impl model::Host for HostState {
         })
     }
     fn doc_url(&mut self) -> Result<Option<String>> {
+        self.charge(cost::BASE)?;
         Ok(None)
     }
     fn focus(&mut self) -> Result<Option<u64>> {
+        self.charge(cost::BASE)?;
         Ok(None)
     }
     fn cursor(&mut self) -> Result<Option<u64>> {
+        self.charge(cost::BASE)?;
         Ok(None)
     }
     fn role(&mut self, n: u64) -> Result<Option<u16>> {
+        self.charge(cost::BASE)?;
         Ok(self.node(n).and_then(|i| self.view.role(i)))
     }
     fn prop(&mut self, n: u64, _group: u16) -> Result<Option<types::PropValue>> {
+        self.charge(cost::BASE)?;
         let _ = self.node(n);
         Ok(None)
     }
     fn name(&mut self, n: u64) -> Result<Option<String>> {
+        self.charge(cost::BASE)?;
         if !self.allowed(Perms::READ_NAMES) {
             return Ok(None);
         }
-        Ok(self.node(n).and_then(|i| self.view.name(i)))
+        self.charge(cost::NAME_PRE)?;
+        let r = self.node(n).and_then(|i| self.view.name(i));
+        self.meter(
+            r.as_ref()
+                .map_or(0, |s| s.len() as u64 * cost::PER_TEXT_BYTE),
+        );
+        Ok(r)
     }
     fn states(&mut self, n: u64) -> Result<u64> {
+        self.charge(cost::BASE)?;
         Ok(self.node(n).map_or(0, |i| self.view.states(i)))
     }
     fn parent(&mut self, n: u64) -> Result<Option<u64>> {
+        self.charge(cost::BASE)?;
         Ok(self
             .node(n)
             .and_then(|i| self.view.parent(i))
             .and_then(|p| self.mint(p)))
     }
     fn children(&mut self, n: u64, max: u16) -> Result<Vec<u64>> {
+        self.charge(cost::BASE)?;
+        let max = max.min(256);
+        self.charge(u64::from(max) * cost::PER_CHILD)?;
         let Some(i) = self.node(n) else {
             return Ok(Vec::new());
         };
-        Ok(self
-            .view
-            .children(i, max.min(256))
-            .into_iter()
-            .filter_map(|c| self.mint(c))
-            .collect())
+        let kids = self.view.children(i, max);
+        Ok(kids.into_iter().filter_map(|c| self.mint(c)).collect())
     }
     fn subtree(&mut self, root: u64, _d: u8, _m: u16) -> Result<Vec<types::ViewNode>> {
+        self.charge(cost::BASE)?;
         let _ = self.node(root);
         Ok(Vec::new())
     }
     fn text(&mut self, n: u64, start: u32, len: u32) -> Result<Option<String>> {
+        self.charge(cost::BASE)?;
         if !self.allowed(Perms::READ_TEXT) {
             return Ok(None);
         }
-        Ok(self
-            .node(n)
-            .and_then(|i| self.view.text(i, start, len.min(64 << 10))))
+        let len = len.min(64 << 10);
+        self.charge(u64::from(len) * cost::PER_TEXT_BYTE)?;
+        Ok(self.node(n).and_then(|i| self.view.text(i, start, len)))
     }
     fn attr(&mut self, n: u64, key: String) -> Result<Option<String>> {
+        self.charge(cost::BASE)?;
         if !self.allowed(Perms::READ_ATTRIBUTES) {
             return Ok(None);
         }
         if !self.cap(Cap::Key, key.len()) {
             return Ok(None);
         }
-        Ok(self.node(n).and_then(|i| self.view.attr(i, &key)))
+        self.charge(cost::NAME_PRE)?;
+        let r = self.node(n).and_then(|i| self.view.attr(i, &key));
+        self.meter(
+            r.as_ref()
+                .map_or(0, |s| s.len() as u64 * cost::PER_TEXT_BYTE),
+        );
+        Ok(r)
     }
     fn matches(&mut self, n: u64, _sel: u16) -> Result<bool> {
+        self.charge(cost::BASE)?;
         let _ = self.node(n);
         Ok(false)
     }
     fn select(&mut self, root: u64, _sel: u16, _max: u16) -> Result<Vec<u64>> {
+        self.charge(cost::BASE)?;
         let _ = self.node(root);
         Ok(Vec::new())
     }
     fn anchor_of(&mut self, n: u64, _kind: model::AnchorKind) -> Result<Option<u64>> {
+        self.charge(cost::BASE)?;
         let _ = self.node(n);
         Ok(None)
     }
     fn prov(&mut self, n: u64, _group: u16) -> Result<Option<types::ProvInfo>> {
+        self.charge(cost::BASE)?;
         let _ = self.node(n);
         Ok(None)
     }
@@ -440,6 +570,7 @@ impl facts::Host for HostState {
         Ok(())
     }
     fn retract(&mut self, target: facts::FactTarget, group: u16, _at: facts::Layer) -> Result<()> {
+        self.charge(cost::BASE)?;
         if self.allowed(Perms::CONTRIBUTE_FACTS)
             && let Some(target) = self.target(&target)
         {
@@ -448,6 +579,7 @@ impl facts::Host for HostState {
         Ok(())
     }
     fn hide(&mut self, target: facts::FactTarget) -> Result<()> {
+        self.charge(cost::BASE)?;
         if self.allowed(Perms::CONTRIBUTE_FACTS)
             && let Some(target) = self.target(&target)
         {
@@ -456,6 +588,7 @@ impl facts::Host for HostState {
         Ok(())
     }
     fn unhide(&mut self, target: facts::FactTarget) -> Result<()> {
+        self.charge(cost::BASE)?;
         if self.allowed(Perms::CONTRIBUTE_FACTS)
             && let Some(target) = self.target(&target)
         {
@@ -470,6 +603,7 @@ impl facts::Host for HostState {
         Ok(())
     }
     fn category(&mut self, target: facts::FactTarget, cat: u16, member: bool) -> Result<()> {
+        self.charge(cost::BASE)?;
         if self.allowed(Perms::CONTRIBUTE_FACTS)
             && let Some(target) = self.target(&target)
         {
@@ -488,6 +622,7 @@ impl facts::Host for HostState {
 
 impl output::Host for HostState {
     fn say(&mut self, parts: Vec<output::Part>, _u: output::Urgency) -> Result<()> {
+        self.charge(cost::BASE)?;
         if !self.allowed(Perms::SPEAK) {
             return Ok(());
         }
@@ -508,6 +643,7 @@ impl output::Host for HostState {
         Ok(())
     }
     fn cue(&mut self, name: String) -> Result<()> {
+        self.charge(cost::BASE)?;
         if self.allowed(Perms::SPEAK) && self.cap(Cap::Key, name.len()) {
             let n = name.len();
             self.push_other(Effect::Cue(name), n);
@@ -520,40 +656,48 @@ impl actions::Host for HostState {
     // AC-3: acting needs a user. `derive` never acts; the R lane (later slice) enables these
     // while a command of the plugin is in flight. Here they are permission-checked and dropped.
     fn activate(&mut self, n: u64, _a: u16) -> Result<()> {
+        self.charge(cost::BASE)?;
         let _ = self.node(n);
         let _ = self.allowed(Perms::ACT);
         Ok(())
     }
     fn focus(&mut self, n: u64) -> Result<()> {
+        self.charge(cost::BASE)?;
         let _ = self.node(n);
         let _ = self.allowed(Perms::ACT);
         Ok(())
     }
     fn move_cursor(&mut self, n: u64) -> Result<()> {
+        self.charge(cost::BASE)?;
         let _ = self.node(n);
         let _ = self.allowed(Perms::NAVIGATE);
         Ok(())
     }
     fn request_mode(&mut self, _m: actions::Mode) -> Result<()> {
+        self.charge(cost::BASE)?;
         let _ = self.allowed(Perms::NAVIGATE);
         Ok(())
     }
     fn pointer_click(&mut self, n: u64, _b: u8) -> Result<()> {
+        self.charge(cost::BASE)?;
         let _ = self.node(n);
         let _ = self.allowed(Perms::POINTER);
         Ok(())
     }
     fn pass_key(&mut self) -> Result<()> {
+        self.charge(cost::BASE)?;
         Ok(())
     }
 }
 
 impl settings::Host for HostState {
     fn get(&mut self, key: String) -> Result<Option<settings::SettingValue>> {
+        self.charge(cost::BASE)?;
         let _ = self.cap(Cap::Key, key.len());
         Ok(None)
     }
     fn set(&mut self, key: String, _v: settings::SettingValue) -> Result<()> {
+        self.charge(cost::BASE)?;
         let _ = self.cap(Cap::Key, key.len());
         Ok(())
     }
@@ -561,9 +705,11 @@ impl settings::Host for HostState {
 
 impl timers::Host for HostState {
     fn arm(&mut self, _token: u32, _after_ms: u32) -> Result<()> {
+        self.charge(cost::BASE)?;
         Ok(())
     }
     fn cancel(&mut self, _token: u32) -> Result<()> {
+        self.charge(cost::BASE)?;
         Ok(())
     }
 }
@@ -577,18 +723,21 @@ impl requests::Host for HostState {
         Ok(Err(requests::RequestError::Denied))
     }
     fn cancel(&mut self, _id: u32) -> Result<()> {
+        self.charge(cost::BASE)?;
         Ok(())
     }
 }
 
 impl diag::Host for HostState {
     fn log(&mut self, level: u8, msg: String) -> Result<()> {
+        self.charge(cost::BASE)?;
         if self.cap(Cap::LogMessage, msg.len()) {
             self.push_other(Effect::Log(level, msg), 0);
         }
         Ok(())
     }
     fn now_ms(&mut self) -> Result<Option<u64>> {
+        self.charge(cost::BASE)?;
         // No clock in the writer lane (determinism, §2.4.5).
         Ok(None)
     }
