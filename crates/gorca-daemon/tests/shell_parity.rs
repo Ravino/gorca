@@ -17,11 +17,12 @@ use std::process::Command;
 use std::sync::Arc;
 
 use gorca_core::{
-    AppExt, AppPolicy, ExtSource, MirrorDirectory, PolicyFacts, PolicyMoment, PolicyVerdict,
+    AppExt, AppPolicy, ExtSource, MirrorDirectory, PolicyMoment, PolicyVerdict, PolicyView,
 };
 use gorca_daemon::NativeShellPolicy;
 use gorca_ext_host::{ExtHost, Manifest};
-use gorca_model::{AppId, AppInfo, ConnectorId, ConnectorKind, Role, StateSet, TextUnit};
+use gorca_model::sem::SemRole;
+use gorca_model::{AppId, AppInfo, ConnectorId, ConnectorKind, TextUnit};
 
 const MANIFEST: &str = include_str!("../../../extensions/ext-gnome-shell/ext.toml");
 
@@ -95,52 +96,28 @@ fn host_with(native: bool) -> (ExtHost, Arc<dyn AppExt>) {
     (host, ae)
 }
 
-const ROLES: [Role; 44] = [
-    Role::Unknown,
-    Role::Application,
-    Role::Window,
-    Role::Dialog,
-    Role::Panel,
-    Role::Document,
-    Role::DocumentWeb,
-    Role::Heading,
-    Role::Paragraph,
-    Role::Link,
-    Role::Image,
-    Role::List,
-    Role::ListItem,
-    Role::Table,
-    Role::Row,
-    Role::Cell,
-    Role::ColumnHeader,
-    Role::RowHeader,
-    Role::Button,
-    Role::ToggleButton,
-    Role::CheckBox,
-    Role::RadioButton,
-    Role::ComboBox,
-    Role::TextEntry,
-    Role::PasswordEntry,
-    Role::SpinButton,
-    Role::Slider,
-    Role::ProgressBar,
-    Role::Menu,
-    Role::MenuBar,
-    Role::MenuItem,
-    Role::Popover,
-    Role::Tab,
-    Role::TabList,
-    Role::Tree,
-    Role::TreeItem,
-    Role::Toolbar,
-    Role::StatusBar,
-    Role::Separator,
-    Role::Label,
-    Role::StaticText,
-    Role::Terminal,
-    Role::Landmark,
-    Role::Alert,
-];
+/// A spread of the semantic roles: every other registry code, plus the roles the rules look at
+/// (and their neighbours the legacy mapping folded into them).
+fn roles() -> Vec<SemRole> {
+    SemRole::ALL
+        .iter()
+        .copied()
+        .filter(|r| {
+            r.code() % 2 == 0
+                || matches!(
+                    r,
+                    SemRole::Window
+                        | SemRole::Dialog
+                        | SemRole::AlertDialog
+                        | SemRole::Alert
+                        | SemRole::Slider
+                        | SemRole::ProgressBar
+                        | SemRole::Meter
+                        | SemRole::Button
+                )
+        })
+        .collect()
+}
 
 const MOMENTS: [PolicyMoment; 4] = [
     PolicyMoment::Focus,
@@ -174,24 +151,21 @@ const RANGES: [Option<(f64, f64, f64)>; 13] = [
     Some((f64::INFINITY, 0.0, 1.0)),
 ];
 
-const STATES: [StateSet; 3] = [
-    StateSet::empty(),
-    StateSet::FOCUSED.union(StateSet::SHOWING),
-    StateSet::all(),
-];
+const FLAGS: [u64; 3] = [0, 0x80, u64::MAX];
 
-fn grid() -> impl Iterator<Item = PolicyFacts<'static>> {
-    MOMENTS.into_iter().flat_map(|moment| {
-        ROLES.into_iter().flat_map(move |role| {
-            STATES.into_iter().flat_map(move |states| {
+fn grid() -> impl Iterator<Item = PolicyView<'static>> {
+    let roles = roles();
+    MOMENTS.into_iter().flat_map(move |moment| {
+        roles.clone().into_iter().flat_map(move |role| {
+            FLAGS.into_iter().flat_map(move |flags| {
                 NAMES.into_iter().flat_map(move |name| {
                     [None, Some("a description")]
                         .into_iter()
                         .flat_map(move |description| {
-                            RANGES.into_iter().map(move |range| PolicyFacts {
+                            RANGES.into_iter().map(move |range| PolicyView {
                                 moment,
                                 role,
-                                states,
+                                flags,
                                 name,
                                 description,
                                 range,
@@ -203,7 +177,7 @@ fn grid() -> impl Iterator<Item = PolicyFacts<'static>> {
     })
 }
 
-fn in_host(ae: &Arc<dyn AppExt>, f: &PolicyFacts<'_>) -> PolicyVerdict {
+fn in_host(ae: &Arc<dyn AppExt>, f: &PolicyView<'_>) -> PolicyVerdict {
     // `None` is "no extension has an opinion": the core presents the node as usual.
     ae.policy(f).unwrap_or(PolicyVerdict::Default)
 }
@@ -237,7 +211,7 @@ impl Component {
         }
     }
 
-    fn verdict(&mut self, f: &PolicyFacts<'_>) -> PolicyVerdict {
+    fn verdict(&mut self, f: &PolicyView<'_>) -> PolicyVerdict {
         for _ in 0..Self::ATTEMPTS {
             while !self.host.settled() {
                 std::thread::yield_now();

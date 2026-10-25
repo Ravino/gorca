@@ -28,7 +28,9 @@ pub use flow::{
 pub use job::{PresentJob, PresentKind, SpeechIntent};
 pub use log::{NoLabels, NodeLabel, PresentLog, PresentRecord, PresentSource};
 pub(crate) use notification::NoticeCtx;
-pub use notification::{announcement_utterance, clean_announcement, is_notice_role};
+pub use notification::{
+    announcement_utterance, clean_announcement, is_notice_node, is_notice_role,
+};
 pub use utterance::{log_states, value_text};
 pub(crate) use window::WindowCtx;
 pub use window::{
@@ -36,7 +38,7 @@ pub use window::{
     fetch_level, fetch_window, reads_content,
 };
 
-use gorca_model::{Epoch, NodeSnapshot};
+use gorca_model::Epoch;
 
 /// Why a node is being presented. A presentation is made for this and the node's fused entry
 /// (`present::node`), so an extension or a milestone (text, windows, notifications) adds its own
@@ -74,7 +76,7 @@ impl PresenterRegistry {
     pub fn ext_segments(
         &self,
         ctx: PresentContext,
-        n: &NodeSnapshot,
+        n: &crate::ExtNode,
         epoch: Epoch,
     ) -> Option<Vec<gorca_model::Segment>> {
         self.ext

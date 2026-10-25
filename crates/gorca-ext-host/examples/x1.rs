@@ -165,6 +165,8 @@ fn run_build(label: &str, wasm: Option<&[u8]>, n: usize) {
     let rewrite = ann("rewrite:spoken");
     let node_none = snap(1, "OK");
     let node_some = snap(2, "gorca-ext-present");
+    let ext_none = gorca_core::ExtNode::from_snapshot(&node_none);
+    let ext_some = gorca_core::ExtNode::from_snapshot(&node_some);
     let ctx = PresentContext::Focus;
 
     row(
@@ -185,14 +187,14 @@ fn run_build(label: &str, wasm: Option<&[u8]>, n: usize) {
         &format!("{label}-present_none"),
         n,
         &stats(time(n, || {
-            std::hint::black_box(ae.present(std::hint::black_box(&node_none), ctx, 1));
+            std::hint::black_box(ae.present(std::hint::black_box(&ext_none), ctx, 1));
         })),
     );
     row(
         &format!("{label}-present_some"),
         n,
         &stats(time(n, || {
-            std::hint::black_box(ae.present(std::hint::black_box(&node_some), ctx, 1));
+            std::hint::black_box(ae.present(std::hint::black_box(&ext_some), ctx, 1));
         })),
     );
     let focus = NodeEvent::FocusChanged {

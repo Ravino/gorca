@@ -6,11 +6,16 @@
 //!   ([`with_host`]); outside a hook the calls are inert (`get_node` returns `None`, `fetch` is
 //!   `Denied`, `speak` and `log` do nothing).
 
-use crate::api::{Budget, Node, NodeKey, Prio, QueryError, Segment};
+use crate::api::{Budget, GroupCode, GroupValue, Node, NodeKey, Prio, QueryError, Segment};
 
 /// Mirror only, never blocks.
 pub fn get_node(key: NodeKey) -> Option<Node> {
     imp::get_node(key)
+}
+
+/// One fused group of a node of this application. Mirror only, never blocks.
+pub fn read_group(key: NodeKey, group: GroupCode) -> Option<GroupValue> {
+    imp::read_group(key, group)
 }
 
 /// Host-enforced deadline.
@@ -50,7 +55,9 @@ mod imp {
     use std::cell::RefCell;
     use std::sync::Arc;
 
-    use crate::api::{Budget, Host, Node, NodeKey, Prio, QueryError, Segment};
+    use crate::api::{
+        Budget, GroupCode, GroupValue, Host, Node, NodeKey, Prio, QueryError, Segment,
+    };
 
     thread_local! {
         static CURRENT: RefCell<Option<Arc<dyn Host>>> = const { RefCell::new(None) };
@@ -83,6 +90,10 @@ mod imp {
 
     pub fn get_node(key: NodeKey) -> Option<Node> {
         current()?.get_node(key)
+    }
+
+    pub fn read_group(key: NodeKey, group: GroupCode) -> Option<GroupValue> {
+        current()?.read_group(key, group)
     }
 
     pub fn fetch(key: NodeKey, mask: u32, b: Budget) -> Result<Node, QueryError> {
@@ -120,11 +131,15 @@ mod imp {
 
 #[cfg(target_arch = "wasm32")]
 mod imp {
-    use crate::api::{Budget, Node, NodeKey, Prio, QueryError, Segment};
+    use crate::api::{Budget, GroupCode, GroupValue, Node, NodeKey, Prio, QueryError, Segment};
     use crate::guest::{self, wit};
 
     pub fn get_node(key: NodeKey) -> Option<Node> {
         wit::gorca::ext::host::get_node(key).map(guest::node_from_wit)
+    }
+
+    pub fn read_group(key: NodeKey, group: GroupCode) -> Option<GroupValue> {
+        wit::gorca::ext::host::read_group(key, group).map(guest::group_value_from_wit)
     }
 
     pub fn fetch(key: NodeKey, mask: u32, b: Budget) -> Result<Node, QueryError> {

@@ -978,7 +978,7 @@ impl crate::AppExt for RecordingExt {
     }
     fn present(
         &self,
-        snap: &NodeSnapshot,
+        snap: &crate::ExtNode,
         _ctx: crate::PresentContext,
         _epoch: u64,
     ) -> Option<Vec<gorca_model::Segment>> {

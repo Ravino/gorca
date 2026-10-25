@@ -211,8 +211,13 @@ fn a_looping_present_delays_the_reader_by_at_most_its_fuel_limit_three_times() {
         // The Reader runs the hook on this thread: its CPU time is the work it is held for, and
         // unlike wall time it excludes the host descheduling the test thread.
         let _ = i;
-        let (u, took) =
-            gorca_testkit::cpu::cpu_time(|| reg.ext_segments(PresentContext::Focus, &n, Epoch(1)));
+        let (u, took) = gorca_testkit::cpu::cpu_time(|| {
+            reg.ext_segments(
+                PresentContext::Focus,
+                &gorca_core::ExtNode::from_snapshot(&n),
+                Epoch(1),
+            )
+        });
         assert!(
             u.is_none(),
             "a looping hook gives no opinion: the core composes"
@@ -228,7 +233,11 @@ fn a_looping_present_delays_the_reader_by_at_most_its_fuel_limit_three_times() {
     assert_eq!(h.stats().disabled, 1);
     let ((), spent) = gorca_testkit::cpu::cpu_time(|| {
         for _ in 0..1000 {
-            let _ = reg.ext_segments(PresentContext::Focus, &n, Epoch(1));
+            let _ = reg.ext_segments(
+                PresentContext::Focus,
+                &gorca_core::ExtNode::from_snapshot(&n),
+                Epoch(1),
+            );
         }
     });
     assert!(

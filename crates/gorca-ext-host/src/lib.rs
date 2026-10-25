@@ -48,7 +48,7 @@ mod wasm;
 
 pub use convert::{
     MAX_ANSWER_CHARS, MAX_NODE_TEXT_CHARS, MAX_SEGMENT_CHARS, MAX_SEGMENTS, app_from_ext,
-    app_to_ext, event_to_ext, key_from_ext, key_to_ext, node_to_ext, role_to_ext,
+    app_to_ext, event_to_ext, group_to_ext, key_from_ext, key_to_ext, node_to_ext,
     segments_from_ext,
 };
 pub use glob::glob_match;

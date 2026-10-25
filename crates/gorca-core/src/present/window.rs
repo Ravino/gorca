@@ -799,19 +799,14 @@ impl Reader {
     /// Does the installed application policy say the activation of this window is not worth
     /// speaking (the Shell's own "Main stage" window activates for every popup)?
     fn window_silenced(&self, snap: &NodeSnapshot) -> bool {
-        use crate::builtin_ext::{PolicyFacts, PolicyMoment, PolicyVerdict};
+        use crate::builtin_ext::{PolicyMoment, PolicyVerdict, PolicyView};
         if !self.policy_active(snap.key.app) {
             return false;
         }
-        let facts = PolicyFacts {
-            moment: PolicyMoment::Activate,
-            role: snap.role,
-            states: snap.states,
-            name: snap.name.as_deref(),
-            description: snap.description.as_deref(),
-            range: None,
-        };
-        self.decide_policy(snap.key.app, &facts) == PolicyVerdict::Silence
+        let mut node = crate::ext::ExtNode::new(snap, self.fused_entry(snap));
+        node.range = None;
+        let view = PolicyView::of(PolicyMoment::Activate, &node);
+        self.decide_policy(snap.key.app, &view) == PolicyVerdict::Silence
     }
 
     /// How a window's title goes out when no focus event followed it (`interrupts`) or when the
@@ -1715,7 +1710,7 @@ pub(crate) mod tests {
     impl crate::builtin_ext::AppPolicy for Fake {
         fn decide(
             &self,
-            _f: &crate::builtin_ext::PolicyFacts<'_>,
+            _f: &crate::builtin_ext::PolicyView<'_>,
         ) -> crate::builtin_ext::PolicyVerdict {
             self.0.clone()
         }
@@ -1755,6 +1750,38 @@ pub(crate) mod tests {
         let seg = Segment::new(Arc::from("Custom"), SegmentKind::Text);
         let mut f = policy_fixture(V::Say(vec![seg]), true);
         assert_eq!(said(&focus(&mut f, 2, t)), ["Custom"]);
+    }
+
+    /// `debug.explain_last` lists the origins of the words actually spoken: the IR kept when the
+    /// focus utterance was built holds the application policy's edit (`via` 2), not a fresh
+    /// composition's plain value.
+    #[test]
+    fn the_kept_ir_is_the_one_that_was_spoken_with_the_policys_edit() {
+        use crate::builtin_ext::PolicyVerdict as V;
+        let t = Instant::now();
+        let mut f = policy_fixture(V::Value("50 percent".into()), true);
+        let fx = focus(&mut f, 2, t);
+        assert_eq!(said(&fx), ["Back, button, 50 percent"]);
+        let kept = f
+            .reader
+            .last_ir
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("the focus kept its IR");
+        let value = kept
+            .1
+            .ir()
+            .fields
+            .iter()
+            .find(|x| x.kind == gorca_present::FieldKind::VALUE)
+            .expect("the value field");
+        assert_eq!(value.origin.via, 2, "the policy wrote it");
+        // A plain focus keeps the composition, with no edit.
+        let mut plain = policy_fixture(V::Default, true);
+        focus(&mut plain, 2, t);
+        let kept = plain.reader.last_ir.lock().unwrap().clone().expect("kept");
+        assert!(kept.1.ir().fields.iter().all(|x| x.origin.via == 0));
     }
 
     #[test]
@@ -1798,10 +1825,10 @@ pub(crate) mod tests {
     impl crate::builtin_ext::AppPolicy for QuietStage {
         fn decide(
             &self,
-            f: &crate::builtin_ext::PolicyFacts<'_>,
+            f: &crate::builtin_ext::PolicyView<'_>,
         ) -> crate::builtin_ext::PolicyVerdict {
             use crate::builtin_ext::{PolicyMoment, PolicyVerdict};
-            if f.moment == PolicyMoment::Activate && f.role == Role::Window {
+            if f.moment == PolicyMoment::Activate && f.role == gorca_model::sem::SemRole::Window {
                 PolicyVerdict::Silence
             } else {
                 PolicyVerdict::Default

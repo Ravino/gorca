@@ -78,7 +78,7 @@ impl HookInstance for NativeInstance {
         self.run(HookKind::Present, |e| e.present(n, ctx))
     }
 
-    fn policy(&mut self, f: &api::PolicyFacts) -> Result<api::PolicyVerdict, Fault> {
+    fn policy(&mut self, f: &api::PolicyView) -> Result<api::PolicyVerdict, Fault> {
         self.run(HookKind::Policy, |e| e.policy(f))
     }
 

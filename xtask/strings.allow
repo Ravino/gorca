@@ -109,6 +109,8 @@ crates/gorca-daemon/src/power.rs | TimeToEmpty
 crates/gorca-daemon/src/terminal_policy.rs | the native terminal policy panicked; it starts over{}
 crates/gorca-daemon/src/terminal_policy.rs |  and is now off
 crates/gorca-daemon/src/wire.rs | keyboard monitoring is off: it needs org.gnome.Orca.KeyboardMonitor, which is only \
+crates/gorca-ext-host/src/wasm.rs | built for gorca:ext@{v}, this host speaks gorca:ext@{want}: rebuild it with `cargo xtask build-ext`
+crates/gorca-ext-host/src/wasm.rs | not an extension component (no `gorca:ext/hooks` export); this host speaks gorca:ext@{want}
 crates/gorca-ext-host/src/host.rs | cannot start wasmtime: {e:#}
 crates/gorca-ext-host/src/host.rs | cannot load component: {e:#}
 crates/gorca-ext-host/src/host.rs | extension `{}`: a native factory needs `backend = \"native\"`
