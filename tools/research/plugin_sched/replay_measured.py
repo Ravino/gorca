@@ -50,6 +50,13 @@ for args in [
     ("F all ten trigger, measured (75/63/x2.8/cold120)", 75, 63, 2.8, 120, True),
     ("G all ten trigger, measured but reserve 8", 75, 8, 2.8, 120, True),
     ("H all ten trigger, measured but pre-send 6", 6, 63, 2.8, 120, True),
+    # M18a-4: after the fixed-cost cuts (snapshot 46 -> 29 us, plan/build/poll/admit -10..20 %):
+    # pre-send ~105 us of the 132 measured (the model's snap covers snapshot + plan + build + send)
+    # becomes 60 on the model's scale, the admission reserve 63 -> 52; exec and cold start unchanged.
+    ("I M18a-4 measured (60/52/x2.8/cold120), all ten", 60, 52, 2.8, 120, True),
+    ("J M18a-4 target: pre-send 20, reserve 24, exec x1.0", 20, 24, 1.0, 120, True),
+    ("K M18a-4 target + exec x2.8 (host-bound calls)", 20, 24, 2.8, 120, True),
+    ("L M18a-4 target + exec x2.8 + warm cold start 40", 20, 24, 2.8, 40, True),
 ]:
     reset()
     run(*args)

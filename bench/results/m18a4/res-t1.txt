@@ -1,0 +1,58 @@
+STAGE K pick..reply posted   n=4000  p50=  138.4 p95=  205.3 p99=  386.4 mean=  150.6 us
+STAGE K send..reply posted   n=3813  p50=  169.8 p95= 1127.9 p99= 2667.9 mean=  304.1 us
+STAGE K t0..reply posted     n=4000  p50=  298.0 p95= 3208.3 p99=10843.2 mean=  789.5 us
+STAGE TOTAL pre-send (t0..sent) n=400   p50=  130.9 p95= 4888.0 p99=10479.4 mean=  593.2 us
+STAGE TOTAL turn             n=400   p50=  278.3 p95= 4926.1 p99=10497.5 mean=  735.6 us
+STAGE TOTAL wait end -> done n=400   p50=   43.9 p95=   77.2 p99=  120.7 mean=   42.4 us
+STAGE k1 pick-up (cold)      n=1766  p50=  114.1 p95= 1679.5 p99= 3475.8 mean=  372.2 us
+STAGE k1 pick-up (hot)       n=108   p50=    6.7 p95=   18.6 p99=   19.8 mean=    7.9 us
+STAGE k1 pick-up after send  n=1874  p50=  111.9 p95= 1634.2 p99= 3408.4 mean=  351.2 us
+STAGE k2 running slot        n=4000  p50=    0.6 p95=    1.5 p99=    1.9 mean=    0.7 us
+STAGE k3 derive prep         n=4000  p50=   12.4 p95=   24.6 p99=   37.3 mean=   15.8 us
+STAGE k4 guest call          n=4000  p50=  112.2 p95=  160.2 p99=  220.3 mean=  118.9 us
+STAGE k5 derive tail+resolve n=4000  p50=    9.0 p95=   14.6 p99=   18.9 mean=   11.3 us
+STAGE k6 reply bookkeeping   n=4000  p50=    0.4 p95=    1.0 p99=    2.0 mean=    0.6 us
+STAGE k7 post reply          n=4000  p50=    1.2 p95=    8.2 p99=   42.5 mean=    3.4 us
+STAGE k8 gate                n=3999  p50=    0.3 p95=    0.7 p99=    1.2 mean=    0.3 us
+STAGE t0 -> wait end         n=400   p50=  247.2 p95= 4889.7 p99=10481.6 mean=  693.2 us
+STAGE w1 snapshot+jobs_for   n=400   p50=   46.3 p95=   68.1 p99=   77.9 mean=   48.4 us
+STAGE w10 admit              n=400   p50=   22.0 p95=   38.2 p99=   53.1 mean=   20.8 us
+STAGE w2 claim               n=400   p50=    0.5 p95=    0.9 p99=    1.1 mean=    0.5 us
+STAGE w3 runner entry        n=400   p50=    0.8 p95=    1.5 p99=    1.8 mean=    0.9 us
+STAGE w4 plan                n=400   p50=   23.5 p95=   31.4 p99=   36.1 mean=   23.1 us
+STAGE w5 build DeriveJobs    n=400   p50=   15.8 p95=   22.7 p99=   28.2 mean=   16.2 us
+STAGE w6 to handoff          n=400   p50=    1.4 p95=    2.0 p99=    2.5 mean=    1.3 us
+STAGE w7 send waited+wake    n=400   p50=   40.1 p95= 4807.2 p99=10359.4 mean=  502.7 us
+STAGE w8 send rest           n=400   p50=    0.3 p95=    0.5 p99=    8.7 mean=    1.4 us
+STAGE w9 poll (convert)      n=400   p50=   21.5 p95=   37.7 p99=   60.9 mean=   21.7 us
+PX-6 plugins=10 trials=400 on_us p50=278.5 p99=10499.3 max=21128.7 off_us p50=5.1 p99=7.0 delta_p99_us=10492.3 facts_at_first_utterance overall=0.005 min_plugin=0.068 per_plugin=[0.5675, 0.48, 0.4775, 0.3675, 0.5625, 0.23, 0.0675, 0.535, 0.1475, 0.0675] min_eventually_within_15ms=1.000 proc_cpu_pct_of_core=18.1 governor=powersave scheduler=sps spacing_ms=200 load1=13.5 cores=16 release=true debug_log=false prewake=true spin_us=window refinement_dummies=false dummy_tier=first quiet_violated=true
+== pl-base sps first 200ms
+STAGE K pick..reply posted   n=4000  p50=  140.0 p95=  198.2 p99=  262.6 mean=  141.0 us
+STAGE K send..reply posted   n=3986  p50=  141.2 p95=  284.3 p99=  391.6 mean=  164.1 us
+STAGE K t0..reply posted     n=4000  p50=  256.8 p95=  398.4 p99=  542.7 mean=  273.6 us
+STAGE TOTAL pre-send (t0..sent) n=400   p50=  101.2 p95=  159.7 p99=  223.4 mean=  113.6 us
+STAGE TOTAL turn             n=400   p50=  273.4 p95=  318.1 p99=  484.6 mean=  283.5 us
+STAGE TOTAL wait end -> done n=400   p50=   40.5 p95=   67.5 p99=   92.4 mean=   42.4 us
+STAGE k1 pick-up (cold)      n=1493  p50=  104.8 p95=  158.8 p99=  423.2 mean=  110.8 us
+STAGE k1 pick-up (hot)       n=84    p50=    6.7 p95=   16.0 p99=   19.2 mean=    7.2 us
+STAGE k1 pick-up after send  n=1577  p50=  103.0 p95=  157.3 p99=  412.3 mean=  105.3 us
+STAGE k2 running slot        n=4000  p50=    0.6 p95=    1.4 p99=    1.9 mean=    0.7 us
+STAGE k3 derive prep         n=4000  p50=   10.7 p95=   20.3 p99=   27.3 mean=   11.9 us
+STAGE k4 guest call          n=4000  p50=  113.8 p95=  159.9 p99=  179.7 mean=  114.2 us
+STAGE k5 derive tail+resolve n=4000  p50=    8.7 p95=   14.1 p99=   16.0 mean=    9.5 us
+STAGE k6 reply bookkeeping   n=4000  p50=    0.4 p95=    1.0 p99=    1.5 mean=    0.5 us
+STAGE k7 post reply          n=4000  p50=    1.3 p95=   14.5 p99=   47.0 mean=    4.2 us
+STAGE k8 gate                n=4000  p50=    0.3 p95=    0.8 p99=    1.4 mean=    0.4 us
+STAGE t0 -> wait end         n=400   p50=  232.8 p95=  265.7 p99=  274.0 mean=  241.1 us
+STAGE w1 snapshot+jobs_for   n=400   p50=   27.0 p95=   43.1 p99=   46.1 mean=   28.4 us
+STAGE w10 admit              n=400   p50=   22.5 p95=   35.3 p99=   46.0 mean=   22.2 us
+STAGE w2 claim               n=400   p50=    0.5 p95=    0.6 p99=    0.7 mean=    0.4 us
+STAGE w3 runner entry        n=400   p50=    1.5 p95=    2.2 p99=    2.5 mean=    1.4 us
+STAGE w4 plan                n=400   p50=   20.6 p95=   31.4 p99=   33.0 mean=   21.9 us
+STAGE w5 build DeriveJobs    n=400   p50=   13.7 p95=   19.1 p99=   21.8 mean=   14.2 us
+STAGE w6 to handoff          n=400   p50=    1.3 p95=    1.8 p99=    2.1 mean=    1.2 us
+STAGE w7 send waited+wake    n=400   p50=   36.9 p95=   63.6 p99=   89.4 mean=   46.1 us
+STAGE w8 send rest           n=400   p50=    0.3 p95=    8.4 p99=   16.9 mean=    2.1 us
+STAGE w9 poll (convert)      n=400   p50=   18.1 p95=   29.8 p99=   64.5 mean=   20.1 us
+PX-6 plugins=10 trials=400 on_us p50=273.7 p99=484.7 max=2554.5 off_us p50=4.7 p99=7.7 delta_p99_us=477.0 facts_at_first_utterance overall=0.000 min_plugin=0.055 per_plugin=[0.0725, 0.745, 0.745, 0.15, 0.675, 0.77, 0.75, 0.7625, 0.065, 0.055] min_eventually_within_15ms=1.000 proc_cpu_pct_of_core=19.9 governor=powersave scheduler=sps spacing_ms=200 load1=8.6 cores=16 release=true debug_log=false prewake=true spin_us=window refinement_dummies=false dummy_tier=first quiet_violated=true
+== pl-v1 sps first 200ms
