@@ -37,7 +37,8 @@ pub struct BuildNode {
 }
 
 impl BuildNode {
-    /// A node of the walk with no text lines read.
+    /// A node of the walk with no text lines read (the latency series build pages with it).
+    #[cfg(test)]
     pub fn of(snap: Arc<NodeSnapshot>, depth: u16) -> Self {
         Self {
             snap,
