@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 use gorca_core::{ExtSink, ExtSource, MirrorDirectory};
 use gorca_ext_host::{ExtHost, Manifest, NativeFactory};
 use gorca_model::{
-    AppId, AppInfo, AttrMap, ChildList, ConnectorId, ConnectorKind, Freshness, Ifaces, LocalId,
-    NodeKey, NodeSnapshot, PropMask, Relations, Role, StateSet,
+    AppId, AppInfo, ConnectorId, ConnectorKind, Freshness, LocalId, NodeKey, NodeSnapshot,
+    PropMask, Role, StateSet,
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -147,29 +147,18 @@ pub fn info(name: &str) -> AppInfo {
 }
 
 pub fn snap(app: AppId, local: u64, role: Role, name: Option<&str>) -> NodeSnapshot {
-    NodeSnapshot {
-        key: NodeKey {
+    NodeSnapshot::new(
+        NodeKey {
             app,
             local: LocalId(local),
         },
-        role,
-        states: StateSet::empty(),
-        name: name.map(Arc::from),
-        description: None,
-        value: None,
-        parent: None,
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
-        attrs: AttrMap::default(),
-        relations: Relations::default(),
-        bounds: None,
-        have: PropMask::PRESENT,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh {
+        Freshness::Fresh {
             at: std::time::Instant::now(),
         },
-        sem: gorca_model::NodeSem::NONE,
-    }
+    )
+    .with_name(name.map(Arc::from))
+    .with_have(PropMask::PRESENT)
+    .with_source(role, StateSet::empty())
 }
 
 /// Wait until no slot is waiting for its replacement instance (the workers rebuild after a

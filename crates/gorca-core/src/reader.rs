@@ -810,9 +810,7 @@ mod tests {
     use super::*;
     use gorca_input_api::{CmdId, KeyClass, KeyEvent, Modifiers, PressKind};
     use gorca_mirror::{MirrorWriter, mirror};
-    use gorca_model::{
-        ChildList, ConnectorId, Freshness, Ifaces, LocalId, Role, SnapshotBatch, StateSet,
-    };
+    use gorca_model::{ConnectorId, Freshness, LocalId, Role, SnapshotBatch, StateSet};
     use std::time::Duration;
 
     fn app() -> AppId {
@@ -831,25 +829,10 @@ mod tests {
 
     fn snap(n: u64, role: Role, name: &str) -> Arc<NodeSnapshot> {
         Arc::new(
-            NodeSnapshot {
-                key: key(n),
-                role,
-                states: StateSet::empty(),
-                name: Some(Arc::from(name)),
-                description: None,
-                value: None,
-                parent: None,
-                children: ChildList::Unknown,
-                interfaces: Ifaces::empty(),
-                attrs: gorca_model::AttrMap::default(),
-                relations: gorca_model::Relations::default(),
-                bounds: None,
-                have: gorca_model::PropMask::PRESENT | gorca_model::PropMask::ATTRS,
-                confirmed_seq: 0,
-                fresh: Freshness::Fresh { at: Instant::now() },
-                sem: gorca_model::NodeSem::NONE,
-            }
-            .with_test_record(),
+            NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+                .with_name(Some(Arc::from(name)))
+                .with_have(gorca_model::PropMask::PRESENT | gorca_model::PropMask::ATTRS)
+                .with_test_source(role, StateSet::empty()),
         )
     }
 
@@ -1237,7 +1220,7 @@ mod tests {
 
     fn selected_snap(n: u64, name: &str) -> Arc<NodeSnapshot> {
         let mut s = (*snap(n, Role::Button, name)).clone();
-        s.states = StateSet::SELECTED;
+        s.set_test_states(StateSet::SELECTED);
         Arc::new(s.with_test_record())
     }
 
@@ -1387,7 +1370,7 @@ mod tests {
 
         // The reply shows the node FOCUSED: accepted, presented and published.
         let mut focused = (*snap(2, Role::Button, "Real")).clone();
-        focused.states = StateSet::FOCUSED;
+        focused.set_test_states(StateSet::FOCUSED);
         let reply = QueryReply {
             node: key(2),
             epoch: f.epoch.current(),
@@ -1454,7 +1437,7 @@ mod tests {
             "the cached states do not show FOCUSED"
         );
         let mut proof = (*snap(1, Role::Button, "Cached")).clone();
-        proof.states = StateSet::FOCUSED;
+        proof.set_test_states(StateSet::FOCUSED);
         f.reader
             .handle(reply(&f, 1, FetchKind::Revalidate, Arc::new(proof)), now);
         assert_eq!(published.get(), Some(app()), "the re-read proved the focus");
@@ -1503,7 +1486,7 @@ mod tests {
 
     fn focused_snap(n: u64, name: &str) -> Arc<NodeSnapshot> {
         let mut s = (*snap(n, Role::Button, name)).clone();
-        s.states = StateSet::FOCUSED;
+        s.set_test_states(StateSet::FOCUSED);
         Arc::new(s)
     }
 
@@ -2268,7 +2251,7 @@ mod tests {
 
     fn with_name(n: u64, name: &str, states: StateSet) -> Arc<NodeSnapshot> {
         let mut s = (*snap(n, Role::CheckBox, name)).clone();
-        s.states = states;
+        s.set_test_states(states);
         Arc::new(s.with_test_record())
     }
 
@@ -2305,7 +2288,7 @@ mod tests {
         let count = |role: Role| {
             let mut f = fixture();
             let mut n = (*with_name(1, "Row", StateSet::empty())).clone();
-            n.role = role;
+            n.set_test_role(role);
             f.writer.apply(
                 SnapshotBatch::new(vec![Arc::new(n.with_test_record())]),
                 gorca_mirror::ApplyOrigin::Push,
@@ -2402,7 +2385,7 @@ mod tests {
     fn content_confirmed_by_a_request_issued_after_the_focus_began_needs_no_revalidation() {
         let mut f = fixture();
         let mut menu = (*with_name(1, "Open", StateSet::empty())).clone();
-        menu.role = Role::MenuItem;
+        menu.set_test_role(Role::MenuItem);
         let menu = menu.with_test_record();
         let now = Instant::now();
         f.writer.apply(
@@ -2570,8 +2553,8 @@ mod tests {
     fn a_partial_node_missing_only_non_blocking_fields_is_spoken() {
         let mut f = fixture();
         let mut row = (*with_name(1, "Row", StateSet::empty())).clone();
-        row.have = PropMask::CACHE_ITEM | PropMask::ATTRS;
-        row.interfaces = gorca_model::Ifaces::ACTION;
+        row.set_have(PropMask::CACHE_ITEM | PropMask::ATTRS);
+        row.set_caps(gorca_model::NodeCaps::new(gorca_model::Ifaces::ACTION));
         f.writer.apply(
             SnapshotBatch::new(vec![Arc::new(row)]),
             gorca_mirror::ApplyOrigin::Push,
@@ -2588,8 +2571,8 @@ mod tests {
         // M22a C1a: a dump row that never had its attributes is spoken from memory too, as a
         // partial hit that the revalidation fills.
         let mut bare = (*with_name(3, "Bare", StateSet::empty())).clone();
-        bare.have = PropMask::CACHE_ITEM;
-        bare.interfaces = gorca_model::Ifaces::ACTION;
+        bare.set_have(PropMask::CACHE_ITEM);
+        bare.set_caps(gorca_model::NodeCaps::new(gorca_model::Ifaces::ACTION));
         f.writer.apply(
             SnapshotBatch::new(vec![Arc::new(bare)]),
             gorca_mirror::ApplyOrigin::Push,
@@ -2604,8 +2587,8 @@ mod tests {
         ));
         assert_eq!(utterance(&fx).segments[0].text.as_ref(), "Bare");
         let mut slider = (*with_name(2, "Vol", StateSet::empty())).clone();
-        slider.have = PropMask::CACHE_ITEM;
-        slider.interfaces = gorca_model::Ifaces::VALUE;
+        slider.set_have(PropMask::CACHE_ITEM);
+        slider.set_caps(gorca_model::NodeCaps::new(gorca_model::Ifaces::VALUE));
         f.writer.apply(
             SnapshotBatch::new(vec![Arc::new(slider)]),
             gorca_mirror::ApplyOrigin::Push,
@@ -3038,15 +3021,11 @@ mod tests {
 
     fn web_node(n: u64, role: Role, name: &str, web: bool) -> Arc<NodeSnapshot> {
         let mut s = (*snap(n, role, name)).clone();
-        s.states = StateSet::ENABLED | StateSet::SHOWING | StateSet::VISIBLE;
-        if web {
-            s.attrs
-                .push((gorca_doc_source_api::web_attrs::TAG, Arc::from("li")));
-            if let Some(rec) = s.sem.rec.take() {
-                let mut rec = (*rec).clone();
-                rec.tag = gorca_model::sem::TagName::new("li").0;
-                s.sem.rec = Some(Arc::new(rec));
-            }
+        s.set_test_states(StateSet::ENABLED | StateSet::SHOWING | StateSet::VISIBLE);
+        if web && let Some(rec) = s.sem_mut().rec.take() {
+            let mut rec = (*rec).clone();
+            rec.tag = gorca_model::sem::TagName::new("li").0;
+            s.sem_mut().rec = Some(Arc::new(rec));
         }
         Arc::new(s)
     }

@@ -506,13 +506,10 @@ fn worker_main(
                     return;
                 }
                 actor.running_since.store(0, Release);
-                let fault = match r {
-                    Ok(f) => f,
-                    Err(_) => {
-                        exec.reset();
-                        Some(FaultKind::Trap)
-                    }
-                };
+                let fault = r.unwrap_or_else(|_| {
+                    exec.reset();
+                    Some(FaultKind::Trap)
+                });
                 if let Some(kind) = fault {
                     sink.send(PluginReply::Fault {
                         plugin: job.plugin,

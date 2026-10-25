@@ -838,7 +838,7 @@ impl FillDriver {
                 let nodes = batch.nodes.len();
                 let mut keys: Vec<NodeKey> = Vec::new();
                 if nodes <= self.limits.max_subtree_nodes as usize {
-                    keys.extend(batch.nodes.iter().map(|n| n.key));
+                    keys.extend(batch.nodes.iter().map(|n| n.key()));
                 }
                 let implausible = matches!(flight.op, FillOp::CacheDump { .. }) && nodes <= 2;
                 let origin = if matches!(flight.op, FillOp::CacheDump { .. }) {

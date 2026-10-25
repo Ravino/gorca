@@ -9,8 +9,8 @@ use gorca_doc_source_api::web_attrs;
 use gorca_input_api::{Chord, KeyClass, KeyEvent, KeyIntent, Modifiers, PressKind};
 use gorca_mirror::{ApplyOrigin, MirrorWriter, mirror};
 use gorca_model::{
-    AppId, ChildList, ConnectorId, DocDelta, DocId, DocNodeId, Epoch, Freshness, Ifaces, LocalId,
-    NodeKey, NodeSnapshot, Role, SnapshotBatch, SrcNode, SrcNodeId, StateSet,
+    AppId, ConnectorId, DocDelta, DocId, DocNodeId, Epoch, Freshness, LocalId, NodeKey,
+    NodeSnapshot, Role, SnapshotBatch, SrcNode, SrcNodeId, StateSet,
 };
 use gorca_rt::{EpochCell, mpsc};
 
@@ -444,25 +444,10 @@ struct Rig {
 
 fn snap(local: u64, role: Role, name: &str, states: StateSet) -> Arc<NodeSnapshot> {
     Arc::new(
-        NodeSnapshot {
-            key: nk(local),
-            role,
-            states,
-            name: Some(Arc::from(name)),
-            description: None,
-            value: None,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: gorca_model::PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        }
-        .with_test_record(),
+        NodeSnapshot::new(nk(local), Freshness::Fresh { at: Instant::now() })
+            .with_name(Some(Arc::from(name)))
+            .with_have(gorca_model::PropMask::PRESENT)
+            .with_test_source(role, states),
     )
 }
 
@@ -3101,7 +3086,7 @@ fn the_first_visit_of_a_tab_resolves_with_its_title_and_the_focused_node_in_one_
 }
 
 fn child_of(parent: u64, mut n: NodeSnapshot) -> Arc<NodeSnapshot> {
-    n.parent = Some(nk(parent));
+    n.set_parent(Some(nk(parent)));
     Arc::new(n)
 }
 
@@ -4122,7 +4107,7 @@ fn the_cursor_follows_its_item_by_dom_id_across_a_re_render() {
                 .filter_map(|n| {
                     let dom = n.attrs.iter().find(|(k, _)| *k == web_attrs::DOM_ID)?;
                     let mut e = gorca_model::sem::SemEntry::default();
-                    e.sem.role = gorca_model::sem::SemRole::from(n.role);
+                    e.sem.role = gorca_model::testing::sem_role(n.role);
                     e.sem.text = Some(Arc::new(gorca_model::sem::SemText {
                         dom_id: Some(Arc::clone(&dom.1)),
                         ..gorca_model::sem::SemText::default()
@@ -4300,7 +4285,7 @@ fn a_toolkit_password_entry_with_a_fused_text_box_role_is_secret_in_every_browse
     assert_eq!(p.spans.last().expect("a span").range.end, 4);
     // The focus snapshot carries no value, and it is sensitive.
     let snap = super::commands::focus_snapshot_of_for_test(&d, field).expect("snapshot");
-    assert!(snap.value.is_none());
+    assert!(snap.value().is_none());
     assert!(snap.is_sensitive());
 }
 

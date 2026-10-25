@@ -61,8 +61,8 @@ fn page(rows: usize) -> Page {
         let y = 10 + i32::try_from(i).unwrap_or(0) * 24;
         let node = |id, role, name: &str, parent, kids: &[u64], x: i32, w: u32| {
             let mut s = snap(id, role, name, Some(parent), kids);
-            s.bounds = Some(Rect { x, y, w, h: 20 });
-            s.have |= PropMask::BOUNDS;
+            s.set_bounds(Some(Rect { x, y, w, h: 20 }));
+            s.set_have(s.have() | PropMask::BOUNDS);
             s
         };
         snaps.push(node(
@@ -92,7 +92,7 @@ fn page(rows: usize) -> Page {
             110,
             200,
         );
-        e.states |= StateSet::FOCUSABLE | StateSet::EDITABLE;
+        e.set_test_states(e.test_states() | StateSet::FOCUSABLE | StateSet::EDITABLE);
         snaps.push(e);
         let mut b = node(
             button,
@@ -103,7 +103,7 @@ fn page(rows: usize) -> Page {
             320,
             80,
         );
-        b.states |= StateSet::FOCUSABLE;
+        b.set_test_states(b.test_states() | StateSet::FOCUSABLE);
         snaps.push(b);
         let mut c = node(
             check,
@@ -114,17 +114,17 @@ fn page(rows: usize) -> Page {
             410,
             90,
         );
-        c.states |= StateSet::FOCUSABLE;
+        c.set_test_states(c.test_states() | StateSet::FOCUSABLE);
         snaps.push(c);
     }
     let mut root = snap(1, Role::Window, "Window", None, &row_ids);
-    root.bounds = Some(Rect {
+    root.set_bounds(Some(Rect {
         x: 0,
         y: 0,
         w: 800,
         h: 10_000,
-    });
-    root.have |= PropMask::BOUNDS;
+    }));
+    root.set_have(root.have() | PropMask::BOUNDS);
     let mut all = vec![root];
     all.extend(snaps);
     let mut views = HashMap::new();
@@ -132,19 +132,19 @@ fn page(rows: usize) -> Page {
     for s in all {
         let mut s = s;
         // The entry the app actor writes into the mirror next to the record.
-        if s.sem.entry.is_none()
-            && let Some(r) = s.sem.rec.as_ref()
+        if s.sem().entry.is_none()
+            && let Some(r) = s.sem().rec.as_ref()
         {
-            s.sem.entry = Some(Arc::new(r.provisional_entry()));
+            s.sem_mut().entry = Some(Arc::new(r.provisional_entry()));
         }
-        let depth = match s.parent {
+        let depth = match s.parent() {
             None => 0,
             Some(p) if p == key(1) => 1,
             Some(_) => 2,
         };
-        order.push((s.key, depth));
+        order.push((s.key(), depth));
         views.insert(
-            s.key,
+            s.key(),
             NodeView {
                 snap: Arc::new(s),
                 stale: PropMask::empty(),
@@ -269,7 +269,7 @@ fn walk(
     out: &mut Vec<(NodeKey, u16)>,
 ) {
     out.push((k, depth));
-    if let gorca_model::ChildList::Known(kids) = &by_id[&k].children {
+    if let gorca_model::ChildList::Known(kids) = &by_id[&k].children() {
         for c in kids {
             walk(*c, depth + 1, by_id, out);
         }
@@ -332,58 +332,58 @@ fn mixed_page() -> Page {
                 next += 1;
                 sub.push(kid);
                 let mut k = snap(kid, *krole, kname, Some(id), &[]);
-                k.bounds = Some(Rect {
+                k.set_bounds(Some(Rect {
                     x: col + 2,
                     y,
                     w: 60,
                     h: 20,
-                });
-                k.have |= PropMask::BOUNDS;
+                }));
+                k.set_have(k.have() | PropMask::BOUNDS);
                 built.push(k);
             }
             let mut n = snap(id, *role, name, Some(panel), &sub);
-            n.bounds = Some(Rect {
+            n.set_bounds(Some(Rect {
                 x: col,
                 y,
                 w: 100,
                 h: 20,
-            });
-            n.have |= PropMask::BOUNDS;
-            n.states |= StateSet::FOCUSABLE;
+            }));
+            n.set_have(n.have() | PropMask::BOUNDS);
+            n.set_test_states(n.test_states() | StateSet::FOCUSABLE);
             snaps.push(n);
             snaps.append(&mut built);
             col += 110;
         }
         let mut pn = snap(panel, Role::Panel, "", Some(1), &kid_ids);
-        pn.bounds = Some(Rect {
+        pn.set_bounds(Some(Rect {
             x: 0,
             y,
             w: 700,
             h: 20,
-        });
-        pn.have |= PropMask::BOUNDS;
+        }));
+        pn.set_have(pn.have() | PropMask::BOUNDS);
         snaps.push(pn);
     }
     let mut root = snap(1, Role::Window, "Window", None, &row_ids);
-    root.bounds = Some(Rect {
+    root.set_bounds(Some(Rect {
         x: 0,
         y: 0,
         w: 800,
         h: 400,
-    });
-    root.have |= PropMask::BOUNDS;
+    }));
+    root.set_have(root.have() | PropMask::BOUNDS);
     snaps.insert(0, root);
     // Pre-order: a node, then its subtree.
-    let by_id: HashMap<NodeKey, NodeSnapshot> = snaps.into_iter().map(|s| (s.key, s)).collect();
+    let by_id: HashMap<NodeKey, NodeSnapshot> = snaps.into_iter().map(|s| (s.key(), s)).collect();
     let mut order = Vec::new();
     walk(key(1), 0, &by_id, &mut order);
     let mut views = HashMap::new();
     for (k, s) in by_id {
         let mut s = s;
-        if s.sem.entry.is_none()
-            && let Some(r) = s.sem.rec.as_ref()
+        if s.sem().entry.is_none()
+            && let Some(r) = s.sem().rec.as_ref()
         {
-            s.sem.entry = Some(Arc::new(r.provisional_entry()));
+            s.sem_mut().entry = Some(Arc::new(r.provisional_entry()));
         }
         views.insert(
             k,

@@ -348,8 +348,8 @@ impl<S: NavSource> Walk<'_, S> {
         match part(role_of(snap)) {
             Part::Skip => {}
             Part::Text => {
-                if snap.have.contains(PropMask::NAME) {
-                    if let Some(name) = &snap.name {
+                if snap.have().contains(PropMask::NAME) {
+                    if let Some(name) = &snap.name() {
                         self.push_text(name);
                     }
                 } else if !self.out.misses.contains(&node) {
@@ -365,16 +365,16 @@ impl<S: NavSource> Walk<'_, S> {
             self.out.truncated = true;
             return;
         }
-        match &snap.children {
+        match &snap.children() {
             ChildList::Known(kids) => {
                 for k in kids {
-                    self.visit(*k, depth + 1, snap.key);
+                    self.visit(*k, depth + 1, snap.key());
                 }
             }
             ChildList::Count(0) => {}
             ChildList::Count(_) | ChildList::Unknown => {
-                if !self.out.misses.contains(&snap.key) {
-                    self.out.misses.push(snap.key);
+                if !self.out.misses.contains(&snap.key()) {
+                    self.out.misses.push(snap.key());
                 }
             }
         }
@@ -395,7 +395,7 @@ pub fn dialog_content<S: NavSource>(src: &S, window: NodeKey, skip: Option<NodeK
     };
     match src.view(window) {
         Lookup::Hit(v) => {
-            w.title.clone_from(&v.snap.name);
+            w.title.clone_from(v.snap.name());
             w.visits = 1;
             let snap = Arc::clone(&v.snap);
             w.children(&snap, 0);
@@ -552,15 +552,15 @@ pub async fn fetch_level(io: &crate::review::ReviewIo, node: NodeKey) -> WindowI
         let _ = nav_fetch(io, NavOp::Node { node }).await;
         let snap = src.view(node).hit().map(|v| v.snap);
         let mut texts = Vec::new();
-        if let Some(parent) = snap.as_ref().and_then(|s| s.parent) {
+        if let Some(parent) = snap.as_ref().and_then(|s| s.parent()) {
             let _ = expand(io, parent, BudgetClass::Interactive, false, None).await;
             if let Some(p) = src.view(parent).hit()
-                && let ChildList::Known(kids) = &p.snap.children
+                && let ChildList::Known(kids) = &p.snap.children()
             {
                 let label = kids.iter().find_map(|k| {
                     let v = src.view(*k).hit()?;
                     is_label(&v.snap)
-                        .then(|| v.snap.name.clone())
+                        .then(|| v.snap.name().clone())
                         .flatten()
                         .filter(|n| !n.trim().is_empty())
                 });
@@ -745,7 +745,7 @@ impl Reader {
             if cur == window {
                 return true;
             }
-            let Some(p) = self.dir.lookup(cur).hit().and_then(|s| s.parent) else {
+            let Some(p) = self.dir.lookup(cur).hit().and_then(|s| s.parent()) else {
                 return false;
             };
             cur = p;
@@ -869,13 +869,13 @@ impl Reader {
     /// speaking (the Shell's own "Main stage" window activates for every popup)?
     fn window_silenced(&self, snap: &NodeSnapshot) -> bool {
         use crate::builtin_ext::{PolicyMoment, PolicyVerdict, PolicyView};
-        if !self.policy_active(snap.key.app) {
+        if !self.policy_active(snap.key().app) {
             return false;
         }
         let mut node = crate::ext::ExtNode::new(snap, self.fused_entry(snap));
         node.range = None;
         let view = PolicyView::of(PolicyMoment::Activate, &node);
-        self.decide_policy(snap.key.app, &view) == PolicyVerdict::Silence
+        self.decide_policy(snap.key().app, &view) == PolicyVerdict::Silence
     }
 
     /// How a window's title goes out when no focus event followed it (`interrupts`) or when the
@@ -994,8 +994,8 @@ impl Reader {
         let Some((window, at)) = self.win.lead.take() else {
             return false;
         };
-        if window == snap.key
-            || window.app != snap.key.app
+        if window == snap.key()
+            || window.app != snap.key().app
             || self.now.saturating_duration_since(at) > LEAD_VALID
         {
             return false;
@@ -1007,13 +1007,13 @@ impl Reader {
             self.win.held = Some(Held {
                 utt: u.clone(),
                 window,
-                focus: snap.key,
-                focus_name: snap.name.clone(),
+                focus: snap.key(),
+                focus_name: snap.name().clone(),
                 release_at: self.now,
             });
             return true;
         }
-        self.apply_lead(window, snap.key, snap.name.as_deref(), epoch, u);
+        self.apply_lead(window, snap.key(), snap.name().as_deref(), epoch, u);
         false
     }
 
@@ -1192,7 +1192,7 @@ pub(crate) mod tests {
     use crate::mode::ModeKeys;
     use crate::reader::{BackgroundMsg, FocusLaneMsg, ReaderMsg};
     use gorca_mirror::{ApplyOrigin, MirrorWriter, mirror};
-    use gorca_model::{ConnectorId, Freshness, Ifaces, LocalId, Role, SnapshotBatch, StateSet};
+    use gorca_model::{ConnectorId, Freshness, LocalId, Role, SnapshotBatch, StateSet};
     use gorca_rt::EpochCell;
     use std::collections::HashMap;
 
@@ -1230,29 +1230,15 @@ pub(crate) mod tests {
 
     pub(crate) fn snap(s: &Spec) -> Arc<NodeSnapshot> {
         Arc::new(
-            NodeSnapshot {
-                key: key(s.n),
-                role: s.role,
-                states: s.states,
-                name: (!s.name.is_empty()).then(|| Arc::from(s.name)),
-                description: None,
-                value: None,
-                parent: None,
-                children: if s.kids.is_empty() {
+            NodeSnapshot::new(key(s.n), Freshness::Fresh { at: Instant::now() })
+                .with_name((!s.name.is_empty()).then(|| Arc::from(s.name)))
+                .with_children(if s.kids.is_empty() {
                     ChildList::Count(0)
                 } else {
                     ChildList::Known(s.kids.iter().map(|k| key(*k)).collect())
-                },
-                interfaces: Ifaces::empty(),
-                attrs: gorca_model::AttrMap::default(),
-                relations: gorca_model::Relations::default(),
-                bounds: None,
-                have: PropMask::PRESENT,
-                confirmed_seq: 0,
-                fresh: Freshness::Fresh { at: Instant::now() },
-                sem: gorca_model::NodeSem::NONE,
-            }
-            .with_test_record(),
+                })
+                .with_have(PropMask::PRESENT)
+                .with_test_source(s.role, s.states),
         )
     }
 
@@ -1397,7 +1383,7 @@ pub(crate) mod tests {
     fn what_the_mirror_lacks_is_reported_as_nodes_to_expand() {
         // 2 is a child of 1 that the mirror does not hold; 3 has an unknown child list.
         let mut unknown = snap(&node(3, Role::Panel, "", &[]));
-        Arc::make_mut(&mut unknown).children = ChildList::Unknown;
+        Arc::make_mut(&mut unknown).set_children(ChildList::Unknown);
         let mut m = map(&[node(1, Role::Dialog, "D", &[2, 3])]);
         m.0.insert(key(3), unknown);
         let c = dialog_content(&m, key(1), None);
@@ -1460,8 +1446,8 @@ pub(crate) mod tests {
         for s in specs {
             for k in s.kids {
                 for n in &mut nodes {
-                    if n.key == key(*k) {
-                        Arc::make_mut(n).parent = Some(key(s.n));
+                    if n.key() == key(*k) {
+                        Arc::make_mut(n).set_parent(Some(key(s.n)));
                     }
                 }
             }
@@ -1988,10 +1974,11 @@ pub(crate) mod tests {
         let fx = f.reader.handle(
             ReaderMsg::Background(BackgroundMsg::Window(WindowInfo {
                 window: other(500),
-                snap: Some(Arc::new(NodeSnapshot {
-                    key: other(500),
-                    ..(*snap(&node(500, Role::Window, "Chat", &[]))).clone()
-                })),
+                snap: Some(Arc::new(
+                    (*snap(&node(500, Role::Window, "Chat", &[])))
+                        .clone()
+                        .with_key(other(500)),
+                )),
                 texts: Vec::new(),
             })),
             at + Duration::from_millis(3),
@@ -2068,10 +2055,11 @@ pub(crate) mod tests {
             f.reader.handle(
                 ReaderMsg::Background(BackgroundMsg::Window(WindowInfo {
                     window: w,
-                    snap: Some(Arc::new(NodeSnapshot {
-                        key: w,
-                        ..(*snap(&node(1, Role::Window, "Spam", &[]))).clone()
-                    })),
+                    snap: Some(Arc::new(
+                        (*snap(&node(1, Role::Window, "Spam", &[])))
+                            .clone()
+                            .with_key(w),
+                    )),
                     texts: Vec::new(),
                 })),
                 t + Duration::from_millis(12),

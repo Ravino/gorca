@@ -14,8 +14,8 @@ use gorca_mirror::fill::{
 };
 use gorca_mirror::{ApplyOrigin, ApplyOutcome, FillLimits, MirrorHandle, MirrorWriter, mirror_for};
 use gorca_model::{
-    AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeEvent, NodeKey,
-    NodeSnapshot, PropMask, Relations, Role, SnapshotBatch, StateSet,
+    AppId, ChildList, ConnectorId, Freshness, LocalId, NodeEvent, NodeKey, NodeSnapshot, PropMask,
+    Role, SnapshotBatch, StateSet,
 };
 use gorca_testkit::b1::audit::{self, Health, PInput, PRequest, PolicyAdapter};
 
@@ -151,33 +151,28 @@ fn parent_of(i: u64) -> Option<u64> {
 }
 
 fn snap(i: u64) -> Arc<NodeSnapshot> {
-    Arc::new(NodeSnapshot {
-        key: key(i),
-        role: match i {
-            0 => Role::Application,
-            1 => Role::Window,
-            _ => Role::Button,
-        },
-        states: StateSet::empty(),
-        name: Some(Arc::from("n")),
-        description: None,
-        value: None,
-        parent: parent_of(i).map(key),
-        children: ChildList::Count(8),
-        interfaces: Ifaces::empty(),
-        attrs: AttrMap::default(),
-        relations: Relations::default(),
-        bounds: None,
-        have: PropMask::NAME
-            | PropMask::ROLE
-            | PropMask::STATES
-            | PropMask::VALUE
-            | PropMask::PARENT
-            | PropMask::CHILDREN,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    })
+    Arc::new(
+        NodeSnapshot::new(key(i), Freshness::Fresh { at: Instant::now() })
+            .with_name(Some(Arc::from("n")))
+            .with_parent(parent_of(i).map(key))
+            .with_children(ChildList::Count(8))
+            .with_have(
+                PropMask::NAME
+                    | PropMask::ROLE
+                    | PropMask::STATES
+                    | PropMask::VALUE
+                    | PropMask::PARENT
+                    | PropMask::CHILDREN,
+            )
+            .with_source(
+                match i {
+                    0 => Role::Application,
+                    1 => Role::Window,
+                    _ => Role::Button,
+                },
+                StateSet::empty(),
+            ),
+    )
 }
 
 fn filled_mirror() -> (MirrorWriter, MirrorHandle) {

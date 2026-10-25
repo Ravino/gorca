@@ -22,8 +22,8 @@ pub fn is_app_root(snap: &NodeSnapshot) -> bool {
     let e = entry_of(snap);
     e.sem.role == SemRole::Application
         && !e.sem.flags.contains(SemFlags::ROLE_AUTHORED)
-        && snap.have.contains(PropMask::PARENT)
-        && snap.parent.is_none()
+        && snap.have().contains(PropMask::PARENT)
+        && snap.parent().is_none()
 }
 
 /// The application node of an ancestry chain, as far as the chain says: [`is_app_root`], or an
@@ -33,7 +33,7 @@ pub(crate) fn is_app_node(snap: &NodeSnapshot) -> bool {
     let e = entry_of(snap);
     e.sem.role == SemRole::Application
         && !e.sem.flags.contains(SemFlags::ROLE_AUTHORED)
-        && (snap.parent.is_none() || !snap.have.contains(PropMask::PARENT))
+        && (snap.parent().is_none() || !snap.have().contains(PropMask::PARENT))
 }
 
 /// The label of a control, as the engines export it: a `label` (static text the model marks

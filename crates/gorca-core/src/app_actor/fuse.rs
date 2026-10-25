@@ -214,7 +214,7 @@ impl Tree for IvmTree<'_> {
 fn row_of(snap: &NodeSnapshot, rec: &SrcRecord) -> Row {
     Row {
         role: rec.sem.role.code(),
-        states: snap.states.bits(),
+        states: crate::plugin_port::state_bits(rec.sem.flags, snap.struct_state().flags()),
         name: rec.name.clone(),
         text: None,
         tag: (!rec.tag.is_empty()).then(|| Arc::from(rec.tag.as_str())),
@@ -411,7 +411,7 @@ impl FuseWriter {
         seq: u64,
     ) {
         for s in snaps {
-            if s.sem.rec.is_none() {
+            if s.sem().rec.is_none() {
                 continue;
             }
             let bytes = usize::try_from(gorca_mirror::node_bytes(s)).unwrap_or(usize::MAX);
@@ -643,15 +643,15 @@ impl FuseWriter {
 
     /// Write one queued snapshot into the registers.
     fn apply_one(&mut self, q: &Queued, inputs: &mut Vec<Input>) {
-        let Some(rec) = q.snap.sem.rec.clone() else {
+        let Some(rec) = q.snap.sem().rec.clone() else {
             return;
         };
-        let key = q.snap.key;
-        let parent = q.snap.parent.and_then(|p| self.index.get(&p).copied());
+        let key = q.snap.key();
+        let parent = q.snap.parent().and_then(|p| self.index.get(&p).copied());
         let Some(idx) = self.alloc(key, parent) else {
             return;
         };
-        match (q.snap.parent, parent) {
+        match (q.snap.parent(), parent) {
             // The parent is known now but was not when the node was first added.
             (Some(_), Some(p)) => self.link(idx, p),
             (Some(pk), None) => self.remember_orphan(pk, key),
@@ -873,7 +873,7 @@ pub fn fuse_snapshots(
     while w.step(&mut mirror, Duration::from_millis(50)) {}
     nodes
         .iter()
-        .map(|n| read.get(n.key).hit().unwrap_or_else(|| Arc::clone(n)))
+        .map(|n| read.get(n.key()).hit().unwrap_or_else(|| Arc::clone(n)))
         .collect()
 }
 
@@ -883,7 +883,7 @@ mod tests {
     use crate::plugin_port::testing::svc;
     use gorca_mirror::ApplyOrigin;
     use gorca_model::sem::{Group, SemRole};
-    use gorca_model::{AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, Role, StateSet};
+    use gorca_model::{AppId, ConnectorId, Freshness, LocalId, Role, StateSet};
 
     fn key(n: u64) -> NodeKey {
         NodeKey {
@@ -908,27 +908,17 @@ mod tests {
         rec.known.set(Group::Role, true);
         rec.known.set(Group::Name, true);
         rec.class = class.map(Arc::from);
-        Arc::new(NodeSnapshot {
-            key: key(n),
-            role: Role::Unknown,
-            states: StateSet::empty(),
-            name: Some(Arc::from(name)),
-            description: None,
-            value: None,
-            parent: parent.map(key),
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: gorca_model::PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem {
-                rec: Some(Arc::new(rec)),
-                entry: None,
-            },
-        })
+        Arc::new(
+            NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+                .with_name(Some(Arc::from(name)))
+                .with_parent(parent.map(key))
+                .with_have(gorca_model::PropMask::PRESENT)
+                .with_sem(gorca_model::NodeSem {
+                    rec: Some(Arc::new(rec)),
+                    entry: None,
+                })
+                .with_source(Role::Unknown, StateSet::empty()),
+        )
     }
 
     fn run(w: &mut FuseWriter, m: &mut gorca_mirror::MirrorWriter) {

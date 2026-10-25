@@ -99,13 +99,26 @@ impl SrcNode {
     }
 
     /// The model role of the node: the fused `entry`'s, else its source record's, else (a
-    /// synthetic node: a text run, a placeholder) the closest model role of the source role.
+    /// synthetic node: a text run is static text, a placeholder is unknown).
     pub fn model_role(&self, entry: Option<&crate::SemEntry>) -> crate::SemRole {
         match (entry, &self.rec) {
             (Some(e), _) => e.sem.role,
             (None, Some(r)) => r.sem.role,
-            (None, None) => crate::SemRole::from(self.role),
+            // Test builds describe a synthetic node by the source role (`testing::sem_role`).
+            #[cfg(feature = "testing")]
+            (None, None) => crate::testing::sem_role(self.role),
+            #[cfg(not(feature = "testing"))]
+            (None, None) => match self.role {
+                Role::StaticText => crate::SemRole::StaticText,
+                _ => crate::SemRole::Unknown,
+            },
         }
+    }
+
+    /// The structural bits of the source's states (see [`crate::StructFlags`]): what the plugin
+    /// rows and navigation read of them.
+    pub fn struct_flags(&self) -> crate::StructFlags {
+        crate::node::struct_flags_of(self.states)
     }
 
     /// The source reported the node as focusable (structure, as `visible` is; the fused flag

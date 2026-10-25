@@ -8,35 +8,27 @@ use std::time::Instant;
 
 use gorca_mirror::{ApplyOrigin, MirrorRead, mirror};
 use gorca_model::{
-    AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSnapshot,
-    PropMask, Relations, Role, SnapshotBatch, StateSet,
+    AppId, ChildList, ConnectorId, Freshness, LocalId, NodeKey, NodeSnapshot, PropMask, Role,
+    SnapshotBatch, StateSet,
 };
 
 fn node(n: u64) -> Arc<NodeSnapshot> {
-    Arc::new(NodeSnapshot {
-        key: NodeKey {
-            app: AppId {
-                connector: ConnectorId(0),
-                serial: 1,
+    Arc::new(
+        NodeSnapshot::new(
+            NodeKey {
+                app: AppId {
+                    connector: ConnectorId(0),
+                    serial: 1,
+                },
+                local: LocalId(n),
             },
-            local: LocalId(n),
-        },
-        role: Role::Button,
-        states: StateSet::empty(),
-        name: Some(Arc::from("a typical accessible name")),
-        description: None,
-        value: None,
-        parent: None,
-        children: ChildList::Count(3),
-        interfaces: Ifaces::empty(),
-        attrs: AttrMap::default(),
-        relations: Relations::default(),
-        bounds: None,
-        have: PropMask::CACHE_ITEM,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    })
+            Freshness::Fresh { at: Instant::now() },
+        )
+        .with_name(Some(Arc::from("a typical accessible name")))
+        .with_children(ChildList::Count(3))
+        .with_have(PropMask::CACHE_ITEM)
+        .with_source(Role::Button, StateSet::empty()),
+    )
 }
 
 #[test]

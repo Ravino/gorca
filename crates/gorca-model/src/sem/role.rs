@@ -192,61 +192,6 @@ impl SemRole {
     }
 }
 
-impl From<crate::Role> for SemRole {
-    /// The closest model role of a legacy role. Lossy (`Panel` is `Generic`, `ToggleButton` is
-    /// `Button`, `Label` is `Caption`): for fixtures and the tests that still describe a node by
-    /// its legacy role, never for a connector, which normalises from the raw role.
-    fn from(role: crate::Role) -> Self {
-        use crate::Role;
-        match role {
-            Role::Unknown => SemRole::Unknown,
-            Role::Application => SemRole::Application,
-            Role::Window => SemRole::Window,
-            Role::Dialog => SemRole::Dialog,
-            Role::Panel => SemRole::Generic,
-            Role::Document => SemRole::Document,
-            Role::DocumentWeb => SemRole::DocumentWeb,
-            Role::Heading => SemRole::Heading,
-            Role::Paragraph => SemRole::Paragraph,
-            Role::Link => SemRole::Link,
-            Role::Image => SemRole::Img,
-            Role::List => SemRole::List,
-            Role::ListItem => SemRole::ListItem,
-            Role::Table => SemRole::Table,
-            Role::Row => SemRole::Row,
-            Role::Cell => SemRole::Cell,
-            Role::ColumnHeader => SemRole::ColumnHeader,
-            Role::RowHeader => SemRole::RowHeader,
-            Role::Button | Role::ToggleButton => SemRole::Button,
-            Role::Switch => SemRole::Switch,
-            Role::CheckBox => SemRole::Checkbox,
-            Role::RadioButton => SemRole::Radio,
-            Role::ComboBox => SemRole::Combobox,
-            Role::TextEntry => SemRole::TextBox,
-            Role::PasswordEntry => SemRole::PasswordBox,
-            Role::SpinButton => SemRole::SpinButton,
-            Role::Slider => SemRole::Slider,
-            Role::ProgressBar => SemRole::ProgressBar,
-            Role::Menu => SemRole::Menu,
-            Role::MenuBar => SemRole::Menubar,
-            Role::MenuItem => SemRole::MenuItem,
-            Role::Popover => SemRole::Popover,
-            Role::Tab => SemRole::Tab,
-            Role::TabList => SemRole::TabList,
-            Role::Tree => SemRole::Tree,
-            Role::TreeItem => SemRole::TreeItem,
-            Role::Toolbar => SemRole::Toolbar,
-            Role::StatusBar => SemRole::Status,
-            Role::Separator => SemRole::Separator,
-            Role::Label => SemRole::Caption,
-            Role::StaticText => SemRole::StaticText,
-            Role::Terminal => SemRole::Terminal,
-            Role::Landmark => SemRole::Region,
-            Role::Alert => SemRole::Alert,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -271,66 +271,331 @@ impl NodeSem {
     };
 }
 
+/// The diagnostic names of what the connector decoded (the presentation log and the mirror
+/// probes): the connector's role word and the bit set of the state names. No decision reads it.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct SrcDiag {
+    role: &'static str,
+    states: u16,
+    /// The source states were read at all (the `sensitive` word needs them).
+    states_read: bool,
+}
+
+/// The state names a snapshot logs, in a fixed order (the log sorts them).
+const DIAG_STATES: &[(StateSet, &str)] = &[
+    (StateSet::ACTIVE, "active"),
+    (StateSet::CHECKED, "checked"),
+    (StateSet::COLLAPSED, "collapsed"),
+    (StateSet::DEFUNCT, "defunct"),
+    (StateSet::ENABLED, "enabled"),
+    (StateSet::EXPANDED, "expanded"),
+    (StateSet::FOCUSABLE, "focusable"),
+    (StateSet::FOCUSED, "focused"),
+    (StateSet::PRESSED, "pressed"),
+    (StateSet::SELECTABLE, "selectable"),
+    (StateSet::SELECTED, "selected"),
+    (StateSet::SHOWING, "showing"),
+    (StateSet::TRANSIENT, "transient"),
+    (StateSet::VISIBLE, "visible"),
+    (StateSet::MANAGES_DESCENDANTS, "manages-descendants"),
+];
+/// Bit of the `sensitive` word in [`SrcDiag::states`]: the source did not say `disabled`.
+const DIAG_SENSITIVE: u16 = 1 << 15;
+/// Bit of the `selected` word, for a context that asserts it.
+const DIAG_SELECTED: u16 = 1 << 10;
+
+impl SrcDiag {
+    /// What nothing was decoded for.
+    pub const NONE: SrcDiag = SrcDiag {
+        role: "unknown",
+        states: 0,
+        states_read: false,
+    };
+
+    /// The names of a decoded role and state set.
+    pub fn of(role: Role, states: StateSet) -> SrcDiag {
+        let mut bits = 0u16;
+        for (i, (f, _)) in DIAG_STATES.iter().enumerate() {
+            if states.contains(*f) {
+                bits |= 1 << i;
+            }
+        }
+        if !states.is_empty() && !states.contains(StateSet::DISABLED) {
+            bits |= DIAG_SENSITIVE;
+        }
+        SrcDiag {
+            role: role.log_name(),
+            states: bits,
+            states_read: true,
+        }
+    }
+}
+
+/// The structural flags of a decoded state set (see [`StructFlags`]).
+pub fn struct_flags_of(states: StateSet) -> StructFlags {
+    let mut f = StructFlags::empty();
+    for (state, flag) in [
+        (StateSet::SHOWING, StructFlags::SHOWING),
+        (StateSet::VISIBLE, StructFlags::VISIBLE),
+        (StateSet::DEFUNCT, StructFlags::DEFUNCT),
+        (StateSet::FOCUSABLE, StructFlags::FOCUSABLE),
+        (StateSet::FOCUSED, StructFlags::FOCUSED),
+        (StateSet::MULTILINE, StructFlags::MULTILINE),
+        (StateSet::ACTIVE, StructFlags::ACTIVE),
+    ] {
+        if states.contains(state) {
+            f |= flag;
+        }
+    }
+    f
+}
+
 /// Immutable node snapshot. Text is deliberately not part of it (see `TextQuery`).
+///
+/// The fields are private (ADR-0022 section 8.5): a snapshot is built with [`NodeSnapshot::new`]
+/// and the `with_*` setters, and read through the accessors. It carries no legacy role, state set
+/// or attribute map; what is presented is in the fused entry (`sem`), and the structure that
+/// navigation reads is [`NodeSnapshot::struct_state`] and [`NodeSnapshot::caps`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NodeSnapshot {
-    pub key: NodeKey,
-    pub role: Role,
-    pub states: StateSet,
-    pub name: Option<Arc<str>>,
-    pub description: Option<Arc<str>>,
-    pub value: Option<Value>,
-    pub parent: Option<NodeKey>,
-    pub children: ChildList,
-    pub interfaces: Ifaces,
-    pub attrs: AttrMap,
-    pub relations: Relations,
-    pub bounds: Option<Rect>,
-    /// Fields this snapshot actually carries. A `GetItems` node has `PropMask::CACHE_ITEM`; a
-    /// full fetch has what was asked for.
-    pub have: PropMask,
-    /// Mirror write sequence at which the app confirmed this content: the `issued_at` of the
-    /// request whose reply produced it (late-reply and re-dirty rules, B-1 5.4).
-    pub confirmed_seq: u64,
-    pub fresh: Freshness,
-    /// Dual-carried semantics (see [`NodeSem`]).
-    pub sem: NodeSem,
+    key: NodeKey,
+    name: Option<Arc<str>>,
+    description: Option<Arc<str>>,
+    value: Option<Value>,
+    parent: Option<NodeKey>,
+    children: ChildList,
+    caps: NodeCaps,
+    relations: Relations,
+    bounds: Option<Rect>,
+    have: PropMask,
+    confirmed_seq: u64,
+    fresh: Freshness,
+    sem: NodeSem,
+    structure: StructFlags,
+    diag: SrcDiag,
+    /// The source's own role is a password field (a mark only the connector sets, beside the
+    /// source record's).
+    native_secret: bool,
+    /// Test support: the role and states `with_source` was given, so a fixture can describe a
+    /// node by them and re-derive its source record (`testing` feature only).
+    #[cfg(feature = "testing")]
+    pub(crate) test_src: (Role, StateSet),
 }
 
 impl NodeSnapshot {
+    /// An empty snapshot of `key`: it carries nothing (`have` is empty) and is as fresh as
+    /// `fresh` says.
+    pub fn new(key: NodeKey, fresh: Freshness) -> NodeSnapshot {
+        NodeSnapshot {
+            key,
+            name: None,
+            description: None,
+            value: None,
+            parent: None,
+            children: ChildList::Unknown,
+            caps: NodeCaps::default(),
+            relations: Relations::default(),
+            bounds: None,
+            have: PropMask::empty(),
+            confirmed_seq: 0,
+            fresh,
+            sem: NodeSem::NONE,
+            structure: StructFlags::empty(),
+            diag: SrcDiag::NONE,
+            native_secret: false,
+            #[cfg(feature = "testing")]
+            test_src: (Role::Unknown, StateSet::empty()),
+        }
+    }
+
+    pub fn key(&self) -> NodeKey {
+        self.key
+    }
+    pub fn name(&self) -> &Option<Arc<str>> {
+        &self.name
+    }
+    pub fn description(&self) -> &Option<Arc<str>> {
+        &self.description
+    }
+    pub fn value(&self) -> &Option<Value> {
+        &self.value
+    }
+    pub fn parent(&self) -> Option<NodeKey> {
+        self.parent
+    }
+    pub fn children(&self) -> &ChildList {
+        &self.children
+    }
+    pub fn relations(&self) -> &Relations {
+        &self.relations
+    }
+    pub fn bounds(&self) -> Option<Rect> {
+        self.bounds
+    }
+    /// Fields this snapshot actually carries. A `GetItems` node has `PropMask::CACHE_ITEM`; a
+    /// full fetch has what was asked for.
+    pub fn have(&self) -> PropMask {
+        self.have
+    }
+    /// Mirror write sequence at which the app confirmed this content: the `issued_at` of the
+    /// request whose reply produced it (late-reply and re-dirty rules, B-1 5.4).
+    pub fn confirmed_seq(&self) -> u64 {
+        self.confirmed_seq
+    }
+    pub fn fresh(&self) -> Freshness {
+        self.fresh
+    }
+    /// The semantic carriers (see [`NodeSem`]).
+    pub fn sem(&self) -> &NodeSem {
+        &self.sem
+    }
+
+    #[must_use]
+    pub fn with_key(mut self, v: NodeKey) -> Self {
+        self.key = v;
+        self
+    }
+    #[must_use]
+    pub fn with_name(mut self, v: Option<Arc<str>>) -> Self {
+        self.name = v;
+        self
+    }
+    #[must_use]
+    pub fn with_description(mut self, v: Option<Arc<str>>) -> Self {
+        self.description = v;
+        self
+    }
+    #[must_use]
+    pub fn with_value(mut self, v: Option<Value>) -> Self {
+        self.value = v;
+        self
+    }
+    #[must_use]
+    pub fn with_parent(mut self, v: Option<NodeKey>) -> Self {
+        self.parent = v;
+        self
+    }
+    #[must_use]
+    pub fn with_children(mut self, v: ChildList) -> Self {
+        self.children = v;
+        self
+    }
+    #[must_use]
+    pub fn with_caps(mut self, v: NodeCaps) -> Self {
+        self.caps = v;
+        self
+    }
+    #[must_use]
+    pub fn with_relations(mut self, v: Relations) -> Self {
+        self.relations = v;
+        self
+    }
+    #[must_use]
+    pub fn with_bounds(mut self, v: Option<Rect>) -> Self {
+        self.bounds = v;
+        self
+    }
+    #[must_use]
+    pub fn with_have(mut self, v: PropMask) -> Self {
+        self.have = v;
+        self
+    }
+    #[must_use]
+    pub fn with_confirmed_seq(mut self, v: u64) -> Self {
+        self.confirmed_seq = v;
+        self
+    }
+    #[must_use]
+    pub fn with_fresh(mut self, v: Freshness) -> Self {
+        self.fresh = v;
+        self
+    }
+    #[must_use]
+    pub fn with_sem(mut self, v: NodeSem) -> Self {
+        self.sem = v;
+        self
+    }
+
+    /// The semantic carriers, for the writer that stamps the fused entry on a copy.
+    pub fn sem_mut(&mut self) -> &mut NodeSem {
+        &mut self.sem
+    }
+    /// The child list, for the test fixtures that edit one in place.
+    pub fn children_mut(&mut self) -> &mut ChildList {
+        &mut self.children
+    }
+    pub fn set_caps(&mut self, v: NodeCaps) {
+        self.caps = v;
+    }
+    pub fn set_key(&mut self, v: NodeKey) {
+        self.key = v;
+    }
+    pub fn set_name(&mut self, v: Option<Arc<str>>) {
+        self.name = v;
+    }
+    pub fn set_value(&mut self, v: Option<Value>) {
+        self.value = v;
+    }
+    pub fn set_parent(&mut self, v: Option<NodeKey>) {
+        self.parent = v;
+    }
+    pub fn set_children(&mut self, v: ChildList) {
+        self.children = v;
+    }
+    pub fn set_have(&mut self, v: PropMask) {
+        self.have = v;
+    }
+    pub fn set_confirmed_seq(&mut self, v: u64) {
+        self.confirmed_seq = v;
+    }
+    pub fn set_fresh(&mut self, v: Freshness) {
+        self.fresh = v;
+    }
+    pub fn set_sem(&mut self, v: NodeSem) {
+        self.sem = v;
+    }
+    pub fn set_description(&mut self, v: Option<Arc<str>>) {
+        self.description = v;
+    }
+    pub fn set_relations(&mut self, v: Relations) {
+        self.relations = v;
+    }
+    pub fn set_bounds(&mut self, v: Option<Rect>) {
+        self.bounds = v;
+    }
+
+    /// The connector's decode of the node's role and states: the structural bits navigation
+    /// reads, the diagnostic names, and the native password mark. The only place the connector's
+    /// role and state types enter the record, and nothing reads them back.
+    #[must_use]
+    pub fn with_source(mut self, role: Role, states: StateSet) -> Self {
+        self.structure = struct_flags_of(states);
+        self.diag = SrcDiag::of(role, states);
+        self.native_secret = crate::redact::is_sensitive(role);
+        #[cfg(feature = "testing")]
+        {
+            self.test_src = (role, states);
+        }
+        self
+    }
+
     /// The role as the diagnostic logs name it (`check_box`): the connector's role, for the
     /// presentation log and the probes only, never for a decision.
     pub fn role_log_name(&self) -> &'static str {
-        self.role.log_name()
+        self.diag.role
     }
 
     /// The AT-SPI names of the states the connector decoded, plus `sensitive` (the core records
     /// its absence as `DISABLED`): for the presentation log and the mirror probes only, never for
     /// a decision.
     pub fn state_names(&self) -> SmallVec<[&'static str; 8]> {
-        const NAMES: &[(StateSet, &str)] = &[
-            (StateSet::ACTIVE, "active"),
-            (StateSet::CHECKED, "checked"),
-            (StateSet::COLLAPSED, "collapsed"),
-            (StateSet::DEFUNCT, "defunct"),
-            (StateSet::ENABLED, "enabled"),
-            (StateSet::EXPANDED, "expanded"),
-            (StateSet::FOCUSABLE, "focusable"),
-            (StateSet::FOCUSED, "focused"),
-            (StateSet::PRESSED, "pressed"),
-            (StateSet::SELECTABLE, "selectable"),
-            (StateSet::SELECTED, "selected"),
-            (StateSet::SHOWING, "showing"),
-            (StateSet::TRANSIENT, "transient"),
-            (StateSet::VISIBLE, "visible"),
-            (StateSet::MANAGES_DESCENDANTS, "manages-descendants"),
-        ];
-        let mut out: SmallVec<[&'static str; 8]> = NAMES
+        let mut out: SmallVec<[&'static str; 8]> = DIAG_STATES
             .iter()
-            .filter(|(f, _)| self.states.contains(*f))
-            .map(|(_, name)| *name)
+            .enumerate()
+            .filter(|(i, _)| self.diag.states & (1 << i) != 0)
+            .map(|(_, (_, name))| *name)
             .collect();
-        if !self.states.is_empty() && !self.states.contains(StateSet::DISABLED) {
+        if self.diag.states & DIAG_SENSITIVE != 0 {
             out.push("sensitive");
         }
         out.sort_unstable();
@@ -340,17 +605,16 @@ impl NodeSnapshot {
     /// A copy of this snapshot with the `selected` state set, for the presentation log of a
     /// context that asserts it; `None` when it already is (diagnostics only).
     pub fn with_selected_for_log(&self) -> Option<NodeSnapshot> {
-        if self.states.contains(StateSet::SELECTED) {
+        if self.diag.states & DIAG_SELECTED != 0 {
             return None;
         }
         let mut c = self.clone();
-        c.states |= StateSet::SELECTED;
+        c.diag.states |= DIAG_SELECTED;
         Some(c)
     }
 
     /// The snapshot of a document node from its fused `entry` (the document mirror's focus
-    /// snapshot): the legacy role and state set are derived from the entry here, in the model,
-    /// for the consumers that still read them. `value` is the contents of a field.
+    /// snapshot). `value` is the contents of a field.
     pub fn from_fused(
         key: NodeKey,
         entry: Arc<crate::SemEntry>,
@@ -360,6 +624,11 @@ impl NodeSnapshot {
     ) -> NodeSnapshot {
         use crate::sem::{Avail, Check, Expand, Invalid, Press, Select, SemFlags};
         let sem = &entry.sem;
+        let mut have = PropMask::NAME | PropMask::ROLE | PropMask::STATES;
+        if value.is_some() {
+            have |= PropMask::VALUE;
+        }
+        // The names the log carries for this node: what the entry says, in the connector's words.
         let mut states = StateSet::empty();
         for (flag, state) in [
             (SemFlags::FOCUSABLE, StateSet::FOCUSABLE),
@@ -398,25 +667,17 @@ impl NodeSnapshot {
         if sem.avail != Avail::Disabled {
             states |= StateSet::ENABLED;
         }
-        let mut have = PropMask::NAME | PropMask::ROLE | PropMask::STATES;
-        if value.is_some() {
-            have |= PropMask::VALUE;
-        }
+        let mut diag = SrcDiag::of(Role::Unknown, states);
+        diag.role = sem.role.name();
+        let description = sem.text.as_deref().and_then(|t| t.description.clone());
         NodeSnapshot {
             key,
-            role: if crate::redact::entry_is_secret(&entry) {
-                Role::PasswordEntry
-            } else {
-                Role::from(sem.role)
-            },
-            states,
             name: Some(name),
-            description: sem.text.as_deref().and_then(|t| t.description.clone()),
+            description,
             value,
             parent: None,
             children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: AttrMap::default(),
+            caps: NodeCaps::default(),
             relations: Relations::default(),
             bounds: None,
             have,
@@ -425,6 +686,11 @@ impl NodeSnapshot {
                 since: now,
                 mask: PropMask::VALUE,
             },
+            structure: struct_flags_of(states) & StructFlags::FOCUSABLE,
+            diag,
+            native_secret: false,
+            #[cfg(feature = "testing")]
+            test_src: (Role::Unknown, states),
             sem: NodeSem {
                 rec: None,
                 entry: Some(entry),
@@ -432,32 +698,38 @@ impl NodeSnapshot {
         }
     }
 
-    /// The capabilities the source claimed for the node (see [`NodeCaps`]).
-    pub fn caps(&self) -> NodeCaps {
-        NodeCaps::new(self.interfaces)
+    /// The model role of the node: the fused entry's, else its source record's, else `Unknown`
+    /// (a snapshot nothing has normalised). Structure, for the mirror's own walks (prefetch).
+    pub fn model_role(&self) -> crate::SemRole {
+        match (&self.sem.entry, &self.sem.rec) {
+            (Some(e), _) => e.sem.role,
+            (None, Some(r)) => r.sem.role,
+            // Test builds describe a bare snapshot by the source role it was given.
+            #[cfg(feature = "testing")]
+            (None, None) => crate::testing::sem_role(self.test_src.0),
+            #[cfg(not(feature = "testing"))]
+            (None, None) => crate::SemRole::Unknown,
+        }
     }
 
-    /// The structural state of the node (see [`StructState`]): the only part of [`StateSet`]
-    /// that navigation reads.
+    /// The capabilities the source claimed for the node (see [`NodeCaps`]).
+    pub fn caps(&self) -> NodeCaps {
+        self.caps
+    }
+
+    /// The source claimed a password role (the native mark; the record and the entry are asked
+    /// beside it, see [`NodeSnapshot::is_sensitive`]).
+    pub(crate) fn native_secret(&self) -> bool {
+        self.native_secret
+    }
+
+    /// The structural state of the node (see [`StructState`]): the only part of the source's
+    /// state set that navigation reads.
     pub fn struct_state(&self) -> StructState {
         if !self.have.contains(PropMask::STATES) {
             return StructState::UNKNOWN;
         }
-        let mut f = StructFlags::empty();
-        for (state, flag) in [
-            (StateSet::SHOWING, StructFlags::SHOWING),
-            (StateSet::VISIBLE, StructFlags::VISIBLE),
-            (StateSet::DEFUNCT, StructFlags::DEFUNCT),
-            (StateSet::FOCUSABLE, StructFlags::FOCUSABLE),
-            (StateSet::FOCUSED, StructFlags::FOCUSED),
-            (StateSet::MULTILINE, StructFlags::MULTILINE),
-            (StateSet::ACTIVE, StructFlags::ACTIVE),
-        ] {
-            if self.states.contains(state) {
-                f |= flag;
-            }
-        }
-        StructState::known(f)
+        StructState::known(self.structure)
     }
 }
 
@@ -593,7 +865,7 @@ impl Freshness {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn a_snapshot_from_a_fused_entry_derives_the_legacy_fields() {
+    fn a_snapshot_from_a_fused_entry_logs_what_the_entry_says() {
         use crate::sem::{Check, Expand, Select, SemEntry, SemFlags, SemRole};
         let mut e = SemEntry::default();
         e.sem.role = SemRole::Checkbox;
@@ -610,22 +882,18 @@ mod tests {
         };
         let s =
             NodeSnapshot::from_fused(key, Arc::new(e), Arc::from("Wi-Fi"), None, Instant::now());
-        assert_eq!(s.role, Role::CheckBox);
-        for st in [
-            StateSet::CHECKED,
-            StateSet::COLLAPSED,
-            StateSet::SELECTABLE,
-            StateSet::FOCUSABLE,
-            StateSet::ENABLED,
-        ] {
-            assert!(s.states.contains(st), "{st:?}");
+        assert_eq!(s.role_log_name(), "checkbox");
+        let names = s.state_names();
+        for st in ["checked", "collapsed", "selectable", "focusable", "enabled"] {
+            assert!(names.contains(&st), "{st}");
         }
-        assert!(!s.states.contains(StateSet::SELECTED));
+        assert!(!names.contains(&"selected"));
         assert!(
-            s.have
+            s.have()
                 .contains(PropMask::NAME | PropMask::ROLE | PropMask::STATES)
         );
-        assert!(s.sem.entry.is_some());
+        assert!(s.struct_state().contains(StructFlags::FOCUSABLE));
+        assert!(s.sem().entry.is_some());
     }
 
     use super::*;

@@ -138,7 +138,7 @@ pub fn describe_where_am_i(
         .iter()
         .zip(web)
         .map(|(n, web)| {
-            let entry = n.sem.entry.clone().unwrap_or_default();
+            let entry = n.sem().entry.clone().unwrap_or_default();
             let ctx = gorca_present::ComposeCtx {
                 flags: gorca_present::ReportFlags::default(),
                 may_refine: false,

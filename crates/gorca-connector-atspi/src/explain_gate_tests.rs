@@ -127,16 +127,16 @@ fn records(family: &Family, lang: gorca_present::Lang, seed: u64, out: &mut Vec<
             if *web != web_run {
                 out.push(dropped(
                     &label,
-                    s.key.local.0,
+                    s.key().local.0,
                     kind_mismatch_reason(web_run),
                     describe(s),
                 ));
                 continue;
             }
-            let Some(entry) = s.sem.entry.as_ref() else {
+            let Some(entry) = s.sem().entry.as_ref() else {
                 out.push(dropped(
                     &label,
-                    s.key.local.0,
+                    s.key().local.0,
                     no_entry_reason(s),
                     describe(s),
                 ));
@@ -150,7 +150,7 @@ fn records(family: &Family, lang: gorca_present::Lang, seed: u64, out: &mut Vec<
                 hedge_inferred: false,
                 lang,
             };
-            let Ok(ir) = compose(entry, s.key, Reason::Focus, ctx) else {
+            let Ok(ir) = compose(entry, s.key(), Reason::Focus, ctx) else {
                 continue;
             };
             let opts = RenderOpts {
@@ -162,7 +162,7 @@ fn records(family: &Family, lang: gorca_present::Lang, seed: u64, out: &mut Vec<
             let (legacy, new) = views(entry, &ir, opts);
             out.push(Record {
                 corpus: label.clone(),
-                node: s.key.local.0,
+                node: s.key().local.0,
                 outcome: if legacy == new { "equal" } else { "different" },
                 deviation: "",
                 legacy,

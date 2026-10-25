@@ -600,7 +600,7 @@ impl Reader {
             .cmd
             .last_spoken_node
             .and_then(|k| self.dir.lookup(k).hit());
-        let entry = node.as_ref().and_then(|n| n.sem.entry.clone());
+        let entry = node.as_ref().and_then(|n| n.sem().entry.clone());
         let secret = self.explain_withholds_text(node.as_ref());
         // The IR the words actually spoken were made from, kept when they were built (rows,
         // groups, the extension's and the policy's edits). Only a focus presentation keeps one;
@@ -686,7 +686,7 @@ impl Reader {
                 .find(|n| crate::nodekind::is_window_role(crate::nodekind::role_of(n)))
             {
                 let epoch = self.epoch.current();
-                let node = w.key;
+                let node = w.key();
                 self.cmd.pending = Some(PendingInfo {
                     kind,
                     node,
@@ -721,7 +721,7 @@ impl Reader {
         let text = match kind {
             PendingKind::WhereAmI => info::where_am_i(&chain, &words, repeat, level),
             PendingKind::WindowTitle => {
-                let app = snap.key.app;
+                let app = snap.key().app;
                 let title = info::window_title(&chain, &words).inspect(|t| {
                     self.cmd.last_title = Some((app, t.clone()));
                 });

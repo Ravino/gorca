@@ -13,8 +13,8 @@ use gorca_connector_api::BackendError;
 use gorca_input_api::{KeyClass, KeyEvent, KeyIntent, Modifiers, PressKind};
 use gorca_mirror::{ApplyOrigin, MirrorRead, MirrorWriter, RemovalCause, mirror};
 use gorca_model::{
-    AppId, ChildList, ConnectorId, Freshness, Ifaces, LazyText, LocalId, NodeKey, NodeSnapshot,
-    PropMask, Rect, Relations, Role, SnapshotBatch, StateSet, TextDelta, TextWindowFill,
+    AppId, ChildList, ConnectorId, Freshness, LazyText, LocalId, NodeKey, NodeSnapshot, PropMask,
+    Rect, Role, SnapshotBatch, StateSet, TextDelta, TextWindowFill,
 };
 use gorca_rt::EpochCell;
 
@@ -314,30 +314,18 @@ impl Sim {
             h: 24,
         });
         Arc::new(
-            NodeSnapshot {
-                key: key(n),
-                role: role_of(n),
-                states,
-                name: Some(Arc::from(name_of(n))),
-                description: None,
-                value: None,
-                parent: parent_of(n).map(key),
-                children: ChildList::Known(
+            NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+                .with_name(Some(Arc::from(name_of(n))))
+                .with_parent(parent_of(n).map(key))
+                .with_children(ChildList::Known(
                     kids_of(n, self.w.alive.contains(&DLG))
                         .iter()
                         .map(|k| key(*k))
                         .collect(),
-                ),
-                interfaces: Ifaces::empty(),
-                attrs: smallvec::SmallVec::default(),
-                relations: Relations::default(),
-                bounds: rect,
-                have,
-                confirmed_seq: 0,
-                fresh: Freshness::Fresh { at: Instant::now() },
-                sem: gorca_model::NodeSem::NONE,
-            }
-            .with_test_record(),
+                ))
+                .with_bounds(rect)
+                .with_have(have)
+                .with_test_source(role_of(n), states),
         )
     }
 

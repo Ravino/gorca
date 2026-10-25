@@ -13,8 +13,8 @@ use std::time::{Duration, Instant};
 
 use gorca_input_api::{KeyClass, KeyEvent, KeyIntent, Modifiers, PressKind, static_keycode};
 use gorca_model::{
-    AppId, ChildList, ConnectorId, Epoch, Freshness, Ifaces, LocalId, NodeKey, NodeSnapshot, Prio,
-    PropMask, Role, StateSet, TextGranularity, TextSelections, TextUnitAt, TextWindowFill,
+    AppId, ConnectorId, Epoch, Freshness, LocalId, NodeKey, NodeSnapshot, Prio, PropMask, Role,
+    StateSet, TextGranularity, TextSelections, TextUnitAt, TextWindowFill,
 };
 use gorca_rt::EpochCell;
 
@@ -39,25 +39,10 @@ fn node() -> NodeKey {
 
 fn snap(role: Role, states: StateSet) -> Arc<NodeSnapshot> {
     Arc::new(
-        NodeSnapshot {
-            key: node(),
-            role,
-            states,
-            name: Some(Arc::from("field")),
-            description: None,
-            value: None,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        }
-        .with_test_record(),
+        NodeSnapshot::new(node(), Freshness::Fresh { at: Instant::now() })
+            .with_name(Some(Arc::from("field")))
+            .with_have(PropMask::PRESENT)
+            .with_test_source(role, states),
     )
 }
 

@@ -8,8 +8,8 @@ use gorca_config::{Overlay, Presets, load};
 use gorca_input_api::{CmdId, KeyClass, KeyEvent, KeyIntent, Modifiers, PressKind};
 use gorca_mirror::{MirrorWriter, mirror};
 use gorca_model::{
-    AppId, ChildList, ConnectorId, Epoch, Freshness, Ifaces, LocalId, NodeKey, NodeSnapshot, Role,
-    SnapshotBatch, StateSet,
+    AppId, ConnectorId, Epoch, Freshness, LocalId, NodeKey, NodeSnapshot, Role, SnapshotBatch,
+    StateSet,
 };
 use gorca_rt::EpochCell;
 
@@ -38,25 +38,11 @@ fn key(n: u64) -> NodeKey {
 
 fn snap(n: u64, role: Role, name: &str, parent: Option<u64>) -> Arc<NodeSnapshot> {
     Arc::new(
-        NodeSnapshot {
-            key: key(n),
-            role,
-            states: StateSet::empty(),
-            name: Some(Arc::from(name)),
-            description: None,
-            value: None,
-            parent: parent.map(key),
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: gorca_model::PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        }
-        .with_test_record(),
+        NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+            .with_name(Some(Arc::from(name)))
+            .with_parent(parent.map(key))
+            .with_have(gorca_model::PropMask::PRESENT)
+            .with_test_source(role, StateSet::empty()),
     )
 }
 
@@ -429,13 +415,13 @@ fn explain_withholds_the_text_of_a_password_and_fails_closed_without_a_node() {
     assert!(!f.reader.explain_withholds_text(Some(&plain)));
     // The native role says password.
     let mut pw = (*snap(4, Role::TextEntry, "Pass", None)).clone();
-    pw.role = Role::PasswordEntry;
+    pw.set_test_role(Role::PasswordEntry);
     assert!(f.reader.explain_withholds_text(Some(&Arc::new(pw))));
     // Only the source record says password (an engine reporting it over a text-box token).
     let mut rec = (*snap(5, Role::TextEntry, "Pass", None)).clone();
-    let mut r = (**rec.sem.rec.as_ref().unwrap()).clone();
+    let mut r = (**rec.sem().rec.as_ref().unwrap()).clone();
     r.sem.role = gorca_model::sem::SemRole::PasswordBox;
-    rec.sem.rec = Some(Arc::new(r));
+    rec.sem_mut().rec = Some(Arc::new(r));
     assert!(f.reader.explain_withholds_text(Some(&Arc::new(rec))));
     // The node left the mirror, or the utterance was not about a node: secrecy is unknown.
     assert!(f.reader.explain_withholds_text(None));
@@ -477,8 +463,8 @@ fn where_am_i_never_speaks_the_contents_of_a_password_field() {
     // made of it: no path may speak the contents.
     let mut f = fixture();
     let mut pw = (*snap(3, Role::PasswordEntry, "Password", Some(2))).clone();
-    pw.value = Some(gorca_model::Value::Text(Arc::from(SECRET)));
-    pw.description = Some(Arc::from("At least eight characters"));
+    pw.set_value(Some(gorca_model::Value::Text(Arc::from(SECRET))));
+    pw.set_description(Some(Arc::from("At least eight characters")));
     f.writer.apply(
         SnapshotBatch {
             nodes: vec![

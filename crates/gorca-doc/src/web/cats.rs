@@ -386,9 +386,9 @@ pub struct NodeSpec {
 }
 
 impl NodeSpec {
-    pub fn new(role: impl Into<SemRole>) -> Self {
+    pub fn new(role: SemRole) -> Self {
         NodeSpec {
-            role: role.into(),
+            role,
             level: 0,
             flags: NodeFlags::NONE,
             sig: 0,

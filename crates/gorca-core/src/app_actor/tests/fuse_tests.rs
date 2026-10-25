@@ -10,8 +10,7 @@ use gorca_ingress::IngressConfig;
 use gorca_mirror::MirrorRead;
 use gorca_model::sem::{Avail, Check, Group, GroupMask, SemRole, Semantics, SrcRecord};
 use gorca_model::{
-    ChildList, Freshness, Ifaces, NodeEvent, NodeSem, NodeSnapshot, PropMask, Role, SemTables,
-    SnapshotBatch, StateSet,
+    Freshness, NodeEvent, NodeSem, NodeSnapshot, PropMask, Role, SemTables, SnapshotBatch, StateSet,
 };
 
 use super::{Rig, key, rig};
@@ -48,27 +47,17 @@ fn button_rec(name: &str) -> SrcRecord {
 
 /// A snapshot whose legacy fields agree with `button_rec(name)`.
 fn snap_of(n: u64, parent: Option<u64>, name: &str) -> Arc<NodeSnapshot> {
-    Arc::new(NodeSnapshot {
-        key: key(n),
-        role: Role::Button,
-        states: StateSet::ENABLED | StateSet::SHOWING,
-        name: (!name.is_empty()).then(|| Arc::from(name)),
-        description: None,
-        value: None,
-        parent: parent.map(key),
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
-        attrs: gorca_model::AttrMap::default(),
-        relations: gorca_model::Relations::default(),
-        bounds: None,
-        have: PropMask::ROLE | PropMask::STATES | PropMask::NAME | PropMask::DESCRIPTION,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: NodeSem {
-            rec: Some(Arc::new(button_rec(name))),
-            entry: None,
-        },
-    })
+    Arc::new(
+        NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+            .with_name((!name.is_empty()).then(|| Arc::from(name)))
+            .with_parent(parent.map(key))
+            .with_have(PropMask::ROLE | PropMask::STATES | PropMask::NAME | PropMask::DESCRIPTION)
+            .with_sem(NodeSem {
+                rec: Some(Arc::new(button_rec(name))),
+                entry: None,
+            })
+            .with_source(Role::Button, StateSet::ENABLED | StateSet::SHOWING),
+    )
 }
 
 fn push(r: &mut Rig, nodes: Vec<Arc<NodeSnapshot>>) {
@@ -97,8 +86,8 @@ fn a_record_is_fused_and_its_entry_replaces_the_record_on_the_mirror_snapshot() 
     push(&mut r, vec![snap_of(1, None, "OK")]);
     drain(&mut r);
     let s = r.read.get(key(1)).hit().unwrap();
-    assert!(s.sem.rec.is_none(), "the record is dropped once fused");
-    let e = s.sem.entry.as_ref().expect("fused entry attached");
+    assert!(s.sem().rec.is_none(), "the record is dropped once fused");
+    let e = s.sem().entry.as_ref().expect("fused entry attached");
     assert_eq!(e.sem.role, SemRole::Button);
     assert_eq!(e.name.as_deref(), Some("OK"));
     assert_eq!(e.sem.avail, Avail::Enabled);
@@ -111,11 +100,11 @@ fn a_record_is_fused_and_its_entry_replaces_the_record_on_the_mirror_snapshot() 
 fn a_snapshot_without_a_record_is_left_alone() {
     let mut r = rig(IngressConfig::default());
     let mut s = (*snap_of(1, None, "x")).clone();
-    s.sem = NodeSem::NONE;
+    s.set_sem(NodeSem::NONE);
     push(&mut r, vec![Arc::new(s)]);
     drain(&mut r);
     let got = r.read.get(key(1)).hit().unwrap();
-    assert!(got.sem.rec.is_none() && got.sem.entry.is_none());
+    assert!(got.sem().rec.is_none() && got.sem().entry.is_none());
     assert_eq!(r.actor.fuse_stats().queued, 0);
 }
 
@@ -133,7 +122,7 @@ fn a_newer_observation_wins_and_a_late_older_one_does_not_overwrite_it() {
     // A late reply, issued before: its record is older than what the registers hold.
     w.enqueue([&old], 3);
     while w.step(&mut mirror, Duration::from_millis(5)) {}
-    let e = read.get(key(1)).hit().unwrap().sem.entry.clone().unwrap();
+    let e = read.get(key(1)).hit().unwrap().sem().entry.clone().unwrap();
     assert_eq!(e.name.as_deref(), Some("new"));
     assert_eq!(w.entry_of(key(1)).unwrap().name.as_deref(), Some("new"));
 }
@@ -157,9 +146,9 @@ fn an_entry_fused_from_a_replaced_snapshot_is_not_attached_to_the_new_one() {
     w.enqueue([&second], 2);
     while w.step(&mut mirror, Duration::from_millis(5)) {}
     let s = read.get(key(1)).hit().unwrap();
-    assert_eq!(s.name.as_deref(), Some("second"));
+    assert_eq!(s.name().as_deref(), Some("second"));
     assert_eq!(
-        s.sem.entry.as_ref().and_then(|e| e.name.as_deref()),
+        s.sem().entry.as_ref().and_then(|e| e.name.as_deref()),
         Some("second"),
         "the entry of the first record must not stick to the second snapshot"
     );
@@ -202,7 +191,7 @@ fn a_big_batch_is_fused_in_bounded_steps_focus_chain_first() {
     );
     let focused = read.get(key(3)).hit().unwrap();
     assert!(
-        focused.sem.entry.is_some(),
+        focused.sem().entry.is_some(),
         "the focused node is fused in the first step"
     );
     while w.step(&mut mirror, Duration::from_millis(2)) {}
@@ -270,12 +259,12 @@ prefixes = ["• "]
     while w.step(&mut mirror, Duration::from_millis(5)) {}
     let got = read.get(key(1)).hit().unwrap();
     assert_eq!(
-        got.name.as_deref(),
+        got.name().as_deref(),
         Some("• Alpha"),
         "legacy name untouched"
     );
     assert_eq!(
-        got.sem.entry.as_ref().and_then(|e| e.name.as_deref()),
+        got.sem().entry.as_ref().and_then(|e| e.name.as_deref()),
         Some("Alpha")
     );
 }
@@ -298,10 +287,10 @@ fn unknown_groups_never_overwrite_an_earlier_observation() {
     );
     w.enqueue([&full], 1);
     let mut p = (*snap_of(1, None, "OK")).clone();
-    p.sem = NodeSem {
+    p.set_sem(NodeSem {
         rec: Some(Arc::new(partial_rec)),
         entry: None,
-    };
+    });
     let p = Arc::new(p);
     w.enqueue([&p], 2);
     while w.step(&mut mirror, Duration::from_millis(5)) {}
@@ -372,7 +361,7 @@ fn feed(
 
 fn entry_name(read: &impl MirrorRead, n: u64) -> Option<String> {
     read.get(key(n)).hit().and_then(|s| {
-        s.sem
+        s.sem()
             .entry
             .as_ref()
             .and_then(|e| e.name.as_deref().map(str::to_owned))
@@ -416,22 +405,22 @@ fn a_property_event_marks_the_entry_stale_and_a_newer_reply_makes_it_fresh() {
     let (mut mirror, read) = gorca_mirror::mirror();
     let issued = mirror.seq();
     feed(&mut w, &mut mirror, issued, &[snap_of(1, None, "OK")]);
-    let fresh = read.get(key(1)).hit().unwrap().sem.entry.clone().unwrap();
+    let fresh = read.get(key(1)).hit().unwrap().sem().entry.clone().unwrap();
     assert!(!fresh.stale.has(Group::Name));
     // The event: the mirror marks the snapshot, the writer the registers (same sequence).
     mirror.invalidate(key(1), PropMask::NAME, Instant::now());
     w.invalidate(key(1), mirror.seq());
     while w.step(&mut mirror, Duration::from_millis(20)) {}
-    let e = read.get(key(1)).hit().unwrap().sem.entry.clone().unwrap();
+    let e = read.get(key(1)).hit().unwrap().sem().entry.clone().unwrap();
     assert!(e.stale.has(Group::Name), "the entry no longer reads fresh");
     // A reply issued before the invalidation cannot make it fresh again.
     feed(&mut w, &mut mirror, issued, &[snap_of(1, None, "OK")]);
-    let e = read.get(key(1)).hit().unwrap().sem.entry.clone().unwrap();
+    let e = read.get(key(1)).hit().unwrap().sem().entry.clone().unwrap();
     assert!(e.stale.has(Group::Name));
     // The re-read, issued after it, does.
     let at = mirror.seq();
     feed(&mut w, &mut mirror, at, &[snap_of(1, None, "Done")]);
-    let e = read.get(key(1)).hit().unwrap().sem.entry.clone().unwrap();
+    let e = read.get(key(1)).hit().unwrap().sem().entry.clone().unwrap();
     assert_eq!(e.name.as_deref(), Some("Done"));
     assert!(!e.stale.has(Group::Name));
 }
@@ -455,7 +444,7 @@ fn a_whole_application_invalidation_marks_every_node_in_bounded_steps() {
         .filter(|n| {
             read.get(key(*n))
                 .hit()
-                .and_then(|s| s.sem.entry.as_ref().map(|e| e.stale.has(Group::Name)))
+                .and_then(|s| s.sem().entry.as_ref().map(|e| e.stale.has(Group::Name)))
                 .unwrap_or(false)
         })
         .count();

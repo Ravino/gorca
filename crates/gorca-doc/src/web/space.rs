@@ -125,7 +125,7 @@ fn shift(r: &Range<usize>, by: u32) -> Range<u32> {
 mod tests {
     use std::sync::Arc;
 
-    use gorca_model::Role;
+    use gorca_model::sem::SemRole;
     use gorca_text::{Dir, Step};
 
     use super::super::cats::{NodeFlags, NodeSpec, SubtreeSpec};
@@ -137,14 +137,14 @@ mod tests {
         let kids: Vec<SubtreeSpec> = parts
             .iter()
             .map(|(t, block)| {
-                let mut n = NodeSpec::new(Role::StaticText).text(t);
+                let mut n = NodeSpec::new(SemRole::StaticText).text(t);
                 if *block {
                     n = n.flags(NodeFlags::BREAK_BEFORE);
                 }
                 SubtreeSpec::leaf(n)
             })
             .collect();
-        let spec = SubtreeSpec::with_children(NodeSpec::new(Role::Document), kids);
+        let spec = SubtreeSpec::with_children(NodeSpec::new(SemRole::Document), kids);
         assert!(
             d.apply(&DocOp::InsertSubtree {
                 parent: None,

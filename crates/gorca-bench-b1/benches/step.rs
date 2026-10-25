@@ -29,8 +29,8 @@ use gorca_mirror::fill::{
 };
 use gorca_mirror::{ApplyOrigin, MirrorHandle, MirrorWriter, mirror};
 use gorca_model::{
-    AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeEvent, NodeKey,
-    NodeSnapshot, PropMask, Relations, Role, SnapshotBatch, StateSet, WindowKind,
+    AppId, ConnectorId, Freshness, LocalId, NodeEvent, NodeKey, NodeSnapshot, PropMask, Role,
+    SnapshotBatch, StateSet, WindowKind,
 };
 
 /// Wiring of an arm's `Candidate` (SPEC 4.4): a mirror filled to the scenario's size, a long
@@ -87,24 +87,13 @@ impl StepSubject for CandidateSubject {
                 1..=64 => Some(i - 1),
                 _ => Some(64 + (i - 65) % 16),
             };
-            batch.push(Arc::new(NodeSnapshot {
-                key: node_key(app, i),
-                role: Role::Button,
-                states: StateSet::empty(),
-                name: Some(Arc::from("n")),
-                description: None,
-                value: None,
-                parent: parent.map(|p| node_key(app, p)),
-                children: ChildList::Unknown,
-                interfaces: Ifaces::empty(),
-                attrs: AttrMap::default(),
-                relations: Relations::default(),
-                bounds: None,
-                have,
-                confirmed_seq: 0,
-                fresh: Freshness::Fresh { at: Instant::now() },
-                sem: gorca_model::NodeSem::NONE,
-            }));
+            batch.push(Arc::new(
+                NodeSnapshot::new(node_key(app, i), Freshness::Fresh { at: Instant::now() })
+                    .with_name(Some(Arc::from("n")))
+                    .with_parent(parent.map(|p| node_key(app, p)))
+                    .with_have(have)
+                    .with_source(Role::Button, StateSet::empty()),
+            ));
             if batch.len() == 1_024 || i + 1 == nodes {
                 let issued_at = self.w.seq();
                 self.w.apply(

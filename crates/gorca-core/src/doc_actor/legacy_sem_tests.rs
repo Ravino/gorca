@@ -282,7 +282,9 @@ pub(crate) fn fuse_spec(s: gorca_doc::web::SubtreeSpec) -> gorca_doc::web::Subtr
         if s.node.sig >= 0xF000_0000_0000_0000 {
             s.node.sig = 0;
         }
-        let role = hint.role.unwrap_or_else(|| Role::from(s.node.role));
+        let role = hint
+            .role
+            .unwrap_or_else(|| gorca_model::testing::legacy_role(s.node.role));
         let mut node = SrcNode {
             id: SrcNodeId(0),
             role,

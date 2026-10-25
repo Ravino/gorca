@@ -182,7 +182,7 @@ impl DocWriter {
 mod tests {
     use std::sync::Arc;
 
-    use gorca_model::Role;
+    use gorca_model::sem::SemRole;
 
     use super::*;
     use crate::web::cats::{NodeSpec, SubtreeSpec};
@@ -191,7 +191,7 @@ mod tests {
         DocOp::InsertSubtree {
             parent: None,
             before: None,
-            subtree: Arc::new(SubtreeSpec::leaf(NodeSpec::new(Role::Document))),
+            subtree: Arc::new(SubtreeSpec::leaf(NodeSpec::new(SemRole::Document))),
         }
     }
 
@@ -218,7 +218,7 @@ mod tests {
         w.publish();
         for i in 0..20 {
             let sub = Arc::new(SubtreeSpec::leaf(
-                NodeSpec::new(Role::Heading).level(1 + (i % 6)),
+                NodeSpec::new(SemRole::Heading).level(1 + (i % 6)),
             ));
             assert!(
                 w.apply(DocOp::InsertSubtree {
@@ -246,7 +246,7 @@ mod tests {
         w.publish();
         let held = r.snapshot(); // stuck reader pins the live copy
         assert!(w.apply(root_op()).is_err()); // root exists; catch-up already ran on first apply
-        let sub = Arc::new(SubtreeSpec::leaf(NodeSpec::new(Role::Paragraph)));
+        let sub = Arc::new(SubtreeSpec::leaf(NodeSpec::new(SemRole::Paragraph)));
         let root = w.doc().root();
         assert!(
             w.apply(DocOp::InsertSubtree {

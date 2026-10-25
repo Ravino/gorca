@@ -31,7 +31,7 @@ use std::mem::size_of;
 use std::time::{Duration, Instant};
 
 use gorca_ingress::DirtySet;
-use gorca_model::{ChildList, Ifaces, NodeEvent, NodeKey, NodeSnapshot, PropMask, Role};
+use gorca_model::{ChildList, NodeEvent, NodeKey, NodeSnapshot, PropMask, SemRole};
 use gorca_rt::BudgetClass;
 use smallvec::SmallVec;
 
@@ -219,25 +219,25 @@ impl Default for FocusPrefetch {
 /// The Reader's `focus_need` (B-1 5.2) as far as a prefetch is concerned.
 fn need_of(n: &NodeSnapshot) -> PropMask {
     let mut need = LIGHT;
-    if !n.interfaces.is_empty() && !n.interfaces.intersects(Ifaces::VALUE | Ifaces::TEXT) {
+    if n.caps().is_known() && !n.caps().has_value() && !n.caps().has_text() {
         need.remove(PropMask::VALUE);
     }
-    if n.name.as_deref().is_none_or(str::is_empty) {
+    if n.name().as_deref().is_none_or(str::is_empty) {
         need |= PropMask::RELATIONS;
     }
     need
 }
 
 fn child_count(n: &NodeSnapshot) -> Option<usize> {
-    match &n.children {
+    match &n.children() {
         ChildList::Known(l) => Some(l.len()),
         ChildList::Count(c) => usize::try_from(*c).ok(),
         ChildList::Unknown => None,
     }
 }
 
-fn is_window(r: Role) -> bool {
-    matches!(r, Role::Window | Role::Dialog)
+fn is_window(r: SemRole) -> bool {
+    matches!(r, SemRole::Window | SemRole::Dialog)
 }
 
 fn recently(ring: &[(NodeKey, Instant)], k: NodeKey, now: Instant, gap: Duration) -> bool {
@@ -462,10 +462,10 @@ impl FocusPrefetch {
             let Some(v) = cx.mirror.view(cur).hit() else {
                 return false;
             };
-            if is_window(v.snap.role) || v.snap.role == Role::Application {
+            if is_window(v.snap.model_role()) || v.snap.model_role() == SemRole::Application {
                 return true;
             }
-            match v.snap.parent {
+            match v.snap.parent() {
                 Some(p) => cur = p,
                 None => return false,
             }
@@ -529,7 +529,7 @@ impl FocusPrefetch {
         if !complete && let Some(top) = self.chain.last().copied() {
             self.ask_ancestry(cx, top, BudgetClass::Prefetch, out);
         }
-        let Some(parent) = v.snap.parent else {
+        let Some(parent) = v.snap.parent() else {
             // The ancestry brings the parent link; its reply continues from here.
             return true;
         };

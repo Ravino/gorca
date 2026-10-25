@@ -29,8 +29,8 @@ use std::time::{Duration, Instant};
 use gorca_core::{ExtSink, ExtSource, MirrorDirectory, PresentContext};
 use gorca_ext_host::{ExtHost, Manifest, NativeFactory};
 use gorca_model::{
-    AppId, AppInfo, AttrMap, ChildList, ConnectorId, ConnectorKind, Freshness, Ifaces, LocalId,
-    NodeEvent, NodeKey, NodeSnapshot, Politeness, PropMask, Relations, Role, StateSet,
+    AppId, AppInfo, ConnectorId, ConnectorKind, Freshness, LocalId, NodeEvent, NodeKey,
+    NodeSnapshot, Politeness, PropMask, Role, StateSet,
 };
 
 const MANIFEST: &str = include_str!("../../../extensions/ext-test/ext.toml");
@@ -69,27 +69,16 @@ fn info() -> AppInfo {
 }
 
 fn snap(local: u64, name: &str) -> NodeSnapshot {
-    NodeSnapshot {
-        key: NodeKey {
+    NodeSnapshot::new(
+        NodeKey {
             app: app(1),
             local: LocalId(local),
         },
-        role: Role::Button,
-        states: StateSet::empty(),
-        name: Some(Arc::from(name)),
-        description: None,
-        value: None,
-        parent: None,
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
-        attrs: AttrMap::default(),
-        relations: Relations::default(),
-        bounds: None,
-        have: PropMask::PRESENT,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    }
+        Freshness::Fresh { at: Instant::now() },
+    )
+    .with_name(Some(Arc::from(name)))
+    .with_have(PropMask::PRESENT)
+    .with_source(Role::Button, StateSet::empty())
 }
 
 fn ann(text: &str) -> NodeEvent {
@@ -199,7 +188,7 @@ fn run_build(label: &str, wasm: Option<&[u8]>, n: usize) {
         })),
     );
     let focus = NodeEvent::FocusChanged {
-        node: node_none.key,
+        node: node_none.key(),
     };
     row(
         &format!("{label}-on_event_focus"),

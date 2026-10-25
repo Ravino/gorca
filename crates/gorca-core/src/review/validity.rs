@@ -94,12 +94,12 @@ pub fn snapshot_hash(s: &NodeSnapshot) -> u64 {
         text.and_then(|t| t.description.as_deref())
             .is_some_and(|d| !d.trim().is_empty()),
     ));
-    match &s.value {
+    match &s.value() {
         Some(Value::Text(t)) => h.bytes(t.as_bytes()),
         Some(Value::Range { current, .. }) => h.word(current.to_bits()),
         None => h.word(0),
     }
-    match s.bounds {
+    match s.bounds() {
         Some(r) => {
             h.word(u64::from(r.x.cast_unsigned()));
             h.word(u64::from(r.y.cast_unsigned()));
@@ -155,49 +155,35 @@ pub fn validity(model: &LineModel, mirror: &dyn MirrorRead, checked_rev: u64) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gorca_model::{
-        AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeSnapshot, Rect, Role,
-        StateSet,
-    };
+    use gorca_model::{AppId, ConnectorId, Freshness, LocalId, NodeSnapshot, Rect, Role, StateSet};
     use std::sync::Arc;
     use std::time::Instant;
 
     fn snap(n: u64) -> NodeSnapshot {
-        NodeSnapshot {
-            key: NodeKey {
+        NodeSnapshot::new(
+            NodeKey {
                 app: AppId {
                     connector: ConnectorId(1),
                     serial: 1,
                 },
                 local: LocalId(n),
             },
-            role: Role::Button,
-            states: StateSet::SHOWING | StateSet::VISIBLE,
-            name: Some(Arc::from("OK")),
-            description: None,
-            value: None,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: Some(Rect {
-                x: 1,
-                y: 2,
-                w: 3,
-                h: 4,
-            }),
-            have: PropMask::PRESENT | PropMask::BOUNDS,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        }
-        .with_test_record()
+            Freshness::Fresh { at: Instant::now() },
+        )
+        .with_name(Some(Arc::from("OK")))
+        .with_bounds(Some(Rect {
+            x: 1,
+            y: 2,
+            w: 3,
+            h: 4,
+        }))
+        .with_have(PropMask::PRESENT | PropMask::BOUNDS)
+        .with_test_source(Role::Button, StateSet::SHOWING | StateSet::VISIBLE)
     }
 
     /// `s` with the source record it would have after the edit.
     fn rec(mut s: NodeSnapshot) -> NodeSnapshot {
-        s.sem = gorca_model::NodeSem::NONE;
+        s.set_sem(gorca_model::NodeSem::NONE);
         s.with_test_record()
     }
 
@@ -206,30 +192,30 @@ mod tests {
         let a = snap(1);
         let mut b = a.clone();
         assert_eq!(snapshot_hash(&a), snapshot_hash(&b));
-        b.name = Some(Arc::from("Cancel"));
+        b.set_name(Some(Arc::from("Cancel")));
         assert_ne!(snapshot_hash(&a), snapshot_hash(&rec(b)));
         let mut c = a.clone();
-        c.bounds = Some(Rect {
+        c.set_bounds(Some(Rect {
             x: 1,
             y: 3,
             w: 3,
             h: 4,
-        });
+        }));
         assert_ne!(snapshot_hash(&a), snapshot_hash(&c));
         // A spoken state group, and a structural bit.
         let mut d = a.clone();
-        d.states |= StateSet::DISABLED;
+        d.set_test_states(d.test_states() | StateSet::DISABLED);
         assert_ne!(snapshot_hash(&a), snapshot_hash(&rec(d)));
         let mut d = a.clone();
-        d.states &= !StateSet::SHOWING;
+        d.set_test_states(d.test_states() & !StateSet::SHOWING);
         assert_ne!(snapshot_hash(&a), snapshot_hash(&d));
         // Fields no zone uses do not make a model dirty.
         let mut e = a.clone();
-        e.states |= StateSet::FOCUSED;
-        e.confirmed_seq = 9;
+        e.set_test_states(e.test_states() | StateSet::FOCUSED);
+        e.set_confirmed_seq(9);
         assert_eq!(snapshot_hash(&a), snapshot_hash(&e));
         let mut f = a.clone();
-        f.states |= StateSet::ENABLED | StateSet::SELECTABLE;
+        f.set_test_states(f.test_states() | StateSet::ENABLED | StateSet::SELECTABLE);
         assert_eq!(snapshot_hash(&a), snapshot_hash(&rec(f)));
     }
 
@@ -237,21 +223,21 @@ mod tests {
     fn a_description_matters_only_as_far_as_it_is_there() {
         let a = snap(1);
         let mut b = a.clone();
-        b.description = Some(Arc::from("tip"));
+        b.set_description(Some(Arc::from("tip")));
         assert_ne!(snapshot_hash(&a), snapshot_hash(&rec(b)));
         let mut c = a.clone();
-        c.description = Some(Arc::from("  "));
+        c.set_description(Some(Arc::from("  ")));
         assert_eq!(snapshot_hash(&a), snapshot_hash(&rec(c)));
     }
 
     #[test]
     fn a_name_and_a_value_do_not_collide() {
         let mut a = snap(1);
-        a.name = Some(Arc::from("ab"));
-        a.value = Some(Value::Text(Arc::from("c")));
+        a.set_name(Some(Arc::from("ab")));
+        a.set_value(Some(Value::Text(Arc::from("c"))));
         let mut b = snap(1);
-        b.name = Some(Arc::from("a"));
-        b.value = Some(Value::Text(Arc::from("bc")));
+        b.set_name(Some(Arc::from("a")));
+        b.set_value(Some(Value::Text(Arc::from("bc"))));
         assert_ne!(snapshot_hash(&rec(a)), snapshot_hash(&rec(b)));
     }
 }

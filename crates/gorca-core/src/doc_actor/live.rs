@@ -524,7 +524,7 @@ impl LiveTracker {
 #[cfg(test)]
 mod tests {
     use gorca_doc::web::{Cat, DocOp, NodeData, NodeSpec, SubtreeSpec};
-    use gorca_model::Role;
+    use gorca_model::sem::SemRole;
 
     use super::*;
 
@@ -627,15 +627,15 @@ mod tests {
         let mut d = WebDoc::new(1);
         let m = region_data(live, gorca_model::sem::SemRole::Generic);
         let region = SubtreeSpec::with_children(
-            NodeSpec::new(Role::Panel)
+            NodeSpec::new(SemRole::Generic)
                 .flags(NodeFlags::BLOCK | NodeFlags::LIVE)
                 .name("Flood region")
                 .data(Arc::new(m)),
             vec![SubtreeSpec::leaf(
-                NodeSpec::new(Role::StaticText).text(text),
+                NodeSpec::new(SemRole::StaticText).text(text),
             )],
         );
-        let root = SubtreeSpec::with_children(NodeSpec::new(Role::DocumentWeb), vec![region]);
+        let root = SubtreeSpec::with_children(NodeSpec::new(SemRole::DocumentWeb), vec![region]);
         assert!(
             d.apply(&DocOp::InsertSubtree {
                 parent: None,
@@ -671,14 +671,14 @@ mod tests {
         let _ = t.tick(&d, t0 + Duration::from_millis(700));
         let later = t0 + Duration::from_secs(5);
         let alert = SubtreeSpec::with_children(
-            NodeSpec::new(Role::Alert)
+            NodeSpec::new(SemRole::Alert)
                 .flags(NodeFlags::BLOCK)
                 .data(Arc::new(region_data(
                     "assertive",
                     gorca_model::sem::SemRole::Alert,
                 ))),
             vec![SubtreeSpec::leaf(
-                NodeSpec::new(Role::StaticText).text("Payment failed"),
+                NodeSpec::new(SemRole::StaticText).text("Payment failed"),
             )],
         );
         let root = d.root().unwrap();
@@ -807,7 +807,11 @@ mod tests {
 
     /// A one-node document whose root carries `data`.
     fn one_node(data: NodeData, flags: NodeFlags) -> (WebDoc, DocNodeId) {
-        let node = SubtreeSpec::leaf(NodeSpec::new(Role::Panel).flags(flags).data(Arc::new(data)));
+        let node = SubtreeSpec::leaf(
+            NodeSpec::new(SemRole::Generic)
+                .flags(flags)
+                .data(Arc::new(data)),
+        );
         let mut d = WebDoc::new(1);
         assert!(
             d.apply(&DocOp::InsertSubtree {

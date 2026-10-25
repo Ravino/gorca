@@ -7,8 +7,8 @@ use gorca_connector_api::app_channel;
 use gorca_ingress::IngressConfig;
 use gorca_mirror::{MirrorRead, mirror};
 use gorca_model::{
-    ChildList, ConnectorId, Freshness, Ifaces, LocalId, Lookup, NodeSnapshot, Politeness, PropMask,
-    Role, SnapshotBatch, StateSet,
+    ConnectorId, Freshness, LocalId, Lookup, NodeSnapshot, Politeness, PropMask, Role,
+    SnapshotBatch, StateSet,
 };
 use std::sync::Arc;
 
@@ -53,25 +53,10 @@ fn rig(cfg: IngressConfig) -> Rig {
 
 fn snap(n: u64) -> Arc<NodeSnapshot> {
     Arc::new(
-        NodeSnapshot {
-            key: key(n),
-            role: Role::Button,
-            states: StateSet::empty(),
-            name: None,
-            description: None,
-            value: None,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: gorca_model::PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        }
-        .with_test_record(),
+        NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+            .with_name(None)
+            .with_have(gorca_model::PropMask::PRESENT)
+            .with_test_source(Role::Button, StateSet::empty()),
     )
 }
 
@@ -312,9 +297,9 @@ use std::sync::Mutex;
 
 fn node(n: u64, role: Role, parent: Option<u64>) -> Arc<NodeSnapshot> {
     let mut s = (*snap(n)).clone();
-    s.role = role;
-    s.name = Some(Arc::from(format!("n{n}")));
-    s.parent = parent.map(key);
+    s.set_test_role(role);
+    s.set_name(Some(Arc::from(format!("n{n}"))));
+    s.set_parent(parent.map(key));
     Arc::new(s.with_test_record())
 }
 
@@ -946,7 +931,7 @@ fn showing(n: u64) -> NodeEvent {
 
 fn alert_snap(n: u64) -> Arc<NodeSnapshot> {
     let mut s = (*snap(n)).clone();
-    s.role = Role::Alert;
+    s.set_test_role(Role::Alert);
     Arc::new(s.with_test_record())
 }
 

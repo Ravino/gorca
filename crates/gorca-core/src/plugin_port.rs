@@ -88,7 +88,7 @@ pub struct ScopeSpec {
 pub struct Row {
     /// `SemRole` code of the observed role.
     pub role: u16,
-    /// State bits.
+    /// State bits, see [`state_bits`].
     pub states: u64,
     /// Observed accessible name.
     pub name: Option<Arc<str>>,
@@ -104,6 +104,14 @@ pub struct Row {
     pub dom_id: Option<Arc<str>>,
     /// A secret node (password): absent from every read (AC-1, SS-3).
     pub secret: bool,
+}
+
+/// The state bits of a row (WIT `states`): the `flags` group of the observed record in the low
+/// 32 bits and the structural bits of the source's states (showing, visible, defunct, focusable,
+/// focused, multi-line, active: `StructFlags`) in the next 8. Both are facts of the observed view;
+/// no spoken state of the fused entry is in them.
+pub fn state_bits(flags: gorca_model::sem::SemFlags, st: gorca_model::StructFlags) -> u64 {
+    u64::from(flags.bits()) | (u64::from(st.bits()) << 32)
 }
 
 impl Row {

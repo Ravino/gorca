@@ -21,14 +21,14 @@ const MAX_DEPTH: usize = 24;
 /// The node and its ancestors, leaf first, as far as the mirror knows them.
 pub(crate) fn ancestry(dir: &MirrorDirectory, leaf: &Arc<NodeSnapshot>) -> Vec<Arc<NodeSnapshot>> {
     let mut out = vec![Arc::clone(leaf)];
-    let mut cur = leaf.parent;
+    let mut cur = leaf.parent();
     while let Some(p) = cur {
         if out.len() >= MAX_DEPTH {
             break;
         }
         match dir.lookup(p).hit() {
             Some(n) => {
-                cur = n.parent;
+                cur = n.parent();
                 out.push(n);
             }
             None => break,
@@ -56,7 +56,7 @@ pub(crate) struct Words {
 
 /// 1-based position of `child` among the known children of `parent`, and their count.
 fn position(parent: &NodeSnapshot, child: NodeKey) -> Option<(usize, usize)> {
-    match &parent.children {
+    match &parent.children() {
         ChildList::Known(list) => list
             .iter()
             .position(|k| *k == child)
@@ -200,7 +200,7 @@ pub(crate) fn where_am_i_parts(
         s.push_str(&w.role_text);
         // Position of the item inside this container: the previous node in the chain.
         if let Some(child) = chain.get(i - 1)
-            && let Some((at, of)) = position(n, child.key)
+            && let Some((at, of)) = position(n, child.key())
         {
             let _ = write!(s, ", {}", msg!(InfoPosition, at = at, of = of));
         }
@@ -229,7 +229,7 @@ pub(crate) fn where_am_i_parts(
         if let Some(d) = lw.description.as_deref().filter(|d| !d.is_empty()) {
             parts.push(d.to_owned());
         }
-        if matches!(leaf.fresh, Freshness::Stale { .. } | Freshness::Defunct) {
+        if matches!(leaf.fresh(), Freshness::Stale { .. } | Freshness::Defunct) {
             parts.push(tr(M::InfoOutOfDate).to_owned());
         }
     }
@@ -258,15 +258,15 @@ pub(crate) fn node_info(chain: &[Arc<NodeSnapshot>], words: &[Words]) -> String 
     let (Some(n), Some(w)) = (chain.first(), words.first()) else {
         return tr(M::NoFocus).to_owned();
     };
-    let fresh = match n.fresh {
+    let fresh = match n.fresh() {
         Freshness::Fresh { .. } => "fresh",
         Freshness::Stale { .. } => "stale",
         Freshness::Defunct => "defunct",
     };
     format!(
         "node {} of application {}, role {}, {}, {} ancestors known, {} states, name {}",
-        n.key.local.0,
-        n.key.app.serial,
+        n.key().local.0,
+        n.key().app.serial,
         if w.role_text.is_empty() {
             "unknown"
         } else {
@@ -337,7 +337,7 @@ pub(crate) fn date_text(t: LocalTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gorca_model::{AppId, AttrMap, ConnectorId, Ifaces, LocalId, Relations};
+    use gorca_model::{AppId, ConnectorId, LocalId};
     use gorca_model::{Role, StateSet};
     use std::time::Instant;
 
@@ -394,25 +394,11 @@ mod tests {
     }
 
     fn node(n: u64, role: Role, name: Option<&str>, parent: Option<u64>) -> NodeSnapshot {
-        NodeSnapshot {
-            key: key(n),
-            role,
-            states: StateSet::empty(),
-            name: name.map(Arc::from),
-            description: None,
-            value: None,
-            parent: parent.map(key),
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: AttrMap::default(),
-            relations: Relations::default(),
-            bounds: None,
-            have: gorca_model::PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        }
-        .with_test_record()
+        NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+            .with_name(name.map(Arc::from))
+            .with_parent(parent.map(key))
+            .with_have(gorca_model::PropMask::PRESENT)
+            .with_test_source(role, StateSet::empty())
     }
 
     /// The words of each node of `chain` from the entry its source record gives (as the Reader
@@ -423,7 +409,7 @@ mod tests {
             .iter()
             .map(|n| {
                 let n = (**n).clone().with_test_record();
-                let entry = n.sem.rec.as_ref().map(|r| r.provisional_entry()).unwrap();
+                let entry = n.sem().rec.as_ref().map(|r| r.provisional_entry()).unwrap();
                 let ctx = ComposeCtx {
                     flags: ReportFlags::default(),
                     may_refine: false,
@@ -446,11 +432,11 @@ mod tests {
     fn chain() -> Vec<Arc<NodeSnapshot>> {
         let item = node(7, Role::ListItem, Some("Inbox"), Some(3));
         let mut list = node(3, Role::List, Some("Folders"), Some(2));
-        list.children = ChildList::Known(
+        list.set_children(ChildList::Known(
             (5..17)
                 .map(|i| if i == 7 { key(7) } else { key(100 + i) })
                 .collect::<smallvec::SmallVec<[NodeKey; 8]>>(),
-        );
+        ));
         // Move the item to position 3: children 5..17 are ids, item key(7) is at index 2.
         let win = node(2, Role::Window, Some("Mail"), Some(1));
         let app = node(1, Role::Application, Some("Evolution"), None);
@@ -479,8 +465,8 @@ mod tests {
     fn detailed_adds_description_and_states() {
         let mut c = chain();
         let mut item = (*c[0]).clone();
-        item.description = Some(Arc::from("Unread messages"));
-        item.states = StateSet::SELECTED | StateSet::FOCUSED;
+        item.set_description(Some(Arc::from("Unread messages")));
+        item.set_test_states(StateSet::SELECTED | StateSet::FOCUSED);
         c[0] = Arc::new(item);
         let t = where_am_i(&c, &words(&c), 2, Verbosity::Normal);
         assert!(

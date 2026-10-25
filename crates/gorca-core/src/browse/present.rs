@@ -643,7 +643,7 @@ mod tests {
     use gorca_model::{Role, StateSet};
 
     fn leaf(role: Role) -> NodeSpec {
-        NodeSpec::new(role)
+        NodeSpec::new(gorca_model::testing::sem_role(role))
     }
 
     fn with_states(n: NodeSpec, st: StateSet) -> NodeSpec {

@@ -16,10 +16,7 @@
 
 pub mod e2e;
 
-use gorca_model::{
-    AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSnapshot, Role,
-    StateSet,
-};
+use gorca_model::{AppId, ConnectorId, Freshness, LocalId, NodeKey, NodeSnapshot, Role, StateSet};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -39,24 +36,12 @@ pub fn key(n: u64) -> NodeKey {
 
 /// A representative snapshot for mirror benchmarks.
 pub fn snapshot(n: u64) -> Arc<NodeSnapshot> {
-    Arc::new(NodeSnapshot {
-        key: key(n),
-        role: Role::Button,
-        states: StateSet::FOCUSABLE,
-        name: Some(Arc::from("benchmark node")),
-        description: None,
-        value: None,
-        parent: None,
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
-        attrs: gorca_model::AttrMap::default(),
-        relations: gorca_model::Relations::default(),
-        bounds: None,
-        have: gorca_model::PropMask::PRESENT,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: Instant::now() },
-        sem: gorca_model::NodeSem::NONE,
-    })
+    Arc::new(
+        NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+            .with_name(Some(Arc::from("benchmark node")))
+            .with_have(gorca_model::PropMask::PRESENT)
+            .with_source(Role::Button, StateSet::FOCUSABLE),
+    )
 }
 
 #[cfg(test)]
@@ -65,6 +50,6 @@ mod tests {
 
     #[test]
     fn fixtures_are_consistent() {
-        assert_eq!(snapshot(7).key, key(7));
+        assert_eq!(snapshot(7).key(), key(7));
     }
 }

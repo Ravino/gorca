@@ -833,3 +833,40 @@ node under one. Character, word, line, say-all, selection, find and the live-reg
 read through it, and rule 12 bans `.text_in(` in `browse/` and `doc_actor/live.rs` (`raw-text-in`).
 Test: `reading_a_character_of_a_secret_field_never_speaks_a_plaintext_char`.
 
+
+#### M22c part 3: the node record (2026-10-25), section 8 closed
+
+`NodeSnapshot` has private fields (constructor `NodeSnapshot::new`, `with_*` builders for the
+producers, accessors for everyone, `set_*` for the mirror writer) and no `role`, `states`,
+`attrs` or `interfaces` field. What is left of the connector's decode sits behind accessors:
+`struct_state()` (structural bits), `caps()` (`NodeCaps`, the private `Ifaces`), `model_role()`
+(entry, else record), the native password mark that `is_sensitive` ORs with the entry and the
+record, and the diagnostic names (`role_log_name`, `state_names`) for the presentation log and
+the probes. Connectors enter through `with_source(role, states)`; the connector crates, the
+document source crates and `gorca-sem-atspi` keep their own source role and state types to
+*produce* the entry. The `From<Role> for SemRole` shim and its reverse are deleted; the tests that
+describe a node by a source role use `gorca_model::testing::{sem_role, legacy_role}` (feature
+`testing`, which also keeps the role and states a fixture was given so `with_test_record` can
+re-derive its record). `NodeSpec::new` takes a `SemRole`. The plugin watch rows
+(`plugin_port::Row`) carry `state_bits(flags group, structural bits)` instead of the raw
+`StateSet` bits (WIT `states` doc updated; no plugin reads a toolkit bit layout); the two
+`UNPORTED` entries of rule 12 are gone, and the ratchet also covers `gorca-mirror`,
+`gorca-present`, `gorca-ext-host` and `extensions/`.
+
+Not moved, by decision: `SrcNode` (the document source's node: `role`, `states`, `attrs`) keeps
+its producer-side fields; the core reads it through `model_role`, `is_focusable`,
+`reports_invalid`, `is_visible` and `struct_flags` only (rule 12 bans the reads in `gorca-core`).
+
+* 2026-10-25: the mirror's merge of a partial reply no longer carries `attrs` (the field is gone;
+  the `ATTRS` bit of `have` is still carried), and the byte counter no longer counts attribute
+  bytes (they live in the record, which `node_bytes` already counts).
+* 2026-10-25: a plugin sees `states` as the `flags` group (bits 0..31) plus the structural bits
+  (showing, visible, defunct, focusable, focused, multi-line, active; bits 32..39) instead of the
+  toolkit bit layout. No shipped plugin reads it.
+* 2026-10-25: the prefetch chain walk stops at a node whose model role is `Window` or `Dialog`
+  (the raw role set it used before folded into the same two roles; an ARIA `alertdialog` is not
+  one).
+
+Gates: goldens unchanged (`tests/fixtures/sem/golden/`, the review, whereami, docflags, quicknav
+suites pass), `cargo xtask cutover --check` ok, shell e2e `run_p1.sh` 9 steps 0 failed
+(`bench/results/e2e/m22c3-p1/`).

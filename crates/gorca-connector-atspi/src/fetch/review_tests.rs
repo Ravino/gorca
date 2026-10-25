@@ -107,10 +107,10 @@ fn bounds_are_window_relative_in_both_toolkit_flavours() {
         run(async {
             let Some(r) = rig(coord).await else { return };
             let mut snaps = [fetched(&r, 2).await, fetched(&r, 3).await];
-            assert!(snaps[0].bounds.is_none() && !snaps[0].have.contains(PropMask::BOUNDS));
+            assert!(snaps[0].bounds().is_none() && !snaps[0].have().contains(PropMask::BOUNDS));
             review::add_bounds(&r.cx, &mut snaps, dl()).await;
             assert_eq!(
-                snaps[0].bounds,
+                snaps[0].bounds(),
                 Some(Rect {
                     x: 10,
                     y: 10,
@@ -119,8 +119,12 @@ fn bounds_are_window_relative_in_both_toolkit_flavours() {
                 }),
                 "{coord}"
             );
-            assert_eq!(snaps[1].bounds.map(|b| b.x), Some(80));
-            assert!(snaps[0].have.contains(PropMask::BOUNDS | PropMask::PRESENT));
+            assert_eq!(snaps[1].bounds().map(|b| b.x), Some(80));
+            assert!(
+                snaps[0]
+                    .have()
+                    .contains(PropMask::BOUNDS | PropMask::PRESENT)
+            );
         });
     }
 }
@@ -131,8 +135,11 @@ fn a_bogus_rectangle_is_none_but_the_node_is_marked_answered() {
         let Some(r) = rig("window").await else { return };
         let mut snaps = [fetched(&r, 8).await];
         review::add_bounds(&r.cx, &mut snaps, dl()).await;
-        assert!(snaps[0].bounds.is_none());
-        assert!(snaps[0].have.contains(PropMask::BOUNDS), "do not ask again");
+        assert!(snaps[0].bounds().is_none());
+        assert!(
+            snaps[0].have().contains(PropMask::BOUNDS),
+            "do not ask again"
+        );
     });
 }
 
@@ -144,7 +151,7 @@ fn a_hung_node_costs_only_its_own_bounds() {
             // The hung node is fetched by hand: its own role/state calls would hang too.
             let n = resolved(&r.cx, 9);
             let mut s = (*fetched(&r, 2).await).clone();
-            s.key = n.key;
+            s.set_key(n.key);
             Arc::new(s)
         }];
         let t0 = std::time::Instant::now();
@@ -153,8 +160,8 @@ fn a_hung_node_costs_only_its_own_bounds() {
             t0.elapsed() < Duration::from_secs(2),
             "bounded by the deadline"
         );
-        assert!(snaps[0].bounds.is_some());
-        assert!(snaps[1].bounds.is_none() && !snaps[1].have.contains(PropMask::BOUNDS));
+        assert!(snaps[0].bounds().is_some());
+        assert!(snaps[1].bounds().is_none() && !snaps[1].have().contains(PropMask::BOUNDS));
     });
 }
 

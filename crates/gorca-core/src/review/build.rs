@@ -266,8 +266,8 @@ pub async fn expand(
     // follow one after the other, up to `MAX_CHILDREN`, so the node is not expanded again and
     // again with the same first page.
     let mut kids = kids;
-    let total = match parent.children {
-        ChildList::Count(n) => usize::try_from(n).ok(),
+    let total = match parent.children() {
+        ChildList::Count(n) => usize::try_from(*n).ok(),
         ChildList::Known(_) | ChildList::Unknown => None,
     };
     let page = CHILD_PAGE as usize;
@@ -276,7 +276,7 @@ pub async fn expand(
     let mut verify: Option<NodeKey> = None;
     if let Some(saved) = saved_total {
         if saved == total {
-            verify = kids.nodes.last().map(|n| n.key);
+            verify = kids.nodes.last().map(|n| n.key());
         } else {
             kids.nodes.clear();
             owed_page = true;
@@ -312,7 +312,7 @@ pub async fn expand(
         match more {
             Ok(mut b) if !b.nodes.is_empty() => {
                 if let Some(last) = verify.take() {
-                    if b.nodes.first().map(|n| n.key) != Some(last) {
+                    if b.nodes.first().map(|n| n.key()) != Some(last) {
                         // The list moved under the saved pages: read it again from the start.
                         kids.nodes.clear();
                         last_page_len = page;
@@ -353,9 +353,9 @@ pub async fn expand(
     }
     // A known count settles it (a strategy may flag `truncated` when it reads past the last
     // child); without one, an unflagged short last page is the whole list.
-    let complete = match parent.children {
+    let complete = match parent.children() {
         ChildList::Count(n) => {
-            usize::try_from(n).is_ok_and(|n| n == kids.nodes.len())
+            usize::try_from(*n).is_ok_and(|n| n == kids.nodes.len())
                 || kids.nodes.len() >= MAX_CHILDREN
         }
         ChildList::Known(_) => false,
@@ -363,7 +363,7 @@ pub async fn expand(
     };
     tracing::debug!(
         ?node,
-        parent_children = ?parent.children,
+        parent_children = ?parent.children(),
         kids = kids.nodes.len(),
         truncated = kids.truncated,
         complete,
@@ -371,8 +371,10 @@ pub async fn expand(
     );
     let mut p = (*parent).clone();
     if complete {
-        p.children = ChildList::Known(kids.nodes.iter().map(|k| k.key).collect());
-        p.have |= PropMask::CHILDREN;
+        p.set_children(ChildList::Known(
+            kids.nodes.iter().map(|k| k.key()).collect(),
+        ));
+        p.set_have(p.have() | PropMask::CHILDREN);
     }
     let mut nodes = Vec::with_capacity(kids.nodes.len() + 1);
     nodes.push(Arc::new(p));
@@ -637,7 +639,7 @@ pub async fn build_model(io: &ReviewIo, spec: BuildSpec) -> Result<Arc<LineModel
     }
 
     // Text lines: reuse the previous model's for clean nodes, ask for the rest.
-    let clip = clip_of(collected.nodes.first().and_then(|n| n.snap.bounds));
+    let clip = clip_of(collected.nodes.first().and_then(|n| n.snap.bounds()));
     let dirty: Option<&[NodeKey]> = spec.dirty.as_deref();
     let mut lines: HashMap<NodeKey, Arc<[TextLine]>> = HashMap::new();
     let mut ask: Vec<NodeKey> = Vec::new();
@@ -686,7 +688,7 @@ pub async fn build_model(io: &ReviewIo, spec: BuildSpec) -> Result<Arc<LineModel
         .nodes
         .into_iter()
         .map(|mut n| {
-            n.lines = lines.get(&n.snap.key).cloned();
+            n.lines = lines.get(&n.snap.key()).cloned();
             n
         })
         .collect();
@@ -791,7 +793,7 @@ pub async fn revalidate(io: &ReviewIo, probe: Vec<ProbeItem>, clip: Rect) -> RrV
             any_ok = true;
             let item = probe.iter().find(|p| p.node == *n);
             if let Some(item) = item
-                && item.rect != s.bounds
+                && item.rect != s.bounds()
             {
                 moved = true;
             }

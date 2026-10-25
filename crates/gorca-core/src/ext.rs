@@ -102,7 +102,7 @@ impl ExtNode {
     pub fn new(snap: &NodeSnapshot, entry: Arc<SemEntry>) -> Self {
         let secret = gorca_present::is_secret_entry(&entry) || snap.is_sensitive();
         Self {
-            key: snap.key,
+            key: snap.key(),
             role: entry.sem.role,
             flags: u64::from(entry.sem.flags.bits()),
             name: if secret { None } else { entry.name.clone() },
@@ -115,7 +115,7 @@ impl ExtNode {
                     .as_deref()
                     .and_then(|t| t.description.clone())
             },
-            range: match &snap.value {
+            range: match &snap.value() {
                 Some(gorca_model::Value::Range { current, min, max }) if !secret => {
                     Some((*current, *min, *max))
                 }
@@ -131,11 +131,11 @@ impl ExtNode {
     /// The Reader uses [`ExtNode::new`] with the document's entry for a web node.
     #[must_use]
     pub fn from_snapshot(snap: &NodeSnapshot) -> Self {
-        let entry = match (&snap.sem.entry, &snap.sem.rec) {
+        let entry = match (&snap.sem().entry, &snap.sem().rec) {
             (Some(e), _) => Arc::clone(e),
             (None, Some(r)) => Arc::new(r.provisional_entry()),
             (None, None) => Arc::new(SemEntry {
-                name: snap.name.clone(),
+                name: snap.name().clone(),
                 ..SemEntry::default()
             }),
         };
@@ -631,42 +631,31 @@ mod tests {
 mod ext_node_tests {
     use gorca_model::sem::{SemRole, SemText};
     use gorca_model::{
-        AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSnapshot, Role,
-        StateSet, Value,
+        AppId, ConnectorId, Freshness, LocalId, NodeKey, NodeSnapshot, Role, StateSet, Value,
     };
 
     use super::*;
 
     fn snap(role: Role) -> NodeSnapshot {
-        NodeSnapshot {
-            key: NodeKey {
+        NodeSnapshot::new(
+            NodeKey {
                 app: AppId {
                     connector: ConnectorId(1),
                     serial: 1,
                 },
                 local: LocalId(3),
             },
-            role,
-            states: StateSet::empty(),
-            name: Some(Arc::from("Volume")),
-            description: Some(Arc::from("The level")),
-            value: Some(Value::Range {
-                current: 0.5,
-                min: 0.0,
-                max: 1.0,
-            }),
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: gorca_model::PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Defunct,
-            sem: gorca_model::NodeSem::NONE,
-        }
-        .with_test_record()
+            Freshness::Defunct,
+        )
+        .with_name(Some(Arc::from("Volume")))
+        .with_description(Some(Arc::from("The level")))
+        .with_value(Some(Value::Range {
+            current: 0.5,
+            min: 0.0,
+            max: 1.0,
+        }))
+        .with_have(gorca_model::PropMask::PRESENT)
+        .with_test_source(role, StateSet::empty())
     }
 
     fn entry(role: SemRole) -> Arc<SemEntry> {

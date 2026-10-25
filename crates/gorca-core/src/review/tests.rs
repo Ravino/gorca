@@ -14,8 +14,8 @@ use std::time::{Duration, Instant};
 use gorca_input_api::{KeyClass, KeyEvent, KeyIntent, Modifiers, PressKind};
 use gorca_mirror::{ApplyOrigin, MirrorRead, MirrorWriter, mirror};
 use gorca_model::{
-    AppId, AttrMap, ChildList, ConnectorId, Epoch, Freshness, Ifaces, LocalId, NodeKey,
-    NodeSnapshot, PropMask, Rect, Relations, Role, SnapshotBatch, StateSet,
+    AppId, ChildList, ConnectorId, Epoch, Freshness, LocalId, NodeKey, NodeSnapshot, PropMask,
+    Rect, Role, SnapshotBatch, StateSet,
 };
 use gorca_rt::EpochCell;
 
@@ -55,29 +55,20 @@ fn node(
         have |= PropMask::BOUNDS;
     }
     Arc::new(
-        NodeSnapshot {
-            key: key(n),
-            role,
-            states: if matches!(role, Role::Button | Role::TextEntry) {
-                StateSet::SHOWING | StateSet::VISIBLE | StateSet::FOCUSABLE
-            } else {
-                StateSet::SHOWING | StateSet::VISIBLE
-            },
-            name: (!name.is_empty()).then(|| Arc::from(name)),
-            description: None,
-            value: None,
-            parent: parent.map(key),
-            children: ChildList::Known(kids.iter().map(|k| key(*k)).collect()),
-            interfaces: Ifaces::empty(),
-            attrs: AttrMap::default(),
-            relations: Relations::default(),
-            bounds: r,
-            have,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-            sem: gorca_model::NodeSem::NONE,
-        }
-        .with_test_record(),
+        NodeSnapshot::new(key(n), Freshness::Fresh { at: Instant::now() })
+            .with_name((!name.is_empty()).then(|| Arc::from(name)))
+            .with_parent(parent.map(key))
+            .with_children(ChildList::Known(kids.iter().map(|k| key(*k)).collect()))
+            .with_bounds(r)
+            .with_have(have)
+            .with_test_source(
+                role,
+                if matches!(role, Role::Button | Role::TextEntry) {
+                    StateSet::SHOWING | StateSet::VISIBLE | StateSet::FOCUSABLE
+                } else {
+                    StateSet::SHOWING | StateSet::VISIBLE
+                },
+            ),
     )
 }
 
@@ -1132,7 +1123,7 @@ fn terminal_screen() -> Vec<Arc<NodeSnapshot>> {
         rect(0, 0, 400, 300),
     ))
     .clone();
-    term.states |= StateSet::FOCUSED;
+    term.set_test_states(term.test_states() | StateSet::FOCUSED);
     vec![
         node(
             1,

@@ -112,14 +112,14 @@ fn join<'a>(it: impl Iterator<Item = (gorca_model::SegmentKind, &'a str)>) -> St
 }
 
 fn describe(s: &NodeSnapshot) -> String {
-    let name: String = s.name.as_deref().unwrap_or("").chars().take(30).collect();
-    format!("{:?} {name:?}", s.role)
+    let name: String = s.name().as_deref().unwrap_or("").chars().take(30).collect();
+    format!("{:?} {name:?}", s.test_role())
 }
 
 /// Why a node has no fused entry. A text leaf is merged into its parent's content name; any
 /// other role without an entry is a defect the replay must not hide.
 fn no_entry_reason(s: &NodeSnapshot) -> &'static str {
-    if matches!(s.role, Role::StaticText | Role::Label) {
+    if matches!(s.test_role(), Role::StaticText | Role::Label) {
         "static-leaf-no-entry"
     } else {
         "no-fused-entry"
@@ -152,7 +152,7 @@ fn arrival_order(snaps: &[Arc<NodeSnapshot>], seed: u64) -> Vec<usize> {
     let mut queues: Vec<std::collections::VecDeque<usize>> = Vec::new();
     let mut slot: BTreeMap<Option<gorca_model::NodeKey>, usize> = BTreeMap::new();
     for (i, s) in snaps.iter().enumerate() {
-        let q = *slot.entry(s.parent).or_insert_with(|| {
+        let q = *slot.entry(s.parent()).or_insert_with(|| {
             queues.push(std::collections::VecDeque::new());
             queues.len() - 1
         });
@@ -197,23 +197,24 @@ fn fuse(
 }
 
 fn is_web(s: &NodeSnapshot) -> bool {
-    s.attrs
-        .iter()
-        .any(|(k, _)| *k == gorca_doc_source_api::web_attrs::TAG)
+    s.sem().rec.as_ref().is_some_and(|r| !r.tag.is_empty())
 }
 
 /// Whether each node is web content: it carries the engine's DOM tag, is a web document, or has a
 /// web ancestor. The page is in document order (parents first).
 fn web_flags(snaps: &[Arc<NodeSnapshot>]) -> Vec<bool> {
-    let index: BTreeMap<gorca_model::NodeKey, usize> =
-        snaps.iter().enumerate().map(|(i, s)| (s.key, i)).collect();
+    let index: BTreeMap<gorca_model::NodeKey, usize> = snaps
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (s.key(), i))
+        .collect();
     let mut out = vec![false; snaps.len()];
     for (i, s) in snaps.iter().enumerate() {
         let parent_web = s
-            .parent
+            .parent()
             .and_then(|p| index.get(&p))
             .is_some_and(|&j| j < i && out[j]);
-        out[i] = is_web(s) || s.role == Role::DocumentWeb || parent_web;
+        out[i] = is_web(s) || s.test_role() == Role::DocumentWeb || parent_web;
     }
     out
 }
@@ -227,10 +228,10 @@ struct Run {
 /// description (with padding) and one another, so the drop of repeated pieces is compared too.
 fn lines_of(s: &NodeSnapshot) -> Vec<Arc<str>> {
     let mut v: Vec<Arc<str>> = vec![Arc::from("First line")];
-    if let Some(n) = &s.name {
+    if let Some(n) = &s.name() {
         v.push(Arc::from(format!(" {n} ")));
     }
-    if let Some(d) = &s.description {
+    if let Some(d) = &s.description() {
         v.push(Arc::clone(d));
     }
     v.push(Arc::from("First line"));
@@ -246,14 +247,14 @@ fn reachable(surface: &str, s: &NodeSnapshot, entry: &gorca_model::sem::SemEntry
     let fused = entry.sem.role;
     if surface == "window" {
         matches!(
-            s.role,
+            s.test_role(),
             Role::Window | Role::Dialog | Role::Alert | Role::Application
         ) || matches!(
             fused,
             R::Window | R::Dialog | R::AlertDialog | R::Alert | R::Application
         )
     } else {
-        matches!(s.role, Role::Dialog | Role::Alert)
+        matches!(s.test_role(), Role::Dialog | Role::Alert)
             || matches!(fused, R::Dialog | R::AlertDialog | R::Alert)
     }
 }
@@ -276,7 +277,7 @@ fn records(
         let webs = web_flags(&fused);
         let mut seen = 0u64;
         for (s, web) in fused.iter().zip(&webs) {
-            let Some(entry) = s.sem.entry.as_ref() else {
+            let Some(entry) = s.sem().entry.as_ref() else {
                 *drops.entry(no_entry_reason(s)).or_default() += 1;
                 continue;
             };
@@ -301,11 +302,11 @@ fn records(
             };
             let mut cases = Vec::new();
             if surface == "window" {
-                let ir = compose(entry, s.key, Reason::Window, ctx).expect("window row");
+                let ir = compose(entry, s.key(), Reason::Window, ctx).expect("window row");
                 cases.push(("lead", ir));
             } else {
                 for (case, lines) in [("bare", Vec::new()), ("lines", lines_of(s))] {
-                    cases.push((case, compose_notice(entry, s.key, ctx, &lines)));
+                    cases.push((case, compose_notice(entry, s.key(), ctx, &lines)));
                 }
             }
             for (case, ir) in cases {
@@ -319,7 +320,7 @@ fn records(
                 );
                 out.push(Record {
                     corpus: label.clone(),
-                    node: s.key.local.0,
+                    node: s.key().local.0,
                     case,
                     surface,
                     new: join(tokens.iter().map(|t| (t.kind, t.text.as_str()))),

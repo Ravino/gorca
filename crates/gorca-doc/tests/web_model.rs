@@ -19,7 +19,6 @@ use gorca_doc::web::{
     PropsPatch, RANKED, ReadUnit, SubtreeSpec, WebDoc, align_by_key, cats_of, channel,
     word_range_in,
 };
-use gorca_model::Role;
 use gorca_model::sem::SemRole;
 
 #[derive(Clone)]
@@ -994,7 +993,7 @@ fn run_seed(seed: u64, steps: usize) -> (std::collections::BTreeMap<&'static str
     };
     // Bootstrap with a root so that most ops have a target.
     let root = SubtreeSpec::with_children(
-        NodeSpec::new(Role::Document),
+        NodeSpec::new(SemRole::Document),
         (0..3).map(|_| rand_spec(&mut h.rng, 2)).collect(),
     );
     let op = DocOp::InsertSubtree {
@@ -1066,8 +1065,12 @@ fn id_stays_with_content_across_detach_and_reattach() {
     let (mut w, r) = channel(5);
     let mk = |role, sig| SubtreeSpec::leaf(NodeSpec::new(role).sig(sig));
     let doc = SubtreeSpec::with_children(
-        NodeSpec::new(Role::Document),
-        vec![mk(Role::Heading, 1), mk(Role::Link, 2), mk(Role::Button, 3)],
+        NodeSpec::new(SemRole::Document),
+        vec![
+            mk(SemRole::Heading, 1),
+            mk(SemRole::Link, 2),
+            mk(SemRole::Button, 3),
+        ],
     );
     let out = w.apply(DocOp::InsertSubtree {
         parent: None,
@@ -1096,7 +1099,7 @@ fn id_stays_with_content_across_detach_and_reattach() {
         .zip(&align)
         .map(|(k, a)| match a {
             Some(i) => ChildSpec::Existing(kids[*i]),
-            None => ChildSpec::New(Arc::new(mk(Role::Paragraph, *k))),
+            None => ChildSpec::New(Arc::new(mk(SemRole::Paragraph, *k))),
         })
         .collect();
     assert!(
@@ -1139,7 +1142,7 @@ fn id_stays_with_content_across_detach_and_reattach() {
     let again = w.apply(DocOp::InsertSubtree {
         parent: Some(root),
         before: None,
-        subtree: Arc::new(mk(Role::Heading, 7)),
+        subtree: Arc::new(mk(SemRole::Heading, 7)),
     });
     let nid = again.map(|o| o.created[0]).ok();
     assert!(nid.is_some_and(|n| !ids.contains(&n)));
@@ -1154,7 +1157,7 @@ fn rejected_ops_do_not_mutate() {
         w.apply(DocOp::InsertSubtree {
             parent: Some(DocNodeId::from_u64(0)),
             before: None,
-            subtree: leaf(Role::Link)
+            subtree: leaf(SemRole::Link)
         }),
         Err(DocError::NoRoot)
     );
@@ -1162,7 +1165,7 @@ fn rejected_ops_do_not_mutate() {
         .apply(DocOp::InsertSubtree {
             parent: None,
             before: None,
-            subtree: leaf(Role::Document),
+            subtree: leaf(SemRole::Document),
         })
         .map(|o| o.created[0]);
     let Ok(root) = root else {
@@ -1172,7 +1175,7 @@ fn rejected_ops_do_not_mutate() {
         w.apply(DocOp::InsertSubtree {
             parent: None,
             before: None,
-            subtree: leaf(Role::Document)
+            subtree: leaf(SemRole::Document)
         }),
         Err(DocError::RootExists)
     );
@@ -1184,7 +1187,7 @@ fn rejected_ops_do_not_mutate() {
         .apply(DocOp::InsertSubtree {
             parent: Some(root),
             before: None,
-            subtree: leaf(Role::Link),
+            subtree: leaf(SemRole::Link),
         })
         .map(|o| o.created[0]);
     let Ok(a) = a else { panic!("insert failed") };
@@ -1222,9 +1225,9 @@ fn rejected_ops_do_not_mutate() {
 #[test]
 fn deep_chain_does_not_overflow_the_stack() {
     // 20k-deep chain: iterative builders must cope (tree depth is unbounded on the web).
-    let mut spec = SubtreeSpec::leaf(NodeSpec::new(Role::StaticText).text("leaf"));
+    let mut spec = SubtreeSpec::leaf(NodeSpec::new(SemRole::StaticText).text("leaf"));
     for _ in 0..20_000 {
-        spec = SubtreeSpec::with_children(NodeSpec::new(Role::Panel), vec![spec]);
+        spec = SubtreeSpec::with_children(NodeSpec::new(SemRole::Generic), vec![spec]);
     }
     let mut d = WebDoc::new(1);
     let child = std::thread::Builder::new()

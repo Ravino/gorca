@@ -182,32 +182,29 @@ impl Hasher for KeyHasher {
 pub fn node_bytes(n: &NodeSnapshot) -> u64 {
     const HDR: usize = 2 * std::mem::size_of::<usize>();
     let mut b = std::mem::size_of::<NodeSnapshot>() + INDEX_OVERHEAD;
-    b += n.name.as_deref().map_or(0, str::len);
-    b += n.description.as_deref().map_or(0, str::len);
-    if let Some(Value::Text(t)) = &n.value {
+    b += n.name().as_deref().map_or(0, str::len);
+    b += n.description().as_deref().map_or(0, str::len);
+    if let Some(Value::Text(t)) = &n.value() {
         b += t.len();
     }
-    if let ChildList::Known(c) = &n.children {
+    if let ChildList::Known(c) = &n.children() {
         b += c.len() * std::mem::size_of::<NodeKey>();
     }
-    for (_, v) in &n.attrs {
-        b += v.len() + std::mem::size_of::<(gorca_model::AttrKey, Arc<str>)>();
-    }
-    b += n.relations.len() * std::mem::size_of::<NodeKey>();
+    b += n.relations().len() * std::mem::size_of::<NodeKey>();
     // The dual-carried semantics (M22a-C1b), real heap: each `Arc` header (two counters), the
     // value, its name unless it is the snapshot's own allocation, and every string of its text.
-    let own_name = |name: &Option<Arc<str>>| match (name, &n.name) {
+    let own_name = |name: &Option<Arc<str>>| match (name, &n.name()) {
         (Some(a), Some(b)) if Arc::ptr_eq(a, b) => 0,
         (Some(a), _) => HDR + a.len(),
         (None, _) => 0,
     };
-    if let Some(r) = &n.sem.rec {
+    if let Some(r) = &n.sem().rec {
         b += HDR
             + std::mem::size_of::<SrcRecord>()
             + own_name(&r.name)
             + r.sem.text.as_deref().map_or(0, SemText::heap_bytes);
     }
-    if let Some(e) = &n.sem.entry {
+    if let Some(e) = &n.sem().entry {
         b += HDR
             + std::mem::size_of::<SemEntry>()
             + own_name(&e.name)
@@ -220,11 +217,11 @@ pub fn node_bytes(n: &NodeSnapshot) -> u64 {
 const INDEX_OVERHEAD: usize = 48;
 
 fn is_partial(n: &NodeSnapshot) -> bool {
-    !n.have.contains(PropMask::PRESENT)
+    !n.have().contains(PropMask::PRESENT)
 }
 
 fn is_stale(n: &NodeSnapshot) -> bool {
-    matches!(n.fresh, Freshness::Stale { .. })
+    matches!(n.fresh(), Freshness::Stale { .. })
 }
 
 // ------------------------------------------------------------------------- global budget
@@ -451,17 +448,17 @@ fn millis(d: std::time::Duration) -> u64 {
 }
 
 fn is_aged(snap: &NodeSnapshot, ttl_ms: u64) -> bool {
-    match snap.fresh {
+    match snap.fresh() {
         Freshness::Fresh { at } if ttl_ms > 0 => millis(at.elapsed()) >= ttl_ms,
         Freshness::Fresh { .. } | Freshness::Stale { .. } | Freshness::Defunct => false,
     }
 }
 
 fn stale_of(snap: &NodeSnapshot, epoch: u64) -> PropMask {
-    if snap.confirmed_seq < epoch {
+    if snap.confirmed_seq() < epoch {
         PropMask::ALL
     } else {
-        snap.fresh.stale_mask()
+        snap.fresh().stale_mask()
     }
 }
 
@@ -642,17 +639,18 @@ fn merge(old: &NodeSnapshot, new: &mut NodeSnapshot, old_stale: PropMask) {
         PropMask::DESCRIPTION,
     ];
     for f in EXTRA {
-        if old.have.contains(f) && !new.have.contains(f) && !old_stale.intersects(f) {
+        if old.have().contains(f) && !new.have().contains(f) && !old_stale.intersects(f) {
             match f {
-                PropMask::VALUE => new.value.clone_from(&old.value),
-                PropMask::RELATIONS => new.relations.clone_from(&old.relations),
-                PropMask::ATTRS => new.attrs.clone_from(&old.attrs),
-                PropMask::BOUNDS => new.bounds = old.bounds,
-                PropMask::PARENT => new.parent = old.parent,
-                PropMask::CHILDREN => new.children.clone_from(&old.children),
-                _ => new.description.clone_from(&old.description),
+                PropMask::VALUE => new.set_value(old.value().clone()),
+                PropMask::RELATIONS => new.set_relations(old.relations().clone()),
+                // The attributes live in the source record, which a reply carries for itself.
+                PropMask::ATTRS => {}
+                PropMask::BOUNDS => new.set_bounds(old.bounds()),
+                PropMask::PARENT => new.set_parent(old.parent()),
+                PropMask::CHILDREN => new.set_children(old.children().clone()),
+                _ => new.set_description(old.description().clone()),
             }
-            new.have |= f;
+            new.set_have(new.have() | f);
         }
     }
 }
@@ -844,12 +842,12 @@ impl MirrorWriter {
         now: Instant,
         out: &mut ApplyOutcome,
     ) {
-        let k = snap.key;
+        let k = snap.key();
         if !self.owns(k) {
             out.dropped_foreign += 1;
             return;
         }
-        if snap.states.contains(gorca_model::StateSet::DEFUNCT) {
+        if snap.struct_state().is_defunct() {
             // 5.1: a reply that says `defunct` is a removal, not a node.
             self.tombstone(k, now, RemovalCause::Defunct);
             out.defunct += 1;
@@ -882,7 +880,7 @@ impl MirrorWriter {
             }
         }
         if let Some(o) = &old
-            && o.confirmed_seq > issued_at
+            && o.confirmed_seq() > issued_at
         {
             // The stored content was confirmed by a newer request than this reply.
             out.superseded += 1;
@@ -890,13 +888,13 @@ impl MirrorWriter {
         }
         let is_new = old.is_none();
         let mut node = Arc::try_unwrap(snap).unwrap_or_else(|a| (*a).clone());
-        node.confirmed_seq = issued_at;
+        node.set_confirmed_seq(issued_at);
         let redirtied = inv_seq > issued_at;
         if let Some(o) = &old {
             let old_stale = stale_of(o, self.shared.stale_epoch.load(Ordering::Acquire));
             merge(o, &mut node, old_stale);
         }
-        node.fresh = if redirtied {
+        node.set_fresh(if redirtied {
             out.kept_stale += 1;
             Freshness::Stale {
                 since: now,
@@ -904,7 +902,7 @@ impl MirrorWriter {
             }
         } else {
             Freshness::Fresh { at: now }
-        };
+        });
         let node = Arc::new(node);
         // Room under the node cap, revivals included.
         if is_new {
@@ -975,7 +973,7 @@ impl MirrorWriter {
                 .shared
                 .index
                 .peek_with(&k, |_, c| match &**c.entry.load() {
-                    Entry::Live { snap, .. } => snap.parent,
+                    Entry::Live { snap, .. } => snap.parent(),
                     Entry::Tombstone { .. } => None,
                 })
                 .flatten();
@@ -1004,7 +1002,7 @@ impl MirrorWriter {
                 .index
                 .peek_with(&k, |_, c| match &**c.entry.load() {
                     Entry::Live { snap, .. } => {
-                        Some(snap.confirmed_seq.max(c.touched.load(Ordering::Relaxed)))
+                        Some(snap.confirmed_seq().max(c.touched.load(Ordering::Relaxed)))
                     }
                     Entry::Tombstone { .. } => None,
                 });
@@ -1098,14 +1096,14 @@ impl MirrorWriter {
         else {
             return false;
         };
-        if !ok(&snap.sem) {
+        if !ok(snap.sem()) {
             return false;
         }
         let mut n = (*snap).clone();
-        n.sem = NodeSem {
+        n.set_sem(NodeSem {
             rec: None,
             entry: Some(entry),
-        };
+        });
         let (old_bytes, new_bytes) = (node_bytes(&snap), node_bytes(&n));
         if new_bytes > old_bytes {
             self.pinned = Some(k);
@@ -1147,12 +1145,12 @@ impl MirrorWriter {
                 inv_mask,
             }) => {
                 let already =
-                    matches!(snap.fresh, Freshness::Stale { mask: m, .. } if m.contains(mask));
+                    matches!(snap.fresh(), Freshness::Stale { mask: m, .. } if m.contains(mask));
                 let next = if already {
                     Arc::clone(&snap)
                 } else {
                     let mut n = (*snap).clone();
-                    n.fresh = n.fresh.step(FreshnessEvent::Invalidate { at, mask });
+                    n.set_fresh(n.fresh().step(FreshnessEvent::Invalidate { at, mask }));
                     let n = Arc::new(n);
                     // Same size: only the stale counter moves.
                     self.counters_sub(&snap);

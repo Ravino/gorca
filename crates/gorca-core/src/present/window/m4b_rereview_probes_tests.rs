@@ -25,10 +25,11 @@ fn foc(f: &mut Fx, n: NodeKey, at: Instant) -> ReaderEffects {
 fn info(w: NodeKey, role: Role, title: &'static str, texts: &[&'static str]) -> ReaderMsg {
     ReaderMsg::Background(BackgroundMsg::Window(WindowInfo {
         window: w,
-        snap: Some(Arc::new(NodeSnapshot {
-            key: w,
-            ..(*snap(&node(w.local.0, role, title, &[]))).clone()
-        })),
+        snap: Some(Arc::new(
+            (*snap(&node(w.local.0, role, title, &[])))
+                .clone()
+                .with_key(w),
+        )),
         texts: texts.iter().map(|t| Arc::from(*t)).collect(),
     }))
 }
@@ -167,8 +168,8 @@ fn q3c_active_window_is_the_users() {
     let (mut w2, h2) = gorca_mirror::mirror();
     f.reader.dir.insert(app(2), &h2);
     let mut win = (*snap(&node(40, Role::Window, "Image Viewer", &[]))).clone();
-    win.key = k(2, 40);
-    win.states |= gorca_model::StateSet::ACTIVE;
+    win.set_key(k(2, 40));
+    win.set_test_states(win.test_states() | gorca_model::StateSet::ACTIVE);
     w2.apply(
         gorca_model::SnapshotBatch {
             nodes: vec![Arc::new(win)],

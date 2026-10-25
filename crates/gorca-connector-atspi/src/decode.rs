@@ -7,8 +7,8 @@ use std::time::Instant;
 
 use gorca_model::sem::SrcRecord;
 use gorca_model::{
-    AttrKey, AttrMap, ChildList, Freshness, Ifaces, NodeKey, NodeSem, NodeSnapshot, PropMask,
-    Relations, Role, StateSet, Value,
+    AttrKey, ChildList, Freshness, Ifaces, NodeCaps, NodeKey, NodeSem, NodeSnapshot, PropMask,
+    Role, StateSet, Value,
 };
 use gorca_sem_atspi::StateBits;
 use smallvec::SmallVec;
@@ -260,41 +260,25 @@ pub fn snapshot(key: NodeKey, raw: &RawNode, now: Instant) -> Arc<NodeSnapshot> 
         }
         RawValue::Text(t) => non_empty(Some(t)).map(Value::Text),
     });
-    Arc::new(NodeSnapshot {
-        key,
-        role: role_from_raw(raw.role),
-        states: states_from_raw(&raw.state_words),
-        name: non_empty(raw.name.as_deref()),
-        description: non_empty(raw.description.as_deref()),
-        value,
-        parent: raw.parent,
-        children: match (&raw.children, raw.child_count) {
-            (Some(c), _) => ChildList::Known(c.clone()),
-            (None, Some(n)) => ChildList::Count(n),
-            (None, None) => ChildList::Unknown,
-        },
-        interfaces: raw.interfaces,
-        attrs: {
-            let mut a: AttrMap = raw
-                .attrs
-                .iter()
-                .map(|(k, v)| (*k, Arc::from(v.as_str())))
-                .collect();
-            if let Some(t) = non_empty(raw.error_text.as_deref()) {
-                a.push((gorca_doc_source_api::web_attrs::ERROR_TEXT, t));
-            }
-            a
-        },
-        relations: Relations::default(),
-        bounds: None,
-        have: raw.have,
-        confirmed_seq: 0,
-        fresh: Freshness::Fresh { at: now },
-        sem: NodeSem {
-            rec: Some(Arc::new(source_record(raw))),
-            entry: None,
-        },
-    })
+    Arc::new(
+        NodeSnapshot::new(key, Freshness::Fresh { at: now })
+            .with_name(non_empty(raw.name.as_deref()))
+            .with_description(non_empty(raw.description.as_deref()))
+            .with_value(value)
+            .with_parent(raw.parent)
+            .with_children(match (&raw.children, raw.child_count) {
+                (Some(c), _) => ChildList::Known(c.clone()),
+                (None, Some(n)) => ChildList::Count(n),
+                (None, None) => ChildList::Unknown,
+            })
+            .with_caps(NodeCaps::new(raw.interfaces))
+            .with_have(raw.have)
+            .with_source(role_from_raw(raw.role), states_from_raw(&raw.state_words))
+            .with_sem(NodeSem {
+                rec: Some(Arc::new(source_record(raw))),
+                entry: None,
+            }),
+    )
 }
 
 #[cfg(test)]
@@ -458,10 +442,10 @@ mod tests {
             ..RawNode::default()
         };
         let n = snapshot(key(), &raw, Instant::now());
-        assert_eq!(n.role, Role::Slider);
-        assert!(n.name.is_none());
-        assert!(n.value.is_none());
-        assert!(matches!(n.fresh, Freshness::Fresh { .. }));
+        assert_eq!(n.role_log_name(), "slider");
+        assert!(n.name().is_none());
+        assert!(n.value().is_none());
+        assert!(matches!(n.fresh(), Freshness::Fresh { .. }));
     }
 
     #[test]
@@ -491,10 +475,8 @@ mod tests {
             ..RawNode::default()
         };
         let n = snapshot(key(), &raw, Instant::now());
-        assert_eq!(n.attrs.len(), 4);
-        assert!(n.attrs.iter().any(|(k, _)| *k == w::ERROR_TEXT));
         // The same text is the record's error text group, which the fusion carries to the entry.
-        let rec = n.sem.rec.as_deref().expect("a record");
+        let rec = n.sem().rec.as_deref().expect("a record");
         assert!(rec.known.has(gorca_model::sem::Group::ErrorText));
         assert_eq!(
             rec.sem
@@ -513,6 +495,6 @@ mod tests {
             ..RawNode::default()
         };
         let n = snapshot(key(), &raw, Instant::now());
-        assert_eq!(n.name.as_deref().map(str::len), Some(MAX_TEXT_BYTES));
+        assert_eq!(n.name().as_deref().map(str::len), Some(MAX_TEXT_BYTES));
     }
 }
