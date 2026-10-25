@@ -12,8 +12,7 @@ use std::sync::Arc;
 
 use gorca_model::sem::{SemEntry, SemFlags, SemRole};
 use gorca_model::{
-    ChildList, Lookup, NodeKey, NodeSnapshot, NodeView, PropMask, Role, StateSet, StructFlags,
-    StructState,
+    ChildList, Lookup, NodeKey, NodeSnapshot, NodeView, PropMask, Role, StructFlags, StructState,
 };
 
 use crate::present::entry_of;
@@ -49,77 +48,13 @@ fn blank(s: Option<&Arc<str>>) -> bool {
     s.is_none_or(|s| s.trim().is_empty())
 }
 
-/// `fn class(v: &NodeView) -> PresClass` (ADR-0006 5.1). Roles that the model does not have as
-/// their own (filler, scroll pane, split pane, section, root pane, ...) arrive as `Unknown` or
-/// `Panel` from the connector and are layout.
-pub fn class(snap: &NodeSnapshot) -> PresClass {
-    class_in(snap, false)
-}
-
-/// [`class`] for a node inside a web document (`web`): Gecko sets `SHOWING` on some of its nodes
-/// only (links and controls, not containers, landmarks or text), so `VISIBLE` alone counts there;
-/// what is off screen is clipped by its extents.
-pub fn class_in(snap: &NodeSnapshot, web: bool) -> PresClass {
-    let showing = !snap.have.contains(PropMask::STATES)
-        || (snap.states.contains(StateSet::SHOWING) && snap.states.contains(StateSet::VISIBLE))
-        // Some toolkits set only one of the pair.
-        || snap.states.contains(StateSet::SHOWING)
-        || (web && snap.states.contains(StateSet::VISIBLE));
-    if snap.states.contains(StateSet::DEFUNCT) || !showing {
-        return PresClass::Unavailable;
-    }
-    let nameless = blank(snap.name.as_ref()) && blank(snap.description.as_ref());
-    match snap.role {
-        Role::Unknown | Role::Panel | Role::Paragraph | Role::Label | Role::Separator => {
-            PresClass::Layout
-        }
-        Role::Window | Role::Landmark if nameless => PresClass::Layout,
-        Role::Application
-        | Role::Window
-        | Role::Dialog
-        | Role::Document
-        | Role::DocumentWeb
-        | Role::Heading
-        | Role::Link
-        | Role::Image
-        | Role::List
-        | Role::ListItem
-        | Role::Table
-        | Role::Row
-        | Role::Cell
-        | Role::ColumnHeader
-        | Role::RowHeader
-        | Role::Button
-        | Role::ToggleButton
-        | Role::Switch
-        | Role::CheckBox
-        | Role::RadioButton
-        | Role::ComboBox
-        | Role::TextEntry
-        | Role::PasswordEntry
-        | Role::SpinButton
-        | Role::Slider
-        | Role::ProgressBar
-        | Role::Menu
-        | Role::MenuBar
-        | Role::MenuItem
-        | Role::Popover
-        | Role::Tab
-        | Role::TabList
-        | Role::Tree
-        | Role::TreeItem
-        | Role::Toolbar
-        | Role::StatusBar
-        | Role::StaticText
-        | Role::Terminal
-        | Role::Landmark
-        | Role::Alert => PresClass::Content,
-    }
-}
-
-/// The class of a node from its fused entry and its structural state (M22b3): the name and the
-/// description the user would hear, the model role, and whether the node is on the screen. The
-/// structural bits are the only thing read of the node's state set; nothing spoken is.
+/// The class of a node (ADR-0006 5.1) from its fused entry and its structural state (M22b3): the
+/// name and the description the user would hear, the model role, and whether the node is on the
+/// screen. The structural bits are the only thing read of the node's state set; nothing spoken is.
+///
+/// `web` is a node inside a web document: Gecko sets `SHOWING` on some of its nodes only (links
+/// and controls, not containers, landmarks or text), so `VISIBLE` alone counts there; what is off
+/// screen is clipped by its extents.
 pub fn class_entry(entry: &SemEntry, st: StructState, web: bool) -> PresClass {
     let showing = !st.is_known()
         || (st.contains(StructFlags::SHOWING) && st.contains(StructFlags::VISIBLE))
@@ -337,23 +272,13 @@ struct Walk<'a, S: NavSource> {
     simple: bool,
     /// Degraded mode: a node the mirror cannot give is skipped instead of fetched.
     lenient: bool,
-    class_fn: &'a ClassFn<'a>,
 }
-
-/// How a walk classifies a node.
-pub type ClassFn<'a> = dyn Fn(&NodeSnapshot) -> PresClass + 'a;
 
 /// `Ok(Some)` = a node, `Ok(None)` = none, `Err(Stop)` = need data.
 type R<T> = Result<T, Stop>;
 
 impl<'a, S: NavSource> Walk<'a, S> {
-    fn new(
-        src: &'a S,
-        simple: bool,
-        lenient: bool,
-        limits: ReviewLimits,
-        class_fn: &'a ClassFn<'a>,
-    ) -> Self {
+    fn new(src: &'a S, simple: bool, lenient: bool, limits: ReviewLimits) -> Self {
         Self {
             src,
             visits: 0,
@@ -361,7 +286,6 @@ impl<'a, S: NavSource> Walk<'a, S> {
             last_content: None,
             simple,
             lenient,
-            class_fn,
         }
     }
 
@@ -386,7 +310,7 @@ impl<'a, S: NavSource> Walk<'a, S> {
                 if critical_missing {
                     return self.miss(NavOp::Node { node: k });
                 }
-                if (self.class_fn)(&v.snap) == PresClass::Content {
+                if class_of_snapshot(&v.snap, false) == PresClass::Content {
                     self.last_content = Some(k);
                 }
                 Ok(Some(Read { snap: v.snap }))
@@ -426,6 +350,7 @@ impl<'a, S: NavSource> Walk<'a, S> {
     }
 
     fn parent(&mut self, r: &Read) -> R<Option<NodeKey>> {
+        // The application root of the accessibility tree, not an ARIA `application` widget.
         if r.snap.role == Role::Application {
             // Never above the application root (ADR-0006 5.2).
             return Ok(None);
@@ -444,8 +369,8 @@ impl<'a, S: NavSource> Walk<'a, S> {
 
     fn class_of(&self, r: &Read) -> PresClass {
         if self.simple {
-            (self.class_fn)(&r.snap)
-        } else if r.snap.states.contains(StateSet::DEFUNCT) {
+            class_of_snapshot(&r.snap, false)
+        } else if r.snap.struct_state().is_defunct() {
             PresClass::Unavailable
         } else {
             PresClass::Content
@@ -652,23 +577,7 @@ pub fn step<S: NavSource>(
     simple: bool,
     limits: ReviewLimits,
 ) -> StepResult {
-    step_with(src, nav, mv, simple, limits, &class)
-}
-
-/// [`step`] with the classification the walk uses (the cut-over gate replays both).
-pub fn step_with<S: NavSource>(
-    src: &S,
-    nav: NodeKey,
-    mv: NavMove,
-    simple: bool,
-    limits: ReviewLimits,
-    class_fn: &ClassFn<'_>,
-) -> StepResult {
-    run(
-        &mut Walk::new(src, simple, false, limits, class_fn),
-        nav,
-        mv,
-    )
+    run(&mut Walk::new(src, simple, false, limits), nav, mv)
 }
 
 /// The degraded move of OB-4: a raw move over whatever the mirror holds, never fetching.
@@ -678,7 +587,7 @@ pub fn step_degraded<S: NavSource>(
     mv: NavMove,
     limits: ReviewLimits,
 ) -> StepResult {
-    run(&mut Walk::new(src, false, true, limits, &class), nav, mv)
+    run(&mut Walk::new(src, false, true, limits), nav, mv)
 }
 
 fn run<S: NavSource>(w: &mut Walk<'_, S>, nav: NodeKey, mv: NavMove) -> StepResult {
@@ -700,6 +609,7 @@ fn run<S: NavSource>(w: &mut Walk<'_, S>, nav: NodeKey, mv: NavMove) -> StepResu
 
 #[cfg(test)]
 mod entry_tests {
+    use gorca_model::Role;
     use gorca_model::sem::{SemText, Semantics};
 
     use super::*;
@@ -896,5 +806,45 @@ mod entry_tests {
         assert_eq!(s.flags(), ON);
         snap.states |= StateSet::DEFUNCT;
         assert!(snap.struct_state().is_defunct());
+    }
+
+    #[test]
+    fn an_aria_application_widget_is_not_the_application_root() {
+        use super::super::collect::testsrc::{key, snap};
+        use super::super::replay::PageSource;
+        let win = snap(1, Role::Window, "Doc", None, &[2]);
+        // A web `role=application` widget: the fused role says application, the AT-SPI role
+        // does not, and the move to the parent must still go through it.
+        let mut widget = snap(2, Role::Panel, "Board", Some(1), &[3]);
+        let mut e = (*entry_of(&widget)).clone();
+        e.sem.role = SemRole::Application;
+        widget.sem.entry = Some(Arc::new(e));
+        let leaf = snap(3, Role::Button, "Play", Some(2), &[]);
+        let page = PageSource(
+            [win, widget, leaf]
+                .into_iter()
+                .map(|s| (s.key, Arc::new(s)))
+                .collect(),
+        );
+        let up = step(
+            &page,
+            key(3),
+            NavMove::Parent,
+            true,
+            ReviewLimits::default(),
+        );
+        assert_eq!(up, StepResult::Found(key(2)));
+        let up = step(
+            &page,
+            key(2),
+            NavMove::Parent,
+            true,
+            ReviewLimits::default(),
+        );
+        assert_eq!(
+            up,
+            StepResult::Found(key(1)),
+            "not stopped as the tree root"
+        );
     }
 }

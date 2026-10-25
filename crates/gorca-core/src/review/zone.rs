@@ -101,6 +101,16 @@ pub fn object_text(snap: &NodeSnapshot, contents: Option<&str>) -> String {
     join_tokens(&object_tokens(snap, contents))
 }
 
+/// The zone text of a node as flat review reads it where no text-layer reading is at hand: the
+/// contents of a field are the snapshot's value.
+pub fn flat_text(snap: &NodeSnapshot) -> String {
+    let contents = match &snap.value {
+        Some(gorca_model::Value::Text(t)) => Some(&**t),
+        Some(gorca_model::Value::Range { .. }) | None => None,
+    };
+    object_text(snap, contents)
+}
+
 /// The role word of a node as review says it for a nameless object, "object" for a role without
 /// a word.
 pub fn role_word(snap: &NodeSnapshot, web: bool) -> &'static str {

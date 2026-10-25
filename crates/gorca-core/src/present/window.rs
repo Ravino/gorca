@@ -31,7 +31,7 @@ use super::fair::Kind;
 use crate::SpeechIntent;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 use crate::review::NavSource;
-use crate::review::objnav::{PresClass, class};
+use crate::review::objnav::{PresClass, class_of_snapshot};
 
 /// How long an activation waits for the focus event that completes it. GTK sends the focus a few
 /// milliseconds after the activation; a window without any focusable widget never does.
@@ -274,7 +274,7 @@ impl<S: NavSource> Walk<'_, S> {
             return;
         };
         let snap = &v.snap;
-        if class(snap) == PresClass::Unavailable {
+        if class_of_snapshot(snap, false) == PresClass::Unavailable {
             return;
         }
         match part(snap.role) {

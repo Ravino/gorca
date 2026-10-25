@@ -484,8 +484,12 @@ or from `PresIr`. That includes `NodeMeta` fields, `AttrMap`, `NodeSnapshot.attr
 read by a consumer, `Role::spoken`, the `aria` tables, `present_focus`/`present_web`/
 `present_change`, `web_overlay`, `subtree_label`, and `PolicyFacts` built from a snapshot.
 Not legacy: identity, tree links, bounds, text content, and *structural* state (`SHOWING`,
-`VISIBLE`, `DEFUNCT`, `FOCUSABLE`, `FOCUSED`). Structural state moves to an explicit `StructState`
-on the node record in b4 so `StateSet` stops being a presentation carrier (open, inventory gap 1).
+`VISIBLE`, `DEFUNCT`, `FOCUSABLE`, `FOCUSED`). Structural state is the typed `StructState`
+(`gorca-model`, M22b3): `NodeSnapshot::struct_state()` projects the structural bits of `StateSet`
+(`SHOWING`, `VISIBLE`, `DEFUNCT`, `FOCUSABLE`, `FOCUSED`, `MULTILINE`) and says whether the states were
+read at all. Review and object navigation read nothing else of the state set (rule 12 ban
+`snapshot-states`, scope `review/`); every spoken state is a group of the fused entry. The `StateSet`
+field itself leaves the node record in b4 (inventory gap 1, closed for review).
 
 ### 8.2 Shadow windows are temporary
 
