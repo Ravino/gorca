@@ -320,7 +320,7 @@ fn writer_delay_with_ten_plugins_against_none() {
     let line = format!(
         "PX-6 plugins={PLUGINS} trials={TRIALS} on_us p50={:.1} p99={:.1} max={:.1} off_us p50={:.1} p99={:.1} \
          delta_p99_us={:.1} facts_at_first_utterance overall={:.3} min_plugin={:.3} per_plugin={:?} \
-         min_eventually_within_15ms={:.3} load1={load1:.1} cores={cores} release={release} quiet_violated={}",
+         min_eventually_within_15ms={:.3} load1={load1:.1} cores={cores} release={release} debug_log={} quiet_violated={}",
         pct(&on_ns, 0.5) as f64 / 1e3,
         pct(&on_ns, 0.99) as f64 / 1e3,
         *on_ns.last().unwrap() as f64 / 1e3,
@@ -331,6 +331,7 @@ fn writer_delay_with_ten_plugins_against_none() {
         min_plugin,
         per_plugin,
         min_refined,
+        std::env::var("GORCA_BENCH_LOG").is_ok(),
         !quiet,
     );
     eprintln!("{line}");

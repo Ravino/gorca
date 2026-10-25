@@ -447,10 +447,11 @@ async fn read_node_raw(
 }
 
 /// The URL of the document: `Document.GetAttributes` carries `DocURL` (Gecko) or `URI` (Blink).
-/// One call under a short deadline; `None` when the engine does not say (the page then matches no
+/// One call under a one-second deadline (the first block waits for it, so the scope can open
+/// before any node is fed); `None` when the engine does not say (the page then matches no
 /// site-scoped plugin).
 async fn fetch_doc_url(app: &AppConn, root: &str) -> Option<Arc<str>> {
-    let dl = Deadline(Instant::now() + Duration::from_millis(250));
+    let dl = Deadline(Instant::now() + Duration::from_millis(1000));
     let lane = app.next_lane();
     let msg = app
         .call(

@@ -197,6 +197,9 @@ pub struct HostState {
     host_left: u64,
     imports: u32,
     call_start: Instant,
+    /// Thread CPU time at the start of the call: the watchdog counts CPU time, so a plugin
+    /// thread the host descheduled is not a misbehaving plugin (the ext host learned this).
+    cpu_start: Duration,
     call_limit: Duration,
     forged_lifetime: u32,
     facts: usize,
@@ -241,6 +244,7 @@ impl HostState {
             host_left: 0,
             imports: 0,
             call_start: Instant::now(),
+            cpu_start: Duration::ZERO,
             call_limit: Duration::ZERO,
             forged_lifetime: 0,
             facts: 0,
@@ -261,6 +265,7 @@ impl HostState {
         self.host_left = grant.units;
         self.imports = 0;
         self.call_start = Instant::now();
+        self.cpu_start = gorca_rt::sched::thread_cpu_time();
         self.call_limit = grant.wall * WATCHDOG_FACTOR;
         self.effects.clear();
         self.malformed = false;
@@ -308,7 +313,11 @@ impl HostState {
             self.meter(units);
             self.imports = self.imports.wrapping_add(1);
             if self.imports.is_multiple_of(WATCHDOG_EVERY)
-                && self.call_start.elapsed() > self.call_limit
+                && (gorca_rt::sched::thread_cpu_time().saturating_sub(self.cpu_start)
+                    > self.call_limit
+                    // Wall backstop, far above the CPU limit: imports never block, so a call
+                    // this slow in wall time is stuck, not descheduled.
+                    || self.call_start.elapsed() > self.call_limit * 50)
             {
                 self.kill = Some(Kill::Watchdog);
             }

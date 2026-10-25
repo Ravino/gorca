@@ -265,11 +265,15 @@ impl PluginInstance {
             });
         }
         let t0 = Instant::now();
+        let cpu0 = gorca_rt::sched::thread_cpu_time();
         let r = self
             .bindings
             .gorca_ext_rules()
             .call_derive(&mut self.store, ctx, &dirty);
         let exec = t0.elapsed();
+        // The overrun rule counts CPU time of the plugin thread: a call the host descheduled for
+        // a while is not an overrun (it would strike healthy plugins on a loaded desktop).
+        let cpu = gorca_rt::sched::thread_cpu_time().saturating_sub(cpu0);
         let left = self.store.get_fuel().unwrap_or(0);
         let fuel_used = grant.units.saturating_sub(left);
         match r {
@@ -289,7 +293,7 @@ impl PluginInstance {
                     effects: std::mem::take(&mut st.effects),
                     exec,
                     fuel_used,
-                    wall_overrun: grant.is_wall_overrun(exec),
+                    wall_overrun: grant.is_wall_overrun(cpu),
                 })
             }
             Err(e) => Err(CallFault {

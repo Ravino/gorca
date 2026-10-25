@@ -55,7 +55,7 @@ impl FuelGrant {
         self
     }
 
-    /// A wall overrun is a call that took more than `max(2 x wall, wall + 50 us)` (`wall` is the grant time unless the grant is a crowded share)
+    /// A wall overrun (measured in CPU time of the plugin thread by the caller) is a call that took more than `max(2 x wall, wall + 50 us)` (`wall` is the grant time unless the grant is a crowded share)
     /// (§2.5.2).
     #[must_use]
     pub fn is_wall_overrun(&self, wall: Duration) -> bool {

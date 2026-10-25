@@ -21,6 +21,7 @@ crates/gorca-core/src/statemodel/mod.rs | *
 crates/gorca-core/src/statemodel/world.rs | *
 crates/gorca-daemon/src/cli.rs | *
 crates/gorca-daemon/src/main.rs | *
+crates/gorca-daemon/src/plugins.rs | plugin call
 crates/gorca-daemon/src/rtkit.rs | *
 crates/gorca-daemon/src/topology.rs | *
 crates/gorca-ext-host/src/manifest_file.rs | *

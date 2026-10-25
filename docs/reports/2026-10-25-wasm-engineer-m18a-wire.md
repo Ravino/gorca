@@ -45,13 +45,20 @@ bounded wait, admission) with the real plugin plus nine copies, 400 turns 24 ms 
 bridge calls over a runner with no plugins. Rows are appended to `bench/results/plugins/px6-2026-10-25.txt`;
 failing rows are kept.
 
-**Not gate-quality.** Every run had loadavg 11-20 on 16 cores (other agents' benchmarks), deep C-states on
-(`bench/b1/quiet-host.sh` needs the user and was not touched). All rows say `quiet_violated=true`. The runs
-show: the bounded wait works (p50 41-110 us, the wait itself ends at D), a derive of the Telegram row costs
-55-170 us of guest time per plugin, so ten of them in 0.3 ms depend on ten idle cores waking at once; facts
-at first utterance were 0.3 - 12 % under load (and 60 % of the jobs in the quietest minute), with every
-fact arriving as a refinement when the host was not oversubscribed. The gate (Delta p99 <= 0.3 ms, >= 99 %
-overall, >= 97 % per plugin) is asserted only on a quiet release run; it has **not** been demonstrated.
+**Not gate-quality, and the gate is not met on this host.** Every run had loadavg 11-20 on 16 cores (other
+agents' benchmarks) and deep C-states on (`bench/b1/quiet-host.sh` needs the user and was not touched); all
+rows say `quiet_violated=true`. Last row (release, load 10.9): writer turn p50 390 us, p99 653 us (off: p99
+6 us), so **Delta p99 = 647 us against the 300 us gate**; facts at first utterance 29 % overall, 57 % for the
+weakest plugin, against 99 % / 97 %; **every fact arrived as a refinement within 15 ms (100 %)** and no plugin
+was masked. Reading: the wait itself ends at D = 0.3 ms by construction; a derive of the Telegram row is
+55-170 us of guest time per plugin, so ten of them inside 0.3 ms need ten idle cores to wake together,
+which a busy host with deep C-states does not give; the 350 us beyond D at p99 is late wake-up of the
+writer plus admission. Two defects found by these runs are fixed: the wall-overrun rule demoted/masked
+healthy plugins (the basis was the crowded fuel share, then wall time of a descheduled thread; now the per-call cap and
+thread CPU time), and a plugin's interactive out-of-fuel is a refinement, not a strike. The earlier rows
+in `bench/results/plugins/px6-2026-10-25.txt` are kept (they show the defect: 0.3 % in time, masked plugins).
+The gate must be re-run on a quiet host (`sudo bench/b1/quiet-host.sh on`, release build, the user's
+approval); until then the PX-6 gate is open.
 
 ## Gaps
 
