@@ -1202,6 +1202,7 @@ dependencies = [
  "gorca-connector-atspi",
  "gorca-core",
  "gorca-dbus",
+ "gorca-doc-source-api",
  "gorca-doc-source-atspi",
  "gorca-ext-api",
  "gorca-ext-host",

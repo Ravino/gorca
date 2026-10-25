@@ -140,3 +140,30 @@ before: 2 jobs, 0 admitted), the live dump now gives 30 facts, 1 per row, no fau
 
 Logs: `RUST_LOG=info,gorca_daemon::plugins=debug` adds `plugin call exec_us=... grant_us=...`, `plugin fact`
 and message-catalog misses. Faults and masks are WARN already; the drop-in is only needed to see timings.
+
+## Follow-up 3 (no faults, role facts logged, but no name on the chat rows)
+
+The plugin matched the live rows all along; the names were dropped after the plugin returned them.
+
+* `crates/gorca-daemon/tests/live_document.rs` (ignored, `GORCA_LIVE_DOC=1`, read-only) drives the
+  real `AtspiDocSource` against the owner's Firefox over a peer-to-peer connection, builds rows the
+  way the document actor does and runs the real plugin in the doc actor's batch order. Result on the
+  live Telegram A document: 30 `a.ListItem-button` rows (role 31, link), `h3.fullName`, `span.time`,
+  `p.last-message`, hashed badge classes, text runs as separate leaves; 30 name facts
+  ("Артем, Сам как?, 25 авг.", "... , 1 unread, ...") and one article per `Message`; labels and
+  sps schedulers alike. So the watch (the row node, class `ListItem-button`) and the structure are right.
+* The installed package has `i18n/` as `drwxr-x--- root root`: the user's gorca cannot read the
+  catalogs, `register_catalogs` skipped them silently, and every message fact of the plugin (the
+  chat names) resolved to nothing and was dropped. Role facts are plain codes, so they survive: that is
+  exactly the journal (`group=0 value=code(5)` only, no `text(len=..)`). Reproduced by running the same
+  probe against a copy of `plugins/dist` without `i18n`: 0 name facts, article facts intact.
+* Immediate fix for the owner: `sudo chmod 755 /usr/lib/gorca/addons/gorca.telegram-web/i18n`
+  (files are already 644), then restart gorca. No new wasm: the pin is unchanged (`1c2fc587...`).
+* Code: `register_catalogs` now warns (path, error, how to fix) for a catalog that exists but cannot be
+  read, the first unresolved message of a plugin is a WARN (later ones stay debug), and
+  `tools/build-plugins.sh` makes `plugins/dist/<id>` world-readable so a root copy keeps the modes.
+* Fixture `tests/fixtures/web/telegram-a-live.json` (anonymised: three chat rows and two messages as
+  the real source delivered them) and the test `the_rows_the_real_source_delivered_for_live_web_a_...`
+  keep a wrong panel from passing. `live_document.rs` regenerates it (`GORCA_DUMP_FIXTURE=<path>`).
+* Not done: a spoken end-to-end run in a private session (the fact-to-speech path is the fusion's
+  Patch-over-observed rule, covered by the `fuse` tests `a_plugin_patch_is_in_the_first_published_entry...`).

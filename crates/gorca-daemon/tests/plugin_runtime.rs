@@ -696,3 +696,88 @@ fn a_long_busy_chat_list_derives_without_faults_and_without_duplicate_facts() {
     );
     assert!(per.values().all(|c| *c == 1), "one fact per row: {per:?}");
 }
+
+/// The rows the real document source delivered for the live Telegram Web A in Firefox ESR
+/// (2026-10-26, text anonymised; made by `live_document.rs`, which reads the real browser): three
+/// chat rows (`a.ListItem-button` with role link, a `h3.fullName` button, hashed badge classes,
+/// text runs as separate leaves) and two messages. A fixture of the wrong panel cannot pass here:
+/// the plugin must name every chat row and give every message the article role.
+#[test]
+fn the_rows_the_real_source_delivered_for_live_web_a_are_named_and_the_messages_are_articles() {
+    let v: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(root().join("tests/fixtures/web/telegram-a-live.json")).unwrap(),
+    )
+    .unwrap();
+    let list = v.as_array().unwrap();
+    let rt = runtime(PluginOptions::default());
+    let mut b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/#1", true),
+    )
+    .expect("scope");
+    let mut kids: HashMap<u32, Vec<u32>> = HashMap::new();
+    let arc = |s: &str| (!s.is_empty()).then(|| Arc::<str>::from(s));
+    for x in list {
+        let i = x["i"].as_u64().unwrap() as u32;
+        let p = x["p"].as_i64().unwrap();
+        if p >= 0 {
+            kids.entry(p as u32).or_default().push(i);
+        }
+        b.upsert(
+            i,
+            Row {
+                role: x["role"].as_u64().unwrap() as u16,
+                name: arc(x["name"].as_str().unwrap()),
+                text: arc(x["text"].as_str().unwrap()),
+                tag: arc(x["tag"].as_str().unwrap()),
+                class: arc(x["class"].as_str().unwrap()),
+                ..Row::default()
+            },
+        );
+    }
+    let tree = Flat(kids);
+    let ops = collect(&mut b, &tree, Duration::from_secs(10));
+    let got = names(&ops);
+    let chat_rows: Vec<u32> = list
+        .iter()
+        .filter(|x| {
+            x["class"]
+                .as_str()
+                .unwrap()
+                .split_whitespace()
+                .any(|t| t == "ListItem-button")
+        })
+        .map(|x| x["i"].as_u64().unwrap() as u32)
+        .collect();
+    assert_eq!(chat_rows.len(), 3);
+    for r in &chat_rows {
+        let n = got
+            .iter()
+            .find(|(n, _)| n == r)
+            .unwrap_or_else(|| panic!("chat row {r} has no name: {ops:?}"));
+        assert!(
+            n.1.contains(", "),
+            "a computed name, not the raw one: {}",
+            n.1
+        );
+    }
+    // The first row has the hashed-class badge "9K".
+    assert!(
+        got.iter()
+            .any(|(n, s)| *n == chat_rows[0] && s.contains("9K unread")),
+        "{got:?}"
+    );
+    let articles = ops
+        .iter()
+        .filter(|o| {
+            matches!(
+                o,
+                FactOp::Patch {
+                    write: gorca_fuse::Write::Val(gorca_fuse::Val::Role(SemRole::Article)),
+                    ..
+                }
+            )
+        })
+        .count();
+    assert_eq!(articles, 2, "{ops:?}");
+}
