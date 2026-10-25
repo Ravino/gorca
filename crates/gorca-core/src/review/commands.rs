@@ -11,11 +11,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gorca_connector_api::ActionReq;
-use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, PropMask, Role, StructFlags};
+use gorca_model::sem::SemRole;
+use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, PropMask, StructFlags};
 use gorca_speech::How;
 use smallvec::SmallVec;
 
 use super::build::{NavFetchError, ProbeItem, RrVerdict};
+use super::collect;
 use super::cursor::{BuildId, FlatPos, ModelId, NavReqId, ReviewCursor, ReviewFrom, ReviewKind};
 use super::cursor::{ReviewOrigin, ReviewPos, hash_line};
 use super::flat::{
@@ -23,7 +25,7 @@ use super::flat::{
     reanchor,
 };
 use super::model::{Completeness, LineModel, LineSource};
-use super::objnav::{NavMove, NavOp, StepResult, step, step_degraded};
+use super::objnav::{NavMove, NavOp, StepResult, is_app_root, step, step_degraded};
 use super::segment::{Dir, SimpleUnits, TextUnits, Unit, slice};
 use super::terminal::held_model;
 use super::validity::{Validity, validity};
@@ -32,7 +34,7 @@ use super::{BuildRequest, OpState, ReviewMsg, RrCheck};
 use crate::SpeechIntent;
 use crate::commands::CoreCmd;
 use crate::mode::{Mode, ModeMsg};
-use crate::present::PresentContext;
+use crate::present::{PresentContext, entry_of};
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 
 /// Safety margin on top of a task's own deadline before the Reader gives up waiting.
@@ -174,51 +176,12 @@ enum Pick {
 }
 
 fn is_surface_role(snap: &NodeSnapshot, parent_is_menubar: bool) -> bool {
-    match snap.role {
-        Role::Window | Role::Dialog | Role::Alert | Role::Popover => true,
-        // SF-2: a showing menu is its own surface, unless it is a menu bar's pull-down title.
-        Role::Menu => snap.struct_state().contains(StructFlags::SHOWING) && !parent_is_menubar,
-        Role::Application
-        | Role::Document
-        | Role::DocumentWeb
-        | Role::Panel
-        | Role::Heading
-        | Role::Paragraph
-        | Role::Link
-        | Role::Image
-        | Role::List
-        | Role::ListItem
-        | Role::Table
-        | Role::Row
-        | Role::Cell
-        | Role::ColumnHeader
-        | Role::RowHeader
-        | Role::Button
-        | Role::ToggleButton
-        | Role::Switch
-        | Role::CheckBox
-        | Role::RadioButton
-        | Role::ComboBox
-        | Role::TextEntry
-        | Role::PasswordEntry
-        | Role::SpinButton
-        | Role::Slider
-        | Role::ProgressBar
-        | Role::MenuBar
-        | Role::MenuItem
-        | Role::Tab
-        | Role::TabList
-        | Role::Tree
-        | Role::TreeItem
-        | Role::Toolbar
-        | Role::StatusBar
-        | Role::Separator
-        | Role::Label
-        | Role::StaticText
-        | Role::Terminal
-        | Role::Landmark
-        | Role::Unknown => false,
-    }
+    let role = entry_of(snap).sem.role;
+    // SF-2: a showing menu is its own surface, unless it is a menu bar's pull-down title.
+    collect::is_surface_role(role)
+        || (role == SemRole::Menu
+            && snap.struct_state().contains(StructFlags::SHOWING)
+            && !parent_is_menubar)
 }
 
 impl Reader {
@@ -787,15 +750,12 @@ impl Reader {
                 Lookup::Miss | Lookup::Gone => return Err(NavOp::Ancestry { node: nav }),
             };
             let parent_menubar = v.snap.parent.is_some_and(
-                |p| matches!(self.dir.view(p), Lookup::Hit(pv) if pv.snap.role == Role::MenuBar),
+                |p| matches!(self.dir.view(p), Lookup::Hit(pv) if entry_of(&pv.snap).sem.role == SemRole::Menubar),
             );
-            if is_surface_role(&v.snap, parent_menubar) || v.snap.role == Role::Application {
+            let app_root = is_app_root(&v.snap);
+            if is_surface_role(&v.snap, parent_menubar) || app_root {
                 // For the Shell and other windowless trees, the container below the root.
-                return Ok(if v.snap.role == Role::Application {
-                    top_below_app
-                } else {
-                    cur
-                });
+                return Ok(if app_root { top_below_app } else { cur });
             }
             top_below_app = cur;
             match v.snap.parent {
@@ -1794,7 +1754,7 @@ impl Reader {
             let Lookup::Hit(v) = self.dir.view(k) else {
                 continue;
             };
-            if v.snap.role == Role::StatusBar
+            if entry_of(&v.snap).sem.role == SemRole::Status
                 && v.snap.struct_state().contains(StructFlags::SHOWING)
             {
                 return Some(k);

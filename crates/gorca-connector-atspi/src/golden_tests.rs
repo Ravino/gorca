@@ -951,6 +951,19 @@ fn review_records(family: &Family, run: &Run, out: &mut Vec<Record>) {
                 push(s, "noname", format!("Role:{}", rr::role_word(s, web_run)));
             }
             push(s, "class", class_text(rr::class_of_snapshot(s, false)));
+            if let Some(e) = s.sem.entry.as_ref() {
+                // What the surface walk of a model build does with the node: asks the app for
+                // its text lines, treats it as another surface.
+                push(
+                    s,
+                    "walk-build",
+                    format!(
+                        "Text:wants_lines={} | Text:surface={}",
+                        rr::wants_lines(s),
+                        rr::is_surface_role(e.sem.role)
+                    ),
+                );
+            }
             if web_run {
                 push(s, "class-web", class_text(rr::class_of_snapshot(s, true)));
             }
@@ -1078,8 +1091,9 @@ fn the_change_utterance_of_every_recorded_state_flip_is_golden() {
 const GATE_FOCUS_RECORDS: usize = 6969;
 const GATE_CHANGE_RECORDS: usize = 4154;
 /// The review gate (`cargo xtask cutover review`, 8 of 8 families, en and ru) compared 35270
-/// records (flat, zone, noname, class, class-web and walk of 6969 nodes).
-const GATE_REVIEW_RECORDS: usize = 35270;
+/// records (flat, zone, noname, class, class-web and walk of 6969 nodes); M22c part 1 added
+/// the `walk-build` case (one record per node, 6969).
+const GATE_REVIEW_RECORDS: usize = 42239;
 
 #[test]
 fn the_goldens_hold_every_record_the_gate_compared() {
@@ -1178,7 +1192,15 @@ fn every_family_has_recorded_review_records_and_every_case_is_there() {
             family.dir
         );
     }
-    for case in ["flat", "zone", "noname", "class", "class-web", "walk"] {
+    for case in [
+        "flat",
+        "zone",
+        "noname",
+        "class",
+        "class-web",
+        "walk",
+        "walk-build",
+    ] {
         assert!(
             text.lines().any(|l| l.split('\t').nth(2) == Some(case)),
             "no review record of case {case}"

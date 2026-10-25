@@ -7,9 +7,10 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use gorca_model::{
-    ChildList, Ifaces, Lookup, NodeKey, NodeSnapshot, PropMask, Rect, Role, StructFlags,
-};
+use gorca_model::sem::SemRole;
+use gorca_model::{ChildList, Lookup, NodeKey, NodeSnapshot, PropMask, Rect, StructFlags};
+
+use crate::present::entry_of;
 
 use super::cluster::BuildNode;
 use super::model::{ReviewLimits, TruncWhy};
@@ -58,63 +59,142 @@ fn overlaps(a: Rect, b: Rect) -> bool {
 }
 
 /// Nodes the app can hang text lines on. A snapshot from a focus fetch or a child fetch does not
-/// say which interfaces the node has (`Ifaces` is empty), so for those the text-bearing roles are
-/// asked and a refusal is the answer; a node known to have no `Text` is not asked.
+/// say which interfaces the node has (`NodeCaps::is_known` is false), so for those the
+/// text-bearing roles are asked and a refusal is the answer; a node known to have no `Text` is not
+/// asked.
 pub fn wants_lines(s: &NodeSnapshot) -> bool {
-    let known = !s.interfaces.is_empty();
-    if known && !s.interfaces.contains(Ifaces::TEXT) {
+    let caps = s.caps();
+    if caps.is_known() && !caps.has_text() {
         return false;
     }
-    match s.role {
-        Role::Label
-        | Role::StaticText
-        | Role::Paragraph
-        | Role::Heading
-        | Role::Link
-        | Role::TextEntry
-        | Role::PasswordEntry
-        | Role::Document
-        | Role::DocumentWeb
-        | Role::Terminal
-        | Role::ListItem
-        | Role::Cell
-        | Role::Alert => true,
+    match text_bearing(entry_of(s).sem.role) {
+        TextBearing::Yes => true,
         // Only on an explicit claim: every filler and container has these roles.
-        Role::Unknown | Role::Landmark | Role::Panel => known,
-        Role::Application
-        | Role::Window
-        | Role::Dialog
-        | Role::Image
-        | Role::List
-        | Role::Table
-        | Role::Row
-        | Role::ColumnHeader
-        | Role::RowHeader
-        | Role::Button
-        | Role::ToggleButton
-        | Role::Switch
-        | Role::CheckBox
-        | Role::RadioButton
-        | Role::ComboBox
-        | Role::SpinButton
-        | Role::Slider
-        | Role::ProgressBar
-        | Role::Menu
-        | Role::MenuBar
-        | Role::MenuItem
-        | Role::Popover
-        | Role::Tab
-        | Role::TabList
-        | Role::Tree
-        | Role::TreeItem
-        | Role::Toolbar
-        | Role::StatusBar
-        | Role::Separator => false,
+        TextBearing::IfClaimed => caps.is_known(),
+        TextBearing::No => false,
     }
 }
 
-fn is_surface_role(r: Role) -> bool {
-    matches!(r, Role::Window | Role::Dialog | Role::Alert | Role::Popover)
+/// Whether a model role carries text lines of its own.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum TextBearing {
+    Yes,
+    IfClaimed,
+    No,
+}
+
+/// One exhaustive `match`: a new model role cannot be added without deciding whether review asks
+/// for its lines. The roles of the web that the engines export as fillers, landmarks or sections
+/// (`IfClaimed`) are asked on a text claim only.
+fn text_bearing(role: SemRole) -> TextBearing {
+    match role {
+        SemRole::StaticText
+        | SemRole::Caption
+        | SemRole::Paragraph
+        | SemRole::Heading
+        | SemRole::Link
+        | SemRole::TextBox
+        | SemRole::SearchBox
+        | SemRole::PasswordBox
+        | SemRole::Document
+        | SemRole::DocumentWeb
+        | SemRole::Terminal
+        | SemRole::ListItem
+        | SemRole::Cell
+        | SemRole::GridCell
+        | SemRole::Option
+        | SemRole::Definition
+        | SemRole::Alert
+        // The inline phrase roles are the engine's static text with an author's tag.
+        | SemRole::Emphasis
+        | SemRole::Strong
+        | SemRole::Mark
+        | SemRole::Code
+        | SemRole::Time
+        | SemRole::Insertion
+        | SemRole::Deletion
+        | SemRole::Subscript
+        | SemRole::Superscript => TextBearing::Yes,
+        SemRole::Application
+        | SemRole::Window
+        | SemRole::Dialog
+        | SemRole::AlertDialog
+        | SemRole::Img
+        | SemRole::List
+        | SemRole::Listbox
+        | SemRole::Table
+        | SemRole::Row
+        | SemRole::ColumnHeader
+        | SemRole::RowHeader
+        | SemRole::Button
+        | SemRole::Switch
+        | SemRole::Checkbox
+        | SemRole::Radio
+        | SemRole::Combobox
+        | SemRole::SpinButton
+        | SemRole::Slider
+        | SemRole::ProgressBar
+        | SemRole::Menu
+        | SemRole::Menubar
+        | SemRole::MenuItem
+        | SemRole::MenuItemCheckbox
+        | SemRole::MenuItemRadio
+        | SemRole::Popover
+        | SemRole::Tab
+        | SemRole::TabList
+        | SemRole::Tree
+        | SemRole::TreeItem
+        | SemRole::Toolbar
+        | SemRole::Status
+        | SemRole::Separator => TextBearing::No,
+        SemRole::Unknown
+        | SemRole::Generic
+        | SemRole::Article
+        | SemRole::Banner
+        | SemRole::Blockquote
+        | SemRole::Complementary
+        | SemRole::ContentInfo
+        | SemRole::DescriptionList
+        | SemRole::Details
+        | SemRole::Feed
+        | SemRole::Figure
+        | SemRole::Form
+        | SemRole::Grid
+        | SemRole::Group
+        | SemRole::Iframe
+        | SemRole::Log
+        | SemRole::Main
+        | SemRole::Marquee
+        | SemRole::Math
+        | SemRole::Meter
+        | SemRole::Navigation
+        | SemRole::Note
+        | SemRole::Presentation
+        | SemRole::RadioGroup
+        | SemRole::Region
+        | SemRole::RowGroup
+        | SemRole::Scrollbar
+        | SemRole::Search
+        | SemRole::Suggestion
+        | SemRole::Summary
+        | SemRole::TabPanel
+        | SemRole::Term
+        | SemRole::Timer
+        | SemRole::Comment
+        | SemRole::Tooltip
+        | SemRole::TreeGrid => TextBearing::IfClaimed,
+    }
+}
+
+pub fn is_surface_role(r: SemRole) -> bool {
+    matches!(
+        r,
+        SemRole::Window
+            | SemRole::Dialog
+            | SemRole::AlertDialog
+            | SemRole::Alert
+            | SemRole::Popover
+    )
 }
 
 /// Fields every node of a model must have (name, role, state).
@@ -166,7 +246,7 @@ impl<S: NavSource> Ctx<'_, S> {
         // U+FFFC (a `<time>`, a `<span>`): its text is not in the parent and it stays.
         if text_parent
             && s.have.contains(PropMask::ROLE)
-            && s.role == Role::StaticText
+            && entry_of(s).sem.role == SemRole::StaticText
             && (matches!(&s.children, ChildList::Count(0))
                 || matches!(&s.children, ChildList::Known(k) if k.is_empty()))
         {
@@ -179,8 +259,9 @@ impl<S: NavSource> Ctx<'_, S> {
             }
             return;
         }
-        let web = match (web, s.role) {
-            (Web::Outside, Role::DocumentWeb) => Web::Inside(
+        let role = entry_of(s).sem.role;
+        let web = match (web, role) {
+            (Web::Outside, SemRole::DocumentWeb) => Web::Inside(
                 (s.have.contains(PropMask::BOUNDS) && !v.stale.contains(PropMask::BOUNDS))
                     .then_some(s.bounds)
                     .flatten(),
@@ -195,7 +276,7 @@ impl<S: NavSource> Ctx<'_, S> {
         // a node of a web document is entered only when it overlaps the document's rectangle, or
         // a long page spends the node cap on what is scrolled away.
         if let Web::Inside(doc) = web
-            && s.role != Role::DocumentWeb
+            && role != SemRole::DocumentWeb
             && class_of_snapshot(s, false) == PresClass::Unavailable
         {
             let known = s.have.contains(PropMask::BOUNDS) && !v.stale.contains(PropMask::BOUNDS);
@@ -219,7 +300,7 @@ impl<S: NavSource> Ctx<'_, S> {
             self.out.text_clips.insert(k, d);
         }
         // Another surface (SF-1): excluded here, it gets its own model.
-        if k != self.surface && is_surface_role(s.role) {
+        if k != self.surface && is_surface_role(role) {
             return;
         }
         let lacks_bounds = !s.have.contains(PropMask::BOUNDS) || v.stale.contains(PropMask::BOUNDS);
@@ -408,10 +489,46 @@ pub(crate) mod testsrc {
 mod tests {
     use super::testsrc::*;
     use super::*;
-    use gorca_model::{Rect, StateSet};
+    use gorca_model::{Ifaces, Rect, Role, StateSet};
 
     fn r(x: i32, y: i32) -> Rect {
         Rect { x, y, w: 50, h: 10 }
+    }
+
+    #[test]
+    fn lines_are_asked_of_text_roles_and_of_fillers_only_on_a_claim() {
+        let mut label = snap(1, Role::Label, "L", None, &[]);
+        let mut panel = snap(2, Role::Panel, "P", None, &[]);
+        let mut button = snap(3, Role::Button, "B", None, &[]);
+        // No interface claim: text-bearing roles are asked, fillers and widgets are not.
+        assert!(wants_lines(&label));
+        assert!(!wants_lines(&panel));
+        assert!(!wants_lines(&button));
+        // A claim of Text: the filler is asked too; a widget never is.
+        for s in [&mut label, &mut panel, &mut button] {
+            s.interfaces = Ifaces::TEXT;
+        }
+        assert!(wants_lines(&label) && wants_lines(&panel));
+        assert!(!wants_lines(&button));
+        // A claim without Text: nothing is asked.
+        label.interfaces = Ifaces::ACTION;
+        assert!(!wants_lines(&label));
+    }
+
+    #[test]
+    fn surface_roles_are_windows_dialogs_alerts_and_popovers() {
+        for r in [
+            SemRole::Window,
+            SemRole::Dialog,
+            SemRole::AlertDialog,
+            SemRole::Alert,
+            SemRole::Popover,
+        ] {
+            assert!(is_surface_role(r), "{r:?}");
+        }
+        for r in [SemRole::Menu, SemRole::Application, SemRole::Generic] {
+            assert!(!is_surface_role(r), "{r:?}");
+        }
     }
 
     #[test]

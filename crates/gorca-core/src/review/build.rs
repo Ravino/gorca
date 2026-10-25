@@ -19,8 +19,7 @@ use std::time::{Duration, Instant};
 use gorca_connector_api::{ActionReq, BackendError, BackendOp, BackendReply, MatchRule, request};
 use gorca_mirror::{MirrorHandle, MirrorRead};
 use gorca_model::{
-    ChildList, Lookup, NodeKey, NodeView, PropMask, Rect, ReqId, Role, SnapshotBatch, StateSet,
-    TextLine, TextQuery,
+    ChildList, Lookup, NodeKey, NodeView, PropMask, Rect, ReqId, SnapshotBatch, TextLine, TextQuery,
 };
 use gorca_rt::{BudgetClass, Clock, Deadline, mpsc, oneshot, with_deadline};
 use tokio::task::JoinSet;
@@ -732,13 +731,7 @@ pub async fn find_status_bar(
     io: &ReviewIo,
     root: NodeKey,
 ) -> Result<Option<NodeKey>, NavFetchError> {
-    let rule = MatchRule {
-        root,
-        roles: vec![Role::StatusBar],
-        states_all: StateSet::SHOWING,
-        states_none: StateSet::empty(),
-        max_results: 1,
-    };
+    let rule = MatchRule::showing_status_bar(root);
     let found = match io
         .call(BudgetClass::Interactive, BackendOp::Collection(rule))
         .await

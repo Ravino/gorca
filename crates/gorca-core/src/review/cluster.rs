@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use gorca_model::sem::{SemEntry, SemRole};
-use gorca_model::{AppId, Ifaces, NodeKey, NodeSnapshot, Rect, StructFlags, TextLine, Value};
+use gorca_model::{AppId, NodeKey, NodeSnapshot, Rect, StructFlags, TextLine, Value};
 use smallvec::SmallVec;
 
 use super::model::{
@@ -153,7 +153,7 @@ fn focusable(s: &NodeSnapshot) -> bool {
 }
 
 fn actionable(s: &NodeSnapshot) -> bool {
-    s.interfaces.contains(Ifaces::ACTION)
+    s.caps().has_action()
 }
 
 /// The object zone of a node, if it has anything to say or can be acted on.
@@ -644,7 +644,7 @@ pub fn build_line_model(input: &BuildInput, limits: &ReviewLimits) -> LineModel 
 mod tests {
     use super::super::collect::testsrc::{key, snap};
     use super::*;
-    use gorca_model::{PropMask, Role, StateSet};
+    use gorca_model::{Ifaces, PropMask, Role, StateSet};
 
     fn bn(mut s: NodeSnapshot, depth: u16, r: Option<Rect>) -> BuildNode {
         s.bounds = r;

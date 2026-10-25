@@ -176,6 +176,36 @@ impl StructState {
     }
 }
 
+/// What a node can do, as the source claimed it (ADR-0022 section 8.1: a capability is structure,
+/// not a presented fact). A snapshot from a focus fetch or a child fetch does not say which
+/// interfaces the node has; such a node is not `known`, and callers ask instead of assuming.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub struct NodeCaps {
+    ifaces: Ifaces,
+}
+
+impl NodeCaps {
+    /// Capabilities of a node whose source claimed `ifaces`.
+    pub const fn new(ifaces: Ifaces) -> Self {
+        Self { ifaces }
+    }
+
+    /// The source said which interfaces the node has (an empty claim is "not said").
+    pub const fn is_known(self) -> bool {
+        !self.ifaces.is_empty()
+    }
+
+    /// The node claims a text interface.
+    pub const fn has_text(self) -> bool {
+        self.ifaces.contains(Ifaces::TEXT)
+    }
+
+    /// The node claims an action interface (it can be activated).
+    pub const fn has_action(self) -> bool {
+        self.ifaces.contains(Ifaces::ACTION)
+    }
+}
+
 /// Interned attribute key. The interner lives in the connector; the core only compares keys.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct AttrKey(pub u16);
@@ -260,6 +290,11 @@ pub struct NodeSnapshot {
 }
 
 impl NodeSnapshot {
+    /// The capabilities the source claimed for the node (see [`NodeCaps`]).
+    pub fn caps(&self) -> NodeCaps {
+        NodeCaps::new(self.interfaces)
+    }
+
     /// The structural state of the node (see [`StructState`]): the only part of [`StateSet`]
     /// that navigation reads.
     pub fn struct_state(&self) -> StructState {
@@ -476,6 +511,16 @@ mod tests {
         }
         assert!(!Freshness::Defunct.presentable());
         assert_eq!(Freshness::Defunct.stale_mask(), PropMask::ALL);
+    }
+
+    #[test]
+    fn caps_say_what_the_source_claimed() {
+        let none = NodeCaps::default();
+        assert!(!none.is_known() && !none.has_text() && !none.has_action());
+        let c = NodeCaps::new(Ifaces::TEXT | Ifaces::ACTION);
+        assert!(c.is_known() && c.has_text() && c.has_action());
+        let v = NodeCaps::new(Ifaces::VALUE);
+        assert!(v.is_known() && !v.has_text() && !v.has_action());
     }
 
     #[test]

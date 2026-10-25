@@ -678,3 +678,27 @@ author set by `ROLE_AUTHORED` (a valid role token). The retired check skipped on
 role attribute, so a control with an unknown role token, or a focusable presentation node, now gets
 an inferred label where Orca (`has_role_from_aria`) would not infer one. Accepted until M22c; the
 fix is a `ROLE_AUTHORED`-like bit for "any role token present".
+
+#### M22c part 1 (2026-10-25): review and object navigation off the legacy record
+
+`crates/gorca-core/src/review/` reads the fused entry, `struct_state()` and the new
+`NodeSnapshot::caps()` only; rule 12 bans legacy `Role`, `StateSet`, `Ifaces`, `.interfaces`,
+`.states` and `.role` there (`PORTED` in `xtask/src/legacyrule.rs`, a ratchet: a module is added
+when ported and never removed). Plan and inventory: `docs/reports/m22c-plan.md`. Oracles: the review
+goldens (35270 rows, none changed), the new `walk-build` rows (`wants_lines`, surface role) and the
+review tests. Dated differences, all in which nodes the build asks the app for text lines
+(`wants_lines`, an extra bounded request answered "no" by a node without Text) and in the tree root:
+
+* 2026-10-25: nodes whose legacy role was `Unknown` (date and time editors exported as groups,
+  `<ins>`, `<del>`, `<sub>`, `<sup>`, `<mark>`, definitions) now have a text-bearing model role
+  (`TextBox`, `Insertion`, `Deletion`, `Subscript`, `Superscript`, `Mark`, `Definition`), and an
+  ARIA `option` exported as a filler is `Option`: all are asked for lines. 35 nodes of the recorded
+  corpus; none changes a spoken word.
+* 2026-10-25: the application root is `Application` without an author token and without a parent
+  (fetched), as a node of the same model role with a parent is an embedded object or an ARIA
+  widget. The legacy check was the raw role, which the entry no longer carries; the golden caught
+  the HTML `<object>` case (raw `embedded` folds into `Application`). A root whose parent was never
+  fetched takes one ancestry fetch before the walk stops, where the legacy check stopped at once.
+* 2026-10-25: `MatchRule::showing_status_bar` hides the connector's role and state types from the
+  review build; the rule sent is the same.
+

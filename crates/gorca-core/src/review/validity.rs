@@ -62,7 +62,7 @@ pub fn snapshot_hash(s: &NodeSnapshot) -> u64 {
     let e = entry_of(s);
     let sem = &e.sem;
     let mut h = Fx(0);
-    h.word(u64::from(sem.role.code()));
+    h.word(u64::from(e.sem.role.code()));
     // The spoken state groups, as the zone says them: which words, not which raw group values
     // (a selectable node that is not selected says nothing more than one that cannot be).
     let spoken = [

@@ -131,6 +131,20 @@ pub struct MatchRule {
     pub max_results: u32,
 }
 
+impl MatchRule {
+    /// The showing status bar below `root`, first match. The consumer names the target, the
+    /// connector's own role and state vocabulary stays in this crate (ADR-0022 section 8.7).
+    pub fn showing_status_bar(root: NodeKey) -> Self {
+        Self {
+            root,
+            roles: vec![Role::StatusBar],
+            states_all: StateSet::SHOWING,
+            states_none: StateSet::empty(),
+            max_results: 1,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TextAttrRun {
     pub range: Range<u32>,
