@@ -64,9 +64,12 @@ pub use fetch::items::{
 pub use fetch::locate::locate_object;
 pub use fetch::review::act_object;
 pub use fetch::{FetchCounters, FetchCountersSnapshot};
+pub use identity_client::{
+    IdentityConfig, configure as configure_identity, configured_socket as identity_socket,
+};
 pub use identity_svc::{
     HELPER_UNIT as IDENTITY_HELPER_UNIT, run_helper as run_identity_helper,
-    socket_path_from as identity_socket_path_from, uses_helper as identity_uses_helper,
+    uses_helper as identity_uses_helper,
 };
 pub use paths::{GLOBAL_BYTE_CAP as PATH_TABLE_BYTE_CAP, Owner, PathTable};
 pub use proc::in_private_user_ns;

@@ -128,3 +128,5 @@ Measured (debug build, helper in the initial namespaces, client in a transient u
 | 50 concurrent lookups of one process | one answer, all equal |
 | Helper bound 30 ms late / backlog full / 9+ held connections (audit tests) | answered / returns at its deadline / answered |
 | `unshare` impostor, `$HOME` copy, wrong server unit, wrong client unit, helper down | `None` (as before) |
+
+Live probes (ignored tests) read their parameters (`GORCA_PROBE_PID`, `GORCA_PROBE_PIDS`, `XDG_RUNTIME_DIR`, `GORCA_IDENTITY_*`) as `KEY=value` lines from `/var/tmp/gorca-identity-probe.params`; only the daemon main.rs reads the environment (xtask rule 8).

@@ -374,7 +374,7 @@ async fn wire_plugins(core: Core, opts: &Options, prewake: Arc<plugins::Prewake>
         // A hardened user unit (PrivateTmp=, ProtectSystem=, ...) runs in a private user
         // namespace and the kernel refuses /proc/<pid>/exe of other processes there: identities
         // come from the identity helper (gorca-identity.service), outside the sandbox.
-        let socket = gorca_connector_atspi::identity_socket_path_from(|k| std::env::var(k).ok());
+        let socket = gorca_connector_atspi::identity_socket();
         if socket.as_ref().is_some_and(|p| p.exists()) {
             tracing::info!("application identities come from the identity helper");
         } else {
