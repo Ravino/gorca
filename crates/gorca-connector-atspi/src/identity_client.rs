@@ -255,17 +255,46 @@ fn warn_once(e: &HelperError, socket: Option<&std::path::Path>) {
     }
 }
 
+/// Where the helper listens and which unit it must run in; read from the environment by the
+/// daemon's `main` (the only place that may) and handed down through [`configure`].
+#[derive(Clone, Debug, Default)]
+pub struct IdentityConfig {
+    /// The helper socket (`None` without a runtime directory).
+    pub socket: Option<PathBuf>,
+    /// The unit the helper must run in (`None` disables that check).
+    pub server_unit: Option<String>,
+}
+
+impl IdentityConfig {
+    /// From an environment lookup supplied by the caller.
+    pub fn from_env(env: impl Fn(&str) -> Option<String>) -> Self {
+        Self {
+            socket: socket_path_from(&env),
+            server_unit: unit_from(&env, ENV_SERVER_UNIT, HELPER_UNIT),
+        }
+    }
+}
+
+static CONFIG: OnceLock<IdentityConfig> = OnceLock::new();
+
+/// Set the helper location once, before the first lookup (a later call is ignored).
+pub fn configure(cfg: IdentityConfig) {
+    let _ = CONFIG.set(cfg);
+}
+
+/// The configured helper socket, if any.
+pub fn configured_socket() -> Option<PathBuf> {
+    CONFIG.get().and_then(|c| c.socket.clone())
+}
+
 fn global() -> &'static Client {
     static GLOBAL: OnceLock<Client> = OnceLock::new();
     GLOBAL.get_or_init(|| {
         if !uses_helper() {
             return Client::local();
         }
-        let env = |k: &str| std::env::var(k).ok();
-        Client::new(
-            socket_path_from(env),
-            unit_from(&env, ENV_SERVER_UNIT, HELPER_UNIT),
-        )
+        let cfg = CONFIG.get().cloned().unwrap_or_default();
+        Client::new(cfg.socket, cfg.server_unit)
     })
 }
 

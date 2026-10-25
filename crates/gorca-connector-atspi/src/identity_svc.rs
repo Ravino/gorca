@@ -355,8 +355,7 @@ pub fn uses_helper() -> bool {
 }
 
 /// Run the helper until killed: `gorca --identity-helper`. Returns only on a start-up error.
-pub fn run_helper() -> std::io::Result<()> {
-    let env = |k: &str| std::env::var(k).ok();
+pub fn run_helper(env: impl Fn(&str) -> Option<String>) -> std::io::Result<()> {
     let cfg = ServerConfig::from_env(env)
         .ok_or_else(|| std::io::Error::other("no XDG_RUNTIME_DIR and no GORCA_IDENTITY_SOCK"))?;
     let listener = bind(&cfg)?;

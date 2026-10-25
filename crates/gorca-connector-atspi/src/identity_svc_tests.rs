@@ -32,6 +32,17 @@ fn reap(mut c: Child) {
 }
 
 const T: Duration = Duration::from_secs(2);
+/// Parameters of the ignored live probes: `KEY=value` lines in `PROBE_PARAMS` (tests take
+/// parameters, not the environment).
+const PROBE_PARAMS: &str = "/var/tmp/gorca-identity-probe.params";
+
+fn probe_param(key: &str) -> Option<String> {
+    let text = std::fs::read_to_string(PROBE_PARAMS).ok()?;
+    text.lines()
+        .find_map(|l| l.strip_prefix(key)?.strip_prefix('='))
+        .map(str::to_owned)
+}
+
 const SHORT: Duration = Duration::from_millis(150);
 
 /// The helper itself (what `gorca --identity-helper` runs), for the live proof when the daemon
@@ -39,7 +50,7 @@ const SHORT: Duration = Duration::from_millis(150);
 #[test]
 #[ignore = "runs the helper until killed; used by the transient-unit proof"]
 fn live_helper_server() {
-    run_helper().expect("helper");
+    run_helper(probe_param).expect("helper");
 }
 
 /// Read-only live probe for `systemd-run --user` transient units with the full hardening
@@ -49,10 +60,13 @@ fn live_helper_server() {
 #[test]
 #[ignore = "needs a live pid and a helper; run inside a transient unit"]
 fn live_helper_identity_probe() {
-    let pid: u32 = std::env::var("GORCA_PROBE_PID")
+    let pid: u32 = probe_param("GORCA_PROBE_PID")
         .expect("GORCA_PROBE_PID")
         .parse()
         .expect("pid");
+    crate::identity_client::configure(crate::identity_client::IdentityConfig::from_env(
+        probe_param,
+    ));
     let start = crate::proc::read_proc_info(pid).start.expect("start time");
     let t = std::time::Instant::now();
     let id = crate::identity_client::resolve(pid, start, Duration::from_millis(200));
@@ -61,7 +75,7 @@ fn live_helper_identity_probe() {
     for _ in 0..100 {
         let _ = crate::identity_client::resolve(pid, start, Duration::from_millis(200));
     }
-    if let Ok(list) = std::env::var("GORCA_PROBE_PIDS") {
+    if let Some(list) = probe_param("GORCA_PROBE_PIDS") {
         // Processes started outside this unit (a unit's own children share its namespaces and
         // are, rightly, unverified): the comma-separated pids are resolved from 64 threads.
         let keys: Vec<(u32, u64)> = list
