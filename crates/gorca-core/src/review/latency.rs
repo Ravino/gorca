@@ -20,6 +20,7 @@
 )]
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -258,4 +259,176 @@ fn the_series_run_in_a_debug_build() {
     let p = page(8);
     let r = step(&p, key(3), NavMove::Next, true, ReviewLimits::default());
     assert!(matches!(r, StepResult::Found(_) | StepResult::Empty));
+}
+
+/// Pre-order of the subtree at `k`, with depths.
+fn walk(
+    k: NodeKey,
+    depth: u16,
+    by_id: &HashMap<NodeKey, NodeSnapshot>,
+    out: &mut Vec<(NodeKey, u16)>,
+) {
+    out.push((k, depth));
+    if let gorca_model::ChildList::Known(kids) = &by_id[&k].children {
+        for c in kids {
+            walk(*c, depth + 1, by_id, out);
+        }
+    }
+}
+
+/// Rows of mixed roles: a label before an entry, a control that holds a label with its own name,
+/// links, list items, check boxes, tabs and menu items. The shapes the line-building rules
+/// (control zones, named containers, label-like text) decide on.
+fn mixed_page() -> Page {
+    type Spec<'a> = (Role, &'a str, Vec<(Role, &'a str)>);
+    let rows: Vec<Vec<Spec<'_>>> = vec![
+        vec![
+            (Role::Label, "Name", vec![]),
+            (Role::TextEntry, "Name", vec![]),
+            (Role::Button, "Go", vec![(Role::Label, "Go")]),
+        ],
+        vec![
+            (Role::StaticText, "Hello", vec![]),
+            (Role::Link, "Docs", vec![(Role::StaticText, "Docs")]),
+        ],
+        vec![(Role::ListItem, "One", vec![(Role::StaticText, "One")])],
+        vec![
+            (Role::CheckBox, "Opt", vec![]),
+            (Role::RadioButton, "Radio", vec![(Role::Label, "Radio")]),
+            (Role::ToggleButton, "Tog", vec![]),
+        ],
+        vec![
+            (Role::Tab, "Tab", vec![(Role::Label, "Tab")]),
+            (Role::MenuItem, "File", vec![(Role::Label, "File")]),
+        ],
+        vec![
+            (Role::Panel, "Group", vec![(Role::StaticText, "inside")]),
+            (Role::Heading, "Title", vec![(Role::StaticText, "Title")]),
+        ],
+        vec![
+            (Role::Cell, "cell", vec![(Role::StaticText, "cell")]),
+            (Role::Slider, "Vol", vec![]),
+            (Role::ComboBox, "Pick", vec![]),
+        ],
+    ];
+    let mut snaps: Vec<NodeSnapshot> = Vec::new();
+    let mut next = 2u64;
+    let mut row_ids = Vec::new();
+    for (i, row) in rows.iter().enumerate() {
+        let y = 10 + i32::try_from(i).unwrap_or(0) * 24;
+        let panel = next;
+        next += 1;
+        row_ids.push(panel);
+        let mut kid_ids = Vec::new();
+        let mut col = 0;
+        let mut built: Vec<NodeSnapshot> = Vec::new();
+        for (role, name, kids) in row {
+            let id = next;
+            next += 1;
+            kid_ids.push(id);
+            let mut sub = Vec::new();
+            for (krole, kname) in kids {
+                let kid = next;
+                next += 1;
+                sub.push(kid);
+                let mut k = snap(kid, *krole, kname, Some(id), &[]);
+                k.bounds = Some(Rect {
+                    x: col + 2,
+                    y,
+                    w: 60,
+                    h: 20,
+                });
+                k.have |= PropMask::BOUNDS;
+                built.push(k);
+            }
+            let mut n = snap(id, *role, name, Some(panel), &sub);
+            n.bounds = Some(Rect {
+                x: col,
+                y,
+                w: 100,
+                h: 20,
+            });
+            n.have |= PropMask::BOUNDS;
+            n.states |= StateSet::FOCUSABLE;
+            snaps.push(n);
+            snaps.append(&mut built);
+            col += 110;
+        }
+        let mut pn = snap(panel, Role::Panel, "", Some(1), &kid_ids);
+        pn.bounds = Some(Rect {
+            x: 0,
+            y,
+            w: 700,
+            h: 20,
+        });
+        pn.have |= PropMask::BOUNDS;
+        snaps.push(pn);
+    }
+    let mut root = snap(1, Role::Window, "Window", None, &row_ids);
+    root.bounds = Some(Rect {
+        x: 0,
+        y: 0,
+        w: 800,
+        h: 400,
+    });
+    root.have |= PropMask::BOUNDS;
+    snaps.insert(0, root);
+    // Pre-order: a node, then its subtree.
+    let by_id: HashMap<NodeKey, NodeSnapshot> = snaps.into_iter().map(|s| (s.key, s)).collect();
+    let mut order = Vec::new();
+    walk(key(1), 0, &by_id, &mut order);
+    let mut views = HashMap::new();
+    for (k, s) in by_id {
+        let mut s = s;
+        if s.sem.entry.is_none()
+            && let Some(r) = s.sem.rec.as_ref()
+        {
+            s.sem.entry = Some(Arc::new(r.provisional_entry()));
+        }
+        views.insert(
+            k,
+            NodeView {
+                snap: Arc::new(s),
+                stale: PropMask::empty(),
+                aged: false,
+            },
+        );
+    }
+    Page { views, order }
+}
+
+/// The flat-review line texts of the mixed page, one per line of the file named by
+/// `GORCA_LINES_OUT` (or stderr): the same test runs in the legacy tree and in this one, and the
+/// two files are diffed (`bench/m6/review-lines.sh`).
+#[test]
+#[ignore = "dumps the line model for the A/B diff of the cut-over; see bench/m6/review-lines.sh"]
+fn dump_line_texts_of_the_mixed_page() {
+    let p = mixed_page();
+    let nodes: Vec<BuildNode> = p
+        .order
+        .iter()
+        .map(|(k, depth)| BuildNode::of(Arc::clone(&p.views[k].snap), *depth))
+        .collect();
+    let input = BuildInput {
+        app: key(1).app,
+        surface: key(1),
+        nodes,
+        built_rev: 1,
+        built_at: Instant::now(),
+        truncated: None,
+    };
+    let m = build_line_model(&input, &ReviewLimits::default());
+    let mut text = String::new();
+    for l in &m.lines {
+        text.push_str(&l.text);
+        text.push('\n');
+    }
+    for z in &m.zones {
+        let _ = writeln!(text, "zone {:?} {}", z.kind, z.text);
+    }
+    assert!(!m.lines.is_empty());
+    match std::env::var("GORCA_LINES_OUT") {
+        Ok(path) => std::fs::write(path, text).expect("write"),
+        Err(_) => eprintln!("{text}"),
+    }
 }
