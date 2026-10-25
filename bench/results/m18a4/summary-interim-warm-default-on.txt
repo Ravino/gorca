@@ -1,0 +1,9 @@
+tier  keyms sched  bin        p50   p99  all10 mean  min   cpu%  load1
+first  200 labels pl-base      367  4613 0.575 0.806 0.765  41.2  11.3
+first  200 labels pl-final     252  1467 0.868 0.956 0.938  46.2   8.7
+first  200 sps    pl-base      282  5929 0.007 0.330 0.100  17.3  16.5
+first  200 sps    pl-final     279 14266 0.000 0.310 0.055  17.2  21.4
+third  200 labels pl-base      361  5532 0.030 0.408 0.328  18.7  35.5
+third  200 labels pl-final     288  3907 0.632 0.922 0.890  40.6  22.6
+third  200 sps    pl-base      270   396 0.000 0.071 0.000   9.8  21.0
+third  200 sps    pl-final     163   450 0.000 0.097 0.000  10.7  15.5

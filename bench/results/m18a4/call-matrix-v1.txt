@@ -1,0 +1,7 @@
+CALL threads=1 gap_us=0 spin n=5000 whole_us p50=6.5 p95=7.4 p99=8.1 | guest_us p50=5.7 p95=6.6 p99=7.2 | host_overhead_p50=0.7 load1=11.61
+CALL threads=1 gap_us=3000 spin n=300 whole_us p50=9.7 p95=57.3 p99=100.1 | guest_us p50=8.2 p95=48.7 p99=68.3 | host_overhead_p50=1.5 load1=9.44
+CALL threads=1 gap_us=3000 sleep n=300 whole_us p50=72.1 p95=108.1 p99=180.4 | guest_us p50=60.6 p95=89.5 p99=148.1 | host_overhead_p50=11.4 load1=9.14
+CALL threads=10 gap_us=0 spin n=30000 whole_us p50=28.6 p95=44.5 p99=75.1 | guest_us p50=25.1 p95=38.7 p99=64.1 | host_overhead_p50=3.5 load1=10.35
+CALL threads=10 gap_us=3000 spin n=3000 whole_us p50=24.9 p95=59.8 p99=77.8 | guest_us p50=20.7 p95=51.0 p99=65.4 | host_overhead_p50=4.1 load1=10.35
+CALL threads=10 gap_us=3000 sleep n=3000 whole_us p50=61.5 p95=102.3 p99=167.5 | guest_us p50=51.8 p95=88.2 p99=138.6 | host_overhead_p50=9.7 load1=10.35
+CALL threads=10 gap_us=20000 sleep n=2000 whole_us p50=86.6 p95=171.8 p99=211.8 | guest_us p50=71.8 p95=143.2 p99=179.9 | host_overhead_p50=14.7 load1=9.68

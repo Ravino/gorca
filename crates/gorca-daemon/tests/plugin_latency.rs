@@ -155,6 +155,87 @@ fn pct(sorted: &[u64], p: f64) -> u64 {
     sorted[i.saturating_sub(1).min(sorted.len() - 1)]
 }
 
+/// Turn one trial's stage records into intervals (ns), keyed by name.
+fn collect_stages(
+    recs: &[gorca_rt::stage::Record],
+    out: &mut std::collections::BTreeMap<&'static str, Vec<u64>>,
+) {
+    use gorca_rt::stage::id::*;
+    let at = |stage: u16| recs.iter().find(|r| r.stage == stage).map(|r| r.ns);
+    let Some(t0) = at(W_ENTRY) else { return };
+    let mut push = |name: &'static str, v: Option<u64>| {
+        if let Some(v) = v {
+            out.entry(name).or_default().push(v);
+        }
+    };
+    let d = |a: Option<u64>, b: Option<u64>| match (a, b) {
+        (Some(a), Some(b)) if b >= a => Some(b - a),
+        _ => None,
+    };
+    push("w1 snapshot+jobs_for", d(Some(t0), at(W_SNAP)));
+    push("w2 claim", d(at(W_SNAP), at(W_CLAIM)));
+    push("w3 runner entry", d(at(W_CLAIM), at(SC_ENTER)));
+    push("w4 plan", d(at(SC_ENTER), at(SC_PLAN)));
+    push("w5 build DeriveJobs", d(at(SC_PLAN), at(SC_BUILT)));
+    push("w6 to handoff", d(at(SC_BUILT), at(H_ENTER)));
+    push("w7 send waited+wake", d(at(H_ENTER), at(H_SENT_W)));
+    push("w8 send rest", d(at(H_SENT_W), at(H_SENT_ALL)));
+    push("TOTAL pre-send (t0..sent)", d(Some(t0), at(H_SENT_W)));
+    push("t0 -> wait end", d(Some(t0), at(H_WAIT_END)));
+    push("w9 poll (convert)", d(at(H_WAIT_END), at(B_POLL)));
+    push("w10 admit", d(at(B_POLL), at(B_ADMIT)));
+    push("TOTAL wait end -> done", d(at(H_WAIT_END), at(B_ADMIT)));
+    push("TOTAL turn", d(Some(t0), at(B_ADMIT)));
+    let sent = at(H_SENT_W);
+    for r in recs.iter().filter(|r| r.stage == K_PICK) {
+        let tag = r.tag;
+        let of = |s: u16| {
+            recs.iter()
+                .filter(|x| x.stage == s && x.tag == tag && x.ns >= r.ns)
+                .map(|x| x.ns)
+                .min()
+        };
+        let hot = d(sent, Some(r.ns)).is_some_and(|v| v < 20_000);
+        push("k1 pick-up after send", d(sent, Some(r.ns)));
+        push(
+            if hot {
+                "k1 pick-up (hot)"
+            } else {
+                "k1 pick-up (cold)"
+            },
+            d(sent, Some(r.ns)),
+        );
+        push("k2 running slot", d(Some(r.ns), of(K_CALL0)));
+        push("k3 derive prep", d(of(K_CALL0), of(K_G0)));
+        push("k4 guest call", d(of(K_G0), of(K_G1)));
+        push(
+            if hot {
+                "k4h guest call (hot worker)"
+            } else {
+                "k4c guest call (cold worker)"
+            },
+            d(of(K_G0), of(K_G1)),
+        );
+        push("k5 derive tail+resolve", d(of(K_G1), of(K_RUN1)));
+        push("k6 reply bookkeeping", d(of(K_RUN1), of(K_POST0)));
+        push("k7 post reply", d(of(K_POST0), of(K_POST1)));
+        push("k8 gate", d(of(K_POST1), of(K_GATE)));
+        push("K pick..reply posted", d(Some(r.ns), of(K_POST1)));
+        let val = |s: u16| {
+            recs.iter()
+                .find(|x| x.stage == s && x.tag == tag)
+                .map(|x| x.ns)
+        };
+        push("k4a guest call: in host imports", val(K_HOSTNS));
+        push(
+            "k4b guest call: import count",
+            val(K_NHOST).map(|n| n * 1000),
+        );
+        push("K send..reply posted", d(sent, of(K_POST1)));
+        push("K t0..reply posted", d(Some(t0), of(K_POST1)));
+    }
+}
+
 #[test]
 fn writer_delay_with_ten_plugins_against_none() {
     // GORCA_BENCH_LOG=1 shows the plugin calls (grant and guest time, never text) and faults.
@@ -237,6 +318,7 @@ fn writer_delay_with_ten_plugins_against_none() {
                 .and_then(|v| gorca_daemon::plugins::SchedulerPolicy::parse(&v))
                 .unwrap_or_default(),
             // GORCA_BENCH_SPIN_US=10 is the old parking writer; unset is the whole window.
+            warm_on_arm: std::env::var("GORCA_BENCH_WARM").ok().map(|_| true),
             writer_spin: std::env::var("GORCA_BENCH_SPIN_US")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -300,6 +382,8 @@ fn writer_delay_with_ten_plugins_against_none() {
         "every plugin derived the row once"
     );
 
+    let stages_on = std::env::var("GORCA_BENCH_STAGES").is_ok();
+    let mut stage_iv: std::collections::BTreeMap<&'static str, Vec<u64>> = Default::default();
     let use_prewake = std::env::var("GORCA_BENCH_NO_PREWAKE").is_err();
     let mut on_ns: Vec<u64> = Vec::with_capacity(TRIALS);
     let mut off_ns: Vec<u64> = Vec::with_capacity(TRIALS);
@@ -328,6 +412,10 @@ fn writer_delay_with_ten_plugins_against_none() {
         }
         bridge.begin_turn();
         bridge.upsert(11, row(&CHAT[11], Some(&text)));
+        if stages_on {
+            let _ = gorca_rt::stage::drain();
+            gorca_rt::stage::enable(true);
+        }
         let t0 = now_ns();
         bridge.interactive(&[1, 0], &tree, t0);
         let ops = bridge.take_ops();
@@ -369,6 +457,10 @@ fn writer_delay_with_ten_plugins_against_none() {
         for (i, e) in eventually.iter().enumerate() {
             refined[i] += usize::from(*e);
         }
+        if stages_on {
+            gorca_rt::stage::enable(false);
+            collect_stages(&gorca_rt::stage::drain(), &mut stage_iv);
+        }
         if trial < 6 {
             eprintln!(
                 "trial {trial}: in time {} eventually {} want {want:?} pending {} live {}",
@@ -404,6 +496,32 @@ fn writer_delay_with_ten_plugins_against_none() {
         st.handoff_drain_ns as f64 / 1e3 / TRIALS as f64,
         st.handoff_poll_ns as f64 / 1e3 / TRIALS as f64
     );
+    if stages_on {
+        let mut f: Box<dyn std::io::Write> = match std::env::var("GORCA_BENCH_OUT") {
+            Ok(path) => Box::new(
+                std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(path)
+                    .unwrap(),
+            ),
+            Err(_) => Box::new(std::io::sink()),
+        };
+        for (name, v) in &mut stage_iv {
+            v.sort_unstable();
+            let mean = v.iter().sum::<u64>() as f64 / v.len().max(1) as f64;
+            let line = format!(
+                "STAGE {name:<22} n={:<5} p50={:>7.1} p95={:>7.1} p99={:>7.1} mean={:>7.1} us",
+                v.len(),
+                pct(v, 0.5) as f64 / 1e3,
+                pct(v, 0.95) as f64 / 1e3,
+                pct(v, 0.99) as f64 / 1e3,
+                mean / 1e3
+            );
+            eprintln!("{line}");
+            writeln!(f, "{line}").unwrap();
+        }
+    }
     let gov = std::fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor")
         .unwrap_or_default()
         .trim()

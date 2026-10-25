@@ -171,6 +171,19 @@ impl PluginInstance {
         // Imports charge fuel before they work; the charge is applied to the store's fuel when
         // control returns to the guest, so guest code and host work draw on one grant.
         store.call_hook(|mut ctx, kind| {
+            if gorca_rt::stage::enabled() {
+                // Diagnostic only (benchmarks): time spent inside host imports.
+                let now = gorca_rt::process::monotonic_ns();
+                let st = ctx.data_mut();
+                match kind {
+                    CallHook::CallingHost => st.probe_t = now,
+                    CallHook::ReturningFromHost => {
+                        st.probe_ns += now.saturating_sub(st.probe_t);
+                        st.probe_n += 1;
+                    }
+                    CallHook::CallingWasm | CallHook::ReturningFromWasm => {}
+                }
+            }
             if matches!(kind, CallHook::ReturningFromHost) {
                 let p = std::mem::take(&mut ctx.data_mut().pending_fuel);
                 if p > 0 {
@@ -264,13 +277,25 @@ impl PluginInstance {
                 exec: Duration::ZERO,
             });
         }
+        gorca_rt::stage::mark_here(gorca_rt::stage::id::K_G0);
         let t0 = Instant::now();
-        let cpu0 = gorca_rt::sched::thread_cpu_time();
+        // The CPU clock was read by `begin_call` a few microseconds ago: one syscall less.
+        let cpu0 = self.store.data().cpu_start;
         let r = self
             .bindings
             .gorca_ext_rules()
             .call_derive(&mut self.store, ctx, &dirty);
         let exec = t0.elapsed();
+        gorca_rt::stage::mark_here(gorca_rt::stage::id::K_G1);
+        if gorca_rt::stage::enabled() {
+            let st = self.store.data_mut();
+            let (ns, n) = (
+                std::mem::take(&mut st.probe_ns),
+                std::mem::take(&mut st.probe_n),
+            );
+            gorca_rt::stage::value_here(gorca_rt::stage::id::K_HOSTNS, ns.max(1));
+            gorca_rt::stage::value_here(gorca_rt::stage::id::K_NHOST, n.max(1));
+        }
         // The overrun rule counts CPU time of the plugin thread: a call the host descheduled for
         // a while is not an overrun (it would strike healthy plugins on a loaded desktop).
         let cpu = gorca_rt::sched::thread_cpu_time().saturating_sub(cpu0);

@@ -326,6 +326,9 @@ pub struct PluginOptions {
     /// (`D`, 0.3 ms): a parked writer wakes late from a deep idle state, a spinning one does not.
     /// Costs at most 0.3 ms of one core per focus change.
     pub writer_spin: Option<Duration>,
+    /// Pre-armed workers replay their last interactive job once per arming to warm their caches
+    /// (default off: an extra invocation of plugin code, pending the owner).
+    pub warm_on_arm: Option<bool>,
     /// `[plugins] scheduler`: the scheduling policy of the interactive handoff.
     pub scheduler: SchedulerPolicy,
     /// Most workers SPS pre-wakes per key (`None`: the ADR default of 6). A diagnostic knob of the
@@ -392,6 +395,7 @@ pub struct PluginRuntime {
     wants_url: bool,
     prewake: Arc<Prewake>,
     writer_spin: Duration,
+    warm_on_arm: bool,
     policy: SchedulerPolicy,
     sps_k_max: Option<usize>,
     sched_log: Option<PathBuf>,
@@ -567,6 +571,7 @@ impl PluginRuntime {
             wants_url,
             prewake,
             writer_spin: opts.writer_spin.unwrap_or(D_WINDOW),
+            warm_on_arm: opts.warm_on_arm.unwrap_or(false),
             policy: opts.scheduler,
             sps_k_max: opts.sps_k_max,
             sched_log: opts.sched_log.clone(),
@@ -581,6 +586,7 @@ impl PluginRuntime {
             wants_url: false,
             prewake: Arc::new(Prewake::default()),
             writer_spin: D_WINDOW,
+            warm_on_arm: false,
             policy: SchedulerPolicy::default(),
             sps_k_max: None,
             sched_log: None,
@@ -590,6 +596,12 @@ impl PluginRuntime {
     /// The key-down hub the scopes register with.
     pub fn prewake(&self) -> Arc<Prewake> {
         Arc::clone(&self.prewake)
+    }
+
+    /// The executor of the `i`-th loaded plugin (benchmarks of the call path only).
+    #[doc(hidden)]
+    pub fn bench_exec(&self, i: usize) -> Option<Box<dyn Exec>> {
+        self.entries.get(i).map(|e| e.exec())
     }
 
     /// Loaded plugin ids (diagnostics).
@@ -655,6 +667,7 @@ impl PluginService for PluginRuntime {
             Some(e.exec())
         });
         let cfg = ActorConfig {
+            warm_on_arm: self.warm_on_arm,
             spin: self.writer_spin,
             ..ActorConfig::default()
         };
@@ -707,6 +720,39 @@ impl PluginService for PluginRuntime {
 
     fn governor(&self) -> Arc<Governor> {
         Arc::clone(&self.gov)
+    }
+}
+
+/// The slot events of a reply without a heap allocation (at most two).
+mod smallvec_events {
+    use gorca_plugin_host::call::PluginReply;
+    use gorca_plugin_host::slot::Event;
+
+    pub struct Events {
+        a: [Option<Event>; 2],
+    }
+
+    impl Events {
+        pub fn one(e: Event) -> Self {
+            Self { a: [Some(e), None] }
+        }
+
+        pub fn of(r: &PluginReply) -> Self {
+            match r {
+                PluginReply::Done {
+                    wall_overrun: true, ..
+                } => Self {
+                    a: [Some(Event::CallOk), Some(Event::WallOverrun)],
+                },
+                PluginReply::Done { .. } => Self::one(Event::CallOk),
+                PluginReply::Fault { kind, .. } => Self::one(Event::Fault(*kind)),
+                PluginReply::Cancelled { .. } => Self::one(Event::Cancelled),
+            }
+        }
+
+        pub fn iter(&self) -> impl Iterator<Item = &Event> {
+            self.a.iter().flatten()
+        }
     }
 }
 
@@ -801,6 +847,12 @@ impl ModelView for RowsView {
     }
 }
 
+/// The model view of a snapshot, as the jobs read it (benchmarks of the call path only).
+#[doc(hidden)]
+pub fn bench_view(rows: Arc<gorca_core::plugin_port::FrozenRows>) -> Arc<dyn ModelView> {
+    Arc::new(RowsView { rows })
+}
+
 // ---- one scope ---------------------------------------------------------------------------
 
 struct ScopePlugin {
@@ -888,6 +940,11 @@ struct PluginScope {
     /// Cost unit of admitting replies after the wait, ns: admitting `n` costs about
     /// `unit * (n + 1)`. Tracks the recent peak (the reserve of the wait covers the tail).
     admit_unit_ns: u64,
+    /// The view of the last snapshot a job was built from (shared by the jobs of one turn).
+    view_cache: Option<(Arc<gorca_core::plugin_port::FrozenRows>, Arc<dyn ModelView>)>,
+    /// Observations of replies, handed to the scheduler off the admission path (next poll that
+    /// is not a waited one, or the next turn).
+    pending_obs: Vec<(usize, PlanInfo, ReplyTiming, u32, bool)>,
 }
 
 /// The fuel split of an interactive handoff (ADR-0026 section 2.4.2, progressive filling):
@@ -952,6 +1009,8 @@ impl PluginScope {
             turn_seq: 0,
             last_end_ns: 0,
             admit_unit_ns: ADMIT_UNIT_PRIOR_NS,
+            view_cache: None,
+            pending_obs: Vec::new(),
         }
     }
 
@@ -1015,9 +1074,17 @@ impl PluginScope {
                 cause: d.cause,
             })
             .collect();
-        let view: Arc<dyn ModelView> = Arc::new(RowsView {
-            rows: Arc::clone(&job.rows),
-        });
+        // One view per snapshot: every plugin of a turn reads the same frozen rows.
+        let view: Arc<dyn ModelView> = match &self.view_cache {
+            Some((rows, v)) if Arc::ptr_eq(rows, &job.rows) => Arc::clone(v),
+            _ => {
+                let v: Arc<dyn ModelView> = Arc::new(RowsView {
+                    rows: Arc::clone(&job.rows),
+                });
+                self.view_cache = Some((Arc::clone(&job.rows), Arc::clone(&v)));
+                v
+            }
+        };
         Some(DeriveJob {
             plugin: u32::try_from(plugin).unwrap_or(0),
             job: id,
@@ -1041,7 +1108,10 @@ impl PluginScope {
         wait: bool,
         jobs: Vec<Job>,
     ) -> Handoff {
+        // Observations of an earlier waited turn that no background poll has handed over yet.
+        self.flush_obs();
         let now = gorca_core::plugin_port::now_ns();
+        gorca_rt::stage::mark_at(gorca_rt::stage::id::SC_ENTER, 0, now);
         let spent_us = u32::try_from(now.saturating_sub(t0_ns) / 1000).unwrap_or(u32::MAX);
         // A plugin still busy with an earlier job cannot answer inside this wait; a `refinement`
         // plugin never gates a turn. Their jobs are dispatched in this turn as background class
@@ -1079,6 +1149,7 @@ impl PluginScope {
             s.end_key(mask);
             plan
         };
+        gorca_rt::stage::mark(gorca_rt::stage::id::SC_PLAN, 0);
         self.turn_seq += 1;
         let mut slots: Vec<Option<Job>> = jobs.into_iter().map(Some).collect();
         let mut planned: Vec<PlannedJob> = Vec::with_capacity(slots.len());
@@ -1133,6 +1204,7 @@ impl PluginScope {
             }
             planned.push(PlannedJob { job: d, hold });
         }
+        gorca_rt::stage::mark(gorca_rt::stage::id::SC_BUILT, 0);
         if planned.is_empty() {
             return Handoff::default();
         }
@@ -1208,6 +1280,9 @@ impl Exec for ResolvingExec {
     }
     fn warm(&mut self) {
         self.inner.warm();
+    }
+    fn warm_call(&mut self, job: &DeriveJob) -> Option<gorca_plugin_host::slot::FaultKind> {
+        self.inner.warm_call(job)
     }
 }
 
@@ -1459,6 +1534,34 @@ impl PluginScope {
                 | PluginReply::Fault { job, .. }
                 | PluginReply::Cancelled { job, .. } => *job,
             };
+            if id == gorca_plugin_host::call::WARM_JOB {
+                // A fault of a warm call: the strike machine and the mask treat it like the
+                // fault of a real call; a warm call carries no facts.
+                if let PluginReply::Fault {
+                    plugin,
+                    kind,
+                    slot_epoch,
+                    ..
+                } = r
+                    && let Some(p) = self.plugins.get_mut(plugin as usize)
+                {
+                    let was_masked = p.masked;
+                    let _ = p.slot.on_reply(slot_epoch, Event::Fault(kind), now);
+                    tracing::warn!(plugin = %p.meta.name, ?kind, "warm call faulted");
+                    let masked = Self::masked_now(p);
+                    self.runner.set_warm(plugin, false);
+                    if masked && !was_masked {
+                        p.masked = true;
+                        out.push(Reply {
+                            plugin: plugin as usize,
+                            t: 0,
+                            targets: Vec::new(),
+                            body: ReplyBody::Masked,
+                        });
+                    }
+                }
+                continue;
+            }
             if waited_only
                 && !self
                     .jobs
@@ -1488,14 +1591,14 @@ impl PluginScope {
                         ..
                     }
                 );
-            let events = if crowded {
-                vec![Event::Cancelled]
+            let events: smallvec_events::Events = if crowded {
+                smallvec_events::Events::one(Event::Cancelled)
             } else {
-                r.events()
+                smallvec_events::Events::of(&r)
             };
-            for ev in events {
+            for ev in events.iter() {
                 let before = p.slot.stale_replies();
-                let _ = p.slot.on_reply(info.slot_epoch, ev, now);
+                let _ = p.slot.on_reply(info.slot_epoch, *ev, now);
                 stale |= p.slot.stale_replies() != before;
             }
             let body = match r {
@@ -1541,6 +1644,12 @@ impl PluginScope {
                 }
             };
             let masked = Self::masked_now(p);
+            // Warming is allowed only while the plugin is unmasked, in `Ready`, and its call
+            // returned normally.
+            self.runner.set_warm(
+                u32::try_from(info.plugin).unwrap_or(u32::MAX),
+                !masked && matches!(body, ReplyBody::Done { .. }),
+            );
             out.push(Reply {
                 plugin: info.plugin,
                 t: info.t,
@@ -1571,10 +1680,24 @@ impl PluginScope {
             // They were posted before this drain: nothing else will wake the writer for them.
             (self.sink.wake)();
         }
-        // What the replies taught the scheduler: start latency (hot or cold), guest time,
-        // response time against the hold, usefulness (ADR-0026 section 2.4.7.6).
+        // What the replies taught the scheduler (ADR-0026 section 2.4.7.6) is handed over off the
+        // admission path: a waited poll only queues it; the next poll that is not a waited one
+        // (the writer's background step) feeds the scheduler, or the next plan does.
+        self.pending_obs.extend(observed);
+        if !waited_only {
+            self.flush_obs();
+        }
+    }
+
+    /// Feed the queued observations to the scheduler: start latency (hot or cold), guest time,
+    /// response time against the hold, usefulness.
+    fn flush_obs(&mut self) {
+        if self.pending_obs.is_empty() {
+            return;
+        }
+        let observed = std::mem::take(&mut self.pending_obs);
         let (turn_now, last_end) = (self.turn_seq, self.last_end_ns);
-        if let (Some(sps), false) = (&self.sps, observed.is_empty()) {
+        if let Some(sps) = &self.sps {
             let mut s = lock(&sps.sched);
             for (plugin, plan, t, exec_us, useful) in observed {
                 tracing::debug!(
@@ -2408,6 +2531,42 @@ mod tests {
         assert!(sum.replies >= 8, "{sum:?}");
         assert!(sum.exec_p50_us >= 50, "{sum:?}");
         assert_eq!(s.fallback(), None);
+    }
+
+    #[test]
+    fn a_fault_of_a_warm_call_strikes_the_slot_like_a_real_fault() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let (mut scope, _sps) = sps_scope(
+            vec![(
+                Duration::from_micros(50),
+                Priority::Interactive,
+                TrustTier::FirstParty,
+            )],
+            &seen,
+        );
+        let mut out = Vec::new();
+        // Three faults in a window back the slot off and mask the plugin (as for real calls);
+        // each strike moves the slot epoch, so each report carries the current one.
+        for _ in 0..3 {
+            let slot_epoch = scope.plugins[0].slot.slot_epoch();
+            scope.sink.send(PluginReply::Fault {
+                plugin: 0,
+                job: gorca_plugin_host::call::WARM_JOB,
+                slot_epoch,
+                kind: gorca_plugin_host::slot::FaultKind::Trap,
+                exec: Duration::ZERO,
+            });
+            scope.poll(&mut out);
+        }
+        assert!(
+            out.iter().any(|r| matches!(r.body, ReplyBody::Masked)),
+            "the plugin is masked"
+        );
+        assert!(
+            !out.iter().any(|r| matches!(r.body, ReplyBody::Done { .. })),
+            "a warm call carries no facts"
+        );
+        assert!(scope.plugins[0].masked);
     }
 
     /// Counts the DP-1 hook calls.

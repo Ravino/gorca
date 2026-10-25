@@ -22,6 +22,7 @@ pub mod guard;
 pub mod lane;
 pub mod process;
 pub mod sched;
+pub mod stage;
 pub mod supervisor;
 pub mod wait;
 pub mod watchdog;

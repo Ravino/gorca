@@ -19,6 +19,10 @@ use crate::view::ModelView;
 /// Plugin id within one runner.
 pub type PluginId = u32;
 
+/// The job id of a warm-call report (never a real job: ids start at 1). A reply with this id is
+/// a fault of a warm call; the writer feeds it to the slot's strike machine like a real fault.
+pub const WARM_JOB: JobId = 0;
+
 /// The shared interactive deadline, measured from the start of the writer turn (r4).
 pub const D_INTERACTIVE: Duration = Duration::from_micros(300);
 
@@ -273,6 +277,12 @@ pub trait Exec: Send + 'static {
     /// Build the instance off the writer turn (at start and after a fault), so the first
     /// interactive call does not pay the instantiation. Default: nothing.
     fn warm(&mut self) {}
+    /// Run `job` again only to warm caches: the effects are dropped (every import only buffers
+    /// them), fuel and capabilities are those of the real call. `Some(kind)` when the call
+    /// faulted or overran: it counts as a fault of the plugin. Default: nothing.
+    fn warm_call(&mut self, _job: &DeriveJob) -> Option<FaultKind> {
+        None
+    }
 }
 
 /// The wasmtime-backed executor of one plugin: owns the instance, rebuilds it after a fault.
@@ -382,6 +392,20 @@ impl Exec for PluginExec {
 
     fn reset(&mut self) {
         self.instance = None;
+    }
+
+    fn warm_call(&mut self, job: &DeriveJob) -> Option<FaultKind> {
+        let inst = self.instance.as_mut()?;
+        match inst.derive(job.interactive, job.epoch, &job.nodes, &job.view, job.grant) {
+            Ok(done) if !done.wall_overrun => None,
+            Ok(_) => Some(FaultKind::Watchdog),
+            Err(CallFault { kind, .. }) => {
+                // The store is not trusted after a fault: rebuild it now, off the writer's turn.
+                self.instance = None;
+                self.warm();
+                Some(kind)
+            }
+        }
     }
 
     fn warm(&mut self) {

@@ -372,3 +372,173 @@ fn every_reply_that_is_in_moves_the_end_of_the_wait_earlier() {
     assert!(out.waited < Duration::from_millis(40), "{out:?}");
     r.shutdown();
 }
+
+// ---- warm calls (M18a-4): the guards the security review asked for ----------------------------
+
+mod warm {
+    use super::*;
+    use gorca_plugin_host::call::WARM_JOB;
+    use gorca_plugin_host::slot::FaultKind;
+    use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
+
+    /// Counts replays; can fault or stall in them.
+    struct Replay {
+        calls: Arc<AtomicU32>,
+        fault: Option<FaultKind>,
+        stall: Duration,
+    }
+
+    impl Exec for Replay {
+        fn run(&mut self, job: &DeriveJob) -> PluginReply {
+            PluginReply::Cancelled {
+                plugin: job.plugin,
+                job: job.job,
+                slot_epoch: job.slot_epoch,
+            }
+        }
+        fn reset(&mut self) {}
+        fn warm_call(&mut self, _job: &DeriveJob) -> Option<FaultKind> {
+            self.calls.fetch_add(1, SeqCst);
+            if !self.stall.is_zero() {
+                std::thread::sleep(self.stall);
+            }
+            self.fault
+        }
+    }
+
+    #[derive(Default)]
+    struct Log(Mutex<Vec<(u64, bool)>>);
+
+    impl ReplySink for Log {
+        fn send(&self, r: PluginReply) {
+            let (job, fault) = match r {
+                PluginReply::Fault { job, .. } => (job, true),
+                PluginReply::Done { job, .. } | PluginReply::Cancelled { job, .. } => (job, false),
+            };
+            self.0.lock().unwrap().push((job, fault));
+        }
+    }
+
+    fn rig(
+        fault: Option<FaultKind>,
+        stall: Duration,
+        lost_after: Duration,
+    ) -> (ActorRunner, Arc<AtomicU32>, Arc<Log>) {
+        let calls = Arc::new(AtomicU32::new(0));
+        let exec: Box<dyn Exec> = Box::new(Replay {
+            calls: Arc::clone(&calls),
+            fault,
+            stall,
+        });
+        let mut r = ActorRunner::new(
+            vec![(0, exec)],
+            Box::new(|_| None),
+            Config {
+                warm_on_arm: true,
+                lost_after,
+                ..Config::default()
+            },
+        )
+        .unwrap();
+        let log = Arc::new(Log::default());
+        let sink: Arc<dyn ReplySink> = Arc::clone(&log) as Arc<dyn ReplySink>;
+        // One real interactive job, so the worker has a last job to replay.
+        r.interactive_planned(
+            &Turn::starting_at(monotonic_ns(), false),
+            vec![planned(0, 1, None)],
+            &sink,
+        );
+        std::thread::sleep(Duration::from_millis(30));
+        (r, calls, log)
+    }
+
+    fn arm_plan(r: &ActorRunner, ms: u64) {
+        assert!(
+            r.prewake_handle()
+                .arm_set(1, monotonic_ns() + ms * 1_000_000)
+        );
+    }
+
+    #[test]
+    fn a_blanket_arm_never_warms_only_a_plan_does() {
+        let (mut r, calls, _log) = rig(None, Duration::ZERO, Duration::from_secs(10));
+        r.set_warm(0, true);
+        assert!(r.prewake_handle().arm(Duration::from_millis(30)));
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(calls.load(SeqCst), 0, "a blanket arm is not a plan");
+        arm_plan(&r, 30);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(calls.load(SeqCst), 1);
+        // Once per arming.
+        std::thread::sleep(Duration::from_millis(30));
+        assert_eq!(calls.load(SeqCst), 1);
+        arm_plan(&r, 30);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(calls.load(SeqCst), 2);
+        r.shutdown();
+    }
+
+    #[test]
+    fn nothing_is_replayed_unless_the_writer_says_the_plugin_is_enabled_and_unmasked() {
+        let (mut r, calls, _log) = rig(None, Duration::ZERO, Duration::from_secs(10));
+        // Never allowed (no real call has returned normally yet).
+        arm_plan(&r, 30);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(calls.load(SeqCst), 0);
+        r.set_warm(0, true);
+        r.set_warm(0, false);
+        arm_plan(&r, 30);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(calls.load(SeqCst), 0, "masked or in backoff: no replay");
+        r.shutdown();
+    }
+
+    #[test]
+    fn a_replay_produces_no_reply_and_so_no_facts() {
+        let (mut r, calls, log) = rig(None, Duration::ZERO, Duration::from_secs(10));
+        r.set_warm(0, true);
+        let before = log.0.lock().unwrap().len();
+        arm_plan(&r, 30);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(calls.load(SeqCst), 1);
+        assert_eq!(
+            log.0.lock().unwrap().len(),
+            before,
+            "a clean replay posts nothing"
+        );
+        r.shutdown();
+    }
+
+    #[test]
+    fn a_faulting_replay_is_reported_as_a_fault_and_ends_warming() {
+        let (mut r, calls, log) = rig(
+            Some(FaultKind::Trap),
+            Duration::ZERO,
+            Duration::from_secs(10),
+        );
+        r.set_warm(0, true);
+        arm_plan(&r, 30);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(calls.load(SeqCst), 1);
+        assert!(
+            log.0.lock().unwrap().contains(&(WARM_JOB, true)),
+            "the fault reaches the writer to be struck like a real one"
+        );
+        arm_plan(&r, 30);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(calls.load(SeqCst), 1, "no replay after a fault");
+        r.shutdown();
+    }
+
+    #[test]
+    fn a_stuck_replay_is_seen_by_the_wedged_actor_detector() {
+        let (mut r, calls, _log) = rig(None, Duration::from_millis(300), Duration::from_millis(30));
+        r.set_warm(0, true);
+        arm_plan(&r, 100);
+        std::thread::sleep(Duration::from_millis(100));
+        assert_eq!(calls.load(SeqCst), 1);
+        let _ = r.supervise_now();
+        assert!(r.replaced(0) >= 1, "running_since covers the replay");
+        r.shutdown();
+    }
+}
