@@ -7,6 +7,8 @@ package gorca:ext@0.11.0;
 // to `site`), moves the host's inline world in crates/gorca-plugin-host/src/host.rs to 0.11.0,
 // and ports every guest (plugins/telegram-web, the host test guest, fixtures) in the same change.
 // Owner rule (2026-10-25): no backward compatibility, no version negotiation, no 0.10 host path.
+// 2026-10-26: the same single 0.11 bump (slice WIT-11) also carries the virtual-actions interfaces of
+// ADR-0028 (wit/drafts/gorca-ext-0.11-vactions/); there is no intermediate 0.11.x.
 
 /// Required export of every world that has an interactive export (ADR-0026 §2.4.8). A plugin
 /// with nothing to warm implements it with an empty body (the SDK's default).

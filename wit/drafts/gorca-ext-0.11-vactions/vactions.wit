@@ -3,7 +3,7 @@ package gorca:ext@0.11.0;
 
 // DRAFT (paper only, ADR-0028). Not built, not linked. Lands with the 0.11 bump of ADR-0026
 // §2.4.8 (slice M18a-4w renames wit/gorca-ext-0.10/ to wit/gorca-ext-0.11/). The implementing
-// slice VA-1 moves `vtypes` and `vactions` into host.wit, REPLACES the 0.10 `actions` interface
+// slice WIT-11 (one bump together with the warmup export, ADR-0028 §2.6) moves `vtypes` and `vactions` into host.wit, REPLACES the 0.10 `actions` interface
 // by the one below (0.10 `activate`, `focus` and `pointer-click` are deleted, not kept beside
 // it), adds `import vactions;` to `app-module` (and so to `site`), and ports every guest in the
 // same change. Owner rule (2026-10-25): no backward compatibility, no version negotiation.

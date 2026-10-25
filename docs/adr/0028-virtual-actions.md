@@ -1,6 +1,7 @@
 # ADR-0028: Virtual actions on the fused semantic model
 
-Status: **Proposed** (r1, 2026-10-26). Owner: architect.
+Status: **Accepted** (r2, 2026-10-26: owner answers QV-1..QV-7 = the recommendations, plus the verbosity requirement
+§2.2.1; r1 Proposed 2026-10-26). Owner: architect.
 Amends: ADR-0026 r7.1 (the 0.10 `actions` interface, AC-4 and the `pointer` permission row; §2.7 permissions table
 gains `offer-actions` and `keys`), ADR-0025 MI-1 (the "a pointer effect needs a new ADR" clause: this is that ADR),
 ADR-0022 §2.9 (a second add-on side table beside `ExtCats`), ADR-0024 §2.3.3 (act on what was spoken, extended to
@@ -132,14 +133,14 @@ pub struct VActs(SmallVec<[VAction; 2]>);   // per host node, <= 8
 
 - **Hint.** `PresIr` gets core field kind `ACTIONS` (code 15, appended to the v1 registry; ADR-0022 §2.5) composed
   when the node has at least one *available* virtual action (an action whose plan needs an absent capability, e.g.
-  the pointer service, is listed but not counted). Content: `Msg(vactions.hint, count)` → en "actions" / ru
-  "действия" (count spoken only when > 1: "2 actions"). Order: after states, before description. Presented on
+  the pointer service, is listed but not counted). Content: `Msg(vactions.hint)` → en "has actions" / ru
+  «есть действия» (owner QV-2; no count). Order: after states, before description. Presented on
   focus, browse line entry, object navigation, quick nav and where-am-I; **not** in say-all and not on
-  re-presentation of the same node within one browse line. Setting `[vactions] announce = "hint" | "cue" | "off"`
-  (default `hint`; `cue` plays the core `actions` earcon instead). Braille: abbreviation `act` (later, with
-  braille M-slices).
+  re-presentation of the same node within one browse line. Governed by `report.actions_hint` (§2.2.1).
+  Braille: abbreviation `act` (later, with braille M-slices).
 - **List.** Core command `vactions.list` opens the core list surface (the one the M15a profile chooser uses;
-  SS-4, gorca's own UI): first the node's native actions (connector names mapped to catalog words), then virtual
+  SS-4, gorca's own UI; default chord `gorca+Shift+A` in every preset, owner QV-3, conflict-checked in VA-1
+  against ADR-0005's preset tables): first the node's native actions (connector names mapped to catalog words), then virtual
   actions in owner order (T2 before T3). Each virtual entry reads `label`; a **T3** entry reads
   `label, <kind word>, <add-on name>: <target role> <target observed name>` (host-built text describing what the
   plan's first effect will touch, VS-3). Enter runs the entry; Escape closes. If there is exactly one entry, the
@@ -150,13 +151,41 @@ pub struct VActs(SmallVec<[VAction; 2]>);   // per host node, <= 8
   Enter, Space or any unmodified key. Focus mode is unchanged (keys go to the application).
 - **Dedicated key.** `vactions.primary` runs the node's primary virtual action (any tier, T3 included, because the
   chord is a core chord the user pressed knowingly and the T3 attribution is spoken first). Unbound by default.
-- **Virtual button** (`show = button`, **T2 only**; T3 degrades to `attached`). The browse line builder inserts a
+- **Virtual button** (`show = button`, **T2 only**, owner QV-4; T3 degrades to `attached`). Spoken exactly like a
+  native button (no "virtual" word). Governed by `report.virtual_buttons` (§2.2.1). The browse line builder inserts a
   synthetic item after the host's own items: role `button`, name = label, key `NodeKey::virtual(owner, host, id)`
   in a reserved key space. It is part of the published view only: never in the observed view, never matched by any
   selector (PF-2 holds), never sent to a connector. Browse arrows, quick nav `B`, the elements list and object
   navigation (last child of the host) reach it; Enter on it runs the action. `explain` names the owner.
 - **Outcome speech.** On success the core says nothing when the plan moved focus or the cursor (the new place is
-  spoken by the normal pipeline); otherwise it speaks the label once ("Reply"). Failures speak one sentence (§2.5).
+  spoken by the normal pipeline); otherwise it speaks the label once ("Reply") as a confirmation under the existing
+  `verbosity.confirmations` (`brief` drops it). Failures speak one sentence (§2.5) and are never silenced.
+
+#### 2.2.1 Verbosity (owner requirement, r2)
+
+Every announcement this ADR adds is a **report field** of the verbosity system: ADR-0016 `report.*` keys, compiled
+once per effective snapshot into `ReportFlags` (`crates/gorca-config/src/profiles/resolve.rs:35`, u64) and consumed by
+`compose` through `ComposeCtx.flags` (`crates/gorca-present/src/compose.rs:31`, an interim u32). Today no `report.*`
+key exists and both values are 0; M22d was to introduce them. VA-1 therefore adds the first keys and the plumbing
+(config u64 → `ComposeCtx`), and M22d adopts it unchanged.
+
+| Key | Values (default) | Bits | Silences | Never silenced |
+|---|---|---|---|---|
+| `report.actions_hint` | `word` \| `cue` \| `off` (`word`) | 2 | the "has actions" field (`cue` = the core `actions` earcon, no words) | Enter rule VA-P1, `vactions.list`, `vactions.primary` |
+| `report.virtual_buttons` | `true` \| `false` (`true`) | 1 | the virtual button as a browse / object-nav / quick-nav stop | the action itself (list, Enter primary) |
+| `report.destructive_warning` | `full` \| `brief` \| `cue` (`full`) | 2 | the confirmation wording: `full` "{label}: this cannot be undone. Press again to confirm", `brief` "Again: {label}", `cue` the core `confirm` earcon only | the second press itself (VS-8). There is no `off`: a silently pending confirmation makes the first press sound like a failure |
+
+- **Scope and layering.** `report.*` are Focus-scope keys (ADR-0016 §2.3 table): settable globally, per profile,
+  per app and per site, with the usual origin explain. Not privacy keys.
+- **Presets.** The verbosity presets (owner QA-2) set them as one bundle: `verbosity.level = normal` → `word` /
+  `true` / `full`; `brief` → `cue` / `true` / `brief`. An explicit `report.*` key beats the preset; `verbosity.cycle`
+  therefore also switches the hint.
+- **Quick toggle.** Command `report.actions_hint_cycle` (word → cue → off → word, speaks the new value; context ANY,
+  `max_press` 1), proposed default chord `gorca+Ctrl+Shift+A` subject to the VA-1 conflict check, and
+  `report.virtual_buttons_toggle` (unbound). Both behave like the existing `*_toggle` commands: they change the
+  session value of the active layer, kept only by the explicit save (ADR-0005, ADR-0016 touched set).
+- **Not report fields** (security text, VS-3/VS-4): the T3 attribution and target description in the list,
+  "Changed, not done", and every failure sentence.
 
 ### 2.3 Execution: the closed effect set
 
@@ -166,7 +195,7 @@ pub struct VActs(SmallVec<[VAction; 2]>);   // per host node, <= 8
 | `Focus(t)` | `DocAction::Focus` / `Component.GrabFocus` | — |
 | `ScrollIntoView(t)` | `DocAction::ScrollIntoView` | — |
 | `Pointer{..}` | `ReaderEffect::PointerAt { act: Click(b), if_covered: Refuse, item: None }` → resolver → `PointerSink` (helper v2) | **G-1** `AtAct::DoubleClick(b)` (helper v2 already has double click at the pointer); **G-2** `Aim` in `BackendOp::Locate` (fraction of the visible rect; "outside a descendant"); **G-3** hit-test acceptance for an aimed point: the answer must be the target or a descendant that is not the excluded node (Blink keeps its `blink-hit-test` exemption) |
-| `Keys(chords)` | `KeyInjector` | **G-6 gap**: no injector exists (stub `NotAvailable`; helper has no keyboard device). Plans with `Keys` are admitted for T2 but always "Not available" until a backend lands: helper v3 virtual keyboard behind a new opt-in `keyboard` cap (same allow-list model as `pointer`) or RemoteDesktop/libei (portal consent). Choice deferred (QV-6) |
+| `Keys(chords)` | `KeyInjector` | **G-6 gap**: no injector exists (stub `NotAvailable`; helper has no keyboard device). Plans with `Keys` are admitted for T2 but always "Not available" until a backend lands: helper v3 virtual keyboard behind a new opt-in `keyboard` cap (same allow-list model as `pointer`) or RemoteDesktop/libei (portal consent). Chosen by measurement in VA-5 (QV-6) |
 | `Await{sel, within}` | — | **G-5** the node writer (doc actor / app actor) answers `AwaitReq { sel, after: RevToken, within }` with the first node that **appeared after** `after` and matches `sel` on the observed view, or `Timeout`; native selector evaluation, no plugin code |
 | `Cursor(t)` | browse/review cursor move (ADR-0026 `move-cursor` path) | — |
 
@@ -190,7 +219,7 @@ pub enum CancelWhy { NewGesture, AnyKey, FocusLeftScope, ActionWithdrawn, ScopeC
 
 | State | Event | Next | Effect |
 |---|---|---|---|
-| Idle | gesture (list Enter, Enter rule VA-P1, `vactions.primary`, virtual button) | Confirming if destructive, else Validating | destructive: speak "Press again to confirm: {label}" |
+| Idle | gesture (list Enter, Enter rule VA-P1, `vactions.primary`, virtual button) | Confirming if destructive, else Validating | destructive: the warning per `report.destructive_warning` |
 | Confirming | same gesture within 2 s | Validating | — |
 | Confirming | timeout / any other key | Cancelled | none spoken on other key; "Cancelled" on timeout |
 | Validating | signature matches, capabilities available, rate ok | Stepping{0} | emit step 0 |
@@ -216,7 +245,7 @@ may use, spoken on install/enable) and `keys`. Existing `act`, `navigate`, `poin
 | `Invoke` | `act` | `act` + per-plugin user consent | target not secret, not in a system scope for T3 |
 | `Focus` | `act` | `act` + consent | same |
 | `ScrollIntoView`, `Cursor` | `navigate` | `navigate` | — |
-| `Pointer` | `pointer` | **never** (QP-5 unchanged) | helper `pointer` cap (MI-9: the owner writes it), `mouse.enabled`, `[vactions] pointer = true` (default true for T2), `if_covered` forced to `Refuse` whatever `mouse.if_covered` says |
+| `Pointer` | `pointer` | **never** (QP-5 unchanged) | helper `pointer` cap (MI-9: the owner writes it), `mouse.enabled`, `[vactions] pointer = true` (default true for T2, owner QV-7; every run is in the VS-9 audit line), `if_covered` forced to `Refuse` whatever `mouse.if_covered` says |
 | `Keys` | `keys` | **never** | focus must be inside the host's application and document at run time; printable keysyms without Ctrl/Alt/Super refused at admission (no text entry); never while focus is editable or secret |
 | `Await` | with any of the above | only after `Invoke` | ≤ 1 per plan for T3 |
 | `show = button`, `primary` on Enter | yes | no (degrade to attached / list-only) | — |
@@ -245,20 +274,25 @@ Trust affects facts (ADR-0026 PF-5), **not input power**: T3-trusted gets no eff
 - **VS-6 Secrets and system scopes.** No action on, inside, or targeting a secret node; no T3 action in SS-1..SS-4;
   `Keys` never while focus is editable or secret.
 - **VS-7 No typing.** `Keys` carries chords, not text, and refuses printable keys without Ctrl/Alt/Super.
-- **VS-8 Destructive kinds** are confirmed by a second press within 2 s, are never `primary`, and are never run
-  by Enter.
+- **VS-8 Destructive kinds** are confirmed by a second press within 2 s after a spoken warning (owner QV-5; wording
+  per `report.destructive_warning`), are never `primary`, and are never run by Enter.
 - **VS-9 Audit.** One INFO line per run: `vaction run owner=<id> action=<id> kind=<code> steps=<kinds>
   outcome=<code> ms=<n>`; no label, no name, no text (ADR-0026 logging rule).
 - **VS-10 Fail open, fail alone.** A failing plan costs only that run; repeated failures do not strike the slot
   (the page, not the plugin, may be at fault); malformed offers do (§2.1).
 
 Failure sentences (catalog `vactions.msg`, en/ru): "Not available", "Changed, not done", "Mouse not available"
-(+ ADR-0025 permission hint), "Covered", "No location", "Busy", "Cancelled", "Press again to confirm: {label}".
+(+ ADR-0025 permission hint), "Covered", "No location", "Busy", "Cancelled". The hint and the destructive warning
+are report fields (§2.2.1).
 
 ### 2.6 WIT 0.11 and the one-ABI convergence
 
 Minimal additions in the 0.11 bump (no compatibility path, owner rule 2026-10-25), draft
-`wit/drafts/gorca-ext-0.11-vactions/vactions.wit`:
+`wit/drafts/gorca-ext-0.11-vactions/vactions.wit`. **One slice, one bump** (orchestrator 2026-10-26): the 0.11 bump
+carries both the required `warmup` export (ADR-0026 §2.4.8, draft `wit/drafts/gorca-ext-0.11-warmup/`) and the
+interfaces below in a single slice **WIT-11** (M18a-4w's bump extended): package renamed to `wit/gorca-ext-0.11/`,
+host world, SDK, telegram-web, the host test guest and all fixtures ported once. VA-1 then implements the host side
+against the frozen 0.11 package; there is no intermediate 0.11.x.
 
 - `vtypes`: `vaction-kind` (u8 registry code), `step-target`, `aim`, `button`, `pointer-step`, `key-chord`,
   `await-step`, the closed `step` variant, `show-as`, the `vaction` record.
@@ -320,16 +354,19 @@ Prerequisite **G-7**: the plugin host implements only `[[watch]]` (tag, one clas
 `crates/gorca-plugin-host/src/package.rs:110-135`); `[[selector]]` rows with ids (ADR-0019 §4.4) and
 `[[vaction]]` rows are new manifest parsing in VA-1, with the same native matcher.
 
-Behaviour: browse cursor on a message → "…, actions"; Enter → the menu opens and focus lands on its first item
+Behaviour: browse cursor on a message → "…, has actions" (unless `report.actions_hint` is off or `cue`); Enter → the menu opens and focus lands on its first item
 (Telegram's menu then handles arrows/Enter/Escape); `vactions.list` → "Message menu", "Reply". Without the helper
 `pointer` cap the hint is silent and the list says "Mouse not available" with the permission hint. Telegram K
 (`bubble[role=article]`) is a follow-up after a live check of its handlers.
 
-Slice order (each ≤ 2 days): **VA-1** model side table, admission, `PresIr ACTIONS`, list surface, Enter rule,
-executor with `Invoke`/`Focus`/`ScrollIntoView`/`Cursor`, WIT/manifest parsing (behind `[vactions] enabled`,
-default off); **VA-2** pointer steps (G-1..G-3) and `Await` (G-5); **VA-TG1** the rows above + a fixture test on
+Slice order (each ≤ 2 days), after **WIT-11** (above): **VA-1** model side table, admission, `PresIr ACTIONS`, list surface, Enter rule,
+executor with `Invoke`/`Focus`/`ScrollIntoView`/`Cursor`, manifest parsing, the `report.*` keys, presets,
+`ReportFlags` plumbing and the toggle commands of §2.2.1 (behind `[vactions] enabled`, default off); **VA-2** pointer steps (G-1..G-3) and `Await` (G-5); **VA-TG1** the rows above + a fixture test on
 the recorded Telegram tree and one live run by the owner; **VA-3** virtual buttons; **VA-4** named `Invoke` for
-documents (G-4); **VA-7** `aria-actions` / AccessKit custom actions; `Keys` only after QV-6.
+documents (G-4); **VA-7** `aria-actions` / AccessKit custom actions; **VA-5** `Keys`: the slice first measures, on the owner's
+Wayland / GNOME 48 session, a helper virtual keyboard device (Clutter `KEYBOARD_DEVICE` behind a new opt-in
+`keyboard` cap) against RemoteDesktop/libei (portal consent, `gorca-input-inject`), ships whichever works (owner
+QV-6) and records the choice in decisions.md.
 
 ## 3. Alternatives considered
 
@@ -368,20 +405,23 @@ and are settled by the owner and the VA-TG1 live run.
 | VM-5 | adversarial set VA-A1..VA-A10 (label/target mismatch, target outside subtree, forged handle, offer on secret node, T3 pointer/keys/Enter/button, action withdrawn mid-run, target renamed between announce and run, run without gesture, rate flood) | 0 effects performed |
 | VM-6 | cancellation: key pressed during an `Await` | no further step emitted; ≤ 1 helper call in flight expires unused |
 
-## 6. Open questions for the owner
+## 6. Owner answers (2026-10-26)
 
-- **QV-1 Enter precedence.** Recommended VA-P1: native activation first, then a first-party primary action, never
-  third-party. Alternative: first-party primary wins even over a native action (fixes pages whose native click is
-  wrong, but Enter then differs from the page's own behaviour).
-- **QV-2 Hint.** Word "actions" (recommended), an earcon, or nothing by default.
-- **QV-3 Keys.** `vactions.list` default chord: `gorca+Shift+A` in the Orca preset (Orca's own binding); NVDA and
-  laptop presets need a conflict check (ADR-0005). `vactions.primary`: unbound, or `gorca+Enter`?
-- **QV-4 Virtual buttons.** First-party only (recommended); spoken as plain "button", or "virtual button"?
-- **QV-5 Destructive confirmation.** Second press within 2 s (recommended) or a yes/no prompt.
-- **QV-6 Key injection backend** (needed for `Keys`, e.g. "reply to last message" via Ctrl+Up): helper v3 virtual
-  keyboard behind a new `keyboard` cap, or RemoteDesktop/libei with portal consent. Not needed for VA-TG1.
-- **QV-7 Pointer default** for first-party actions: `[vactions] pointer = true` once the helper cap exists
-  (recommended), or a separate opt-in per plugin.
+All seven recommendations accepted:
+
+| Id | Answer |
+|---|---|
+| QV-1 | native activation first, then a first-party primary action, never third-party (VA-P1) |
+| QV-2 | hint en "has actions", ru «есть действия»; a report field (§2.2.1) |
+| QV-3 | `gorca+Shift+A` lists actions (all presets; conflict check in VA-1); `vactions.primary` unbound |
+| QV-4 | virtual buttons first-party only, spoken like a normal button |
+| QV-5 | destructive kinds: second press after a spoken warning |
+| QV-6 | key backend chosen by measurement in VA-5 (helper keyboard device vs libei) |
+| QV-7 | first-party pointer use allowed by default, with the VS-9 audit line |
+
+Requirement added with the answers: every new announcement is a per-field verbosity setting, global and per
+profile, quick to toggle, and silencing it never removes the behaviour (§2.2.1, VA-11). Target user: a fast
+listener (about 1000 words/min) who knows the flow and turns the hints off.
 
 Unverified: the exact AT-SPI relation name Firefox uses for `aria-actions` on ATK (`ATSPI_RELATION_ACTION` was not
 found in `refs/at-spi2-core/atspi/atspi-constants.h`); that a right click on the bubble centre never lands on a link
@@ -403,7 +443,13 @@ alternative).
 - **VA-8** At most one plan runs; a newer gesture or any user key cancels it; late replies are dropped by `RunId`.
 - **VA-9** Destructive kinds are confirmed and never primary.
 - **VA-10** Every run leaves one audit line without content text.
+- **VA-11** Silencing a report field (§2.2.1) never changes what a gesture does; failure and security sentences are
+  not report fields.
 
 ## 8. Changelog
+
+**r2 (2026-10-26)** — Accepted. Owner answers QV-1..QV-7 (§6); hint "has actions" / «есть действия»; §2.2.1
+verbosity (`report.actions_hint`, `report.virtual_buttons`, `report.destructive_warning`, presets, quick toggle,
+VA-11); one WIT-11 slice for the warm hook and virtual actions; VA-5 key backend by measurement.
 
 **r1 (2026-10-26)** — initial proposal.
