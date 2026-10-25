@@ -883,7 +883,9 @@ spoken permission review and the trust UI, `route-changed`.
     dropped. (C-1) A plugin in backoff is unmasked when the backoff has run out (the runner raises
     `BackoffExpired`, the scope keeps the writer ticking meanwhile); a mask retracts the plugin's
     facts. (P-1) The document URL is read only when a loaded plugin matches on URLs, beside the
-    first block fetch, which waits for it at most 50 ms.
+    first block fetch, which never waits for it: the block is published at once and the URL
+    follows as a later `RouteChanged` hint. A URL-scoped scope then opens late and replays the rows
+    already in the document, so its facts arrive as refinements.
 13. (r5.1) Latency. Keypress pre-wake: the keyboard pump calls `Prewake::key_down` (rate limited to
     one per 20 ms, never blocking), which keeps every open scope's idle workers spinning for 8 ms,
     so they run when the focus change brings the job. The writer spins for the whole bounded window

@@ -75,10 +75,10 @@ pub struct SourceConfig {
     /// What this engine's AT-SPI tree needs on top of the generic build (data from the
     /// connector's quirk table, never decided here from a name).
     pub quirks: EngineQuirks,
-    /// Read the document URL (`Document.GetAttributes`) and report it after every `Reset`. Only
-    /// when some loaded plugin matches on URLs: otherwise the round trip is never made. It runs
-    /// beside the first block fetch and the first block waits for it at most
-    /// [`URL_GRACE`] after it is ready.
+    /// Read the document URL (`Document.GetAttributes`) and report it as a `RouteChanged` hint.
+    /// Only when some loaded plugin matches on URLs: otherwise the round trip is never made.
+    /// The read runs beside the build and **never delays the first block**: the hint follows as
+    /// a batch of its own when the answer arrives (and after every later `Reset`).
     pub report_url: bool,
     /// Events that did not fit while dormant, after which a wake rebuilds from scratch anyway.
     pub dormant_marks: usize,
@@ -453,20 +453,6 @@ async fn read_node_raw(
     Some((role, state, name, attrs, target))
 }
 
-/// How long the first block waits for the URL once the block itself is ready.
-pub const URL_GRACE: Duration = Duration::from_millis(50);
-
-/// Collect the URL task before the first block leaves (the Reset is followed by the hint). A URL
-/// that is not there within [`URL_GRACE`] is given up: the page then matches no site plugin.
-async fn settle_url(live: &mut Live) {
-    if let Some(h) = live.url_task.take() {
-        live.out.url = match tokio::time::timeout(URL_GRACE, h).await {
-            Ok(Ok(u)) => u,
-            Ok(Err(_)) | Err(_) => None,
-        };
-    }
-}
-
 /// The URL of the document: `Document.GetAttributes` carries `DocURL` (Gecko) or `URI` (Blink).
 /// One call under a one-second deadline (the first block waits for it, so the scope can open
 /// before any node is fed); `None` when the engine does not say (the page then matches no
@@ -497,8 +483,6 @@ async fn fetch_doc_url(app: &AppConn, root: &str) -> Option<Arc<str>> {
 
 /// Mutable per-document state of the running source.
 struct Live {
-    /// The URL read beside the first block (only with `report_url`).
-    url_task: Option<tokio::task::JoinHandle<Option<Arc<str>>>>,
     /// The rectangle request in flight (label inference); a newer one aborts it.
     extents_task: Option<tokio::task::JoinHandle<()>>,
     ident: IdentityMap,
@@ -727,7 +711,6 @@ const ROOT_ERROR_LIMIT: u32 = 3;
 impl AtspiDocSource {
     async fn run(mut self, mut ctx: DocSourceCtx) -> Result<(), SourceError> {
         let mut live = Live {
-            url_task: None,
             extents_task: None,
             ident: IdentityMap::new(self.config.use_dom_id),
             paths: PathTable::default(),
@@ -756,12 +739,12 @@ impl AtspiDocSource {
             touched_overflow: false,
         };
         let mut flight: Option<Flight> = None;
-        if self.config.report_url {
-            let (app, root) = (Arc::clone(&self.app), self.root_path.clone());
-            live.url_task = Some(tokio::spawn(
-                async move { fetch_doc_url(&app, &root).await },
-            ));
-        }
+        // The URL is read beside the build; its answer is reported as a hint when it comes.
+        let mut url_job: Option<tokio::task::JoinHandle<Option<Arc<str>>>> =
+            self.config.report_url.then(|| {
+                let (app, root) = (Arc::clone(&self.app), self.root_path.clone());
+                tokio::spawn(async move { fetch_doc_url(&app, &root).await })
+            });
 
         // Build. A failed block fetch is the one hard error: nothing to mirror.
         let t_attach = Instant::now();
@@ -782,7 +765,6 @@ impl AtspiDocSource {
                 }
                 Ok((a, _, _)) => {
                     // Everything fitted in the first block.
-                    settle_url(&mut live).await;
                     self.finish_build(&mut live, &ctx, &[&a], t_attach, true);
                     None
                 }
@@ -798,14 +780,12 @@ impl AtspiDocSource {
             )
             .await
             .map_err(|e| map_fetch(&e))?;
-            settle_url(&mut live).await;
             self.finish_build(&mut live, &ctx, &[&doc], t_attach, true);
             None
         };
         if let Some((a, plan, consumed)) = first {
             // Push the top of the document now; fetch the rest while the mirror is already usable.
             let n_a = a.block.node_count();
-            settle_url(&mut live).await;
             register_locals(&mut live, &a);
             let deltas = a
                 .block
@@ -862,6 +842,21 @@ impl AtspiDocSource {
             };
             tokio::select! {
                 () = ctx.shutdown.cancelled() => return Ok(()),
+                url = async {
+                    match url_job.as_mut() {
+                        Some(h) => h.await,
+                        None => std::future::pending().await,
+                    }
+                }, if url_job.is_some() => {
+                    url_job = None;
+                    if let Ok(Some(u)) = url {
+                        live.out.url = Some(Arc::clone(&u));
+                        live.out.emit(
+                            &ctx.sink,
+                            vec![DocDelta::Hint(DocHint::RouteChanged { url: u })],
+                        );
+                    }
+                }
                 req = ctx.requests.recv() => {
                     let Some(req) = req else { return Ok(()) };
                     self.handle_request(&mut live, &ctx, &mut flight, req).await;

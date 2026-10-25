@@ -2370,40 +2370,65 @@ async fn without_a_url_consumer_the_url_is_never_asked_for_and_the_first_block_i
     h.shutdown.cancel();
 }
 
+/// Waits for the `RouteChanged` hint; `None` if none comes within `within`.
+async fn next_url_hint(h: &mut Harness, within: Duration) -> Option<(Duration, String)> {
+    let t0 = Instant::now();
+    while let Some(left) = within.checked_sub(t0.elapsed()) {
+        match tokio::time::timeout(left, h.rx.deltas.recv()).await {
+            Ok(Some(DocDelta::Hint(gorca_model::DocHint::RouteChanged { url }))) => {
+                return Some((t0.elapsed(), url.to_string()));
+            }
+            Ok(Some(_)) => {}
+            Ok(None) | Err(_) => return None,
+        }
+    }
+    None
+}
+
 #[tokio::test]
-async fn a_wanted_url_is_read_beside_the_block_and_follows_the_reset() {
+async fn a_wanted_url_is_read_beside_the_block_and_follows_as_a_hint() {
     let (fake, conn) = Fake::start(1).await;
     let (doc, _ul, _lis) = fake.list(3).await;
     fake.tree.lock().unwrap().doc_url = Some("https://web.telegram.org/a/".into());
     let mut h = start_source_full(fake, conn, doc, true, 400, true).await;
-    let (_took, deltas) = first_reset(&mut h).await;
-    let hint = deltas.iter().find_map(|d| match d {
-        DocDelta::Hint(gorca_model::DocHint::RouteChanged { url }) => Some(url.to_string()),
-        _ => None,
-    });
-    assert_eq!(hint.as_deref(), Some("https://web.telegram.org/a/"));
+    let hint = next_url_hint(&mut h, Duration::from_secs(3)).await;
+    assert_eq!(
+        hint.map(|(_, u)| u).as_deref(),
+        Some("https://web.telegram.org/a/")
+    );
     h.shutdown.cancel();
 }
 
 #[tokio::test]
-async fn a_slow_url_costs_the_first_block_at_most_the_grace() {
+async fn a_slow_url_never_delays_the_first_block_and_arrives_as_a_later_hint() {
     let (fake, conn) = Fake::start(1).await;
     let (doc, _ul, _lis) = fake.list(3).await;
     {
         let mut t = fake.tree.lock().unwrap();
         t.doc_url = Some("https://web.telegram.org/a/".into());
-        t.doc_url_delay = Duration::from_secs(1);
+        t.doc_url_delay = Duration::from_millis(600);
     }
     let mut h = start_source_full(fake, conn, doc, true, 400, true).await;
-    let (took, deltas) = first_reset(&mut h).await;
-    // The block fetch of this toy page takes a few ms; the URL adds at most the grace.
+    let t0 = Instant::now();
+    let mut seen_reset_at = None;
+    while seen_reset_at.is_none() {
+        match tokio::time::timeout(Duration::from_secs(5), h.rx.deltas.recv()).await {
+            Ok(Some(DocDelta::Reset { .. })) => seen_reset_at = Some(t0.elapsed()),
+            Ok(Some(DocDelta::Hint(_))) => panic!("the URL came before the first block"),
+            Ok(Some(_)) => {}
+            Ok(None) | Err(_) => break,
+        }
+    }
+    let took = seen_reset_at.expect("a Reset");
     assert!(
-        took < gorca_doc_source_atspi::source::URL_GRACE + Duration::from_millis(400),
-        "first block after {took:?}"
+        took < Duration::from_millis(400),
+        "first block after {took:?}: the URL read must not delay it"
     );
-    assert!(
-        !deltas.iter().any(|d| matches!(d, DocDelta::Hint(_))),
-        "a URL that did not come in time is not reported"
+    let hint = next_url_hint(&mut h, Duration::from_secs(3)).await;
+    assert_eq!(
+        hint.map(|(_, u)| u).as_deref(),
+        Some("https://web.telegram.org/a/"),
+        "the URL is delivered later as a hint"
     );
     h.shutdown.cancel();
 }

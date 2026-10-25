@@ -103,6 +103,10 @@ struct DocPlugins {
     engine: u16,
     verified: bool,
     open: Option<(PluginBridge, PluginSources)>,
+    /// The rows of a document whose scope is waiting for its URL (the URL arrives after the first
+    /// block, never before it): replayed into the bridge when the scope opens, so the plugins
+    /// derive what is already there. Empty unless some plugin matches on URLs.
+    waiting: HashMap<u32, Row>,
 }
 
 impl std::fmt::Debug for DocPlugins {
@@ -224,6 +228,7 @@ impl FuseStage {
             engine,
             verified,
             open: None,
+            waiting: HashMap::new(),
         });
         self
     }
@@ -255,7 +260,13 @@ impl FuseStage {
             return;
         };
         let metas = runner.plugins().to_vec();
-        let bridge = PluginBridge::new(runner, pl.service.governor(), scope);
+        let mut bridge = PluginBridge::new(runner, pl.service.governor(), scope);
+        // A scope that opens late (the URL came after the first block) learns what is there.
+        let mut rows: Vec<(u32, Row)> = pl.waiting.drain().collect();
+        rows.sort_by_key(|(k, _)| *k);
+        for (k, row) in rows {
+            bridge.upsert(k, row);
+        }
         let sources = PluginSources::register(&mut self.ivm, &metas);
         pl.open = Some((bridge, sources));
     }
@@ -312,6 +323,7 @@ impl FuseStage {
     fn reset(&mut self) {
         // A new document: the scope closes (its actors stop) and opens again on the new URL.
         if let Some(p) = self.plugins.as_mut() {
+            p.waiting.clear();
             p.open = None;
         }
         self.ivm = engine(&self.setup);
@@ -372,6 +384,9 @@ impl FuseStage {
             return;
         }
         for x in all {
+            if let Some(pl) = self.plugins.as_mut() {
+                pl.waiting.remove(&x.0);
+            }
             if let Some(b) = self.bridge() {
                 b.remove(x.0);
             }
@@ -411,8 +426,16 @@ impl FuseStage {
 
     fn upsert(&mut self, n: &SrcNode, seq: u64) {
         let Some(ix) = self.alloc(n.id) else { return };
-        if let Some(b) = self.bridge() {
-            b.upsert(ix.0, row_of(n));
+        if let Some(pl) = self.plugins.as_mut() {
+            match pl.open.as_mut() {
+                Some((b, _)) => {
+                    b.upsert(ix.0, row_of(n));
+                }
+                None if pl.service.wants_url() => {
+                    pl.waiting.insert(ix.0, row_of(n));
+                }
+                None => {}
+            }
         }
         if let Some(rec) = &n.rec {
             self.write(ix, rec, seq, true);
@@ -1310,6 +1333,34 @@ mod tests {
             DocDelta::Upsert(vec![node(9, SemRole::DocumentWeb, None)]),
         ]);
         assert_eq!(s.len(), 1);
+    }
+
+    #[test]
+    fn a_url_that_arrives_after_the_first_block_activates_the_plugin_for_what_is_there() {
+        let (service, jobs) = svc(true);
+        let mut s = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
+        // The first block is published at once, without the URL: nothing is patched.
+        let mut batch = vec![reset(1)];
+        batch.extend(chat_doc("Alice"));
+        s.apply(&batch);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("AL Alice 15:00"));
+        assert_eq!(*jobs.lock().unwrap(), 0);
+        // The hint comes as a batch of its own; the plugin then derives the nodes already in the
+        // document and its facts are a refinement of the entry.
+        let changed = s.apply(&[hint("https://web.telegram.org/a/")]);
+        assert_eq!(name_of(&s, 2).as_deref(), Some("Alice!"));
+        assert!(changed.contains(&SrcNodeId(2)), "{changed:?}");
+        assert_eq!(*jobs.lock().unwrap(), 1);
+        // A removed node leaves nothing waiting for a scope that never opens.
+        let (service, _) = svc(true);
+        let mut s2 = FuseStage::new(setup()).with_plugins(service, Arc::from("firefox"), 1, true);
+        s2.apply(&batch);
+        s2.apply(&[DocDelta::Children {
+            parent: SrcNodeId(1),
+            children: smallvec::SmallVec::new(),
+        }]);
+        s2.apply(&[hint("https://web.telegram.org/a/")]);
+        assert!(s2.sem(SrcNodeId(2)).is_none());
     }
 
     #[test]
