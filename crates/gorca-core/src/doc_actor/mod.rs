@@ -16,6 +16,9 @@
 pub mod agree;
 #[cfg(test)]
 pub(crate) mod agree_tests;
+#[cfg(test)]
+mod flags_gate_tests;
+pub mod flags_sem;
 pub mod fuse;
 #[cfg(test)]
 pub(crate) mod legacy_sem_tests;

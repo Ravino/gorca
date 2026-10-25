@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use common::{Rec, load, root};
 use gorca_model::PropMask;
-use gorca_model::sem::{Check, Expand, Group, Invalid, Press, SemRole};
+use gorca_model::sem::{Check, Expand, Group, Invalid, Press, SemFlags as F, SemRole};
 use gorca_sem_atspi::{Notes, RawNode, SrcRecord, normalise};
 
 fn all_nodes() -> Vec<(String, String, Rec)> {
@@ -201,13 +201,16 @@ fn unknown_vs_absent_follows_the_fetched_mask_on_real_nodes() {
             need(Group::Avail, role && states);
             need(Group::Expand, states);
             need(Group::Orientation, states);
-            // The authored-role and text-label bits travel with the role even without the states.
-            let role_bits =
-                gorca_model::sem::SemFlags::ROLE_AUTHORED | gorca_model::sem::SemFlags::TEXT_LABEL;
-            need(
-                Group::Flags,
-                states || (role && rec.sem.flags.intersects(role_bits)),
-            );
+            // The facts of the role and of the attributes (authored role, text label, live-off,
+            // display class, busy, layout guess) travel with them even without the states.
+            let attr_bits = F::ROLE_AUTHORED
+                | F::TEXT_LABEL
+                | F::LIVE_OFF
+                | F::DISPLAY_BLOCK
+                | F::DISPLAY_INLINE
+                | F::BUSY
+                | F::LAYOUT_TABLE;
+            need(Group::Flags, states || rec.sem.flags.intersects(attr_bits));
             need(Group::Invalid, states);
             need(Group::Current, attrs);
             need(Group::Sort, attrs);

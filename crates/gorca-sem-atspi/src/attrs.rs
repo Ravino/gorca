@@ -57,6 +57,8 @@ pub struct ParsedAttrs<'a> {
     pub details_roles: Option<&'a str>,
     pub details_from: Option<&'a str>,
     pub layout_guess: Option<&'a str>,
+    /// CSS `display` of the element (Gecko and Blink).
+    pub display: Option<&'a str>,
     pub name_from: Option<&'a str>,
     pub explicit_name: Option<&'a str>,
     /// Blink's `pressed` is exported next to the state; Gecko too.
@@ -66,7 +68,7 @@ pub struct ParsedAttrs<'a> {
 /// Every attribute name [`ParsedAttrs::parse`] reads. A connector keeps only these from a
 /// `GetAttributes` reply (the app's attribute map is untrusted and can be large); a test checks
 /// that the list and the parser agree.
-pub const WANTED_ATTRS: [&str; 39] = [
+pub const WANTED_ATTRS: [&str; 40] = [
     "xml-roles",
     "tag",
     "toolkit",
@@ -103,6 +105,7 @@ pub const WANTED_ATTRS: [&str; 39] = [
     "details-roles",
     "details-from",
     "layout-guess",
+    "display",
     "name-from",
     "explicit-name",
     "pressed",
@@ -155,6 +158,7 @@ impl<'a> ParsedAttrs<'a> {
                 "details-roles" => &mut a.details_roles,
                 "details-from" => &mut a.details_from,
                 "layout-guess" => &mut a.layout_guess,
+                "display" => &mut a.display,
                 "name-from" => &mut a.name_from,
                 "explicit-name" => &mut a.explicit_name,
                 "pressed" => &mut a.pressed,
@@ -336,6 +340,38 @@ fn live_attr(v: Option<&str>) -> Option<LiveAttr> {
         "off" | "" => LiveAttr::Off,
         _ => LiveAttr::Bad,
     })
+}
+
+/// CSS `display` values that start a new line (FT-4); everything else is inline-level.
+pub fn display_is_block(d: &str) -> bool {
+    matches!(
+        d,
+        "block"
+            | "list-item"
+            | "table"
+            | "table-row"
+            | "table-row-group"
+            | "table-header-group"
+            | "table-footer-group"
+            | "table-cell"
+            | "table-caption"
+            | "flex"
+            | "grid"
+            | "flow-root"
+            | "-webkit-box"
+            | "details"
+    )
+}
+
+/// An explicit `aria-live=off`, or a role that is a live region only to be quiet (a timer, a
+/// marquee): the node mutes the enclosing live region.
+pub fn live_off(role: SemRole, a: &ParsedAttrs<'_>) -> bool {
+    match live_attr(a.live) {
+        Some(LiveAttr::Off) => true,
+        // An explicit politeness wins over the quiet role.
+        Some(LiveAttr::On(_)) => false,
+        Some(LiveAttr::Bad) | None => matches!(role, SemRole::Timer | SemRole::Marquee),
+    }
 }
 
 /// `aria-relevant` tokens; `all` is the three kinds; the default is `additions text`.

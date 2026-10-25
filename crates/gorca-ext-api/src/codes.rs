@@ -266,6 +266,9 @@ pub const SEM_FLAGS: &[Row] = &[
     ("SELECTION_FOLLOWS_FOCUS", 16384),
     ("SYNTHETIC", 32768),
     ("ROLE_AUTHORED", 65536),
+    ("LIVE_OFF", 262_144),
+    ("DISPLAY_BLOCK", 524_288),
+    ("DISPLAY_INLINE", 1_048_576),
     ("TEXT_LABEL", 131_072),
 ];
 
