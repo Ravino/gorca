@@ -1402,7 +1402,7 @@ fn spawn_action(
                 what = "doc_action_result",
                 action = if is_click { "click" } else { "focus" },
                 ok,
-                result = ?result,
+                result = result_kind(result.as_ref()),
                 node = ?src,
             );
         }
@@ -1438,6 +1438,23 @@ fn spawn_action(
             let _ = notices.try_send(DocNotice::SelectionDone { doc, req, outcome });
         }
     });
+}
+
+/// A static name for the answer of a page action, for the trace: never the error's payload (a
+/// displaced node's name and a protocol error's text are page content).
+fn result_kind(r: Option<&Result<(), SourceError>>) -> &'static str {
+    match r {
+        None => "none",
+        Some(Ok(())) => "ok",
+        Some(Err(SourceError::Timeout)) => "timeout",
+        Some(Err(SourceError::Detached)) => "detached",
+        Some(Err(SourceError::NotSupported)) => "not_supported",
+        Some(Err(SourceError::Protocol(_))) => "protocol",
+        Some(Err(SourceError::Refused)) => "refused",
+        Some(Err(SourceError::Gone)) => "gone",
+        Some(Err(SourceError::Displaced(_))) => "displaced",
+        Some(Err(SourceError::Approximate)) => "approximate",
+    }
 }
 
 #[cfg(test)]
