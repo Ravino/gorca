@@ -91,6 +91,8 @@ pub(super) const SCROLL_DEBOUNCE: Duration = Duration::from_millis(150);
 const LOADING_CUE_WINDOW: Duration = Duration::from_millis(1200);
 /// Focus in a document the mirror does not know yet waits this long (browse design 7.3).
 const LOADING_GRACE: Duration = Duration::from_secs(1);
+/// How long a cold focus (no snapshot of the focused node yet) is read again from the directory.
+const COLD_FOCUS_POLL: Duration = Duration::from_secs(30);
 /// The shortest time between two focus resolutions restarted by key presses.
 const KEY_RESYNC_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -2560,8 +2562,59 @@ impl Reader {
         }
     }
 
+    /// A focus that arrived cold (`Loading`, `known: false`: no snapshot of the focused node
+    /// yet) is read again from the directory on every timer tick: the snapshot that arrives
+    /// later says whether the node is a field. Without this only a new focus event could end the
+    /// wait, and a page that does not move focus again stayed with the browse grabs off (letters
+    /// typed into the page, Enter handed to it). Polled once per grace period for
+    /// [`COLD_FOCUS_POLL`], then left to the next focus event.
+    fn web_recheck_cold_focus(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_ref() else { return };
+        let WebMode::Loading {
+            focus,
+            since,
+            known: false,
+            ..
+        } = b.mode
+        else {
+            return;
+        };
+        match self.dir.lookup(focus) {
+            Lookup::Hit(snap) => {
+                let editable = forms::passes_through(
+                    role_of(&snap),
+                    PassFacts::of(&entry_of(&snap).sem, true),
+                    Reason::Focus,
+                );
+                tracing::debug!(
+                    target: "gorca_core::browse",
+                    what = "cold_focus_resolved",
+                    editable,
+                    waited_ms = u64::try_from(now.saturating_duration_since(since).as_millis())
+                        .unwrap_or(u64::MAX),
+                );
+                self.web_apply(
+                    WebEv::FocusPending {
+                        focus,
+                        editable,
+                        known: true,
+                        now,
+                    },
+                    fx,
+                    true,
+                );
+            }
+            Lookup::Miss | Lookup::Gone => {
+                if now.saturating_duration_since(since) < COLD_FOCUS_POLL {
+                    fx.push(ReaderEffect::ArmTimer(now + LOADING_GRACE));
+                }
+            }
+        }
+    }
+
     pub(crate) fn web_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
         self.web_frame_focus_timer(now, fx);
+        self.web_recheck_cold_focus(now, fx);
         self.web_auto_read_timer(fx);
         let Some(b) = self.web.as_mut() else { return };
         let mut sync_tabs = false;

@@ -1051,6 +1051,41 @@ fn a_cold_unknown_focus_stays_loading_with_the_grabs_off() {
     );
 }
 
+/// The focus was cold when it arrived (no snapshot yet, `known: false`) and the snapshot that
+/// came later says it is a link, not a field: the page must not stay in `Loading` with the grabs
+/// off (letters typed into the page, Enter handed to the page). Only a new focus event used to
+/// end it, so a page that does not move focus again (Telegram Web A's chat list after a refresh)
+/// stayed silent for browse keys.
+#[test]
+fn a_cold_focus_that_turns_out_not_to_be_a_field_ends_in_browse_mode() {
+    let mut r = rig();
+    r.focus(3000);
+    assert!(matches!(r.mode(), WebMode::Loading { known: false, .. }));
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::InDocument {
+            focus: nk(3000),
+            doc: DocId(1),
+        }),
+        r.now,
+    );
+    // The snapshot of the focused node arrives late: a plain link.
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![snap(3000, Role::Link, "Chat", StateSet::FOCUSABLE)],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    r.now += Duration::from_millis(1100);
+    r.reader.handle(ReaderMsg::Timer, r.now);
+    assert!(
+        matches!(r.mode(), WebMode::Browse { .. }),
+        "a focused link is browsed, got {:?}",
+        r.mode()
+    );
+    assert!(matches!(r.reader.mode(), Mode::Browse { .. }));
+}
+
 #[test]
 fn a_better_reading_of_the_pending_focus_is_kept() {
     let now = Instant::now();
