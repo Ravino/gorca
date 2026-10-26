@@ -126,6 +126,30 @@ impl SemRole {
         )
     }
 
+    /// Roles of controls the user operates (activated, typed into, toggled): a plugin's role fact
+    /// may refine such a node (link to button) but never turn it into something that is not
+    /// operable; activation and the focus-mode decision rest on the node's native capabilities.
+    pub const fn is_interactive(self) -> bool {
+        matches!(
+            self,
+            SemRole::Button
+                | SemRole::Link
+                | SemRole::Checkbox
+                | SemRole::Radio
+                | SemRole::Switch
+                | SemRole::TextBox
+                | SemRole::SearchBox
+                | SemRole::PasswordBox
+                | SemRole::Combobox
+                | SemRole::SpinButton
+                | SemRole::Slider
+                | SemRole::MenuItem
+                | SemRole::MenuItemCheckbox
+                | SemRole::MenuItemRadio
+                | SemRole::Tab
+        )
+    }
+
     /// Roles whose accessible name is computed from their content (B-1 P9-3): a name change of a
     /// descendant label changes the name of such an ancestor without an event on it.
     pub const fn takes_name_from_content(self) -> bool {

@@ -655,3 +655,41 @@ fn the_state_bits_of_a_row_have_the_layout_the_wit_documents() {
     // The flags group never reaches the structural half.
     assert_eq!(state_bits(SemFlags::all(), StructFlags::empty()) >> 32, 0);
 }
+
+#[test]
+fn a_role_fact_never_turns_an_interactive_node_into_one_that_is_not_operable() {
+    use gorca_model::sem::SemRole;
+    let (mut b, sh) = bridge(&[PluginTier::FirstParty]);
+    populate(&mut b);
+    // The watched node is a link by its source; node 3 is plain.
+    let mut link = row("chat", "watch");
+    link.role = SemRole::Link.code();
+    b.upsert(1, link);
+    let mut plain = row("child text", "");
+    plain.role = SemRole::Generic.code();
+    b.upsert(3, plain);
+    b.background(&tree());
+    let (_, job) = sh.lock().unwrap().jobs[0].clone();
+    let role = |node: u32, r: SemRole| FactEffect {
+        node,
+        group: Group::Role.group_code().0,
+        value: Some(FactValue::Code(r.code())),
+        patch: true,
+    };
+    sh.lock().unwrap().replies.push(done(
+        0,
+        job.t,
+        1,
+        vec![
+            role(1, SemRole::ListItem), // refused: a link stays operable
+            role(3, SemRole::Heading),  // a plain node may become a heading
+        ],
+        vec![1, 3],
+    ));
+    assert!(b.drain());
+    let ops = b.take_ops();
+    assert_eq!(ops.len(), 1, "{ops:?}");
+    assert!(matches!(ops[0], FactOp::Patch { node: 3, .. }));
+    // A refinement between interactive roles is allowed.
+    assert_eq!(b.stats().downgrade_refused, 1);
+}

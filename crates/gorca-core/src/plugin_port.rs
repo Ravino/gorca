@@ -516,6 +516,10 @@ pub struct BridgeStats {
     pub no_wait: u64,
     /// Facts dropped because their node is a secret one (AC-1, SS-3).
     pub secret_dropped: u64,
+    /// Role facts refused because they would turn an interactive node (link, button, field...)
+    /// into a role that is not operable (ADR-0022 section 8.7: activation and focus mode rest on
+    /// the node's native capabilities).
+    pub downgrade_refused: u64,
     /// Interactive jobs sent, and replies that had arrived when the bounded wait ended.
     pub handoff_asked: u64,
     /// See `handoff_asked`.
@@ -1238,6 +1242,24 @@ impl PluginBridge {
                     self.stats.unsupported += 1;
                     continue;
                 };
+                // A role fact never makes an operable node inoperable. The one exception: a
+                // button may become a heading (a title that merely opens a profile; its
+                // focusable/clickable flags stay).
+                if let Write::Val(Val::Role(r)) = &write
+                    && !r.is_interactive()
+                    && self
+                        .rows
+                        .get(ix(e.node))
+                        .and_then(Option::as_ref)
+                        .and_then(|row| SemRole::from_code(row.role))
+                        .is_some_and(|native| {
+                            native.is_interactive()
+                                && !(native == SemRole::Button && *r == SemRole::Heading)
+                        })
+                {
+                    self.stats.downgrade_refused += 1;
+                    continue;
+                }
                 // Stratum by tier: only a computed patch of a first-party or user-trusted
                 // plugin is S1; everything else is S4 and hedged.
                 let s1 = e.patch
