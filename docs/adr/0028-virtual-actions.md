@@ -221,7 +221,7 @@ pub struct VActs(SmallVec<[VAction; 2]>);   // per host node, <= 8
   Enter, Space or any unmodified key. Focus mode is unchanged (keys go to the application).
 - **Dedicated key.** `vactions.primary` runs the node's primary virtual action (any tier, T3 included, because the
   chord is a core chord the user pressed knowingly and the T3 attribution is spoken first). Unbound by default.
-- **Virtual button** (`show = button`, **T2 only**, owner QV-4; T3 degrades to `attached`). Spoken exactly like a
+- **Virtual button** (`show = button`, **T2 only**, owner QV-4; T3 degrades to `attached`). Built as a synthetic leaf by the ADR-0029 mechanism (one key space, lifetime engine and index path with virtual containers). Spoken exactly like a
   native button (no "virtual" word). Governed by `report.virtual_buttons` (§2.2.1). The browse line builder inserts a
   synthetic item after the host's own items: role `button`, name = label, key `NodeKey::virtual(owner, host, id)`
   in a reserved key space. It is part of the published view only: never in the observed view, never matched by any
