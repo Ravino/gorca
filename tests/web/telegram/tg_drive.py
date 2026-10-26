@@ -17,7 +17,7 @@ SCEN = os.environ.get("TG_SCEN", "list")
 BROWSER = os.environ.get("TG_BROWSER", "firefox")
 DOWN, UP, RIGHT, LEFT, HOME, END, TAB, ESC, ENTER = 108, 103, 106, 105, 102, 107, 15, 1, 28
 SHIFT, CTRL, INSERT, SPACE, PGUP, PGDN = 42, 29, 110, 57, 104, 109
-L = {"a": 30, "b": 48, "h": 35, "i": 23, "k": 37, "t": 20, "e": 18, "s": 31, "x": 45, "1": 2}
+L = {"l": 38, "f5": 63, "a": 30, "b": 48, "h": 35, "i": 23, "k": 37, "t": 20, "e": 18, "s": 31, "x": 45, "1": 2}
 T0 = time.monotonic()
 fails = 0
 
@@ -422,6 +422,29 @@ elif SCEN == "plugin":
         print("article quick nav said:", art[:4], flush=True)
         found = [s for s in art if re.search(r"article.*Message \d+", s)]
         verdict(bool(found) == on, "Web A message rows are articles for quick navigation exactly when the plugin is on", f"found={len(found)} on={on}")
+
+elif SCEN == "chatlist":
+    # The owner's report (2026-10-26): after a page refresh, in the chat list, Enter on a row does nothing,
+    # H and I are typed as letters, rows are not list items. Page: a2.html (telegram-tt ListItem markup:
+    # the chat opens on MOUSEDOWN of a.ListItem-button; a native Enter opens nothing). ?focus=container|
+    # wrapper|link|none is where the refresh leaves the focus; &f=churn re-sorts the list. The page title
+    # becomes "OPENED n id" when a chat opens.
+    on = os.environ.get("TG_PLUGINS", "off") == "on"
+    time.sleep(2.0)
+    step("before refresh", show=True)
+    step("F5", L["f5"], wait=1.0, settle=5.0)
+    print("after refresh focus=", focused(), "title=", doc_title(), flush=True)
+    for i in range(int(os.environ.get("TG_TABS", "0"))):
+        step(f"tab {i+1}", TAB, wait=0.8)
+    for i in range(2 if not os.environ.get("TG_TABS") else 0):
+        step(f"down {i+1}", DOWN)
+    h = step("h (heading)", L["h"])
+    verdict(bool(h) and not all(len(x.strip()) <= 2 for x in h), "H after refresh speaks a heading, it is not typed as a letter", f"said={h}")
+    li = step("i (list item)", L["i"])
+    verdict(bool(li) and not all(len(x.strip()) <= 2 for x in li), "I after refresh speaks a list item", f"said={li}")
+    en = step("enter", ENTER, wait=1.5, settle=1.0)
+    t = doc_title() or ""
+    verdict(t.startswith("OPENED"), "Enter on a chat row opens the chat", f"title={t!r} said={en}")
 
 elif SCEN == "typing":
     open_first_chat()
