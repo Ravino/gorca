@@ -316,6 +316,7 @@ then refined; never fetched by IPC on the presentation path. Replaces `leaving_i
 | `live` | S1, live group |
 | `hide` | S1, existence group (removes the node from browse/quick-nav/review sets) |
 | `flatten` | mirror structure (flat builder), not `Semantics`; recorded in the trace as a structure patch |
+| `group` (ADR-0029) | mirror structure: a synthetic container inserted over a contiguous run of siblings, built by the node writer after `FUSE`; never in the observed view |
 | `claim`, `sleep` | hook routing and lifecycle (ADR-0019), outside `FUSE` |
 | `category` | adds membership in an **add-on-defined** category set stored beside the entry (`ExtCats`); built-in `Cat` stays a pure function of `Semantics` (SM-1). To join a built-in category an add-on re-roles the node |
 
