@@ -1396,6 +1396,16 @@ fn spawn_action(
             None
         };
         let ok = matches!(result, Some(Ok(())));
+        if is_click || is_focus {
+            tracing::debug!(
+                target: "gorca_core::browse",
+                what = "doc_action_result",
+                action = if is_click { "click" } else { "focus" },
+                ok,
+                result = ?result,
+                node = ?src,
+            );
+        }
         if is_scroll {
             tracing::debug!(target: "gorca_phase", phase = "web_scroll", ok, result = ?result);
         }

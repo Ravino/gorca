@@ -569,6 +569,56 @@ fn node_facts(d: &WebDoc, id: DocNodeId) -> (SemRole, PassFacts, Toggles) {
     }
 }
 
+/// One line describing a document node for the browse trace (`gorca_core::browse`, debug): the
+/// role the source reported and the fused one, the structural flags and the source facts. No
+/// names or text, so a trace never carries what the user reads or types.
+fn trace_node(d: &WebDoc, id: DocNodeId) -> String {
+    let Some(v) = d.node(id) else {
+        return format!("node={id:?} gone");
+    };
+    let (known, native, tag, focusable, visible) = match v.data {
+        Some(m) => (
+            m.basis.known,
+            m.basis.native,
+            format!("{:?}", m.basis.tag),
+            m.basis.focusable,
+            m.basis.visible,
+        ),
+        None => (false, SemRole::Unknown, String::new(), false, false),
+    };
+    let flags = entry_at(d, id).map(|e| format!("{:?}", e.sem.flags));
+    format!(
+        "node={id:?} native={native:?} fused={:?} basis_known={known} tag={tag} src_focusable={focusable} visible={visible} attached={} sem_flags={}",
+        v.role,
+        d.is_attached(id),
+        flags.as_deref().unwrap_or("-"),
+    )
+}
+
+/// The ancestors of a node, innermost first, as `role/native/focusable` triples (trace only).
+fn chain_trace(d: &WebDoc, mut id: DocNodeId) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    for _ in 0..8 {
+        if let Some(v) = d.node(id) {
+            let (native, foc) = v.data.map_or((SemRole::Unknown, false), |m| {
+                (m.basis.native, m.basis.focusable)
+            });
+            let _ = write!(
+                out,
+                "[{:?}/{native:?}/{}]",
+                v.role,
+                if foc { "F" } else { "-" }
+            );
+        }
+        match d.parent(id) {
+            Some(p) => id = p,
+            None => break,
+        }
+    }
+    out
+}
+
 /// The nearest ancestor-or-self (within `hops`) whose categories intersect `c`.
 fn up_to(d: &WebDoc, mut id: DocNodeId, c: Cat, hops: usize) -> Option<DocNodeId> {
     for _ in 0..=hops {
@@ -871,6 +921,16 @@ impl Reader {
                 set.chords.insert(*c);
             }
         }
+        if self.web.as_ref().is_some_and(|w| w.mode.is_active()) {
+            tracing::debug!(
+                target: "gorca_core::browse",
+                what = "grab_set",
+                mode = ?self.mode,
+                web_mode = ?self.web_mode(),
+                chords = set.chords.len(),
+                single_letter = self.web.as_ref().is_some_and(|w| w.single_letter),
+            );
+        }
         set
     }
 
@@ -1010,6 +1070,33 @@ impl Reader {
         let (next, effects) = step(old, ev);
         b.mode = next;
         let changed = next != old;
+        if tracing::enabled!(target: "gorca_core::browse", tracing::Level::DEBUG) {
+            let subject = match ev {
+                WebEv::FocusIn { doc, node, .. } => Some((doc, node)),
+                WebEv::Activate { node, .. } => old.doc().map(|d| (d, node)),
+                WebEv::Toggle { .. }
+                | WebEv::FocusPending { .. }
+                | WebEv::FocusAway
+                | WebEv::FirstUseful { .. }
+                | WebEv::NoDocument { .. }
+                | WebEv::Escape
+                | WebEv::FocusRemoved { .. }
+                | WebEv::DocGone { .. } => None,
+            };
+            let node = subject
+                .and_then(|(doc, id)| b.docs.get(doc).map(|h| h.read.with(|d| trace_node(d, id))))
+                .unwrap_or_default();
+            tracing::debug!(
+                target: "gorca_core::browse",
+                what = "web_mode",
+                changed,
+                ev = ?ev,
+                from = ?old,
+                to = ?next,
+                effects = ?effects,
+                subject = %node,
+            );
+        }
         // The cursor of a document the user leaves is remembered for when they come back (W3).
         if let WebMode::Browse { doc, cur, .. } = old
             && next.doc() != Some(doc)
@@ -1211,6 +1298,19 @@ impl Reader {
             }
             let passes = forms::passes_through(role, facts, Reason::Focus);
             let application = forms::is_application(role);
+            if tracing::enabled!(target: "gorca_core::browse", tracing::Level::DEBUG) {
+                tracing::debug!(
+                    target: "gorca_core::browse",
+                    what = "focus_decision",
+                    decision_role = ?role,
+                    facts = ?facts,
+                    passes,
+                    application,
+                    mode = ?b.mode,
+                    subject = %h.read.with(|d| trace_node(d, id)),
+                    chain = %h.read.with(|d| chain_trace(d, id)),
+                );
+            }
             let last_before = match b.mode {
                 WebMode::Browse { doc: d, cur, .. } if d == doc => Some(cur.node),
                 WebMode::Focus { doc: d, node, .. } if d == doc => Some(node),
@@ -2813,6 +2913,12 @@ impl Reader {
                     armed_name = Some(s.name.clone());
                 } else {
                     b.armed_click = sig.filter(|s| armed.as_ref().is_none_or(|a| a.role == s.role));
+                    tracing::debug!(
+                        target: "gorca_core::browse",
+                        what = "enter",
+                        outcome = "displaced_cursor_announced_not_clicked",
+                        cursor = ?cur.node,
+                    );
                     self.web_speak_line_here(fx);
                     return;
                 }
@@ -2864,8 +2970,30 @@ impl Reader {
             ))
         });
         let Some((node, target_role, toggles, passes, checkable)) = target else {
+            tracing::debug!(
+                target: "gorca_core::browse",
+                what = "enter",
+                outcome = "no_click_target_near_cursor",
+                cursor = ?cur.node,
+            );
             return;
         };
+        if tracing::enabled!(target: "gorca_core::browse", tracing::Level::DEBUG) {
+            tracing::debug!(
+                target: "gorca_core::browse",
+                what = "enter",
+                outcome = if passes { "focus_mode" } else { "click" },
+                cursor = ?cur.node,
+                armed_name = armed_name.is_some(),
+                target_role = ?target_role,
+                subject = %self
+                    .web
+                    .as_ref()
+                    .and_then(|b| b.docs.get(doc))
+                    .map(|h| h.read.with(|d| trace_node(d, node)))
+                    .unwrap_or_default(),
+            );
+        }
         if passes {
             // Browse -> Focus{Auto}; the machine emits `Action::Focus`.
             self.web_apply(WebEv::Activate { node, passes }, fx, false);
