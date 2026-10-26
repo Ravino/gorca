@@ -82,6 +82,7 @@ pub fn basis_of(n: &SrcNode) -> gorca_doc::web::SrcBasis {
         visible: n.is_visible(),
         focusable: n.is_focusable(),
         invalid: source_invalid(n),
+        native: n.model_role(None),
     }
 }
 

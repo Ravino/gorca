@@ -160,3 +160,7 @@ crates/gorca-daemon/src/cli.rs | GORCA_SCHED_LOG
 crates/gorca-daemon/src/lib.rs | gorca runs in a private user namespace (systemd PrivateTmp=, ProtectSystem=, \
 crates/gorca-daemon/src/plugins.rs | plugin catalog unreadable: its messages will not be spoken (check the \
 crates/gorca-daemon/src/plugins.rs | plugin message not in its catalog: the fact is dropped (further ones are debug lines)
+crates/gorca-core/src/doc_actor/translate.rs | child lists
+crates/gorca-core/src/doc_actor/translate.rs | props and text
+crates/gorca-core/src/doc_actor/translate.rs | patched entries
+crates/gorca-core/src/doc_actor/translate.rs | breaks and markers

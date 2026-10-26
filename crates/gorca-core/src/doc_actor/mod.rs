@@ -546,7 +546,7 @@ impl Actor {
                 true
             }
             Err(e) => {
-                tracing::warn!(doc = self.spec_doc.0, error = %e, "doc batch rejected; rebuilding");
+                tracing::warn!(doc = self.spec_doc.0, error = %e, stage = self.tr.stage(), "doc batch rejected; rebuilding");
                 self.counters
                     .rejected
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
