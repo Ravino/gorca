@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+gorca-cpu = { workspace = true }
 gorca-model = { workspace = true }
 gorca-rt = { workspace = true }
 gorca-connector-api = { workspace = true }

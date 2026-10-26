@@ -30,7 +30,7 @@ pub fn raw_to_scalar(text: &str, raw: u32, unit: TextUnit) -> Option<u32> {
             while !text.is_char_boundary(b) {
                 b -= 1;
             }
-            u32::try_from(text[..b].chars().count()).ok()
+            u32::try_from(gorca_cpu::text::utf8_scalar_count(&text[..b])).ok()
         }
         TextUnit::Utf16Bom => {
             let mut scalar = 0u32;

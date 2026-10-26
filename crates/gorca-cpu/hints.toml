@@ -1,0 +1,11 @@
+# Measured speed-up of each implementation over the portable function (ADR-0027 section 4).
+# Written from `cargo bench -p gorca-cpu --bench kernels` on the reference machine; see
+# docs/reports/adr-0027-impl.md for the run. An absent entry means "not measured": the log
+# line then omits the "~Nx faster" clause. Format: `kernel-id/impl = factor`.
+
+# Reference machine: Intel Core Ultra 9 285H, pinned to cpu 2, release profile; min of 3 runs,
+# host under load (see docs/reports/adr-0027-impl.md). Factors are over the portable function at
+# 1-4 KiB, rounded down to a stable value.
+utf8-scalar-count/avx2 = 4.5
+common-prefix-chars/avx2 = 1.7
+utf8-extend-chars/avx2 = 4.0

@@ -21,6 +21,7 @@ repository = "https://github.com/Ravino/gorca"
 
 [workspace.dependencies]
 # Internal crates.
+gorca-cpu = { path = "crates/gorca-cpu" }
 gorca-model = { path = "crates/gorca-model" }
 gorca-i18n = { path = "crates/gorca-i18n" }
 gorca-config = { path = "crates/gorca-config" }

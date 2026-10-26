@@ -885,7 +885,7 @@ impl CaretState {
         } else {
             return None;
         };
-        let new: Vec<char> = new.chars().collect();
+        let new: Vec<char> = gorca_cpu::text::utf8_to_chars(new);
         if new.len() == old.len() {
             return None;
         }
@@ -900,7 +900,7 @@ impl CaretState {
         let fits = |at: usize| {
             at + n <= long.len() && long[..at] == short[..at] && long[at + n..] == short[at..]
         };
-        let pre = short.iter().zip(long).take_while(|(a, b)| a == b).count();
+        let pre = gorca_cpu::text::common_prefix_chars(short, long);
         // The caret says where a typed or erased run sits when the text is ambiguous ("ll").
         let hinted = caret.map(|c| c as usize).into_iter().flat_map(|c| {
             if inserting {

@@ -1,0 +1,23 @@
+[package]
+name = "gorca-cpu"
+description = "Runtime CPU feature detection and kernel dispatch (ADR-0027): one-time detection, a fn-pointer table, a portable specification for every kernel."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+tracing = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+libc = { workspace = true }
+proptest = { version = "1", default-features = false, features = ["std"] }
+
+[[bench]]
+name = "kernels"
+harness = false
+
+[lints]
+workspace = true

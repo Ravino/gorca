@@ -1,0 +1,81 @@
+Benchmarking leaf-diff-model/before/40
+Benchmarking leaf-diff-model/before/40: Warming up for 1.0000 s
+Benchmarking leaf-diff-model/before/40: Collecting 100 samples in estimated 2.0003 s (14M iterations)
+Benchmarking leaf-diff-model/before/40: Analyzing
+leaf-diff-model/before/40
+                        time:   [119.87 ns 135.39 ns 152.17 ns]
+                        change: [+45.437% +70.155% +102.82%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 18 outliers among 100 measurements (18.00%)
+  18 (18.00%) high severe
+Benchmarking leaf-diff-model/after/40
+Benchmarking leaf-diff-model/after/40: Warming up for 1.0000 s
+Benchmarking leaf-diff-model/after/40: Collecting 100 samples in estimated 2.0001 s (27M iterations)
+Benchmarking leaf-diff-model/after/40: Analyzing
+leaf-diff-model/after/40
+                        time:   [96.596 ns 112.18 ns 130.00 ns]
+                        change: [+121.41% +170.68% +233.87%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 15 outliers among 100 measurements (15.00%)
+  4 (4.00%) high mild
+  11 (11.00%) high severe
+Benchmarking leaf-diff-model/before/200
+Benchmarking leaf-diff-model/before/200: Warming up for 1.0000 s
+Benchmarking leaf-diff-model/before/200: Collecting 100 samples in estimated 2.0009 s (5.9M iterations)
+Benchmarking leaf-diff-model/before/200: Analyzing
+leaf-diff-model/before/200
+                        time:   [330.23 ns 374.43 ns 430.39 ns]
+                        change: [+39.343% +53.845% +70.532%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+Benchmarking leaf-diff-model/after/200
+Benchmarking leaf-diff-model/after/200: Warming up for 1.0000 s
+Benchmarking leaf-diff-model/after/200: Collecting 100 samples in estimated 2.0003 s (25M iterations)
+Benchmarking leaf-diff-model/after/200: Analyzing
+leaf-diff-model/after/200
+                        time:   [84.310 ns 94.382 ns 106.21 ns]
+                        change: [+16.942% +26.980% +36.785%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 18 outliers among 100 measurements (18.00%)
+  18 (18.00%) high severe
+Benchmarking leaf-diff-model/before/1000
+Benchmarking leaf-diff-model/before/1000: Warming up for 1.0000 s
+Benchmarking leaf-diff-model/before/1000: Collecting 100 samples in estimated 2.0037 s (1.6M iterations)
+Benchmarking leaf-diff-model/before/1000: Analyzing
+leaf-diff-model/before/1000
+                        time:   [1.1372 µs 1.1860 µs 1.2709 µs]
+                        change: [+4.0868% +14.752% +28.293%] (p = 0.01 < 0.05)
+                        Performance has regressed.
+Found 17 outliers among 100 measurements (17.00%)
+  2 (2.00%) high mild
+  15 (15.00%) high severe
+Benchmarking leaf-diff-model/after/1000
+Benchmarking leaf-diff-model/after/1000: Warming up for 1.0000 s
+Benchmarking leaf-diff-model/after/1000: Collecting 100 samples in estimated 2.0018 s (5.6M iterations)
+Benchmarking leaf-diff-model/after/1000: Analyzing
+leaf-diff-model/after/1000
+                        time:   [396.87 ns 434.91 ns 476.95 ns]
+                        change: [+58.024% +79.775% +107.72%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high severe
+Benchmarking leaf-diff-model/before/5000
+Benchmarking leaf-diff-model/before/5000: Warming up for 1.0000 s
+Benchmarking leaf-diff-model/before/5000: Collecting 100 samples in estimated 2.0195 s (232k iterations)
+Benchmarking leaf-diff-model/before/5000: Analyzing
+leaf-diff-model/before/5000
+                        time:   [6.0256 µs 6.4419 µs 6.9619 µs]
+                        change: [+152.19% +183.85% +217.59%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high mild
+Benchmarking leaf-diff-model/after/5000
+Benchmarking leaf-diff-model/after/5000: Warming up for 1.0000 s
+Benchmarking leaf-diff-model/after/5000: Collecting 100 samples in estimated 2.0020 s (3.4M iterations)
+Benchmarking leaf-diff-model/after/5000: Analyzing
+leaf-diff-model/after/5000
+                        time:   [929.09 ns 1.0190 µs 1.0960 µs]
+                        change: [−42.328% −34.652% −25.869%] (p = 0.00 < 0.05)
+                        Performance has improved.
+

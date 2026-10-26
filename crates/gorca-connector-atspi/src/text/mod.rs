@@ -90,7 +90,7 @@ async fn screen(cx: &CallCx, node: NodeKey, dl: Deadline) -> Result<BackendReply
     let caret = cx.caller.text_caret(&n.path, dl).await.ok().map(nonneg);
     let (kept, caret) = clip_screen(&t, caret, MAX_SCREEN_BYTES);
     let text: Arc<str> = Arc::from(kept);
-    let len = u32::try_from(text.chars().count()).unwrap_or(u32::MAX);
+    let len = u32::try_from(gorca_cpu::text::utf8_scalar_count(&text)).unwrap_or(u32::MAX);
     Ok(BackendReply::Window(TextWindowFill {
         base: 0,
         text,
@@ -120,7 +120,7 @@ fn clip_screen(s: &str, caret: Option<u32>, max: usize) -> (&str, Option<u32>) {
     {
         start += nl + 1;
     }
-    let dropped = s.get(..start).map_or(0, |h| h.chars().count());
+    let dropped = s.get(..start).map_or(0, gorca_cpu::text::utf8_scalar_count);
     let dropped = u32::try_from(dropped).unwrap_or(u32::MAX);
     let kept = s.get(start..).unwrap_or("");
     (kept, caret.and_then(|c| c.checked_sub(dropped)))

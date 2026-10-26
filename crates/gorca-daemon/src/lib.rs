@@ -69,7 +69,7 @@ use tracing_subscriber::EnvFilter;
 
 pub use cli::{
     CliError, ConfigCmd, FillChoice, Options, Parsed, ShellPolicyMode, SpeechMode, USAGE,
-    default_ext_dirs, parse,
+    cpu_disable_arg, default_ext_dirs, parse,
 };
 pub use config_task::{Built, ConfigSource, ConfigTask, build as build_settings, run_config_cmd};
 pub use platform::{PlatformOverrides, probe as probe_platform};
