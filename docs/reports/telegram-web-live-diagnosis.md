@@ -269,3 +269,22 @@ on the real fixture `tests/fixtures/web/telegram-a-chat-list.json`.
 The shell e2e: no release build was possible (disk at 95%, no release target); the Phase 1 harness ran on the
 debug build in the isolated session (`--allow-debug --quick --only L1,F0`): L1 gorca-side p99 7.9 ms, lost 0.
 Results `/var/tmp/web-a5ae-e2e/20261026T004837Z.txt` (debug numbers, smoke only).
+
+## Follow-up 6: regression of the chat-list list items (Enter silent, letters typed)
+
+Cause: the plugin patched bare `a.ListItem-button` links to `listitem`. A role fact replaced the fused
+role of an operable node, and activation (Enter) and the focus-mode/passthrough decision read the fused
+role, so the link was no longer activatable and the page started in focus mode.
+Fix, three layers:
+* (a, core, generic) `PluginBridge` refuses a role fact that would turn a node whose source role is
+  interactive (`SemRole::is_interactive`: link, button, fields, checkbox/radio/switch, slider/spin, menu
+  items, tab) into a non-interactive one (`downgrade_refused` counter); the only exception is button to
+  heading (the chat-header title that opens a profile). Activation and focus mode therefore always rest on
+  the native role. Test `a_role_fact_never_turns_an_interactive_node_into_one_that_is_not_operable`.
+* (b, plugin) only the row wrapper (`div.ListItem.chat-item-clickable`) is a list item; a bare link keeps its
+  role and its computed name (the list still counts the wrapped rows; bare ones are not counted).
+* (c, core) `patch_sem` no longer touches a node that is detached (a `changed` entry whose node was removed in
+  the same flush), which was the likely source of the "node is not in the document tree" rebuilds.
+Quick rollback: plugin pin `eb4e661a` (installed wasm + its catalogs) with this or the previous core: it never
+patches chat rows to list items (the chat list is only a navigation landmark there). The core index fix is
+independent of it.

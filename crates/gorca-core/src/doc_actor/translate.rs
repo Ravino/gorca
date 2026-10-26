@@ -460,6 +460,7 @@ impl Translator {
                 continue;
             }
             if let Some(id) = self.by_src.get(src).copied()
+                && w.doc().is_attached(id)
                 && let Some(e) = sem.sem(*src)
             {
                 Self::patch_sem(w, id, e, &mut break_parents)?;

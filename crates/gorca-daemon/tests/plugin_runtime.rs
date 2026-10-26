@@ -996,19 +996,12 @@ fn the_chat_list_is_a_list_of_list_items_inside_the_chats_landmark() {
             .iter()
             .any(|(n, s)| *n == parent_of[&list[0]] && !s.is_empty())
     );
-    // The rows are the list's direct children: the wrapper when Gecko exposes it, else the link.
-    let rows: Vec<u32> = parent_of
-        .iter()
-        .filter(|(_, p)| **p == list[0])
-        .map(|(i, _)| *i)
-        .filter(|i| {
-            let c = &class_of[i];
-            c.split_whitespace()
-                .any(|t| t == "chat-item-clickable" || t == "ListItem-button")
-        })
-        .collect();
-    assert!(rows.len() >= 3, "{}", rows.len());
-    for r in &rows {
+    // The rows whose wrapper Gecko exposes are list items; a bare link is left alone (a link
+    // that is also a list item would stop being operable: activation and focus mode follow the
+    // native role).
+    let wrappers = with_class("chat-item-clickable");
+    assert!(!wrappers.is_empty());
+    for r in &wrappers {
         assert_eq!(roles(*r), vec!["ListItem"], "chat row {r}");
     }
     let links = with_class("ListItem-button");
@@ -1018,12 +1011,6 @@ fn the_chat_list_is_a_list_of_list_items_inside_the_chats_landmark() {
             named.iter().any(|(n, _)| *n == l),
             "link {l} keeps its computed name"
         );
-        // A link inside a wrapper keeps its role; a bare one is the list item itself.
-        let bare = parent_of[&l] == list[0];
-        assert_eq!(
-            roles(l),
-            if bare { vec!["ListItem"] } else { vec![] },
-            "link {l}"
-        );
+        assert!(roles(l).is_empty(), "link {l} keeps its role and behaviour");
     }
 }

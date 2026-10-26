@@ -46,20 +46,7 @@ mod guest {
 
     struct Plugin;
 
-    /// A chat row whose wrapper Gecko does not expose is a direct child of the chat list: the
-    /// link itself is the list item (focus, the link action and the computed name are unchanged).
-    fn bare_chat_row(n: u64) {
-        let Some(parent) = model::parent(n) else {
-            return;
-        };
-        let class = model::attr(parent, "class").unwrap_or_default();
-        if has_class(&class, "chat-list") {
-            assert_node(n, GROUP_ROLE, types::PropValue::Code(ROLE_LISTITEM));
-        }
-    }
-
     fn chat_row(n: u64) {
-        bare_chat_row(n);
         let nodes = model::subtree(n, 6, 64);
         let mut cells: Vec<Cell> = Vec::with_capacity(nodes.len());
         for vn in &nodes {
