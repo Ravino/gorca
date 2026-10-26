@@ -1,7 +1,7 @@
 #!/bin/bash
 # Telegram Web A / K fixtures with REAL keys in a PRIVATE headless GNOME Shell (tests/shell/run_shell.sh,
 # tests/web/selcopy/inner.sh). Nothing touches the live session; the world is torn down by run-isolated.sh.
-#   tests/web/telegram/run.sh A|K|E firefox|chromium SCENARIO OUTDIR [QUERY-FLAGS]
+#   tests/web/telegram/run.sh A|A2|K|E firefox|chromium SCENARIO OUTDIR [QUERY-FLAGS]
 #   SCENARIO: echo login list chat scrollup listscroll incoming flood churn typing   (see tg_drive.py)
 #   QUERY-FLAGS: appended to the URL, e.g. "?f=incoming,typing" or "?a11y=1"
 #   TG_PLUGINS=on|off (default off): turn the plugin runtime on (`[plugins] enabled = true`, the
@@ -11,13 +11,14 @@ set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 APP=${1:?A|K}; BR=${2:?firefox|chromium}; SCEN=${3:?scenario}; OUT=${4:?outdir}; Q=${5:-}
-case "$APP" in A) PAGE=a.html ;; K) PAGE=k.html ;; E) PAGE=echo.html ;; *) echo "A, K or E (echo control page)" >&2; exit 2 ;; esac
+case "$APP" in A) PAGE=a.html ;; A2) PAGE=a2.html ;; K) PAGE=k.html ;; E) PAGE=echo.html ;; *) echo "A, A2 (2026-10 chat-list markup), K or E (echo control page)" >&2; exit 2 ;; esac
 mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
 export GORCA_BIN=${GORCA_BIN:-<repo>/target/release/gorca}
-export GORCA_PASSTHROUGH="RDFIFO GORCA_BIN GORCA_CFG MARKLOG SELCOPY_BROWSER SELCOPY_OUT SELCOPY_DRIVER SELCOPY_URL RUST_LOG TG_SCEN TG_BROWSER TG_PLUGINS TG_PAGE GORCA_PLUGINS_DIR GORCA_PLUGINS_FIRST_PARTY_DIR GORCA_PLUGINS_CACHE_DIR GORCA_PLUGINS_URL_EXTRA"
+export GORCA_PASSTHROUGH="RDFIFO GORCA_BIN GORCA_CFG MARKLOG SELCOPY_BROWSER SELCOPY_OUT SELCOPY_DRIVER SELCOPY_URL RUST_LOG TG_SCEN TG_BROWSER TG_PLUGINS TG_TABS TG_PAGE GORCA_PLUGINS_DIR GORCA_PLUGINS_FIRST_PARTY_DIR GORCA_PLUGINS_CACHE_DIR GORCA_PLUGINS_URL_EXTRA"
 export TG_PLUGINS=${TG_PLUGINS:-off}
 if [ "$TG_PLUGINS" = on ]; then
   printf '[plugins]\nenabled = true\n' >"$OUT/gorca-plugins.toml"
+  export GORCA_CFG=$OUT/gorca-plugins.toml
 fi
 # Article quick navigation has no default key; the scenario `plugin` binds it (on and off alike).
 if [ "$SCEN" = plugin ]; then
