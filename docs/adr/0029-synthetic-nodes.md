@@ -234,7 +234,7 @@ Dependency: the category-feed fix (SN-5) must be merged before SN-1's quick-nav 
 
 - **QS-1** Telegram header members: confirm with a live dump that nothing besides the header precedes
   `div.Transition` (pinned-message bar, audio player); if something does, use `range` with a `last-match`.
-- **QS-2** Should `report.synthetic_structure` default on? Recommended yes (the owner asked for the structure).
+- **QS-2** Should `report.synthetic_structure` default on? **Decided by the owner 2026-10-26: default OFF** (users get the page's own structure unless they opt in); the owner's own build enables it.
 
 ## 7. Changelog
 
