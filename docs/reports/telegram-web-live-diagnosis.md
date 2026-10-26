@@ -311,3 +311,14 @@ Detached-node rebuilds (`doc batch rejected ... not in the document tree`): not 
 (`SetProps` does not require attachment). The error is `DocError::NotAttached` from `SyncChildren` (a listed
 child inside a detached subtree) during a reload/re-render. The warning now names the step
 (`stage = "child lists" | "removals" | ...`), so the next occurrence says which op; the doc is rebuilt either way.
+
+## Follow-up 8 (owner decision, 2026-10-26): the chat list is no longer restructured
+
+The plugin makes no `list`/`listitem` patch on the chat list or its rows and adds no "Chats" navigation
+landmark. The chat-list watches (`chat-list`, `chat-item-clickable`) and the catalog entries `chats` and
+`chat-list` are gone; rows keep their names ("name, unread, preview, time"). The open chat is unchanged
+(message list and items, own-message description, title and date headings, Messages and Message input
+regions). Follow-ups 5 to 7 above describe the removed list structure; their core fixes (index re-derivation,
+native-role decisions, cold-focus recheck) stay. Test `the_chat_list_gets_names_only_and_no_list_or_landmark_structure`
+replaces the list-structure test. The `chatlist` e2e (`tests/web/telegram`) asserts browse keys and Enter only,
+so it holds unchanged.

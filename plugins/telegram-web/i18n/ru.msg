@@ -10,7 +10,5 @@ row-110 = {title}, {n} {n#непрочитанное|непрочитанных|
 row-111 = {title}, {n} {n#непрочитанное|непрочитанных|непрочитанных}, {preview}, {time}
 messages-list = Список сообщений
 own-message = Ваше сообщение
-chats = Чаты
 messages = Сообщения
 composer = Поле ввода
-chat-list = Список чатов

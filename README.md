@@ -105,7 +105,7 @@ Phase 1 (focus reader, speech, event ingress, test harness) and most of Phase 2 
   time", without the avatar's initials. In Web A an open chat becomes a list: the messages are
   list items (so you hear a position such as "3 of 40"), your own messages are described as
   "Your message", the chat title is a level-1 heading, date separators are level-2 headings, and
-  the page has landmarks named Chats, Messages and Message input. The words come from the
+  the open chat has regions named Messages and Message input (the chat list is only named, not restructured). The words come from the
   plugin's message catalogue (English and Russian). The plugin was fixed several times after live
   use, is validated mostly in private-session tests, and may still miss pages or break when
   Telegram changes its markup (`docs/reports/telegram-web-live-diagnosis.md`). To use it, set

@@ -905,10 +905,9 @@ fn the_open_chat_gets_a_message_list_headings_and_described_own_messages() {
         assert_eq!(patches(d, role), vec!["Heading"], "date separator {d}");
         assert_eq!(patches(d, level), vec!["2"]);
     }
-    // Landmarks, by structure: the chat list, the message area (the list's parent) and the
-    // composer, each with a catalog name.
+    // Landmarks, by structure: the message area (the list's parent) and the composer, each with
+    // a catalog name. The chat list gets none (see the chat-list test).
     for (what, n, r) in [
-        ("chat list", with_class("chat-list")[0], "List"),
         ("message area", area_node, "Region"),
         ("composer", with_class("Composer")[0], "Region"),
     ] {
@@ -923,11 +922,13 @@ fn the_open_chat_gets_a_message_list_headings_and_described_own_messages() {
 }
 
 /// The chat list of Web A as the real source delivered it (2026-10-26, anonymised;
-/// `GORCA_DUMP_LIST`): `chat-list` is a list named "Chat list" inside a navigation landmark (its
-/// parent), each `div.ListItem.chat-item-clickable` (the wrapper whose siblings are the rows) is a
-/// list item, and the link inside keeps its computed name and its role (Enter still opens the chat).
+/// `GORCA_DUMP_LIST`): the plugin names the rows and changes nothing else about the list. The
+/// list container, its parent and the row wrappers get no role (no list, no list item, no
+/// navigation landmark), and the links keep their role and behaviour (owner decision: the chat
+/// list stays as the browser exposes it, so Enter, quick navigation and focus mode are the
+/// core's, untouched).
 #[test]
-fn the_chat_list_is_a_list_of_list_items_inside_the_chats_landmark() {
+fn the_chat_list_gets_names_only_and_no_list_or_landmark_structure() {
     let v: serde_json::Value = serde_json::from_slice(
         &std::fs::read(root().join("tests/fixtures/web/telegram-a-chat-list.json")).unwrap(),
     )
@@ -985,24 +986,15 @@ fn the_chat_list_is_a_list_of_list_items_inside_the_chats_landmark() {
             })
             .collect()
     };
+    let named = names(&ops);
     let list = with_class("chat-list");
     assert_eq!(list.len(), 1);
-    assert_eq!(roles(list[0]), vec!["List"], "{ops:?}");
-    assert_eq!(roles(parent_of[&list[0]]), vec!["Navigation"], "{ops:?}");
-    let named = names(&ops);
-    assert!(named.iter().any(|(n, s)| *n == list[0] && !s.is_empty()));
-    assert!(
-        named
-            .iter()
-            .any(|(n, s)| *n == parent_of[&list[0]] && !s.is_empty())
-    );
-    // The rows whose wrapper Gecko exposes are list items; a bare link is left alone (a link
-    // that is also a list item would stop being operable: activation and focus mode follow the
-    // native role).
-    let wrappers = with_class("chat-item-clickable");
-    assert!(!wrappers.is_empty());
-    for r in &wrappers {
-        assert_eq!(roles(*r), vec!["ListItem"], "chat row {r}");
+    // No fact at all on the list, its parent or the row wrappers: no role, no name.
+    let mut untouched = vec![list[0], parent_of[&list[0]]];
+    untouched.extend(with_class("chat-item-clickable"));
+    for n in untouched {
+        assert!(roles(n).is_empty(), "node {n} gets no role: {ops:?}");
+        assert!(named.iter().all(|(m, _)| *m != n), "node {n} gets no name");
     }
     let links = with_class("ListItem-button");
     assert_eq!(links.len(), 3);

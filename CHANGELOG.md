@@ -45,7 +45,7 @@ Added
   experimental): chat-list rows are named "name, unread count, last message, time" without the
   avatar's initials. In an open Web A chat the messages are a list of list items, your own
   messages are described as "Your message", the chat title is a level-1 heading, date separators
-  are level-2 headings, and the page has landmarks named Chats, Messages and Message input (all in
+  are level-2 headings, and the open chat has regions named Messages and Message input (the chat list is only named, not restructured) (all in
   English and Russian). To use it set `[plugins] enabled = true`, run the identity helper and
   install the package root-owned under `/usr/lib/gorca/addons/gorca.telegram-web` with every
   directory, including `i18n/`, readable by your user.

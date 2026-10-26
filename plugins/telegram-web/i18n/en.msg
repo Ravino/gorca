@@ -10,7 +10,5 @@ row-110 = {title}, {n} unread, {preview}
 row-111 = {title}, {n} unread, {preview}, {time}
 messages-list = Message list
 own-message = Your message
-chats = Chats
 messages = Messages
 composer = Message input
-chat-list = Chat list
