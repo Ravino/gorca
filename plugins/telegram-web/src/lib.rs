@@ -3,9 +3,11 @@
 //!
 //! * A chat row gets a computed name (title, unread count, preview, time) without the avatar's
 //!   initials or its doubled label (study findings T2, T3).
-//! * A Web A message (`div.Message`, no role) gets the role `article` (finding T4).
+//! * In an open Web A chat the message list is a `list` and each `div.Message` a `listitem`
+//!   (own messages are described as "Your message"), the chat title is a level-1 heading, date
+//!   separators are level-2 headings, and the chat list, message area and composer are landmarks.
 //!
-//! Both are facts about nodes the host calls `derive` for (the `[[watch]]` selectors of the
+//! All are facts about nodes the host calls `derive` for (the `[[watch]]` selectors of the
 //! manifest); the result is a function of the rows handed over, nothing else (PF-1).
 
 mod chat;

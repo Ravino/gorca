@@ -42,8 +42,18 @@ Added
   `docs/reports/m18a-5-placement.md` for the measurements and the cases where the goal was not
   met.
 - First-party `telegram-web` plugin for Telegram Web A and K in Firefox and Chromium (early and
-  experimental): chat-row names with unread count, preview and time, and Web A messages as
-  articles.
+  experimental): chat-list rows are named "name, unread count, last message, time" without the
+  avatar's initials. In an open Web A chat the messages are a list of list items, your own
+  messages are described as "Your message", the chat title is a level-1 heading, date separators
+  are level-2 headings, and the page has landmarks named Chats, Messages and Message input (all in
+  English and Russian). To use it set `[plugins] enabled = true`, run the identity helper and
+  install the package root-owned under `/usr/lib/gorca/addons/gorca.telegram-web` with every
+  directory, including `i18n/`, readable by your user.
+- Planned, recorded as design decisions (no code yet): ADR-0028 (accepted), virtual actions, which
+  make mouse-only affordances reachable from the keyboard through one actions menu opened with
+  gorca+Shift+A; and ADR-0029 (proposed), synthetic nodes, which let a plugin declare virtual
+  regions such as a chat header. ADR-0022 (one semantic model and presentation pipeline) is
+  marked Accepted.
 - Application identity helper: `gorca-identity.service` (`gorca --identity-helper`) verifies
   application identity outside any user namespace, so `gorca.service` keeps its full sandbox
   (`ProtectSystem`, `PrivateTmp`, `ProtectKernel*`). It uses a tagged, pipelined protocol with a
@@ -74,6 +84,15 @@ Fixed
   target.
 - `info.window_title` climbs to the window by fetching parents when the mirror lacks the
   ancestry.
+- The input lane no longer spins on the real-time keyboard thread while a gorca modifier is held
+  for more than 1.5 s: the stale-key deadline was left in the past, so the session loop never
+  slept, and the kernel's real-time CPU limit (SIGXCPU) demoted the lane for the rest of the run.
+  See `docs/reports/input-lane-sigxcpu.md`; the lane is still not promoted again after a
+  demotion.
+- Telegram Web plugin on a live session: gorca warns when plugins run inside a private user
+  namespace, where application identity cannot be verified; an unreadable plugin message
+  catalogue now produces a warning instead of silently dropping the chat names; and a fact on a
+  node a plugin only read is admitted once (`docs/reports/telegram-web-live-diagnosis.md`).
 
 Known issues
 
