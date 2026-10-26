@@ -1,0 +1,11 @@
+Host: Intel Core Ultra 9 285H (16 CPUs, P/E/LP-E), AVX2 + AVX-VNNI, no AVX-512. Release profile.
+Bench binary pinned with `taskset -c 2`; cpu2 governor: powersave (intel_pstate/HWP).
+Host NOT quiet: other agents building and testing concurrently.
+  20261026-kernels-run{1,2,3}.txt          load average 31.06 31.09 28.21 (utf8-scalar-count, common-prefix-chars,
+                                           dispatch-overhead; its utf8-extend rows are from the superseded
+                                           first extend implementation and must not be used)
+  20261026-extend-leafdiff-run{1,2,3}.txt  load average 26.07 25.77 26.86; these files hold the leaf-diff
+                                           group only (the filtered rerun overwrote the first extend+leaf-diff
+                                           output of the same names before it was archived; the extend table in
+                                           the report is transcribed from that console output)
+Summaries take the minimum per case over the three runs (bench/cpu/summarize.py).
