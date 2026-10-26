@@ -135,6 +135,7 @@ fn data_of(n: &SrcNode, sem: Option<Arc<SemEntry>>) -> Arc<NodeData> {
         value: None,
         article_tag: n.rec.as_ref().is_some_and(|r| r.tag.as_str() == "article"),
         sem,
+        basis: super::flags_sem::basis_of(n),
     })
 }
 
@@ -461,7 +462,7 @@ impl Translator {
             if let Some(id) = self.by_src.get(src).copied()
                 && let Some(e) = sem.sem(*src)
             {
-                Self::patch_sem(w, id, e)?;
+                Self::patch_sem(w, id, e, &mut break_parents)?;
             }
         }
 
@@ -881,37 +882,75 @@ impl Translator {
         Ok(())
     }
 
-    /// Replace the fused entry in the node's data (everything else of the data stays).
-    fn patch_sem(w: &mut DocWriter, id: DocNodeId, e: Arc<SemEntry>) -> Result<(), DocError> {
-        let Some(view) = w.doc().node(id) else {
+    /// Replace the fused entry in the node's data and re-derive what follows from it: the role,
+    /// the heading level and the structural flags, which the browse categories (headings,
+    /// landmarks, lists, articles, ...) are a pure function of (DM-4). An add-on fact that changes
+    /// the role of a node after the document was built therefore reaches quick navigation, the
+    /// position counts and the landmark ancestry through this one place. Cost: one `SetProps`
+    /// (the category index updates along the node's path, O(log n)).
+    fn patch_sem(
+        w: &mut DocWriter,
+        id: DocNodeId,
+        e: Arc<SemEntry>,
+        break_parents: &mut HashSet<DocNodeId>,
+    ) -> Result<(), DocError> {
+        let doc = w.doc();
+        let Some(view) = doc.node(id) else {
             return Ok(());
         };
-        let (data, cur_flags) = match view.data {
-            Some(m) => (m, view.flags),
+        let (data, cur_flags, cur_role, cur_level) = match view.data {
+            Some(m) => (m, view.flags, view.role, view.level),
             None => return Ok(()),
         };
-        // The fused role decides the article flag (an add-on patch can make a node an article or
-        // take the role away again); the page's own `<article>` keeps it either way, so a
-        // re-spec (`flags_of`) and a patch agree.
-        let article = data.article_tag || e.sem.role == gorca_model::sem::SemRole::Article;
-        let flags = if article {
-            cur_flags | NodeFlags::ARTICLE
+        let mut patch = PropsPatch::default();
+        let mut any = false;
+        let flags;
+        if data.basis.known {
+            let (derived, level) = super::flags_sem::flags_from_parts(
+                &data.basis,
+                &e.sem,
+                cur_flags.contains(NodeFlags::FRAME),
+            );
+            let keep = cur_flags.0 & (NodeFlags::BREAK_BEFORE.0 | NodeFlags::CELL_SEP.0);
+            flags = NodeFlags(without_breaks(derived).0 | keep);
+            if cur_role != e.sem.role {
+                patch.role = Some(e.sem.role);
+                any = true;
+            }
+            if cur_level != level {
+                patch.level = Some(level);
+                any = true;
+            }
         } else {
-            NodeFlags(cur_flags.0 & !NodeFlags::ARTICLE.0)
-        };
-        if data.sem.as_ref() == Some(&e) && flags == cur_flags {
-            return Ok(());
+            // A node built without its source facts: only the article flag follows the role.
+            let article = data.article_tag || e.sem.role == SemRole::Article;
+            flags = if article {
+                cur_flags | NodeFlags::ARTICLE
+            } else {
+                NodeFlags(cur_flags.0 & !NodeFlags::ARTICLE.0)
+            };
         }
-        let patched = NodeData {
-            sem: Some(e),
-            ..data.clone()
-        };
-        let patch = PropsPatch {
-            data: Some(Some(Arc::new(patched))),
-            flags: (flags != cur_flags).then_some(flags),
-            ..PropsPatch::default()
-        };
-        w.apply(DocOp::SetProps { id, patch })?;
+        if flags != cur_flags {
+            let changed = cur_flags.0 ^ flags.0;
+            if changed & (NodeFlags::BLOCK.0 | NodeFlags::HIDDEN.0) != 0
+                && let Some(p) = doc.parent(id)
+            {
+                break_parents.insert(p);
+            }
+            patch.flags = Some(flags);
+            any = true;
+        }
+        if data.sem.as_ref() != Some(&e) {
+            let patched = NodeData {
+                sem: Some(e),
+                ..data.clone()
+            };
+            patch.data = Some(Some(Arc::new(patched)));
+            any = true;
+        }
+        if any {
+            w.apply(DocOp::SetProps { id, patch })?;
+        }
         Ok(())
     }
 
@@ -1835,5 +1874,129 @@ mod tests {
         t.apply_fused(&mut w, vec![], &lookup, &[SrcNodeId(2)])
             .unwrap();
         assert!(!article_flag(&mut w, &t));
+    }
+
+    /// Fused entries by node, changed by the test between batches (an add-on's facts arriving).
+    struct PerNode(std::cell::RefCell<HashMap<SrcNodeId, Arc<SemEntry>>>);
+
+    impl SemLookup for PerNode {
+        fn sem(&self, id: SrcNodeId) -> Option<Arc<SemEntry>> {
+            self.0.borrow().get(&id).cloned()
+        }
+    }
+
+    fn entry_level(role: gorca_model::sem::SemRole, level: u8) -> Arc<SemEntry> {
+        let mut e = SemEntry::default();
+        e.sem.role = role;
+        e.sem.level = level;
+        Arc::new(e)
+    }
+
+    /// A document whose source roles are all plain, and whose headings, landmarks, list and list
+    /// items come only from facts applied after the load (a plugin's refinement): the browse
+    /// categories (H, D, L, I) find them in both directions, and follow a later patch.
+    #[test]
+    fn roles_that_arrive_as_facts_after_the_load_reach_the_quick_nav_categories() {
+        use gorca_doc::web::Cat;
+        use gorca_model::sem::SemRole;
+        let (mut w, _r) = channel(1);
+        let mut t = Translator::new();
+        let facts = PerNode(std::cell::RefCell::new(HashMap::new()));
+        // body(1) -> [a(2), b(3), list(4) -> [i(5), i(6)], c(7), d(8)], all plain paragraphs.
+        let batch = vec![
+            DocDelta::Reset {
+                root: SrcNodeId(1),
+                nav_id: 1,
+            },
+            DocDelta::Upsert(vec![
+                n(1, Role::DocumentWeb),
+                n(2, Role::Paragraph),
+                n(3, Role::Paragraph),
+                n(4, Role::Paragraph),
+                n(5, Role::Paragraph),
+                n(6, Role::Paragraph),
+                n(7, Role::Paragraph),
+                n(8, Role::Paragraph),
+            ]),
+            list(1, &[2, 3, 4, 7, 8]),
+            list(4, &[5, 6]),
+            DocDelta::Settled { batch: 1 },
+        ];
+        t.apply_fused(&mut w, batch, &facts, &[]).unwrap();
+        let ids: Vec<DocNodeId> = (2..=8).map(|n| t.id_of(SrcNodeId(n)).unwrap()).collect();
+        let (h2, nav, lst, i5, i6, h7, h8) =
+            (ids[0], ids[1], ids[2], ids[3], ids[4], ids[5], ids[6]);
+        for c in [Cat::HEADING, Cat::ANY_LANDMARK, Cat::LIST, Cat::LIST_ITEM] {
+            assert!(
+                w.doc().first_of(c).is_none(),
+                "nothing before the facts: {c:?}"
+            );
+        }
+
+        // The facts arrive: no upsert, only changed entries (what a plugin's reply does).
+        {
+            let mut m = facts.0.borrow_mut();
+            m.insert(SrcNodeId(2), entry_level(SemRole::Heading, 1));
+            m.insert(SrcNodeId(3), entry_level(SemRole::Navigation, 0));
+            m.insert(SrcNodeId(4), entry_level(SemRole::List, 0));
+            m.insert(SrcNodeId(5), entry_level(SemRole::ListItem, 0));
+            m.insert(SrcNodeId(6), entry_level(SemRole::ListItem, 0));
+            m.insert(SrcNodeId(7), entry_level(SemRole::Heading, 2));
+        }
+        let changed: Vec<SrcNodeId> = (2..=7).map(SrcNodeId).collect();
+        t.apply_fused(&mut w, vec![], &facts, &changed).unwrap();
+        let d = w.doc();
+        // H, forward and backward, with the level.
+        assert_eq!(d.first_of(Cat::HEADING), Some(h2));
+        assert_eq!(d.next(h2, Cat::HEADING), Some(h7));
+        assert_eq!(d.next(h7, Cat::HEADING), None);
+        assert_eq!(d.prev(h7, Cat::HEADING), Some(h2));
+        assert_eq!(d.prev(h2, Cat::HEADING), None);
+        assert_eq!(d.next(h2, Cat::HEADING_2), Some(h7));
+        assert_eq!(d.next(h2, Cat::HEADING_1), None);
+        // D.
+        assert_eq!(d.first_of(Cat::ANY_LANDMARK), Some(nav));
+        assert_eq!(d.next(h2, Cat::ANY_LANDMARK), Some(nav));
+        assert_eq!(d.prev(h7, Cat::ANY_LANDMARK), Some(nav));
+        assert_eq!(d.next(nav, Cat::ANY_LANDMARK), None);
+        // L and I.
+        assert_eq!(d.next(nav, Cat::LIST), Some(lst));
+        assert_eq!(d.prev(h7, Cat::LIST), Some(lst));
+        assert_eq!(d.next(lst, Cat::LIST_ITEM), Some(i5));
+        assert_eq!(d.next(i5, Cat::LIST_ITEM), Some(i6));
+        assert_eq!(d.prev(h7, Cat::LIST_ITEM), Some(i6));
+        assert_eq!(d.prev(i6, Cat::LIST_ITEM), Some(i5));
+        assert_eq!(d.prev(i5, Cat::LIST_ITEM), None);
+        // The node's own role and level are the fused ones.
+        assert_eq!(d.node(h2).unwrap().role, SemRole::Heading);
+        assert_eq!(d.node(h2).unwrap().level, 1);
+        assert_eq!(d.node(h7).unwrap().level, 2);
+
+        // A later patch: the first heading becomes level 3, the landmark goes away, a fourth
+        // plain paragraph becomes a heading.
+        {
+            let mut m = facts.0.borrow_mut();
+            m.insert(SrcNodeId(2), entry_level(SemRole::Heading, 3));
+            m.insert(SrcNodeId(3), entry_level(SemRole::Generic, 0));
+            m.insert(SrcNodeId(8), entry_level(SemRole::Heading, 1));
+        }
+        t.apply_fused(
+            &mut w,
+            vec![],
+            &facts,
+            &[SrcNodeId(2), SrcNodeId(3), SrcNodeId(8)],
+        )
+        .unwrap();
+        let d = w.doc();
+        assert_eq!(d.node(h2).unwrap().level, 3);
+        assert_eq!(d.first_of(Cat::HEADING_3), Some(h2));
+        assert!(
+            d.first_of(Cat::ANY_LANDMARK).is_none(),
+            "the landmark is gone"
+        );
+        assert_eq!(d.next(h7, Cat::HEADING), Some(h8));
+        assert_eq!(d.prev(h8, Cat::HEADING), Some(h7));
+        assert_eq!(d.next(h2, Cat::HEADING_1), Some(h8));
+        assert_eq!(d.first_of(Cat::HEADING_1), Some(h8));
     }
 }

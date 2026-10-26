@@ -368,6 +368,24 @@ pub struct NodeData {
     /// fused, for synthetic nodes and for sources that do not normalise. Read it through the
     /// mirror only; nothing else merges sources.
     pub sem: Option<Arc<SemEntry>>,
+    /// The source facts the node's flags are derived from (see [`SrcBasis`]).
+    pub basis: SrcBasis,
+}
+
+/// What the source said about a node that its structural flags depend on besides the fused entry:
+/// kept with the node so a later fact (an add-on patching the role) can recompute role, level and
+/// flags without the source node. `known` is false for nodes built without it (flags are then
+/// left alone by a patch).
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct SrcBasis {
+    pub known: bool,
+    /// The DOM tag of the source record.
+    pub tag: gorca_model::sem::TagName,
+    pub visible: bool,
+    pub focusable: bool,
+    /// The source record's `invalid` group was set.
+    pub invalid: bool,
 }
 
 /// Everything a source supplies for one node.
