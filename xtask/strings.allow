@@ -164,3 +164,5 @@ crates/gorca-core/src/doc_actor/translate.rs | child lists
 crates/gorca-core/src/doc_actor/translate.rs | props and text
 crates/gorca-core/src/doc_actor/translate.rs | patched entries
 crates/gorca-core/src/doc_actor/translate.rs | breaks and markers
+crates/gorca-core/src/browse/commands.rs | node={id:?} gone
+crates/gorca-core/src/browse/commands.rs | node={id:?} native={native:?} fused={:?} basis_known={known} tag={tag} src_focusable={focusable} visible={visible} attached={} sem_flags={}

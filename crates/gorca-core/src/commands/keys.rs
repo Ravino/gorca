@@ -43,6 +43,12 @@ impl Reader {
         {
             self.web_ctrl_down(fx);
         }
+        if intent.event.pressed
+            && self.web.as_ref().is_some_and(|w| w.mode.is_active())
+            && tracing::enabled!(target: "gorca_core::browse", tracing::Level::DEBUG)
+        {
+            trace_web_key(self, &intent);
+        }
         match intent.class {
             KeyClass::Command(cmd) | KeyClass::Watched(cmd) => {
                 self.run_command(cmd, &intent, now, fx);
@@ -195,6 +201,33 @@ fn is_logged_key(keysym: u32, gorca_modifiers: &[u32]) -> bool {
     MODIFIER_KEYS
         .iter()
         .any(|m| m.keysym == keysym && gorca_modifiers.contains(&keysym))
+}
+
+/// One debug line per key press while a web document is active (`gorca_core::browse`): the
+/// verdict of the input lane (a gorca command, or a key the page gets) next to the mode. The
+/// keysym is named only for non-printable keys; printable ones are never logged.
+fn trace_web_key(r: &Reader, intent: &KeyIntent) {
+    let sym = intent.event.keysym;
+    let printable = intent.event.unichar != 0 && !(0xffe1..=0xffee).contains(&sym);
+    let (verdict, cmd) = match intent.class {
+        KeyClass::Command(c) => ("consumed_by_gorca", crate::commands::CoreCmd::from_id(c)),
+        KeyClass::Watched(c) => ("watched_command", crate::commands::CoreCmd::from_id(c)),
+        KeyClass::Described(_) => ("described_in_learn_mode", None),
+        KeyClass::Ambiguous { .. } => ("ambiguous_not_executed", None),
+        KeyClass::ModifierPassThrough => ("modifier_passed_to_page", None),
+        KeyClass::PassToApp => ("passed_to_page_not_grabbed", None),
+        KeyClass::Swallowed => ("swallowed", None),
+        KeyClass::Injected => ("injected", None),
+    };
+    tracing::debug!(
+        target: "gorca_core::browse",
+        what = "web_key",
+        verdict,
+        cmd = ?cmd,
+        keysym = %if printable { String::from("printable") } else { format!("{sym:#x}") },
+        mode = ?r.mode,
+        web_mode = ?r.web_mode(),
+    );
 }
 
 #[cfg(test)]
