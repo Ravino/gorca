@@ -1,12 +1,13 @@
 # ADR-0030: List and set positions: sources declare, the core counts
 
-Status: **Proposed** (r1, 2026-10-26). Owner: architect.
+Status: **Accepted** (r2, 2026-10-26; owner answers Q-1..Q-3 in §8, index and virtualised-list rule from
+`docs/reports/list-position-math.md` in §2.3, §2.4, §2.7). Owner: architect.
 Amends: ADR-0022 §2.4 (computed positions leave `Semantics` and become a context value), ADR-0022 PR-4 (the spoken
 rule is now this ADR's §2.5), ADR-0024 §2.6 admission (plugins may not assert `setpos`), ADR-0029 §2.6 (one
 structural fact, `extent`, in the same WIT 0.11 bump). Builds on: ADR-0003 (`WebDoc` order-statistics mirror),
 ADR-0016 / ADR-0028 §2.2.1 (report fields), `docs/reports/virtual-list-navigation-math.md` (branch
-`math/virtual-list-nav`, commit `db16616d`, virtual-list detector rule D).
-Slot: `docs/reports/list-position-math.md` (math-researcher, in flight) supplies the index structure of §2.7.
+`math/virtual-list-nav`, commit `db16616d`), `docs/reports/list-position-math.md` (design A, rule RL; code and
+test vectors in `tools/research/list_position/`).
 
 ## 1. Context
 
@@ -79,9 +80,33 @@ the content, and both NVDA and Orca keep the index out of it. gorca follows them
 One pure function in `gorca-present`'s context layer, `resolve_position(item) -> Option<PosAnswer>`, used by every
 surface (focus, browse, quick nav, object navigation, where-am-I; LP-7).
 
-**Set membership (computed).** The set of an item is the run of siblings under the same published parent (synthetic
-containers count as parents; hidden nodes and flattened levels are already out of the published view) whose fused
-role is in the item class of the parent's role:
+**Set membership (computed), r2: nearest-list ownership.** An item belongs to its **nearest list ancestor** in the
+published fused tree (synthetic containers count; hidden nodes and flattened levels are already out of the published
+view), crossing any non-list wrappers between them; an item inside a nested list belongs to the nested list only.
+Formally (math report §1): `owner(x)` = nearest proper ancestor `y` with `LIST ∈ cats(y)`; `members(L)` = the items
+with `owner = L`, in document order.
+
+Why nearest-list and not direct children:
+
+- **Real pages wrap items.** React-style renderers put generic `div`s between a list and its items (Telegram's chat
+  list has both wrapped and bare rows, `docs/reports/telegram-web-live-diagnosis.md` §"Chat list as a list"), and
+  ARIA 1.2 allows `generic` between `list` and `listitem`. Direct-children counting says "0 items" for such a list,
+  and a plugin would have to re-role or flatten every wrapper just to get a count. That is the drift this ADR
+  removes.
+- **Same answer as the user's model.** Quick nav `I` and the elements list already treat such items as items of
+  that list; the count must agree (LP-7).
+- **Cost.** With the same signed weights, direct-children semantics gives unowned items weight 0 and makes a list
+  toggle (a late role patch, a synthetic wrap) cost O(children); nearest-list keeps every op at O(log n + D) (math
+  report §2.1, §6).
+- Nested lists stay separate, as in Gecko's and Chromium's group computation and in both screen readers.
+
+Design A (§2.7) covers the list family (`List`, `Listbox` with `ListItem`, `Option`: the `LIST` / `LIST_ITEM`
+categories). The other families in the table keep declared values (engines compute them for real ARIA widgets,
+which plugins rarely re-shape). When one of them is patched, its computed position is a count over the parent's
+direct children, bounded at 256 members (beyond that: no computed position, no total). A per-family weight triple
+(+12 B/node each, math report §5) is added only when a measurement shows a patched large menu, tab list or tree.
+
+Item classes per family:
 
 | Parent role | Item roles |
 |---|---|
@@ -93,18 +118,16 @@ role is in the item class of the parent's role:
 | `RadioGroup` | `Radio` |
 | `Feed` | `Article` |
 
-Other children (separators, wrappers the plugin did not re-role) are skipped, not counted. Nested lists are their own
-sets. Tables and grids keep ADR-0022 `GridPos` and are out of scope here.
+Other descendants (separators, wrappers) are crossed, not counted. Nested lists are their own sets. Tables and grids keep ADR-0022 `GridPos` and are out of scope here.
 
 **Precedence, per field (position and size resolved independently):**
 
-1. **Declared, structure unpatched.** `sem.pos` from the source (`Engine` or `Author`) is used when the item's role,
-   its parent's role and the parent's child set are all unpatched: the item's `ProvTag` role nibble is the observed
-   stratum S0, and the parent's `struct_patched` counter (§2.7) is 0. This is the common case (real `<ul>`, ARIA
+1. **Declared and consistent, structure unpatched.** `sem.pos` from the source (`Engine` or `Author`) is used when
+   (a) the item's `ProvTag` role nibble is the observed stratum S0 and its owner list's `struct_patched` counter
+   (§2.7) is 0, and (b) the declared values are consistent (RL-1, §2.4). This is the common case (real `<ul>`, ARIA
    listboxes, GTK lists) and keeps an author's `aria-posinset="1003" aria-setsize="30000"`.
-2. **Declared size, patched structure.** A declared `setsize` (from items or from `setsize=-1`) is still taken under
-   patches when it is the same on every item that carries one; a declared `posinset` is not (the plugin may have
-   moved the item into a different set).
+2. **Declared size, patched structure.** A declared `setsize` (including `-1`) is still taken under patches when it
+   is consistent (RL-1); a declared `posinset` is not (the plugin may have moved the item into a different set).
 3. **Computed.** Otherwise `pos = 1 + |preceding set members|`, `size = |set members|`, `src = Computed`, subject to
    the extent rule (§2.4).
 
@@ -116,13 +139,13 @@ on the container node itself is ignored.
 pub enum ListExtent {
     Complete(u32),   // computed over a list the core knows to be whole
     Declared(u32),   // author or engine setsize
-    OpenEnded,       // setsize = -1, INDETERMINATE, plugin `extent`, or virtual-list detector
+    OpenEnded,       // setsize = -1, INDETERMINATE, plugin `extent`, or a suspect list (RL-3)
     Pending,         // mirror coverage of the list is not complete yet (ADR-0003 coverage)
 }
 pub struct PosAnswer { pub pos: Option<u32>, pub extent: ListExtent, pub src: PosSrc }
 
 pub trait SetIndex {                     // implemented by WebDoc and by the app actor's node store
-    fn item_pos(&self, item: NodeRef) -> Option<PosAnswer>;   // O(log n), §2.7
+    fn item_pos(&self, item: NodeRef) -> Option<PosAnswer>;   // O(log n + D), §2.7
     fn extent(&self, list: NodeRef) -> ListExtent;            // O(1)
 }
 ```
@@ -138,16 +161,31 @@ A total is spoken only when it is `Declared` or `Complete` (LP-2).
 | `OpenEnded` | "list" (no count) | declared `posinset` only, as "item p" (Orca's `GROUP_INDEX_TOTAL_UNKNOWN_SPEECH`); a computed `p` is a window index and is **not** said |
 | `Pending` | "list" (no count), `may_refine` | nothing until coverage completes |
 
-`OpenEnded` holds when any of:
+The total and position rule (r2; the math report's rule RL, §3.2), in order:
 
-- a declared `setsize = -1` on the items, or the `INDETERMINATE` state on the list (Orca's
-  `get_set_size_is_unknown`);
-- a plugin's `extent = open-ended` on the list node (T2 built, T3-trusted built and tainted, T3 advisory; the
-  ADR-0029 trust table);
-- the virtual-list detector's rule D for that container: declared (`setsize` greater than rendered items, or the
-  first rendered `posinset > 1`) or at least 2 scroll-attributed churn episodes
-  (`virtual-list-navigation-math.md` §4: FPR ≈ 2.9 %, FNR ≈ 8.6 % at 2 episodes). The mark is sticky for the
-  document's lifetime.
+- **RL-1 Author data.** Declared values are consistent when every rendered member that carries a `setsize` carries
+  the same value `> 0`, `setsize ≥` the largest `posinset`, and the `posinset` values are distinct and increase in
+  document order. They then give both the total (`Declared(n)`) and the position. The check is incremental: each
+  query compares the item with its previous and next members (`list_kth`, O(log n)). A failed check marks the list
+  `decl_inconsistent` (sticky until its members change), and declared values are then ignored for it.
+  `setsize = -1` on the items, or the `INDETERMINATE` state on the list (Orca's `get_set_size_is_unknown`), makes
+  the list `OpenEnded`.
+- **RL-2 Plugin fact.** A plugin's `extent = open-ended` on the list node makes it `OpenEnded` (T2 built,
+  T3-trusted built and tainted, T3 advisory; the ADR-0029 trust table). Unlike the option in the math report, a
+  plugin never supplies a total (LP-1).
+- **RL-3 Suspicion.** The list is *suspect*, hence `OpenEnded`, once any of these is observed: the first rendered
+  `posinset > 1`; a declared `setsize` larger than the rendered members; the role `Feed`; **one** scroll-attributed
+  churn episode (members added or removed at an end of the list within 300 ms of a scroll, a gorca `ScrollTo` or a
+  focus move inside it). One episode is enough because a false alarm only withholds a number. Math report §3.2:
+  0 % of correct totals withheld; false totals 3.2 % (general web) and 11.2 % (chat apps), against 15.2 % and
+  53.4 % for the NVDA/Orca behaviour. `aria-busy` alone does not mark a list: it already suppresses speech
+  (ADR-0022 §2.7), and a list that loads once would be withheld forever.
+- **RL-4 Memory per list identity.** Suspicion is remembered per list identity: document origin + list signature
+  (the ADR-0029 anchor of a synthetic list, else the role/class path from the nearest landmark). It survives
+  revisits and reloads for the session, in RAM (ADR-0002 PR-4: no new persisted data), and is cleared only when a
+  source epoch bump changes the signature. Persisting it across sessions (hashes of origin and signature, no
+  content) needs a later amendment, once measured.
+- **RL-5 Otherwise** design A's DOM count and rank are exact: `Complete(n)`, "p of n".
 
 `Complete(n)` for web content needs a list that is not `OpenEnded` and whose subtree coverage in the mirror is
 complete. Native lists: the toolkit's child list is the whole list (GTK3 tree views export every row, GTK4 exports
@@ -155,8 +193,9 @@ complete. Native lists: the toolkit's child list is the whole list (GTK3 tree vi
 Orca shortcut applies for item-only parents (`List`, `Listbox`, `Tree`): index-in-parent and child count. No IPC on
 the presentation path (ADR-0022 SM-6): an unknown answer is no answer.
 
-Known limit: an undeclared virtual list without a plugin is `Complete(window)` until the detector has seen two
-scrolls (detector FNR ≈ 60 % before that). This is the same as Orca and NVDA today. The Telegram plugin asserts
+Known limit (proven unavoidable, math report §3.1): on its first visit, an undeclared virtual list without a plugin
+is `Complete(window)` until one window move is seen, because an idle window cannot be told apart from a short static
+list. This is no worse than Orca and NVDA, and RL-4 makes it happen once per list per session. The Telegram plugin asserts
 `open-ended` on its message list and chat list, so Telegram never hears a window count.
 
 ### 2.5 When it is spoken, and the report fields
@@ -197,24 +236,40 @@ facts). `PosSrc::Computed` never appears in a `SemEntry`; it appears in `PosAnsw
 Changes to positions are never spoken by themselves (an item becoming "4 of 31" because a message arrived is not a
 state change, ADR-0022 ST rules).
 
-### 2.7 Cost model (slot for the math result)
+### 2.7 Index: signed-weight set rank on the document treap (design A, the specified implementation)
 
-- **Key path:** `item_pos` is O(log n) and `extent` O(1); no scan of siblings, no IPC. Budget: p99 ≤ 5 µs per call
-  at a 100 000-node document with a 10 000-item list, inside the 15 ms keypress budget with three orders of margin.
-- **Update path:** each `DocOp` (`InsertSubtree`, `MoveSubtree`, `SyncChildren`, `RemoveSubtree`, `SetProps` of a
-  role) maintains the counts in O(k log n) for k touched nodes, like the existing per-category counts
-  (`crates/gorca-doc/src/web/doc.rs:1144,1174`, `cats.rs` `RANKED` already has `LIST` and `LIST_ITEM`). The writer
-  keeps `struct_patched: u16` per parent (children with a role patch, `hide`, `flatten`, or a synthetic level),
-  updated in the same `FUSE` step, O(1).
-- **Structure:** the exact per-parent order-statistics design (counting set members among a parent's children,
-  excluding nested lists, under patches and window shifts) is the math-researcher's
-  `docs/reports/list-position-math.md` (branch in flight). Its result fills this section in r2; LP-4 and the M-1
-  budget are the acceptance criteria it must meet.
-- **Interim (until the index lands):** an O(c) count of the parent's children, capped at c ≤ 512; above the cap the
-  answer is `Pending` (no total, no computed position). The current browse entry count (`browse/present.rs:183`) is
-  replaced by the resolver with the same cap.
-- **Native:** the app actor's `ChildList::Known` gives index and count; c is small (menus, tab lists); the same
-  512 cap applies.
+r2 replaces the r1 interim 512-item cap. Source: `docs/reports/list-position-math.md` §2.1 (Invariant W and
+corollaries R and K proven; property test `prop_test.py 300 80`, 24k random ops, full agreement with the oracle).
+
+- **Weights.** Each `WebDoc` treap node gets `w: i32`: `+1` for a visible list item, `−c(L)` for a visible list
+  `L` that owns `c(L)` items, `0` otherwise. The document root is a sentinel list and is never reported. The treap
+  summary gains `wsum` and `wmax` (the maximum non-empty prefix sum), folded into the existing pull next to `cnt`
+  (`crates/gorca-doc/src/web/doc.rs`). The kind comes from the node's own cats (`LIST_ITEM`, `LIST`;
+  `crates/gorca-doc/src/web/cats.rs`), so hidden and presentational nodes drop out for free. +12 B/node (1.2 MB at
+  100k nodes).
+- **Queries** (read-only, no splits, deterministic): `list_count(L)` is O(1) (stored `c(L) = −w(L)`);
+  `list_rank(x) -> (owner, p)` = `1 + Σ w over (pos(L), pos(x))` is O(log n + D), where D is the owner-walk depth;
+  `list_kth(L, k)` is a `wmax`-guided descent, O(log n). `list_kth` serves the RL-1 neighbour checks and the
+  first/last/item-k commands.
+- **Updates.** Every `DocOp` changes the weight of at most three nodes (the node, its old owner, its new owner).
+  This covers insert, remove, move, `SetProps` role or hidden toggles, a node becoming or ceasing to be a list, and
+  ADR-0029 wrap and dissolve. Each costs O(log n + D) on top of the treap op already paid; reorder costs nothing. A
+  role patch that turns a node with 10k item children into a list costs O(log n + D), not O(10k). Hook points: the
+  `SetProps`/patch path (`Translator::patch_sem` and the cats update in `doc.rs`), the `InsertSubtree` build, and
+  the split during remove/detach (math report §5). An optional `WrapRun` op makes an ADR-0029 wrap a single treap
+  insert.
+- **`validate()`** gains `wsum(root) == 0` and `c(L) == Σ w(interior L)` for every list. The test vectors
+  `tools/research/list_position/vectors.json` (5 scenarios, 148 ops) become a `gorca-doc` test.
+- **Measured** (Python model, in steps): at 100k nodes with a 10k-item list, key rank + count p99 is 112 steps
+  (≈ 0.5–1.2 µs in Rust) and kth p99 is 171; patch ops p99 are 56–430 steps, including the existing treap work;
+  Telegram fixtures key p99 is 42–52 steps. Worst case D = 500 (the Blink parser's nesting cap): ≈ 3 µs.
+- **Bounded key path:** "p of n" costs ≤ D + 4h steps and "n items" O(1); no scan, no IPC, independent of list
+  length. The RL-1 neighbour check adds ≤ 2 kth descents.
+- **`struct_patched: u16` per list** counts the members with a role patch, `hide`, `flatten` or a synthetic level.
+  It is kept in the same `FUSE` step, O(1), and feeds precedence step 1.
+- **Native:** the app actor's `ChildList::Known` gives index and count over direct children (native toolkits do not
+  wrap list items). Native sets are small (menus, tab lists) or declared (GTK4 `setsize`); the 256-member bound of
+  the non-list families applies.
 
 ### 2.8 Plugin API changes (WIT 0.11, the single WIT-11 bump)
 
@@ -232,7 +287,7 @@ state change, ADR-0022 ST rules).
 | C. Computed positions inside `Semantics` (ADR-0022 §2.4 as written) | O(n) `sem_rev` bumps per head insertion; worst exactly on churning virtual lists |
 | D. Always say a count (rendered children), like the current browse code | dishonest for virtual lists: "40 items" for a 30 000-message chat |
 | E. Position in browse lines by default | neither NVDA nor Orca does it; extra words on every line for a 1000 wpm listener; available as `report.position = always` |
-| F. Orca's default (focus position off) | NVDA's default is on, ADR-0022 PR-4 already chose on, and the field is last so it costs nothing to a fast listener who moves on; open question Q-1 |
+| F. Orca's default (focus position off) | NVDA's default is on, ADR-0022 PR-4 already chose on, and the field is last so it costs nothing to a fast listener who moves on; owner chose on (Q-1, §8) |
 
 ## 4. Consequences
 
@@ -248,8 +303,8 @@ state change, ADR-0022 ST rules).
 - **LP-1** Positions and totals are computed only by the core resolver. Plugins never assert a number.
 - **LP-2** A total is spoken only when the extent is `Declared` or `Complete`.
 - **LP-3** Computed positions are never stored in `SemEntry`; a sibling's insertion bumps no `sem_rev`.
-- **LP-4** The key path does O(log n) work for a position and O(1) for an extent; no IPC; bounded by the 512 cap
-  until the index lands.
+- **LP-4** The key path does O(log n + D) work for a position and O(1) for a total; no IPC; independent of list
+  length.
 - **LP-5** A declared `posinset` is used only while the item's role and its parent's child set are unpatched.
 - **LP-6** Report fields gate words only; navigation and where-am-I answers are unchanged by them.
 - **LP-7** The same item gives the same `PosAnswer` on every surface (ADR-0022 PR-3).
@@ -258,32 +313,42 @@ state change, ADR-0022 ST rules).
 
 | Id | Metric | Target |
 |---|---|---|
-| M-1 | `item_pos` p99, 100k-node doc, 10k-item list, under 1k ops/s churn | ≤ 5 µs (interim scan: ≤ 50 µs at c = 512) |
-| M-2 | `DocOp` throughput loss from set counts | ≤ 10 % vs `main` on the B-2 web corpus |
+| M-1 | `item_pos` p99, 100k-node doc, 10k-item list, under 1k ops/s churn | ≤ 2 µs (Rust, design A) |
+| M-2 | `DocOp` throughput loss from the weights | ≤ 10 % vs `main` on the B-2 web corpus |
+| M-2b | `validate()` W invariant and the 148-op vector suite, after every op | 100 % pass |
 | M-3 | Resolver vs engine agreement on unpatched Firefox and Chromium list fixtures | 100 % (`pos`, `size`) |
 | M-4 | Telegram fixtures (message list, chat list) | entry says "list", no "of n" with a window count, 0 utterances with a total |
 | M-5 | Keypress → speech p99 (CLAUDE.md budget) on the Telegram fixture with `report.position = always` | unchanged within noise |
-| M-6 | Detector-marked lists on the B-2 corpus (non-virtual lists marked `OpenEnded`) | ≤ 3 % (math report FPR) |
+| M-6 | Suspect-marked lists on the B-2 corpus that are not virtual | ≤ 3 % |
+| M-7 | Undeclared-virtual share of lists in Telegram, Slack, Signal (re-tunes RL-3) | measured and reported |
 
 ## 7. Slices
 
 - **LP-a** Resolver + native focus position (declared values from GTK4/Gecko/Chromium, last field), where-am-I on the
-  resolver, `report.position`, `info-position` / `position-no-total`. Interim cap.
-- **LP-b** Web computed positions over the fused tree, `struct_patched`, extent from declared values and coverage,
-  `report.list_item_count`; browse entry count via the resolver.
-- **LP-c** `extent` structural fact (WIT-11), plugin `setpos` → `NotAdmitted`, Telegram plugin asserts open-ended,
-  detector hook (rule D) when the virtual-list cursor lands.
-- **LP-d** Order-statistics index from `list-position-math.md`; removes the cap; M-1/M-2 measured.
+  resolver, `report.position`, `info-position` / `position-no-total`.
+- **LP-b** Design A in `WebDoc` (weights, `list_count` / `list_rank` / `list_kth`, `validate`, the vector suite),
+  nearest-list membership, `struct_patched`, RL-1 consistency, `report.list_item_count`; browse entry count and
+  where-am-I through the resolver. The O(c) `facts_of` scan (`browse/present.rs:183`) is deleted in the same slice
+  (ADR-0022 §8.3). M-1, M-2, M-2b measured.
+- **LP-c** `extent` structural fact (WIT-11), plugin `setpos` → `NotAdmitted`, the Telegram plugin asserts
+  open-ended on its message and chat lists, RL-3 suspicion (churn attribution) and RL-4 per-identity memory.
 
-## 8. Open questions (owner)
+## 8. Owner answers (2026-10-26)
 
-- **Q-1** Focus-mode position default: **on** (NVDA, this ADR) or off (Orca)?
-- **Q-2** An open-ended list on entry: "list" (this ADR) or "list of unknown size" (Orca)?
-- **Q-3** For Telegram specifically, do you want positions in browse mode (`report.position = always` in the
-  telegram site row), knowing they will be declared-only ("item 1003") or absent, never window indices?
+- **Q-1** Positions in focus mode are **on** by default (NVDA): `report.position = focus`.
+- **Q-2** A list of unknown size is announced simply as **"list"**, with no "unknown size" wording; the catalog has
+  no such message.
+- **Q-3** Positions stay **off in browse mode for everyone**, Telegram included; no site or app row overrides the
+  default. `report.position = always` stays a user's own choice.
 
 ## 9. Changelog
 
 **r1 (2026-10-26)** — first version: sources declare, core counts, plugins only shape structure and may say
 `open-ended`; precedence and extent rules; NVDA/Orca-aligned defaults; `report.position` and
 `report.list_item_count`; computed positions moved out of `Semantics`; cost slot for `list-position-math.md`.
+
+**r2 (2026-10-26)** — Accepted with the owner's answers (§8). Nearest-list ownership instead of direct children
+(§2.3; justified by wrappers, consistency with quick nav, and cost). Design A (signed weights on the document treap)
+is the specified index and replaces the 512-item cap (§2.7). The math report's rule RL is adopted as RL-1..RL-5
+(§2.4): one scroll-attributed churn episode marks a list suspect, remembered per list identity for the session;
+plugins still never supply totals. Metrics and slices updated (LP-d folded into LP-b).
