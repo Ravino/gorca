@@ -288,3 +288,26 @@ Fix, three layers:
 Quick rollback: plugin pin `eb4e661a` (installed wasm + its catalogs) with this or the previous core: it never
 patches chat rows to list items (the chat list is only a navigation landmark there). The core index fix is
 independent of it.
+
+## Follow-up 7: focus mode and silent Enter with the plugin's chat list (reproduced in a core test)
+
+Evidence: `browse::tests::a_plugin_list_around_a_focused_link_keeps_browse_mode_and_enter_activates_the_link`
+(shape from the owner's dump: focusable list > wrapper > focused link with a click action) failed at the first
+assertion: a focus event on the **focusable `chat-list` container** with the plugin's role `list` entered focus
+mode (`Focus { cause: Auto }`). Root cause: `forms::passes_through` treats a focusable `List` as a widget
+("lists are passive text in a page; a focusable one is a widget"), and `node_facts` fed it the fused (patched)
+role. After a page refresh Firefox puts the focus on that tabindex container first, so the page started in
+focus mode (letters typed, Enter silent). The earlier guard (interactive nodes are never downgraded) did not
+touch this path: the container was never interactive.
+Fix at the root: browse-mode decisions (focus mode, activation) read the role the SOURCE reported
+(`NodeData.basis.native`, authored role tokens already folded in), never the fused role of a later fact
+(`node_facts`). A fact can describe a node (list, heading, landmark: speech, quick-nav index) but cannot change
+what the node can do. Together with the bridge guard of follow-up 6 this is the ADR-0022 section 8.7 rule:
+plugin facts refine presentation and structure; capability comes from the node.
+The test also covers: before the facts, after the facts, after a full rebuild of the document with the facts
+already known; Enter clicks the focused link in all three; L, I and D (list, row wrapper, navigation landmark)
+are found and spoken from the document start.
+Detached-node rebuilds (`doc batch rejected ... not in the document tree`): not produced by `patch_sem`
+(`SetProps` does not require attachment). The error is `DocError::NotAttached` from `SyncChildren` (a listed
+child inside a detached subtree) during a reload/re-render. The warning now names the step
+(`stage = "child lists" | "removals" | ...`), so the next occurrence says which op; the doc is rebuilt either way.

@@ -92,6 +92,8 @@ pub struct Translator {
     orphans: HashMap<SrcNodeId, SrcNode>,
     deferred: HashMap<SrcNodeId, Vec<SrcNodeId>>,
     stats: TranslatorStats,
+    /// The step of the batch being applied (for the log when the mirror rejects an op).
+    stage: &'static str,
 }
 
 /// One batch, collected.
@@ -305,6 +307,11 @@ impl Translator {
     /// updates carries its fused entry in its meta (the entry is part of the back copy before
     /// the publish), and `changed` lists nodes whose entry changed without an upsert (a
     /// neighbour's content, a fact): their meta is patched in place.
+    /// The step the last batch was in (the log line of a rejected batch names it).
+    pub fn stage(&self) -> &'static str {
+        self.stage
+    }
+
     pub fn apply_fused(
         &mut self,
         w: &mut DocWriter,
@@ -368,11 +375,13 @@ impl Translator {
         }
 
         // 1. A new document: the root stays, the rest of the tree goes.
+        self.stage = "reset";
         if let Some(root_src) = c.reset {
             out.reset = true;
             self.begin_document(w, root_src, &mut c, &mut out, &mut touched)?;
         }
 
+        self.stage = "child lists";
         // 2. Child lists, parents first: a list whose parent is mirrored is applied now; the
         // lists of nodes created on the way are consumed while their subtree is assembled.
         let order = c.list_order.clone();
@@ -403,6 +412,7 @@ impl Translator {
         }
 
         // 3. Removals nothing kept.
+        self.stage = "removals";
         for src in std::mem::take(&mut c.removed) {
             let Some(id) = self.by_src.get(&src).copied() else {
                 self.orphans.remove(&src);
@@ -420,6 +430,7 @@ impl Translator {
         }
 
         // 4. Props and text of nodes that already existed.
+        self.stage = "props and text";
         let upserts = std::mem::take(&mut c.upserts);
         // One budget for both pending pools (N4): parked ids plus parked orphans.
         let mut held: usize =
@@ -453,6 +464,7 @@ impl Translator {
             }
         }
 
+        self.stage = "patched entries";
         // 4b. Entries that changed without an upsert (a neighbour's content, a forwarded fact):
         // the meta is patched in place. Not a content change: nothing is marked touched.
         for src in changed {
@@ -468,6 +480,7 @@ impl Translator {
         }
 
         // 5. Breaks, then markers.
+        self.stage = "breaks and markers";
         for p in break_parents {
             if w.doc().is_attached(p) {
                 Self::recompute_breaks(w, p)?;
@@ -477,6 +490,7 @@ impl Translator {
 
         out.touched = touched.iter().copied().take(TOUCHED_CAP).collect();
         // 6. Reap what is still detached.
+        self.stage = "reap";
         self.reap(w, &mut out)?;
         Ok(out)
     }

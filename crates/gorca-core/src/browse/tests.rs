@@ -4336,3 +4336,169 @@ fn reading_a_character_of_a_secret_field_never_speaks_a_plaintext_char() {
         "{around}"
     );
 }
+
+// ---- plugin roles around a focused link (the Telegram chat list) --------------------------
+
+struct PluginFacts(
+    std::cell::RefCell<std::collections::HashMap<SrcNodeId, Arc<gorca_model::sem::SemEntry>>>,
+);
+
+impl crate::doc_actor::fuse::SemLookup for PluginFacts {
+    fn sem(&self, id: SrcNodeId) -> Option<Arc<gorca_model::sem::SemEntry>> {
+        self.0.borrow().get(&id).cloned()
+    }
+}
+
+fn plugin_entry(
+    role: gorca_model::sem::SemRole,
+    focusable: bool,
+) -> Arc<gorca_model::sem::SemEntry> {
+    let mut e = gorca_model::sem::SemEntry::default();
+    e.sem.role = role;
+    if focusable {
+        e.sem.flags |= gorca_model::sem::SemFlags::FOCUSABLE;
+    }
+    Arc::new(e)
+}
+
+/// body(1) -> block(2) -> focusable block(3, the chat list) -> block(4, the row wrapper) ->
+/// focusable link(5, locals 3005) -> run(6): the shape of the live Telegram chat list.
+fn chat_list_page() -> Vec<DocDelta> {
+    let mut body = block(src(1, Role::DocumentWeb, Some(1001)));
+    body.name = Some(Arc::from("Chats"));
+    let mut list = block(src(3, Role::Paragraph, Some(3003)));
+    list.states |= StateSet::FOCUSABLE;
+    let mut link = src(5, Role::Link, Some(3005));
+    link.states |= StateSet::FOCUSABLE;
+    link.name = Some(Arc::from("Ross 05:05"));
+    vec![
+        DocDelta::Reset {
+            root: SrcNodeId(1),
+            nav_id: 2,
+        },
+        DocDelta::Upsert(vec![
+            body,
+            block(src(2, Role::Paragraph, None)),
+            list,
+            block(src(4, Role::Paragraph, None)),
+            link,
+            run(6, "Ross 05:05"),
+        ]),
+        kids(1, &[2]),
+        kids(2, &[3]),
+        kids(3, &[4]),
+        kids(4, &[5]),
+        kids(5, &[6]),
+        DocDelta::Settled { batch: 2 },
+    ]
+}
+
+fn install_chat_list(r: &mut Rig, facts: &PluginFacts, changed: &[SrcNodeId], page: Vec<DocDelta>) {
+    let out =
+        r.tr.apply_fused(&mut r.writer, page, facts, changed)
+            .unwrap();
+    r.writer.publish();
+    for (l, id) in out.join_add {
+        r.join.set(
+            NodeKey {
+                app: app(),
+                local: l,
+            },
+            (DocId(1), id),
+        );
+    }
+}
+
+fn assert_enter_clicks_the_link(r: &mut Rig, what: &str) {
+    let fx = r.focus(3005);
+    assert!(
+        matches!(r.mode(), WebMode::Browse { .. }),
+        "{what}: focus on the link keeps browse mode, got {:?}",
+        r.mode()
+    );
+    let fx2 = r.key(CoreCmd::BrowseActivate);
+    let acts = effects_web(&fx2);
+    assert!(
+        acts.iter().any(|a| matches!(
+            a,
+            WebEffect::Act {
+                act: DocAction::Click,
+                ..
+            }
+        )),
+        "{what}: Enter clicks the focused link: {acts:?} (focus said {:?})",
+        spoken(&fx)
+    );
+    assert!(
+        matches!(r.mode(), WebMode::Browse { .. }),
+        "{what}: still browse mode after Enter"
+    );
+}
+
+#[test]
+fn a_plugin_list_around_a_focused_link_keeps_browse_mode_and_enter_activates_the_link() {
+    use gorca_model::sem::SemRole;
+    let mut r = rig();
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![
+                snap(3005, Role::Link, "Ross 05:05", StateSet::FOCUSABLE),
+                snap(3003, Role::Paragraph, "", StateSet::FOCUSABLE),
+            ],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    let facts = PluginFacts(std::cell::RefCell::new(std::collections::HashMap::new()));
+    install_chat_list(&mut r, &facts, &[], chat_list_page());
+    assert_enter_clicks_the_link(&mut r, "before the facts");
+
+    // The plugin's facts arrive: a navigation landmark, a (focusable) list, a list item wrapper.
+    {
+        let mut m = facts.0.borrow_mut();
+        m.insert(SrcNodeId(2), plugin_entry(SemRole::Navigation, false));
+        m.insert(SrcNodeId(3), plugin_entry(SemRole::List, true));
+        m.insert(SrcNodeId(4), plugin_entry(SemRole::ListItem, false));
+    }
+    install_chat_list(
+        &mut r,
+        &facts,
+        &[SrcNodeId(2), SrcNodeId(3), SrcNodeId(4)],
+        Vec::new(),
+    );
+    r.focus(3003);
+    assert!(
+        matches!(r.mode(), WebMode::Browse { .. }),
+        "focus on the focusable list container stays browse mode, got {:?}",
+        r.mode()
+    );
+    assert_enter_clicks_the_link(&mut r, "after the facts");
+
+    // The plugin's roles are what quick navigation finds and speaks.
+    r.focus(1001);
+    let fx = r.key(CoreCmd::QuicknavNextList);
+    let said = spoken(&fx).join(" | ");
+    assert!(said.contains("list"), "L finds the plugin list: {said}");
+    let fx = r.key(CoreCmd::QuicknavNextListItem);
+    let said = spoken(&fx).join(" | ");
+    assert!(
+        said.contains("list item"),
+        "I finds the row wrapper: {said}"
+    );
+    let fx = r.key(CoreCmd::QuicknavNextLandmark);
+    let said = spoken(&fx).join(" | ");
+    assert!(
+        said.contains("navigation") || said.contains("landmark"),
+        "D finds the navigation landmark: {said}"
+    );
+
+    // A full rebuild of the document (a reload) with the facts already known.
+    install_chat_list(&mut r, &facts, &[], chat_list_page());
+    r.focus(3003);
+    assert!(
+        matches!(r.mode(), WebMode::Browse { .. }),
+        "focus on the list after a rebuild, got {:?}",
+        r.mode()
+    );
+    assert_enter_clicks_the_link(&mut r, "after a rebuild");
+}

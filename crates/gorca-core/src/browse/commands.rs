@@ -556,7 +556,13 @@ fn is_group(v: &gorca_doc::web::NodeView<'_>) -> bool {
 
 /// The model role of a document node, its pass-through facts and its toggle states.
 fn node_facts(d: &WebDoc, id: DocNodeId) -> (SemRole, PassFacts, Toggles) {
-    let role = d.node(id).map_or(SemRole::Unknown, |v| v.role);
+    // The decisions (focus mode, activation) follow the role the source reported: a fact that
+    // describes a node differently (a plugin calling a focusable block a list) must not make it
+    // a widget or take its activation away.
+    let role = d.node(id).map_or(SemRole::Unknown, |v| match v.data {
+        Some(m) if m.basis.known => m.basis.native,
+        _ => v.role,
+    });
     match entry_at(d, id) {
         Some(e) => (role, PassFacts::of(&e.sem, false), Toggles::of(&e.sem)),
         None => (role, PassFacts::default(), Toggles::default()),

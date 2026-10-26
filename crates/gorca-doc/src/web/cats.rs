@@ -386,6 +386,10 @@ pub struct SrcBasis {
     pub focusable: bool,
     /// The source record's `invalid` group was set.
     pub invalid: bool,
+    /// The role the source reported (authored role tokens already folded in), before any later
+    /// fact refined the fused role. Browse-mode decisions (focus mode, activation) read this one:
+    /// what a node can do comes from the node, not from an add-on's description of it.
+    pub native: SemRole,
 }
 
 /// Everything a source supplies for one node.
