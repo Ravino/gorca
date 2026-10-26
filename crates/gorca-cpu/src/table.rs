@@ -7,6 +7,7 @@ use std::sync::{Once, OnceLock};
 use crate::defs;
 use crate::detect::{CpuInfo, cpu_info, detect};
 use crate::disable::DisableList;
+use crate::enabled::Enabled;
 use crate::feature::{Feature, FeatureSet};
 use crate::registry::{Choice, KernelInfo};
 use crate::report;
@@ -24,7 +25,7 @@ macro_rules! declare_kernels {
         impl Kernels {
             /// Resolve every kernel against `enabled`.
             #[must_use]
-            pub fn resolve(enabled: FeatureSet) -> (Kernels, Vec<Choice>) {
+            pub fn resolve(enabled: Enabled) -> (Kernels, Vec<Choice>) {
                 let mut choices = Vec::new();
                 $(
                     let ($field, c) = $spec.resolve(enabled);
@@ -67,7 +68,7 @@ pub struct Active {
     pub detected: FeatureSet,
     pub disabled: DisableList,
     /// `detected` minus `disabled`: what the resolver may use.
-    pub enabled: FeatureSet,
+    pub enabled: Enabled,
     pub info: CpuInfo,
     pub source: Source,
     pub kernels: Kernels,
@@ -77,7 +78,7 @@ pub struct Active {
 impl Active {
     fn build(disable: &DisableList, source: Source) -> Active {
         let detected = detect();
-        let enabled = disable.apply(detected);
+        let enabled = disable.enabled();
         let (kernels, choices) = Kernels::resolve(enabled);
         Active {
             detected,
@@ -133,7 +134,7 @@ impl Active {
         };
         let _ = writeln!(s, "features detected: {}", list(self.detected));
         let _ = writeln!(s, "disabled by list: {}", self.disabled.describe());
-        let _ = writeln!(s, "features in use: {}", list(self.enabled));
+        let _ = writeln!(s, "features in use: {}", list(self.enabled.set()));
         let _ = writeln!(
             s,
             "table resolved by: {}",
@@ -265,7 +266,7 @@ mod tests {
                     .filter(|(i, _)| m & (1 << i) != 0)
                     .map(|(_, f)| *f)
                     .collect();
-                let (_, choices) = Kernels::resolve(mask);
+                let (_, choices) = Kernels::resolve(Enabled::new_unchecked(mask));
                 let c = choices.iter().find(|c| c.kernel == info.id).unwrap();
                 assert!(
                     c.requires.is_subset_of(mask),
@@ -293,7 +294,7 @@ mod tests {
 
     #[test]
     fn disabling_everything_gives_portable_choices() {
-        let (_, choices) = Kernels::resolve(DisableList::parse("all").apply(detect()));
+        let (_, choices) = Kernels::resolve(DisableList::parse("all").enabled());
         assert!(choices.iter().all(Choice::is_portable));
     }
 

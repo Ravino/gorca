@@ -13,10 +13,10 @@ use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, Throughput};
 use gorca_cpu::specs::{COMMON_PREFIX, UTF8_EXTEND, UTF8_SCALAR_COUNT};
-use gorca_cpu::{Impl, KernelSpec, detect};
+use gorca_cpu::{Enabled, Impl, KernelSpec};
 
 fn runnable<F: Copy>(spec: &KernelSpec<F>) -> Vec<(&'static str, F)> {
-    let have = detect();
+    let have = Enabled::detected();
     let mut v = vec![("portable", spec.portable)];
     v.extend(
         spec.impls

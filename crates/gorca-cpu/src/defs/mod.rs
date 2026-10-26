@@ -9,7 +9,6 @@ pub(crate) mod utf8_scalar_count;
 
 #[cfg(test)]
 pub(crate) mod testutil {
-    use crate::feature::FeatureSet;
     use crate::registry::KernelSpec;
 
     /// Every implementation of `spec` the hardware can run, portable first. The disable list is
@@ -17,7 +16,7 @@ pub(crate) mod testutil {
     /// test job proves the portable path through the rest of the suite. On a CPU without the
     /// features only portable remains and the test degenerates to portable-vs-oracle.
     pub(crate) fn runnable<F: Copy>(spec: &KernelSpec<F>) -> Vec<(&'static str, F)> {
-        let enabled: FeatureSet = crate::detect();
+        let enabled = crate::Enabled::detected();
         let mut v = vec![(crate::PORTABLE, spec.portable)];
         for i in spec.impls {
             if let Some(f) = i.checked(enabled) {

@@ -128,6 +128,29 @@ impl Feature {
             .find(|f| norm(f.name()) == want || norm(f.label()) == want)
     }
 
+    /// Features this one cannot work without (the CPU's own dependency chain). Disabling a
+    /// feature disables everything that lists it here, transitively (`DisableList::apply`).
+    #[must_use]
+    #[allow(clippy::enum_glob_use)]
+    pub const fn requires(self) -> &'static [Feature] {
+        use Feature::*;
+        match self {
+            Ssse3 => &[Sse3],
+            Sse41 => &[Ssse3],
+            Sse42 => &[Sse41],
+            Avx => &[Sse42],
+            Avx2 | Fma | F16c => &[Avx],
+            AvxVnni | Avx512F | Avx10_1 => &[Avx2],
+            Avx512Cd | Avx512Bw | Avx512Dq | Avx512Vl | Avx512Vnni | Avx512Vpopcntdq
+            | Avx512Bf16 => &[Avx512F],
+            Avx512Vbmi => &[Avx512Bw],
+            Dotprod | I8mm | Bf16 | Fp16 | Sve => &[Neon],
+            Sve2 => &[Sve],
+            Sse3 | Popcnt | Lzcnt | Bmi1 | Bmi2 | Pclmulqdq | Sha | Gfni | Neon | Pmull | Sha2
+            | Crc | Lse | Aes => &[],
+        }
+    }
+
     const fn bit(self) -> u64 {
         1u64 << (self as u8)
     }
@@ -172,6 +195,11 @@ impl FeatureSet {
     #[must_use]
     pub const fn union(self, other: FeatureSet) -> FeatureSet {
         FeatureSet(self.0 | other.0)
+    }
+
+    #[must_use]
+    pub const fn intersection(self, other: FeatureSet) -> FeatureSet {
+        FeatureSet(self.0 & other.0)
     }
 
     #[must_use]

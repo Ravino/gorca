@@ -2,6 +2,7 @@
 //! Kernel specifications: the portable function (the specification), the faster implementations
 //! in preference order, and the resolution rule (ADR-0027 section 2.3).
 
+use crate::enabled::Enabled;
 use crate::feature::FeatureSet;
 
 /// One implementation of a kernel and the features it needs. Built by `kernel_impl!`, which
@@ -24,8 +25,8 @@ impl<F: Copy> Impl<F> {
 
     /// The function, if every required feature is in `have`.
     #[must_use]
-    pub fn checked(&self, have: FeatureSet) -> Option<F> {
-        self.requires.is_subset_of(have).then_some(self.f)
+    pub fn checked(&self, have: Enabled) -> Option<F> {
+        self.requires.is_subset_of(have.set()).then_some(self.f)
     }
 }
 
@@ -63,9 +64,9 @@ pub const PORTABLE: &str = "portable";
 impl<F: Copy> KernelSpec<F> {
     /// The first implementation whose `requires` are all in `enabled`, else the portable one.
     #[must_use]
-    pub fn resolve(&self, enabled: FeatureSet) -> (F, Choice) {
+    pub fn resolve(&self, enabled: Enabled) -> (F, Choice) {
         for i in self.impls {
-            if i.requires.is_subset_of(enabled) {
+            if i.requires.is_subset_of(enabled.set()) {
                 return (
                     i.f,
                     Choice {
@@ -192,7 +193,7 @@ macro_rules! kernel_impl {
             #[allow(dead_code)]
             pub fn call_checked($($arg: $ty),*) -> Option<$ret> {
                 REQUIRES
-                    .is_subset_of($crate::active().enabled)
+                    .is_subset_of($crate::active().enabled.set())
                     .then(|| call($($arg),*))
             }
 
@@ -231,11 +232,12 @@ mod tests {
 
     #[test]
     fn first_fitting_impl_wins() {
-        let all = FeatureSet::of(&[Feature::Avx2, Feature::Bmi2]);
+        let en = |f: &[Feature]| Enabled::new_unchecked(FeatureSet::of(f));
+        let all = en(&[Feature::Avx2, Feature::Bmi2]);
         assert_eq!((SPEC.resolve(all).0)(0), 1);
-        let avx2 = FeatureSet::of(&[Feature::Avx2]);
+        let avx2 = en(&[Feature::Avx2]);
         assert_eq!(SPEC.resolve(avx2).1.name, "b");
-        let none = SPEC.resolve(FeatureSet::EMPTY);
+        let none = SPEC.resolve(Enabled::none());
         assert!(none.1.is_portable());
         assert_eq!((none.0)(0), 0);
     }

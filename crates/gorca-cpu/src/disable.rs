@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The `GORCA_CPU_DISABLE` / `--cpu-disable` list (ADR-0027 section 6.1).
 
+use crate::detect::detect;
+use crate::enabled::Enabled;
 use crate::feature::{Feature, FeatureSet};
 
 /// Features switched off for diagnosis or portable-path testing.
@@ -40,14 +42,35 @@ impl DisableList {
         !self.all && self.features.is_empty() && self.unknown.is_empty()
     }
 
-    /// `detected` minus what this list switches off.
+    /// `detected` minus what this list switches off **and everything that depends on it**:
+    /// turning off AVX also turns off AVX2, FMA, AVX-512, AVX-VNNI and AVX10, because their
+    /// kernels use the state and instructions of the feature below them
+    /// ([`Feature::requires`]), and a "portable" run must not keep executing them.
     #[must_use]
     pub fn apply(&self, detected: FeatureSet) -> FeatureSet {
         if self.all {
-            FeatureSet::EMPTY
-        } else {
-            detected.difference(self.features)
+            return FeatureSet::EMPTY;
         }
+        let mut set = detected.difference(self.features);
+        loop {
+            let mut changed = false;
+            for f in set.iter().collect::<Vec<_>>() {
+                if f.requires().iter().any(|r| !set.contains(*r)) {
+                    set.remove(f);
+                    changed = true;
+                }
+            }
+            if !changed {
+                return set;
+            }
+        }
+    }
+
+    /// The feature set kernels may be selected against on this machine: detection minus this
+    /// list. One of the few ways to obtain an [`Enabled`].
+    #[must_use]
+    pub fn enabled(&self) -> Enabled {
+        Enabled::new_unchecked(self.apply(detect()))
     }
 
     /// Canonical text (`all`, or the sorted feature names, plus unknown names), for the report.
@@ -90,6 +113,47 @@ mod tests {
         assert_eq!(d.unknown, ["avx3"]);
         assert_eq!(d.describe(), "avx2,avx3?");
         assert!(!d.is_empty());
+    }
+
+    #[test]
+    fn disabling_a_feature_disables_what_depends_on_it() {
+        let have = FeatureSet::of(&[
+            Feature::Sse3,
+            Feature::Ssse3,
+            Feature::Sse41,
+            Feature::Sse42,
+            Feature::Avx,
+            Feature::Avx2,
+            Feature::Fma,
+            Feature::AvxVnni,
+            Feature::Avx512F,
+            Feature::Avx512Bw,
+            Feature::Avx512Vbmi,
+            Feature::Bmi2,
+        ]);
+        let left = DisableList::parse("avx").apply(have);
+        assert_eq!(
+            left,
+            FeatureSet::of(&[
+                Feature::Sse3,
+                Feature::Ssse3,
+                Feature::Sse41,
+                Feature::Sse42,
+                Feature::Bmi2
+            ])
+        );
+        let left = DisableList::parse("avx512bw").apply(have);
+        assert!(left.contains(Feature::Avx512F) && left.contains(Feature::Avx2));
+        assert!(!left.contains(Feature::Avx512Bw) && !left.contains(Feature::Avx512Vbmi));
+        assert!(
+            !DisableList::parse("sse4.1")
+                .apply(have)
+                .contains(Feature::Avx2)
+        );
+        // Every parent is a real feature that precedes nothing circular.
+        for f in Feature::ALL {
+            assert!(!f.requires().contains(f));
+        }
     }
 
     #[test]

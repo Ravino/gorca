@@ -38,8 +38,8 @@ pub fn utf8_extend_chars(s: &str, out: &mut Vec<char>) {
 /// The scalars of `s` as a new vector; equal to `s.chars().collect()`.
 #[must_use]
 pub fn utf8_to_chars(s: &str) -> Vec<char> {
-    // `s.len()` is an upper bound of the scalar count: one allocation, never a regrow.
-    let mut v = Vec::with_capacity(s.len());
+    // Exact capacity (the count kernel is cheaper than a regrow): one allocation, no slack.
+    let mut v = Vec::with_capacity(utf8_scalar_count(s));
     utf8_extend_chars(s, &mut v);
     v
 }

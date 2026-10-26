@@ -57,7 +57,7 @@ type Wanted<'a> = (&'a str, bool, Option<f64>);
 pub fn info_lines(a: &Active) -> Vec<String> {
     lines(
         a.detected,
-        a.enabled,
+        a.enabled.set(),
         &a.disabled,
         &crate::table::kernel_infos(),
         &a.choices,

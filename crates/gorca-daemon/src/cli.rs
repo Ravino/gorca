@@ -380,8 +380,7 @@ impl Options {
         // `all` (or `portable`) changes how guest code is compiled. The list is the one
         // `main` gave `gorca_cpu::init` (flag over environment).
         let cpu_list = o.cpu_disable.clone().or_else(|| get("GORCA_CPU_DISABLE"));
-        o.plugins.portable =
-            gorca_cpu::DisableList::parse(cpu_list.as_deref().unwrap_or("")).all;
+        o.plugins.portable = gorca_cpu::DisableList::parse(cpu_list.as_deref().unwrap_or("")).all;
         if o.shell_policy == ShellPolicyMode::Auto
             && let Some(p) = get("GORCA_SHELL_POLICY").and_then(|v| ShellPolicyMode::parse(&v))
         {
@@ -490,16 +489,17 @@ impl Options {
 /// The `--cpu-disable` value in `args`, found by a plain scan that runs no kernel (ADR-0027
 /// CD-1: `gorca_cpu::init` is the first statement of `main`, before `parse`).
 pub fn cpu_disable_arg(args: &[String]) -> Option<String> {
+    // Last one wins, the same rule `parse` applies to every repeated flag.
+    let mut found = None;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         if let Some(v) = a.strip_prefix("--cpu-disable=") {
-            return Some(v.to_owned());
-        }
-        if a == "--cpu-disable" {
-            return it.next().cloned();
+            found = Some(v.to_owned());
+        } else if a == "--cpu-disable" {
+            found = it.next().cloned();
         }
     }
-    None
+    found
 }
 
 /// Parse `args` (without the program name).
@@ -669,10 +669,30 @@ mod tests {
     #[test]
     fn cpu_disable_flag_is_scanned_and_drives_the_plugin_engine() {
         let a = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
-        assert_eq!(cpu_disable_arg(&a(&["--cpu-disable=avx2"])), Some("avx2".into()));
-        assert_eq!(cpu_disable_arg(&a(&["--x", "--cpu-disable", "all"])), Some("all".into()));
+        assert_eq!(
+            cpu_disable_arg(&a(&["--cpu-disable=avx2"])),
+            Some("avx2".into())
+        );
+        assert_eq!(
+            cpu_disable_arg(&a(&["--x", "--cpu-disable", "all"])),
+            Some("all".into())
+        );
         assert_eq!(cpu_disable_arg(&a(&["--cpu-disable"])), None);
         assert_eq!(cpu_disable_arg(&a(&[])), None);
+        // Repeated: the last one wins in the scan and in `parse` (plugin engine).
+        let twice = ["--cpu-disable=all", "--cpu-disable=avx2"];
+        assert_eq!(cpu_disable_arg(&a(&twice)), Some("avx2".into()));
+        assert!(!opts(&twice).with_env(|_| None).plugins.portable);
+        let twice = ["--cpu-disable=avx2", "--cpu-disable=all"];
+        assert_eq!(cpu_disable_arg(&a(&twice)), Some("all".into()));
+        assert!(opts(&twice).with_env(|_| None).plugins.portable);
+        // Repeated: the last one wins in the scan and in `parse` (plugin engine).
+        let twice = ["--cpu-disable=all", "--cpu-disable=avx2"];
+        assert_eq!(cpu_disable_arg(&a(&twice)), Some("avx2".into()));
+        assert!(!opts(&twice).with_env(|_| None).plugins.portable);
+        let twice = ["--cpu-disable=avx2", "--cpu-disable=all"];
+        assert_eq!(cpu_disable_arg(&a(&twice)), Some("all".into()));
+        assert!(opts(&twice).with_env(|_| None).plugins.portable);
         let env = |k: &str| (k == "GORCA_CPU_DISABLE").then(|| "all".to_owned());
         assert!(opts(&[]).with_env(env).plugins.portable);
         let partial = |k: &str| (k == "GORCA_CPU_DISABLE").then(|| "avx2".to_owned());
@@ -680,7 +700,12 @@ mod tests {
         // The flag wins over the environment.
         let o = opts(&["--cpu-disable=avx2"]).with_env(env);
         assert!(!o.plugins.portable);
-        assert!(opts(&["--cpu-disable=portable"]).with_env(|_| None).plugins.portable);
+        assert!(
+            opts(&["--cpu-disable=portable"])
+                .with_env(|_| None)
+                .plugins
+                .portable
+        );
     }
 
     #[test]

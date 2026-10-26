@@ -23,6 +23,7 @@
 mod cap;
 pub mod detect;
 pub mod disable;
+mod enabled;
 pub mod feature;
 pub mod registry;
 pub mod report;
@@ -32,9 +33,10 @@ mod arch;
 mod defs;
 pub mod text;
 
+pub use cap::Cap;
 pub use detect::{CpuInfo, RawIsa, cpu_info, detect, raw_isa};
 pub use disable::DisableList;
-pub use cap::Cap;
+pub use enabled::Enabled;
 pub use feature::{Arch, Feature, FeatureMarker, FeatureSet, marker, same_name};
 pub use registry::{Choice, Impl, KernelInfo, KernelSpec, PORTABLE};
 pub use table::{
