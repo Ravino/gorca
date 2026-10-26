@@ -596,9 +596,7 @@ async fn session_inner(
         if matches!(state, MonitorState::Lost { .. }) {
             return Err(Attempt::GrabsFailed);
         }
-        let stale_at = deferred
-            .as_ref()
-            .and(down.iter().map(|d| d.at + DOWN_STALE).min())
+        let stale_at = stale_deadline(deferred.as_ref(), &mut down, std::time::Instant::now())
             .map(tokio::time::Instant::from_std);
         let next_timer = timers.iter().map(|(t, _)| *t).min();
         // Biased: key events first. A grab change must see every key that was already
@@ -791,6 +789,22 @@ fn track_down(down: &mut Vec<Down>, ev: &KeyEvent, now: std::time::Instant) {
             at: now,
         });
     }
+}
+
+/// When the oldest key that is down goes stale, while a grab set waits for it. Keys that are
+/// stale already are forgotten first: a deadline in the past makes the stale arm of the session
+/// loop ready on every pass, and when the set still cannot go out (a modifier is held for
+/// longer than `DOWN_STALE`) the loop spins at 100% CPU on the input lane until the key is
+/// released. That tripped `RLIMIT_RTTIME` and demoted the lane (docs/reports/input-lane-sigxcpu.md).
+/// After the pruning the result is always in the future, so the arm sleeps instead.
+fn stale_deadline(
+    deferred: Option<&GrabSet>,
+    down: &mut Vec<Down>,
+    now: std::time::Instant,
+) -> Option<std::time::Instant> {
+    down.retain(|d| now.saturating_duration_since(d.at) < DOWN_STALE);
+    deferred?;
+    down.iter().map(|d| d.at + DOWN_STALE).min()
 }
 
 /// Tab and ISO_Left_Tab are one physical key.
@@ -1478,6 +1492,34 @@ mod tests {
         let mut stale = Vec::new();
         track_down(&mut stale, &ev(23, 0xff09, true), t0);
         assert!(!keystroke_conflict(&state, &want, &stale, t0 + DOWN_STALE));
+    }
+
+    #[test]
+    fn stale_deadline_is_never_in_the_past() {
+        let t0 = std::time::Instant::now();
+        let ev = |keycode, pressed| KeyEvent {
+            keycode,
+            keysym: 0xffe5,
+            unichar: 0,
+            modifiers: Modifiers::empty(),
+            pressed,
+        };
+        let mut down = Vec::new();
+        track_down(&mut down, &ev(66, true), t0);
+        let deferred = Some(GrabSet::default());
+        // Waiting: the deadline is the key's staleness time.
+        assert_eq!(
+            stale_deadline(deferred.as_ref(), &mut down, t0),
+            Some(t0 + DOWN_STALE)
+        );
+        // The key is held past DOWN_STALE (a held modifier): the set still cannot go out, but
+        // the deadline must not stay in the past or the session loop spins.
+        let later = t0 + DOWN_STALE + Duration::from_millis(1);
+        assert_eq!(stale_deadline(deferred.as_ref(), &mut down, later), None);
+        assert!(down.is_empty());
+        // No deferred set: no deadline either.
+        track_down(&mut down, &ev(66, true), later);
+        assert_eq!(stale_deadline(None, &mut down, later), None);
     }
 
     #[test]
