@@ -40,10 +40,24 @@ mod guest {
     const WATCH_DIVIDER_A2: u16 = 8;
     const WATCH_CHATS_A: u16 = 9;
     const WATCH_COMPOSER_A: u16 = 10;
+    const WATCH_CHAT_ITEM_A: u16 = 11;
 
     struct Plugin;
 
+    /// A chat row whose wrapper Gecko does not expose is a direct child of the chat list: the
+    /// link itself is the list item (focus, the link action and the computed name are unchanged).
+    fn bare_chat_row(n: u64) {
+        let Some(parent) = model::parent(n) else {
+            return;
+        };
+        let class = model::attr(parent, "class").unwrap_or_default();
+        if has_class(&class, "chat-list") {
+            assert_node(n, GROUP_ROLE, types::PropValue::Code(ROLE_LISTITEM));
+        }
+    }
+
     fn chat_row(n: u64) {
+        bare_chat_row(n);
         let nodes = model::subtree(n, 6, 64);
         let mut cells: Vec<Cell> = Vec::with_capacity(nodes.len());
         for vn in &nodes {
@@ -127,6 +141,23 @@ mod guest {
         );
     }
 
+    /// The chat list is a list; its parent (a block with nothing else in it) is the "Chats"
+    /// navigation landmark.
+    fn chat_list(n: u64) {
+        assert_node(n, GROUP_ROLE, types::PropValue::Code(ROLE_LIST));
+        assert_node(
+            n,
+            GROUP_NAME,
+            types::PropValue::Message(types::MsgRef {
+                id: "chat-list".to_owned(),
+                args: Vec::new(),
+            }),
+        );
+        if let Some(area) = model::parent(n) {
+            landmark(area, ROLE_NAVIGATION, "chats");
+        }
+    }
+
     /// The message list is a list; its parent (the message area: the list and, below it, the
     /// composer's footer) is the "Messages" region.
     fn message_list(n: u64) {
@@ -166,7 +197,10 @@ mod guest {
                     WATCH_CHAT_A | WATCH_CHAT_K => chat_row(d.node),
                     WATCH_MESSAGE_A => message_row(d.node),
                     WATCH_MESSAGES_A => message_list(d.node),
-                    WATCH_CHATS_A => landmark(d.node, ROLE_NAVIGATION, "chats"),
+                    WATCH_CHATS_A => chat_list(d.node),
+                    WATCH_CHAT_ITEM_A => {
+                        assert_node(d.node, GROUP_ROLE, types::PropValue::Code(ROLE_LISTITEM))
+                    }
                     WATCH_COMPOSER_A => landmark(d.node, ROLE_REGION, "composer"),
                     WATCH_HEADER_A => chat_header(d.node),
                     WATCH_DATE_A | WATCH_DIVIDER_A | WATCH_DIVIDER_A2 => heading(d.node, 2),

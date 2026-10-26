@@ -908,7 +908,7 @@ fn the_open_chat_gets_a_message_list_headings_and_described_own_messages() {
     // Landmarks, by structure: the chat list, the message area (the list's parent) and the
     // composer, each with a catalog name.
     for (what, n, r) in [
-        ("chat list", with_class("chat-list")[0], "Navigation"),
+        ("chat list", with_class("chat-list")[0], "List"),
         ("message area", area_node, "Region"),
         ("composer", with_class("Composer")[0], "Region"),
     ] {
@@ -920,4 +920,110 @@ fn the_open_chat_gets_a_message_list_headings_and_described_own_messages() {
     }
     assert_eq!(patches(divider, role), vec!["Heading"]);
     assert_eq!(patches(divider, level), vec!["2"]);
+}
+
+/// The chat list of Web A as the real source delivered it (2026-10-26, anonymised;
+/// `GORCA_DUMP_LIST`): `chat-list` is a list named "Chat list" inside a navigation landmark (its
+/// parent), each `div.ListItem.chat-item-clickable` (the wrapper whose siblings are the rows) is a
+/// list item, and the link inside keeps its computed name and its role (Enter still opens the chat).
+#[test]
+fn the_chat_list_is_a_list_of_list_items_inside_the_chats_landmark() {
+    let v: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(root().join("tests/fixtures/web/telegram-a-chat-list.json")).unwrap(),
+    )
+    .unwrap();
+    let rt = runtime(PluginOptions::default());
+    let mut b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/#1", true),
+    )
+    .expect("scope");
+    let mut kids: HashMap<u32, Vec<u32>> = HashMap::new();
+    let arc = |s: &str| (!s.is_empty()).then(|| Arc::<str>::from(s));
+    let mut class_of: HashMap<u32, String> = HashMap::new();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    for x in v.as_array().unwrap() {
+        let i = x["i"].as_u64().unwrap() as u32;
+        let p = x["p"].as_i64().unwrap();
+        if p >= 0 {
+            kids.entry(p as u32).or_default().push(i);
+            parent_of.insert(i, p as u32);
+        }
+        let class = x["class"].as_str().unwrap();
+        class_of.insert(i, class.to_owned());
+        b.upsert(
+            i,
+            Row {
+                role: x["role"].as_u64().unwrap() as u16,
+                name: arc(x["name"].as_str().unwrap()),
+                text: arc(x["text"].as_str().unwrap()),
+                tag: arc(x["tag"].as_str().unwrap()),
+                class: arc(class),
+                ..Row::default()
+            },
+        );
+    }
+    let ops = collect(&mut b, &Flat(kids), Duration::from_secs(10));
+    let with_class = |c: &str| -> Vec<u32> {
+        let mut v: Vec<u32> = class_of
+            .iter()
+            .filter(|(_, k)| k.split_whitespace().any(|t| t == c))
+            .map(|(i, _)| *i)
+            .collect();
+        v.sort_unstable();
+        v
+    };
+    let roles = |n: u32| -> Vec<String> {
+        ops.iter()
+            .filter_map(|o| match o {
+                FactOp::Patch {
+                    node,
+                    write: gorca_fuse::Write::Val(gorca_fuse::Val::Role(r)),
+                    ..
+                } if *node == n => Some(format!("{r:?}")),
+                _ => None,
+            })
+            .collect()
+    };
+    let list = with_class("chat-list");
+    assert_eq!(list.len(), 1);
+    assert_eq!(roles(list[0]), vec!["List"], "{ops:?}");
+    assert_eq!(roles(parent_of[&list[0]]), vec!["Navigation"], "{ops:?}");
+    let named = names(&ops);
+    assert!(named.iter().any(|(n, s)| *n == list[0] && !s.is_empty()));
+    assert!(
+        named
+            .iter()
+            .any(|(n, s)| *n == parent_of[&list[0]] && !s.is_empty())
+    );
+    // The rows are the list's direct children: the wrapper when Gecko exposes it, else the link.
+    let rows: Vec<u32> = parent_of
+        .iter()
+        .filter(|(_, p)| **p == list[0])
+        .map(|(i, _)| *i)
+        .filter(|i| {
+            let c = &class_of[i];
+            c.split_whitespace()
+                .any(|t| t == "chat-item-clickable" || t == "ListItem-button")
+        })
+        .collect();
+    assert!(rows.len() >= 3, "{}", rows.len());
+    for r in &rows {
+        assert_eq!(roles(*r), vec!["ListItem"], "chat row {r}");
+    }
+    let links = with_class("ListItem-button");
+    assert_eq!(links.len(), 3);
+    for l in links {
+        assert!(
+            named.iter().any(|(n, _)| *n == l),
+            "link {l} keeps its computed name"
+        );
+        // A link inside a wrapper keeps its role; a bare one is the list item itself.
+        let bare = parent_of[&l] == list[0];
+        assert_eq!(
+            roles(l),
+            if bare { vec!["ListItem"] } else { vec![] },
+            "link {l}"
+        );
+    }
 }
