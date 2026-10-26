@@ -211,7 +211,20 @@ mod tests {
         hint: &dyn Fn(&str, &str) -> Option<f64>,
     ) -> Vec<String> {
         let d = DisableList::parse(disable);
-        let detected = FeatureSet::of(detected);
+        // A real CPU that has a feature has its prerequisites: add them, or the disable
+        // list's dependency closure would (correctly) switch the synthetic feature off.
+        let mut detected = FeatureSet::of(detected);
+        loop {
+            let before = detected;
+            for f in before.iter() {
+                for r in f.requires() {
+                    detected.insert(*r);
+                }
+            }
+            if detected == before {
+                break;
+            }
+        }
         let enabled = d.apply(detected);
         let choices: Vec<Choice> = ks.iter().map(|k| choose(k, enabled)).collect();
         lines(detected, enabled, &d, ks, &choices, hint)
