@@ -66,15 +66,43 @@ pub fn flags_from_sem(
     tag: &str,
     nested_doc: bool,
 ) -> (NodeFlags, u8) {
+    let basis = gorca_doc::web::SrcBasis {
+        tag: gorca_model::sem::TagName::new(tag).0,
+        ..basis_of(n)
+    };
+    flags_from_parts(&basis, sem, nested_doc)
+}
+
+/// The source facts of `n` that [`flags_from_parts`] needs besides the fused semantics.
+#[must_use]
+pub fn basis_of(n: &SrcNode) -> gorca_doc::web::SrcBasis {
+    gorca_doc::web::SrcBasis {
+        known: true,
+        tag: n.rec.as_ref().map(|r| r.tag).unwrap_or_default(),
+        visible: n.is_visible(),
+        focusable: n.is_focusable(),
+        invalid: source_invalid(n),
+    }
+}
+
+/// [`flags_from_sem`] without the source node: what a patch of the fused entry recomputes.
+#[must_use]
+pub fn flags_from_parts(
+    basis: &gorca_doc::web::SrcBasis,
+    sem: &Semantics,
+    nested_doc: bool,
+) -> (NodeFlags, u8) {
+    let (visible, focusable, src_invalid) = (basis.visible, basis.focusable, basis.invalid);
+    let tag = basis.tag.as_str();
     let mut f = NodeFlags::NONE;
     // `showing` is viewport state and flips without events (TBD-WEB-1): only `visible` counts.
-    if !n.is_visible() {
+    if !visible {
         f = f | NodeFlags::HIDDEN;
     }
     if sem.flags.contains(SemFlags::VISITED) {
         f = f | NodeFlags::VISITED;
     }
-    if n.is_focusable() || sem.flags.contains(SemFlags::FOCUSABLE) {
+    if focusable || sem.flags.contains(SemFlags::FOCUSABLE) {
         f = f | NodeFlags::FOCUSABLE;
     }
     let role = sem.role;
@@ -118,7 +146,7 @@ pub fn flags_from_sem(
         f = f | NodeFlags::ANNOTATION;
     }
     // A form field that is invalid is announced as the field; W finds the marked-up text.
-    if (sem.invalid != Invalid::No || source_invalid(n))
+    if (sem.invalid != Invalid::No || src_invalid)
         && !matches!(
             role,
             SemRole::TextBox

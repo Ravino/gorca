@@ -60,7 +60,7 @@ class = "unread-divider"
 id = 8
 class = "local-action-message"
 
-# A: the list of chats in the left column: a navigation landmark.
+# A: the list of chats in the left column: a list inside a navigation landmark (its parent).
 [[watch]]
 id = 9
 class = "chat-list"
@@ -69,3 +69,9 @@ class = "chat-list"
 [[watch]]
 id = 10
 class = "Composer"
+
+# A: a chat of the list (the wrapper whose siblings are the rows; the link inside keeps its name
+# and behaviour): a list item.
+[[watch]]
+id = 11
+class = "chat-item-clickable"

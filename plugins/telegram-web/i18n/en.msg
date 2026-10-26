@@ -13,3 +13,4 @@ own-message = Your message
 chats = Chats
 messages = Messages
 composer = Message input
+chat-list = Chat list

@@ -13,3 +13,4 @@ own-message = Ваше сообщение
 chats = Чаты
 messages = Сообщения
 composer = Поле ввода
+chat-list = Список чатов

@@ -231,3 +231,41 @@ Matched by the structure of the live open chat (read-only dump, ids/classes as G
   counts as a landmark (`Cat::LANDMARK`), which `D` takes.
 * Test: `the_open_chat_gets_a_message_list_headings_and_described_own_messages` now also checks the
   three landmarks on the real open-chat fixture (the dump includes the composer footer and the chat-list node).
+
+## Follow-up 5: plugin roles did not reach the browse index (H found nothing)
+
+Root cause (core, not Telegram): the browse categories (H, D, L, I, ...) are a pure function of the
+mirror node's `(role, level, flags)` (gorca-doc DM-4, updated incrementally by `SetProps` along the node's
+path, O(log n)). The translator builds those from the fused entry only when a node is upserted
+(`spec_of`); an entry that changes later (a plugin's reply arrives after the document was built) goes
+through `Translator::patch_sem`, which replaced the entry in the node's data and the ARTICLE flag and
+nothing else. The line renderer reads the fused entry, so arrow keys spoke "heading" and "list item",
+while the role/level/flags in the mirror, hence the category index, stayed the source's.
+Fix (`patch_sem`): re-derive role, heading level and the structural flags from the new entry
+(`flags_from_parts`, shared with the build path) and apply them in the same `SetProps`; the source facts
+the flags need besides the entry (tag, visible, focusable, invalid) are kept with the node
+(`NodeData.basis`); a BLOCK/HIDDEN change recomputes the parent's line breaks. Bounded: one `SetProps` per
+changed entry, no rebuild. Test: `roles_that_arrive_as_facts_after_the_load_reach_the_quick_nav_categories`
+(all source roles plain; headings, a landmark, a list and its items arrive as facts; H, D, L, I forward and
+backward, the heading level, and a later patch that changes a level, removes the landmark and adds a heading).
+"Where am I"/landmark ancestry and "list, N items" read the same mirror roles (the list count counts the
+list's direct list-item children).
+
+Gap, not fixed: browse mode never speaks an item position ("3 of 30"): the presenter has no
+position path for list items (`SetPos` is read by nothing in `gorca-present`/`browse`, and the plugin API
+cannot send positions: `Value::Position` is dropped by the host). It needs a presenter feature
+(count siblings or use `SetPos`) plus a position fact in the plugin host; proposed as the next slice.
+
+### Chat list as a list
+
+`div.chat-list` is a list ("Chat list" / "Список чатов"); its parent (an unclassed block with nothing else
+in it) is the "Chats" navigation landmark; each row is a list item: the `div.ListItem.chat-item-clickable`
+wrapper, or the `a.ListItem-button` link itself when Gecko does not expose the wrapper (the live tree has both
+shapes, 1 wrapped and 2 bare links among the first 4 children). A link inside a wrapper keeps its link role;
+a bare one is patched to list item and keeps its focus, link action and computed name (Enter goes through the
+focusable/clickable ancestor search). Test: `the_chat_list_is_a_list_of_list_items_inside_the_chats_landmark`
+on the real fixture `tests/fixtures/web/telegram-a-chat-list.json`.
+
+The shell e2e: no release build was possible (disk at 95%, no release target); the Phase 1 harness ran on the
+debug build in the isolated session (`--allow-debug --quick --only L1,F0`): L1 gorca-side p99 7.9 ms, lost 0.
+Results `/var/tmp/web-a5ae-e2e/20261026T004837Z.txt` (debug numbers, smoke only).

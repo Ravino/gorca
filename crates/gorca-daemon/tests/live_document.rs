@@ -95,7 +95,27 @@ async fn find_showing_doc(conn: &AppConn, root: &str) -> Option<String> {
                 .ok()
                 .and_then(|m| wire::parse_state(m.body().data().bytes()).ok())
                 .unwrap_or(0);
-            if st & (1u64 << state_bit::SHOWING) != 0 {
+            let wanted = std::env::var("GORCA_LIVE_URL").ok();
+            if let Some(w) = wanted {
+                // A document by URL, showing or not (the owner may be on another tab).
+                let url = conn
+                    .call(
+                        conn.next_lane(),
+                        dl(2000),
+                        &p,
+                        "org.a11y.atspi.Document",
+                        "GetAttributes",
+                        &(),
+                    )
+                    .await
+                    .ok()
+                    .and_then(|m| wire::parse_string_map(m.body().data().bytes()).ok())
+                    .and_then(|a| a.into_iter().find(|(k, _)| k == "DocURL").map(|(_, v)| v))
+                    .unwrap_or_default();
+                if url.contains(&w) {
+                    return Some(p);
+                }
+            } else if st & (1u64 << state_bit::SHOWING) != 0 {
                 return Some(p);
             }
             continue;
@@ -375,6 +395,72 @@ async fn live_firefox_document_through_the_real_source_and_plugin() {
                 chain.join(" < ")
             );
         }
+    }
+    if let Some(out) = std::env::var_os("GORCA_DUMP_LIST") {
+        // The chat list: the parent of `chat-list`, the list and its first rows with their
+        // subtrees, anonymised like the other fixtures.
+        let mut aliases: HashMap<String, String> = HashMap::new();
+        let mut alias = |s: &str| -> String {
+            let keep = s.trim().is_empty()
+                || s.trim().chars().all(|c| {
+                    c.is_ascii_digit() || matches!(c, ':' | '.' | ',' | ' ' | 'K' | 'M' | '?')
+                });
+            if keep {
+                return s.to_owned();
+            }
+            let n = aliases.len();
+            aliases
+                .entry(s.to_owned())
+                .or_insert_with(|| format!("Слово{n}"))
+                .clone()
+        };
+        let cl = all_rows
+            .iter()
+            .filter(|(_, r)| has(r, "chat-list"))
+            .map(|(i, _)| *i)
+            .min()
+            .expect("a chat-list node");
+        let mut order: Vec<u32> = Vec::new();
+        if let Some(p) = parent.get(&cl) {
+            order.push(*p);
+        }
+        order.push(cl);
+        for k in kids.get(&cl).into_iter().flatten().take(4) {
+            let mut q = std::collections::VecDeque::from([*k]);
+            let mut n = 0;
+            while let Some(x) = q.pop_front() {
+                if n >= 30 {
+                    break;
+                }
+                n += 1;
+                order.push(x);
+                q.extend(kids.get(&x).into_iter().flatten().copied());
+            }
+        }
+        let pos: HashMap<u32, usize> = order.iter().enumerate().map(|(k, i)| (*i, k + 1)).collect();
+        let mut json = vec![serde_json::json!({
+            "i": 0, "p": -1, "role": SemRole::Generic.code(), "tag": "div", "class": "", "name": "", "text": ""
+        })];
+        for i in &order {
+            let r = &all_rows[i];
+            let p = if *i == order[0] {
+                0
+            } else {
+                parent
+                    .get(i)
+                    .and_then(|p| pos.get(p))
+                    .map_or(0, |k| i64::try_from(*k).unwrap())
+            };
+            json.push(serde_json::json!({
+                "i": pos[i], "p": p, "role": r.role,
+                "tag": r.tag.as_deref().unwrap_or(""),
+                "class": r.class.as_deref().unwrap_or(""),
+                "name": r.name.as_deref().map(&mut alias).unwrap_or_default(),
+                "text": r.text.as_deref().map(&mut alias).unwrap_or_default(),
+            }));
+        }
+        std::fs::write(&out, serde_json::to_string_pretty(&json).unwrap()).unwrap();
+        println!("list fixture written: {} nodes", json.len());
     }
     if let Some(out) = std::env::var_os("GORCA_DUMP_CHAT") {
         // The open chat: the `messages-layout` node, the header title, the message list and its
