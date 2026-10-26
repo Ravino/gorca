@@ -48,7 +48,10 @@ admitted against the replaced code. `min_len`: 128 B / 64 chars / 64 B.
   disk watchdog mid-run (missing rlibs, doctests of bench crates), and `cpu_dispatch` ran against a `gorca` binary
   from another agent's build (`CARGO_BIN_EXE_gorca` is `target/debug/gorca`, shared); `term_parity` is a load flake.
   Reruns alone: `-p gorca-cpu`, `cpu_dispatch`, `term_parity` pass.
-- Touched crates with and without `GORCA_CPU_DISABLE=all`: see the end of this file.
+- Touched crates (`-p gorca-cpu -p gorca-text -p gorca-core -p gorca-connector-atspi -p gorca-daemon`): 1510 passed, 0 failed
+  (doctest phase only fails with `can't find crate`, shared-target damage). Same set with `GORCA_CPU_DISABLE=all`: 1399
+  passed, 3 failed: the three `cpu_dispatch` tests, which ran against another agent's `gorca` binary (rev 40302be3, no
+  `--verbose`) uplifted into the shared `target/debug/gorca`; they pass when the binary is this tree's.
 
 ## Open / not done
 
