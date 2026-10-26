@@ -171,6 +171,26 @@ pub fn chat_name(cells: &[Cell]) -> Option<Name> {
     })
 }
 
+/// True when the whitespace separated `class` attribute has the token `want`.
+pub fn has_class(class: &str, want: &str) -> bool {
+    class.split_ascii_whitespace().any(|t| t == want)
+}
+
+/// Most characters of each part of a name (a Cyrillic character is two bytes; the host's cap on
+/// one message argument is 1024 bytes).
+const TITLE_MAX: usize = 160;
+const PREVIEW_MAX: usize = 240;
+const COUNT_MAX: usize = 12;
+const TIME_MAX: usize = 24;
+
+/// `s` cut to `max` characters, with an ellipsis when something was cut.
+fn clip(s: &str, max: usize) -> String {
+    match s.char_indices().nth(max) {
+        None => s.to_owned(),
+        Some((i, _)) => format!("{}\u{2026}", s[..i].trim_end()),
+    }
+}
+
 /// The parts of a chat row's name. The words between them ("unread", the order, the commas) are
 /// the catalog's (`i18n/<lang>.msg`), so they follow the UI language.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -197,17 +217,20 @@ impl Name {
         )
     }
 
-    /// The arguments of the message: `title`, `n`, `preview`, `time` (only the present ones).
+    /// The arguments of the message: `title`, `n`, `preview`, `time` (only the present ones),
+    /// each cut to what is worth speaking: the host refuses a whole call that returns an
+    /// argument over 1 KiB or more than 32 KiB of fact text, and a long last message must not
+    /// cost the names of every other row of its batch.
     pub fn args(&self) -> Vec<(String, String)> {
-        let mut v = vec![("title".to_owned(), self.title.clone())];
+        let mut v = vec![("title".to_owned(), clip(&self.title, TITLE_MAX))];
         if let Some(n) = &self.unread {
-            v.push(("n".to_owned(), n.clone()));
+            v.push(("n".to_owned(), clip(n, COUNT_MAX)));
         }
         if !self.preview.is_empty() {
-            v.push(("preview".to_owned(), self.preview.clone()));
+            v.push(("preview".to_owned(), clip(&self.preview, PREVIEW_MAX)));
         }
         if !self.time.is_empty() {
-            v.push(("time".to_owned(), self.time.clone()));
+            v.push(("time".to_owned(), clip(&self.time, TIME_MAX)));
         }
         v
     }
@@ -496,6 +519,30 @@ mod tests {
         for t in ["", "22:28", "Q148", "1,2", "12345678", "K", "1,234K"] {
             assert!(!looks_like_count(t), "{t}");
         }
+    }
+
+    #[test]
+    fn long_parts_are_cut_so_a_row_never_costs_its_batch() {
+        let n = Name {
+            title: "т".repeat(500),
+            unread: Some("1".into()),
+            preview: "п".repeat(2000),
+            time: "22:28".into(),
+        };
+        for (_, v) in n.args() {
+            assert!(v.len() <= 1024, "{}", v.len());
+        }
+        let total: usize = n.args().iter().map(|(k, v)| k.len() + v.len()).sum();
+        assert!(total * 32 < 32 << 10, "32 rows fit one call: {total}");
+        assert_eq!(clip("abc", 3), "abc");
+        assert_eq!(clip("abcd", 3), "abc\u{2026}");
+    }
+
+    #[test]
+    fn class_tokens_are_whole_words() {
+        assert!(has_class("fullName _8IVW0azL", "fullName"));
+        assert!(!has_class("fullNameWrapper", "fullName"));
+        assert!(!has_class("", "fullName"));
     }
 
     #[test]

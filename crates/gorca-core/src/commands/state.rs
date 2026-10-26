@@ -285,6 +285,9 @@ pub(crate) struct PendingInfo {
     /// a window name can be as old as the last event that named it (a page changes its title
     /// without the frame announcing it).
     pub window: bool,
+    /// Parent links followed by fetch so far to reach the window of `info.window_title` when
+    /// the mirror's ancestry stops short of it (see `Reader::answer_or_refetch`).
+    pub hops: u8,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

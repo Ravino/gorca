@@ -1170,3 +1170,53 @@ fn window_title_is_fresh_after_a_page_changes_it_and_falls_back_to_the_cache() {
         ["Inbox"]
     );
 }
+
+/// A page deep in the tree: the mirror holds the focused node but not its upper ancestors. The
+/// window title is found by following the parents, not answered "unavailable".
+#[test]
+fn window_title_climbs_to_the_window_when_the_mirror_lacks_the_ancestry() {
+    let mut f = fixture();
+    f.writer.apply(
+        SnapshotBatch {
+            nodes: vec![
+                snap(9, Role::Link, "Inbox link", Some(8)),
+                snap(8, Role::Panel, "", Some(7)),
+            ],
+            ..Default::default()
+        },
+        gorca_mirror::ApplyOrigin::Push,
+    );
+    f.reader.handle(
+        ReaderMsg::Focus(crate::FocusLaneMsg::FocusChanged { node: key(9) }),
+        f.now,
+    );
+    f.reader.handle(ReaderMsg::Timer, f.now);
+    let mut next = 7;
+    let fx = f.run(CoreCmd::InfoWindowTitle, 1);
+    assert!(
+        matches!(fx.as_slice(), [ReaderEffect::Fetch { node, .. }] if *node == key(next)),
+        "{fx:?}"
+    );
+    for up in [6, 5] {
+        let reply = QueryReply {
+            node: key(next),
+            epoch: f.epoch.current(),
+            kind: crate::reader::FetchKind::Info,
+            result: Ok(snap(next, Role::Panel, "", Some(up))),
+        };
+        let fx = f.reader.handle(ReaderMsg::Reply(reply), f.now);
+        next = up;
+        assert!(
+            matches!(fx.as_slice(), [ReaderEffect::Fetch { node, .. }] if *node == key(next)),
+            "{fx:?}"
+        );
+    }
+    let reply = QueryReply {
+        node: key(next),
+        epoch: f.epoch.current(),
+        kind: crate::reader::FetchKind::Info,
+        result: Ok(snap(next, Role::Window, "Chat with Anna", Some(1))),
+    };
+    let fx = f.reader.handle(ReaderMsg::Reply(reply), f.now);
+    assert_eq!(spoken(&fx), ["Chat with Anna"]);
+}

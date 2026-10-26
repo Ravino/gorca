@@ -36,6 +36,9 @@ pub const PASS_TIMEOUT: Duration = Duration::from_secs(10);
 /// Large ring steps are this many small ones.
 const LARGE_STEP: u8 = 4;
 
+/// Most parent links `info.window_title` follows by fetch when the mirror lacks the ancestry.
+const MAX_TITLE_HOPS: u8 = 48;
+
 impl Reader {
     /// Speak `text` now: interrupts, at the current epoch (E-4), survives nothing else.
     pub(crate) fn say(&mut self, text: &str, fx: &mut ReaderEffects) {
@@ -646,7 +649,7 @@ impl Reader {
             });
         }
         match self.dir.lookup(node) {
-            Lookup::Hit(snap) => self.answer_or_refetch(kind, repeat, &snap, fx),
+            Lookup::Hit(snap) => self.answer_or_refetch(kind, repeat, 0, &snap, fx),
             Lookup::Miss => {
                 let epoch = self.epoch.current();
                 self.cmd.pending = Some(PendingInfo {
@@ -655,6 +658,7 @@ impl Reader {
                     repeat,
                     epoch,
                     window: false,
+                    hops: 0,
                 });
                 fx.push(ReaderEffect::Fetch {
                     node,
@@ -676,6 +680,7 @@ impl Reader {
         &mut self,
         kind: PendingKind,
         repeat: u8,
+        hops: u8,
         snap: &Arc<NodeSnapshot>,
         fx: &mut ReaderEffects,
     ) {
@@ -693,10 +698,35 @@ impl Reader {
                     repeat,
                     epoch,
                     window: true,
+                    hops: 0,
                 });
                 fx.push(ReaderEffect::Fetch {
                     node,
                     mask: PropMask::PRESENT,
+                    class: BudgetClass::Interactive,
+                    epoch,
+                    kind: crate::reader::FetchKind::Info,
+                });
+                return;
+            }
+            // The mirror's ancestry stops short of the window (a deep page whose upper levels
+            // were not fetched yet, or evicted): follow the first missing parent by fetch, one
+            // hop per reply, instead of answering "unavailable".
+            if let Some(up) = chain.last().and_then(|top| top.parent())
+                && hops < MAX_TITLE_HOPS
+            {
+                let epoch = self.epoch.current();
+                self.cmd.pending = Some(PendingInfo {
+                    kind,
+                    node: up,
+                    repeat,
+                    epoch,
+                    window: false,
+                    hops: hops + 1,
+                });
+                fx.push(ReaderEffect::Fetch {
+                    node: up,
+                    mask: PropMask::PRESENT | PropMask::PARENT,
                     class: BudgetClass::Interactive,
                     epoch,
                     kind: crate::reader::FetchKind::Info,
@@ -760,8 +790,17 @@ impl Reader {
         self.cmd.pending = None;
         // A fetch that failed answers from the cache: a possibly old title beats silence.
         match result.or_else(|| self.dir.lookup(node).hit()) {
+            // A hop of the climb that reached the window itself, fresh: it is the answer.
+            Some(snap)
+                if p.kind == PendingKind::WindowTitle
+                    && p.hops > 0
+                    && !p.window
+                    && crate::nodekind::is_window_role(crate::nodekind::role_of(&snap)) =>
+            {
+                self.answer_node(p.kind, p.repeat, &snap, fx);
+            }
             Some(snap) if p.kind == PendingKind::WindowTitle && !p.window => {
-                self.answer_or_refetch(p.kind, p.repeat, &snap, fx);
+                self.answer_or_refetch(p.kind, p.repeat, p.hops, &snap, fx);
             }
             Some(snap) => self.answer_node(p.kind, p.repeat, &snap, fx),
             None => {

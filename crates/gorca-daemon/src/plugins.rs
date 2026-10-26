@@ -67,6 +67,164 @@ const ADMIT_UNIT_PRIOR_NS: u64 = 5_000;
 /// The cost unit never exceeds this, whatever the recent peak says.
 const UNIT_CAP_NS: u64 = 12_000;
 
+/// CPU placement of the interactive plugin path (`[plugins] placement`, M18a-5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlacementPolicy {
+    /// With the `sps` scheduler on a hybrid CPU: the writer's wait and the plugins it waits for on
+    /// the P cores (a soft mask), refinement and third-party plugins on the E cores. Elsewhere,
+    /// and under `labels`, nothing is pinned.
+    #[default]
+    Auto,
+    /// Leave every thread to the kernel.
+    Off,
+}
+
+impl PlacementPolicy {
+    /// `"auto"` or `"off"`.
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Some(Self::Auto),
+            "off" => Some(Self::Off),
+            _ => None,
+        }
+    }
+}
+
+/// How the CPU classes are turned into masks (M18a-5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Shape {
+    workers: WorkerShape,
+    writer: WriterShape,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WriterShape {
+    /// The writer thread is never touched: moving a running thread costs a migration, which was
+    /// a millisecond-sized tail on about 1 turn in 100 at 200 ms spacing (M18a-5).
+    Free,
+    /// Moved off the low-power cores for a waited turn.
+    Wide,
+    /// Moved to the P cores for a waited turn.
+    Fast,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkerShape {
+    /// Every waited-for worker on the P cores.
+    Strict,
+    /// Waited-for workers on P and E cores, never the low-power ones.
+    Wide,
+    /// As many waited-for workers on the P cores as leave one P core for the writer, the rest wide:
+    /// the P cluster is never oversubscribed by spinning workers.
+    Capped,
+}
+
+impl Default for Shape {
+    fn default() -> Self {
+        Self::of(5)
+    }
+}
+
+impl Shape {
+    fn of(v: u8) -> Self {
+        match v {
+            1 => Self {
+                workers: WorkerShape::Strict,
+                writer: WriterShape::Fast,
+            },
+            2 => Self {
+                workers: WorkerShape::Wide,
+                writer: WriterShape::Wide,
+            },
+            3 => Self {
+                workers: WorkerShape::Capped,
+                writer: WriterShape::Wide,
+            },
+            4 => Self {
+                workers: WorkerShape::Capped,
+                writer: WriterShape::Fast,
+            },
+            _ => Self {
+                workers: WorkerShape::Capped,
+                writer: WriterShape::Free,
+            },
+        }
+    }
+
+    /// One mask per plugin id; `background` marks the plugins that never gate a turn.
+    fn worker_masks(
+        self,
+        p: &gorca_rt::topology::Placement,
+        background: &[bool],
+    ) -> Vec<Option<Vec<usize>>> {
+        let mut on_fast = 0usize;
+        let room = p.fast.len().saturating_sub(1).max(1);
+        background
+            .iter()
+            .map(|&bg| {
+                if bg {
+                    return p.bulk.clone();
+                }
+                match self.workers {
+                    WorkerShape::Strict => Some(p.fast.clone()),
+                    WorkerShape::Wide => Some(p.wide.clone()),
+                    WorkerShape::Capped => {
+                        on_fast += 1;
+                        Some(if on_fast <= room {
+                            p.fast.clone()
+                        } else {
+                            p.wide.clone()
+                        })
+                    }
+                }
+            })
+            .collect()
+    }
+
+    /// The CPUs a waited writer turn is held on; `None`: the thread is left alone.
+    fn writer_mask(self, p: &gorca_rt::topology::Placement) -> Option<Vec<usize>> {
+        match self.writer {
+            WriterShape::Free => None,
+            WriterShape::Wide => Some(p.wide.clone()),
+            WriterShape::Fast => Some(p.fast.clone()),
+        }
+    }
+}
+
+/// `[plugins] idle_lease` (DP-1 option (b), owner-approved 2026-10-25).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum IdleLeasePolicy {
+    /// Hold a `/dev/cpu_dma_latency` lease while plugins are active (a no-op with one info line
+    /// when the device is not writable).
+    #[default]
+    Auto,
+    /// Never open the device.
+    Off,
+}
+
+impl IdleLeasePolicy {
+    /// `"auto"` or `"off"`.
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Some(Self::Auto),
+            "off" => Some(Self::Off),
+            _ => None,
+        }
+    }
+}
+
+/// The DP-1 lease as an [`IdleStateHook`]: every key-down that arms plugin workers renews it.
+#[derive(Debug)]
+struct LeaseHook(gorca_rt::pmqos::PmQosLease);
+
+impl IdleStateHook for LeaseHook {
+    fn plugins_active(&self, now_ns: u64) {
+        self.0.touch(now_ns);
+    }
+}
+
 /// Which policy schedules the interactive handoff (`[plugins] scheduler`, ADR-0026 section
 /// 2.4.7.12, C-4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -331,6 +489,16 @@ pub struct PluginOptions {
     pub warm_on_arm: Option<bool>,
     /// `[plugins] scheduler`: the scheduling policy of the interactive handoff.
     pub scheduler: SchedulerPolicy,
+    /// `[plugins] placement`: CPU placement of the writer's wait and the plugin workers.
+    pub placement: PlacementPolicy,
+    /// `[plugins] idle_lease`: hold a `/dev/cpu_dma_latency` lease while plugins are active.
+    pub idle_lease: IdleLeasePolicy,
+    /// The device node for the lease (`None`: `/dev/cpu_dma_latency`); tests only.
+    pub idle_lease_device: Option<PathBuf>,
+    /// Benchmark knob, never read from a file: which placement shape `Auto` uses (1 strict,
+    /// 2 wide, 3 capped with the writer off the low-power cores, 4 capped with the writer on the P
+    /// cores, 5 or unset capped with the writer left alone); `None` is the product default.
+    pub placement_variant: Option<u8>,
     /// Most workers SPS pre-wakes per key (`None`: the ADR default of 6). A diagnostic knob of the
     /// benchmarks, never read from a file.
     pub sps_k_max: Option<usize>,
@@ -348,6 +516,13 @@ struct Entry {
 }
 
 impl Entry {
+    /// The plugin never gates a turn (refinement, or third party): its worker runs on the
+    /// efficiency cores under `[plugins] placement = "auto"`.
+    fn background(&self) -> bool {
+        self.manifest.priority == Priority::Refinement
+            || matches!(self.tier, TrustTier::Untrusted | TrustTier::Dev)
+    }
+
     /// The executor of one actor: the plugin instance, with its message facts resolved on the
     /// worker thread (the writer's admission stays cheap).
     fn exec(&self) -> Box<dyn Exec> {
@@ -397,6 +572,8 @@ pub struct PluginRuntime {
     writer_spin: Duration,
     warm_on_arm: bool,
     policy: SchedulerPolicy,
+    placement: Option<Arc<gorca_rt::topology::Placement>>,
+    placement_shape: Shape,
     sps_k_max: Option<usize>,
     sched_log: Option<PathBuf>,
 }
@@ -419,16 +596,33 @@ impl std::fmt::Debug for PluginRuntime {
 /// The plugin's message catalogs (`i18n/en.msg`, `i18n/ru.msg`, the format of the core's catalogs)
 /// under its id as the namespace: the texts its message facts resolve to. Bounded reads; a missing
 /// or refused file only means those messages are missing.
-fn register_catalogs(id: &str, dir: &Path) {
+///
+/// Returns how many catalog files exist but could not be read (a package installed with a
+/// directory the user cannot enter makes every message fact of the plugin vanish, so it is a
+/// warning, never silence).
+fn register_catalogs(id: &str, dir: &Path) -> usize {
     use std::io::Read as _;
     const CAP: u64 = 256 * 1024;
     let mut files: Vec<(gorca_i18n::Lang, String)> = Vec::new();
+    let mut unreadable = 0;
     for (lang, name) in [
         (gorca_i18n::Lang::En, "en.msg"),
         (gorca_i18n::Lang::Ru, "ru.msg"),
     ] {
-        let Ok(f) = gorca_plugin_host::fsx::open_regular(&dir.join("i18n").join(name)) else {
-            continue;
+        let path = dir.join("i18n").join(name);
+        let f = match gorca_plugin_host::fsx::open_regular(&path) {
+            Ok(f) => f,
+            Err(e) => {
+                // A missing file is a catalog the plugin does not have; anything else is an
+                // installation fault.
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    unreadable += 1;
+                    tracing::warn!(id, path = %path.display(), error = %e,
+                        "plugin catalog unreadable: its messages will not be spoken (check the \
+                         permissions of the package's i18n directory: it must be world-readable)");
+                }
+                continue;
+            }
         };
         let mut text = String::new();
         if f.take(CAP).read_to_string(&mut text).is_ok() {
@@ -436,7 +630,7 @@ fn register_catalogs(id: &str, dir: &Path) {
         }
     }
     if files.is_empty() {
-        return;
+        return unreadable;
     }
     let refs: Vec<(gorca_i18n::Lang, &str)> = files.iter().map(|(l, t)| (*l, t.as_str())).collect();
     match gorca_i18n::ext::register_extension(id, &refs) {
@@ -450,6 +644,7 @@ fn register_catalogs(id: &str, dir: &Path) {
         Ok(_) => {}
         Err(e) => tracing::warn!(id, error = %e, "plugin catalog refused"),
     }
+    unreadable
 }
 
 fn package_dirs(root: &Path) -> Vec<PathBuf> {
@@ -564,6 +759,24 @@ impl PluginRuntime {
                 extra_urls,
             }));
         }
+        if !entries.is_empty() {
+            match opts.idle_lease {
+                IdleLeasePolicy::Off => {
+                    tracing::info!("idle-state lease: off by [plugins] idle_lease");
+                }
+                IdleLeasePolicy::Auto => {
+                    let dev = opts
+                        .idle_lease_device
+                        .as_deref()
+                        .unwrap_or_else(|| std::path::Path::new(gorca_rt::pmqos::DEVICE));
+                    if let Some(l) =
+                        gorca_rt::pmqos::PmQosLease::open(dev, gorca_rt::pmqos::TARGET_US)
+                    {
+                        prewake.set_idle_hook(Arc::new(LeaseHook(l)));
+                    }
+                }
+            }
+        }
         let wants_url = entries.iter().any(|e| e.url_scoped());
         Arc::new(PluginRuntime {
             entries,
@@ -573,6 +786,22 @@ impl PluginRuntime {
             writer_spin: opts.writer_spin.unwrap_or(D_WINDOW),
             warm_on_arm: opts.warm_on_arm.unwrap_or(false),
             policy: opts.scheduler,
+            placement: match (opts.placement, opts.scheduler) {
+                (PlacementPolicy::Off, _) => {
+                    tracing::info!("cpu placement: off by [plugins] placement");
+                    None
+                }
+                (PlacementPolicy::Auto, SchedulerPolicy::Labels) => {
+                    // `labels` wakes every worker on every key: ten spinners in a six-core mask
+                    // starve each other (M18a-5: facts at first utterance 0.94 -> 0.43-0.48).
+                    tracing::info!("cpu placement: not used with the labels scheduler");
+                    None
+                }
+                (PlacementPolicy::Auto, SchedulerPolicy::Sps) => gorca_rt::topology::auto(),
+            },
+            placement_shape: opts
+                .placement_variant
+                .map_or_else(Shape::default, Shape::of),
             sps_k_max: opts.sps_k_max,
             sched_log: opts.sched_log.clone(),
         })
@@ -588,6 +817,8 @@ impl PluginRuntime {
             writer_spin: D_WINDOW,
             warm_on_arm: false,
             policy: SchedulerPolicy::default(),
+            placement: None,
+            placement_shape: Shape::default(),
             sps_k_max: None,
             sched_log: None,
         }
@@ -671,7 +902,14 @@ impl PluginService for PluginRuntime {
             spin: self.writer_spin,
             ..ActorConfig::default()
         };
-        let runner = match ActorRunner::new(execs, maker, cfg) {
+        let background: Vec<bool> = matched.iter().map(|e| e.background()).collect();
+        let place = self
+            .placement
+            .as_ref()
+            .map(|p| gorca_plugin_host::actor::WorkerPlacement {
+                cpus: self.placement_shape.worker_masks(p, &background),
+            });
+        let runner = match ActorRunner::new_placed(execs, maker, cfg, place) {
             Ok(r) => r,
             Err(e) => {
                 tracing::warn!(error = %e, "plugin actors did not start");
@@ -715,6 +953,10 @@ impl PluginService for PluginRuntime {
         self.prewake.register(runner.prewake_handle(), sps.clone());
         let mut scope = PluginScope::from_parts_sps(runner, plugins, wake, sps);
         scope.sched_log.clone_from(&self.sched_log);
+        scope.writer_cpus = self
+            .placement
+            .as_ref()
+            .and_then(|p| self.placement_shape.writer_mask(p));
         Some(Box::new(scope))
     }
 
@@ -945,6 +1187,10 @@ struct PluginScope {
     /// Observations of replies, handed to the scheduler off the admission path (next poll that
     /// is not a waited one, or the next turn).
     pending_obs: Vec<(usize, PlanInfo, ReplyTiming, u32, bool)>,
+    /// The P cores the writer's waited turn runs on (`None`: no placement).
+    writer_cpus: Option<Vec<usize>>,
+    /// Holds the writer thread on `writer_cpus` from the start of a waited handoff to `turn_done`.
+    pin: gorca_rt::topology::TurnPin,
 }
 
 /// The fuel split of an interactive handoff (ADR-0026 section 2.4.2, progressive filling):
@@ -1011,6 +1257,8 @@ impl PluginScope {
             admit_unit_ns: ADMIT_UNIT_PRIOR_NS,
             view_cache: None,
             pending_obs: Vec::new(),
+            writer_cpus: None,
+            pin: gorca_rt::topology::TurnPin::new(),
         }
     }
 
@@ -1047,7 +1295,10 @@ impl PluginScope {
                     plugin,
                     t: job.t,
                     targets,
-                    body: ReplyBody::Failed { requeue: false },
+                    body: ReplyBody::Failed {
+                        requeue: false,
+                        fault: false,
+                    },
                 });
                 return None;
             }
@@ -1299,6 +1550,20 @@ fn value_shape(v: &FactValue) -> String {
     }
 }
 
+/// The first message fact a plugin returns that its catalog cannot resolve is a warning (the
+/// catalog is missing, unreadable or lacks the id); later ones stay debug lines.
+fn warn_unresolved_once(ns: &str, id: &str) {
+    static SEEN: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+    let first = lock(SEEN.get_or_init(Mutex::default)).insert(ns.to_owned());
+    if first {
+        tracing::warn!(
+            plugin = ns,
+            message = id,
+            "plugin message not in its catalog: the fact is dropped (further ones are debug lines)"
+        );
+    }
+}
+
 fn effects_of(effects: Vec<Effect>, ns: &str) -> Vec<FactEffect> {
     let mut out = Vec::new();
     for e in effects {
@@ -1320,6 +1585,7 @@ fn effects_of(effects: Vec<Effect>, ns: &str) -> Vec<FactEffect> {
                         // Resolved from the plugin's own catalog in the UI language of this
                         // moment; an id the catalog lacks drops the fact.
                         let Some(t) = resolve_msg(ns, &id, &args) else {
+                            warn_unresolved_once(ns, &id);
                             tracing::debug!(
                                 node,
                                 group,
@@ -1394,6 +1660,9 @@ impl ScopeRunner for PluginScope {
         let n = jobs.len();
         if n == 0 {
             return Handoff::default();
+        }
+        if wait && let Some(f) = &self.writer_cpus {
+            self.pin.enter(f);
         }
         if let Some(sps) = self.sps.clone() {
             return self.interactive_sps(&sps, t0_ns, wait, jobs);
@@ -1479,6 +1748,7 @@ impl ScopeRunner for PluginScope {
     }
 
     fn turn_done(&mut self, admit_ns: u64, replies: u32) {
+        self.pin.leave();
         if replies == 0 || self.sps.is_none() {
             return;
         }
@@ -1628,19 +1898,27 @@ impl PluginScope {
                         effects: effects_of(effects, &p.meta.name),
                         reads: reads.nodes,
                         overflow: reads.overflow,
+                        exec_us: u32::try_from(exec.as_micros()).unwrap_or(u32::MAX).max(1),
                     }
                 }
                 // A reply of a dead incarnation or a displaced job: its nodes run again.
-                PluginReply::Done { .. } | PluginReply::Cancelled { .. } => {
-                    ReplyBody::Failed { requeue: true }
-                }
+                PluginReply::Done { .. } | PluginReply::Cancelled { .. } => ReplyBody::Failed {
+                    requeue: true,
+                    fault: false,
+                },
                 PluginReply::Fault { .. } if crowded => {
                     tracing::debug!(plugin = %p.meta.name, "interactive grant too small: refine in the background");
-                    ReplyBody::Failed { requeue: true }
+                    ReplyBody::Failed {
+                        requeue: true,
+                        fault: false,
+                    }
                 }
                 PluginReply::Fault { kind, .. } => {
                     tracing::warn!(plugin = %p.meta.name, ?kind, "plugin call faulted");
-                    ReplyBody::Failed { requeue: false }
+                    ReplyBody::Failed {
+                        requeue: false,
+                        fault: true,
+                    }
                 }
             };
             let masked = Self::masked_now(p);
@@ -1802,6 +2080,60 @@ mod tests {
         }
     }
 
+    fn hybrid() -> gorca_rt::topology::Placement {
+        gorca_rt::topology::Placement {
+            fast: vec![0, 1, 2, 3, 4, 5],
+            wide: (0..14).collect(),
+            bulk: Some((6..14).collect()),
+        }
+    }
+
+    #[test]
+    fn capped_masks_leave_a_p_core_for_the_writer_and_never_use_low_power_cores() {
+        let p = hybrid();
+        let bg = [false, false, false, false, false, false, false, true];
+        let m = Shape::default().worker_masks(&p, &bg);
+        assert_eq!(m.len(), 8);
+        // Five waited-for workers on the P cores (6 - 1), the rest on P and E.
+        assert_eq!(
+            m.iter()
+                .filter(|x| x.as_deref() == Some(&p.fast[..]))
+                .count(),
+            5
+        );
+        assert_eq!(m[5].as_deref(), Some(&p.wide[..]));
+        assert_eq!(m[6].as_deref(), Some(&p.wide[..]));
+        // A background worker goes to the E cores.
+        assert_eq!(m[7], p.bulk);
+        for mask in m.iter().flatten() {
+            assert!(mask.iter().all(|c| *c < 14), "no low-power core: {mask:?}");
+        }
+        assert_eq!(Shape::default().writer_mask(&p), None);
+        assert_eq!(Shape::of(3).writer_mask(&p), Some(p.wide.clone()));
+        assert_eq!(Shape::of(4).writer_mask(&p), Some(p.fast.clone()));
+    }
+
+    #[test]
+    fn strict_and_wide_shapes() {
+        let p = hybrid();
+        let bg = [false, true];
+        let strict = Shape::of(1).worker_masks(&p, &bg);
+        assert_eq!(strict[0].as_deref(), Some(&p.fast[..]));
+        let wide = Shape::of(2).worker_masks(&p, &bg);
+        assert_eq!(wide[0].as_deref(), Some(&p.wide[..]));
+        // No E cores: background workers stay unrestricted.
+        let none = gorca_rt::topology::Placement { bulk: None, ..p };
+        assert_eq!(Shape::of(2).worker_masks(&none, &bg)[1], None);
+    }
+
+    #[test]
+    fn placement_policy_parses_and_defaults_to_auto() {
+        assert_eq!(PlacementPolicy::default(), PlacementPolicy::Auto);
+        assert_eq!(PlacementPolicy::parse(" Off "), Some(PlacementPolicy::Off));
+        assert_eq!(PlacementPolicy::parse("auto"), Some(PlacementPolicy::Auto));
+        assert_eq!(PlacementPolicy::parse("pin"), None);
+    }
+
     #[test]
     fn no_plugin_derived_text_reaches_a_log() {
         let cap = Capture::default();
@@ -1845,6 +2177,21 @@ mod tests {
             "plugin text leaked into a log: {log}"
         );
         assert!(!log.contains("hunter2"), "{log}");
+    }
+
+    #[test]
+    fn a_catalog_directory_the_user_cannot_enter_is_counted_not_ignored() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let pkg = tempfile::tempdir().unwrap();
+        let i18n = pkg.path().join("i18n");
+        std::fs::create_dir(&i18n).unwrap();
+        std::fs::write(i18n.join("en.msg"), "hello = hi\n").unwrap();
+        // The installed shape that silenced every message of the Telegram plugin: root's 0750.
+        std::fs::set_permissions(&i18n, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let unreadable = register_catalogs("test.catalog-perm", pkg.path());
+        std::fs::set_permissions(&i18n, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(unreadable, 2, "en.msg and ru.msg both fail to open");
+        assert_eq!(register_catalogs("test.catalog-ok", pkg.path()), 0);
     }
 
     #[test]

@@ -111,3 +111,161 @@ Probe in the transient units (`live_peer_identity_probe`, whole real path): hard
   `ProtectKernelModules=no`, `ProtectControlGroups=no`, `PrivateTmp=no`.
 * Daemon logs a WARN at startup when plugins are enabled and gorca is in a private user namespace.
 * Expected after restart: `plugin scope opened app=firefox-esr doc=true plugins=1`.
+
+## Follow-up 2 (scope opens, but `Malformed` / `Watchdog` faults)
+
+Reproduced with a live dump of the Telegram A document (`live_tree_probe`, ignored test, input
+`GORCA_LIVE_TREE=<json>`; 404 nodes, 30 chat rows): one background job with all rows ended in
+`Watchdog` (debug host; the owner's release build shows it once and `Malformed` mostly).
+
+* Cause 1 (`Watchdog`, and the strikes that mask the plugin): `PluginBridge::background` sent up
+  to `MAX_BATCH` = 64 dirty rows in one call. A Web A row costs a `subtree` of up to 64 nodes plus
+  one `attr` host call per node; 64 of them exceed the 1 ms background grant, and the host kills a
+  call at 4 grants of CPU.
+* Cause 2 (`Malformed`): a call may return at most 32 KiB of fact text and 1 KiB per message
+  argument (B-6); 64 rows with Cyrillic previews (2 bytes a letter, up to 348 characters) cross
+  either limit, and one such row fails the whole call, so every other row of its batch loses its name.
+* Cause 3 (host bug found on the way): `owned_by` attributed every effect of a multi-target call to
+  every target (the read set is the union), so a batch of k rows admitted k^2 facts
+  (10 rows gave 100 ops, each name 10 times) and kept k^2 tokens.
+* Not related: `RLIMIT_RTTIME SIGXCPU` on `gorca-input` (5 earlier occurrences in the journal since
+  2026-10-23, all before plugins were enabled; the input lane's pre-wake only arms, never spins).
+
+Fix: the bridge sizes background jobs per plugin from the measured microseconds per node
+(`BG_JOB_TARGET_US` = 250 per job, 1..32 nodes, 4 before the first measurement); a faulted call halves
+the size and its nodes are requeued; the plugin clips title/preview/count/time arguments (160/240/12/24
+characters); facts are owned by their own target. New pin in `plugins/pins.txt`.
+Tests: `a_long_busy_chat_list_derives_without_faults_and_without_duplicate_facts` (90 long rows, failed
+before: 2 jobs, 0 admitted), the live dump now gives 30 facts, 1 per row, no fault; `long_parts_are_cut...`.
+
+Logs: `RUST_LOG=info,gorca_daemon::plugins=debug` adds `plugin call exec_us=... grant_us=...`, `plugin fact`
+and message-catalog misses. Faults and masks are WARN already; the drop-in is only needed to see timings.
+## Update 2026-10-26
+
+The unit-side workaround (dropping the namespace options) is superseded: the full sandbox is back and identity comes from the identity helper, see `docs/reports/2026-10-26-linux-platform-identity-helper.md`.
+
+## Follow-up 3 (no faults, role facts logged, but no name on the chat rows)
+
+The plugin matched the live rows all along; the names were dropped after the plugin returned them.
+
+* `crates/gorca-daemon/tests/live_document.rs` (ignored, `GORCA_LIVE_DOC=1`, read-only) drives the
+  real `AtspiDocSource` against the owner's Firefox over a peer-to-peer connection, builds rows the
+  way the document actor does and runs the real plugin in the doc actor's batch order. Result on the
+  live Telegram A document: 30 `a.ListItem-button` rows (role 31, link), `h3.fullName`, `span.time`,
+  `p.last-message`, hashed badge classes, text runs as separate leaves; 30 name facts
+  ("Артем, Сам как?, 25 авг.", "... , 1 unread, ...") and one article per `Message`; labels and
+  sps schedulers alike. So the watch (the row node, class `ListItem-button`) and the structure are right.
+* The installed package has `i18n/` as `drwxr-x--- root root`: the user's gorca cannot read the
+  catalogs, `register_catalogs` skipped them silently, and every message fact of the plugin (the
+  chat names) resolved to nothing and was dropped. Role facts are plain codes, so they survive: that is
+  exactly the journal (`group=0 value=code(5)` only, no `text(len=..)`). Reproduced by running the same
+  probe against a copy of `plugins/dist` without `i18n`: 0 name facts, article facts intact.
+* Immediate fix for the owner: `sudo chmod 755 /usr/lib/gorca/addons/gorca.telegram-web/i18n`
+  (files are already 644), then restart gorca. No new wasm: the pin is unchanged (`1c2fc587...`).
+* Code: `register_catalogs` now warns (path, error, how to fix) for a catalog that exists but cannot be
+  read, the first unresolved message of a plugin is a WARN (later ones stay debug), and
+  `tools/build-plugins.sh` makes `plugins/dist/<id>` world-readable so a root copy keeps the modes.
+* Fixture `tests/fixtures/web/telegram-a-live.json` (anonymised: three chat rows and two messages as
+  the real source delivered them) and the test `the_rows_the_real_source_delivered_for_live_web_a_...`
+  keep a wrong panel from passing. `live_document.rs` regenerates it (`GORCA_DUMP_FIXTURE=<path>`).
+* Not done: a spoken end-to-end run in a private session (the fact-to-speech path is the fusion's
+  Patch-over-observed rule, covered by the `fuse` tests `a_plugin_patch_is_in_the_first_published_entry...`).
+
+## Follow-up 4: message list, headings, click handlers (owner requests)
+
+Facts only (role, level and description patches, names from the plugin catalog); no DOM injection.
+Structure read from the owner's open chat (read-only dumps, 2026-10-26); fixture
+`tests/fixtures/web/telegram-a-open-chat.json` is the real source output, anonymised.
+
+* Live shape: `div.messages-layout` holds the header title (`h3.fullName`, role button, a direct
+  child; there is no `MiddleHeader`/`ChatInfo` in the tree) and `div.Transition > div.MessageList`,
+  whose direct children are `div.sticky-date` separators and `div.Message.message-list-item`
+  (role section, no AT-SPI action; outgoing ones carry the class `own`). Replies
+  (`div.EmbeddedMessage`) have the action `click`, their children `clickAncestor`.
+* **Messages as a list**: `MessageList` becomes `list` named "Messages" / "Сообщения"; each
+  `div.Message` becomes `listitem`. Chosen over `article`: the list is announced once and each item then
+  carries a position ("3 of 40"; the messages are direct children of the list, so counting is exact),
+  while `article` says the word on every message and has no list context; quick-nav keeps working
+  (`L` list, `I` item); `A` no longer stops on messages. A role patch is the only handle the fact API
+  gives (`Value::Position/Grid` are not admitted).
+* **Own messages**: a message with class `own` gets the description "Your message" / "Ваше сообщение"
+  (catalog `own-message`), so the owner hears who wrote it without a name that would double the text.
+  Remove the `own` branch of `message_row` if it reads badly.
+* **Chat header**: the watch is `messages-layout`; its direct-child `h3.fullName` becomes a level-1
+  `heading` (matched by structure; chat-list titles are below `a.ListItem-button` and untouched).
+* **Date separators** (`div.sticky-date`) become level-2 headings. The **unread divider** rule
+  (`.unread-divider` / `.local-action-message`) is kept but its class names are NOT confirmed: no chat
+  with unread messages has been dumped; the test uses a synthetic divider.
+* Host fix found on the way: a fact on a node the call only read (the header title) was admitted once
+  per target of the batch; it is now admitted once (`admit_done`, the first target claims it).
+
+### Click handlers (recorded only, nothing implemented)
+
+Gecko exposes a real click handler as an action on the node that owns it and `clickAncestor` on its
+descendants. Chat list: `a.ListItem-button` (role link, `jump`) opens the chat, `h3.fullName`
+(`press`) and `button.Button` (`press`); everything inside a row has `clickAncestor` only.
+Open chat: `div.Message` has NO action (a message itself has no mouse-only handler); the only
+`click` seen is on `div.EmbeddedMessage` (the quoted reply inside a message: jumps to the replied
+message), its text and sender spans being `clickAncestor`. Menus (`message-action-buttons`,
+context menu) were not dumped.
+
+### Landmarks (owner request, same slice)
+
+Matched by the structure of the live open chat (read-only dump, ids/classes as Gecko exposes them):
+
+| Region | Node (watch) | Role / catalog name | Covers |
+|---|---|---|---|
+| Chats | `div.chat-list` | navigation, "Chats" / "Чаты" | the chat rows (not the left header with menu and search, not the folder tabs) |
+| Messages | the parent of `MessageList` (an unclassed `div.Transition`, reached with `model.parent`) | region, "Messages" / "Сообщения" | the message list and, below it, the composer's footer |
+| Message list | `div.MessageList` | list, "Message list" / "Список сообщений" | the messages and date headings; keeps the N-of-M count |
+| Composer | `div.Composer` | region, "Message input" / "Поле ввода" | text field, attach, emoji, send/record buttons |
+
+* **Header**: Gecko flattens it: the avatar, title, status and the search/call/menu buttons are direct
+  children of `div.messages-layout`; there is no node that covers them, so a banner/region cannot be
+  patched onto it without marking something that also covers the messages. It stays reachable as the
+  level-1 heading (`H`) which is the title; the buttons follow it in reading order.
+* The roles are ordinary fused-model roles: `flags_from_sem` turns navigation/region into the landmark
+  category the browse quick-nav (`D`) and the "where am I" ancestry read, and the verbosity rules apply to them
+  like to authored landmarks. That wiring is by design and covered by existing tests, not exercised
+  end to end with this plugin (no private-session run). Note: a region without `ROLE_AUTHORED` still
+  counts as a landmark (`Cat::LANDMARK`), which `D` takes.
+* Test: `the_open_chat_gets_a_message_list_headings_and_described_own_messages` now also checks the
+  three landmarks on the real open-chat fixture (the dump includes the composer footer and the chat-list node).
+
+## Follow-up 5: plugin roles did not reach the browse index (H found nothing)
+
+Root cause (core, not Telegram): the browse categories (H, D, L, I, ...) are a pure function of the
+mirror node's `(role, level, flags)` (gorca-doc DM-4, updated incrementally by `SetProps` along the node's
+path, O(log n)). The translator builds those from the fused entry only when a node is upserted
+(`spec_of`); an entry that changes later (a plugin's reply arrives after the document was built) goes
+through `Translator::patch_sem`, which replaced the entry in the node's data and the ARTICLE flag and
+nothing else. The line renderer reads the fused entry, so arrow keys spoke "heading" and "list item",
+while the role/level/flags in the mirror, hence the category index, stayed the source's.
+Fix (`patch_sem`): re-derive role, heading level and the structural flags from the new entry
+(`flags_from_parts`, shared with the build path) and apply them in the same `SetProps`; the source facts
+the flags need besides the entry (tag, visible, focusable, invalid) are kept with the node
+(`NodeData.basis`); a BLOCK/HIDDEN change recomputes the parent's line breaks. Bounded: one `SetProps` per
+changed entry, no rebuild. Test: `roles_that_arrive_as_facts_after_the_load_reach_the_quick_nav_categories`
+(all source roles plain; headings, a landmark, a list and its items arrive as facts; H, D, L, I forward and
+backward, the heading level, and a later patch that changes a level, removes the landmark and adds a heading).
+"Where am I"/landmark ancestry and "list, N items" read the same mirror roles (the list count counts the
+list's direct list-item children).
+
+Gap, not fixed: browse mode never speaks an item position ("3 of 30"): the presenter has no
+position path for list items (`SetPos` is read by nothing in `gorca-present`/`browse`, and the plugin API
+cannot send positions: `Value::Position` is dropped by the host). It needs a presenter feature
+(count siblings or use `SetPos`) plus a position fact in the plugin host; proposed as the next slice.
+
+### Chat list as a list
+
+`div.chat-list` is a list ("Chat list" / "Список чатов"); its parent (an unclassed block with nothing else
+in it) is the "Chats" navigation landmark; each row is a list item: the `div.ListItem.chat-item-clickable`
+wrapper, or the `a.ListItem-button` link itself when Gecko does not expose the wrapper (the live tree has both
+shapes, 1 wrapped and 2 bare links among the first 4 children). A link inside a wrapper keeps its link role;
+a bare one is patched to list item and keeps its focus, link action and computed name (Enter goes through the
+focusable/clickable ancestor search). Test: `the_chat_list_is_a_list_of_list_items_inside_the_chats_landmark`
+on the real fixture `tests/fixtures/web/telegram-a-chat-list.json`.
+
+The shell e2e: no release build was possible (disk at 95%, no release target); the Phase 1 harness ran on the
+debug build in the isolated session (`--allow-debug --quick --only L1,F0`): L1 gorca-side p99 7.9 ms, lost 0.
+Results `/var/tmp/web-a5ae-e2e/20261026T004837Z.txt` (debug numbers, smoke only).

@@ -8,6 +8,102 @@ since the project started on 2026-10-12. The detailed record is `docs/decisions.
 
 ## [Unreleased]
 
+### Newest changes (2026-10-24 to 2026-10-26)
+
+Added
+
+- One semantic model and one presentation pipeline (ADR-0022). Every surface now reads only the
+  fused model and speaks through the shared presentation record `PresIr` (version 1): focus and
+  change, browse mode, quick navigation and say-all, review and object navigation, where-am-I,
+  window titles and notifications, extension words and "explain". Each surface was cut over
+  behind a replay gate (`cargo xtask cutover <surface>`: every corpus family, English and
+  Russian, zero unclassified differences, byte-identical reruns and shuffled arrival order) and
+  its old path was then deleted. The last commit before each deletion is tagged
+  `legacy/<surface>-last` (focus, browse, window, whereami, review, ext, carrier, model).
+- No-legacy rule (`cargo xtask legacy`, rule 12): the allowlist file is gone, and any use of a
+  banned legacy API (`Role`, `StateSet`, raw attribute maps) in ported code fails the build. The
+  node snapshot fields are private and the mirror node holds the fused entry only.
+- Secrets: a secret mark on a node is sticky, one shared question decides what is secret for
+  every speak and log sink, and browse-mode text reading is secret-aware. A review path that
+  spoke the contents of a toolkit password entry whose fused role was a text box was found by a
+  security scan and fixed. Rule 14 bans hand-written password checks.
+- WebAssembly plugin system (ADR-0026), experimental and off by default (`[plugins] enabled`):
+  wasmtime Component Model runtime, trust tiers, default-deny capabilities, system scopes that
+  third parties cannot reach, fuel and wall-clock budgets with strikes, a MAC-verified `.cwasm`
+  cache in a 0700 directory, and each plugin as its own actor with a bounded wait on the key
+  path. Third-party plugins are not loaded in the product yet.
+- Statistical plugin scheduler (SPS) behind `[plugins] scheduler = "labels" | "sps"`. The default
+  stays `"labels"` because SPS did not meet its acceptance gate on every measure
+  (`docs/reports/m18a-3-sps.md`).
+- Hybrid-CPU placement of plugin workers (`[plugins] placement = "auto" | "off"`, effective with
+  `scheduler = "sps"`) and an optional `/dev/cpu_dma_latency` idle-state lease
+  (`[plugins] idle_lease = "auto" | "off"`) with a shipped udev rule,
+  `packaging/udev/70-gorca-cpu-dma-latency.rules`, that you install yourself. See
+  `docs/reports/m18a-5-placement.md` for the measurements and the cases where the goal was not
+  met.
+- First-party `telegram-web` plugin for Telegram Web A and K in Firefox and Chromium (early and
+  experimental): chat-list rows are named "name, unread count, last message, time" without the
+  avatar's initials. In an open Web A chat the messages are a list of list items, your own
+  messages are described as "Your message", the chat title is a level-1 heading, date separators
+  are level-2 headings, and the page has landmarks named Chats, Messages and Message input (all in
+  English and Russian). To use it set `[plugins] enabled = true`, run the identity helper and
+  install the package root-owned under `/usr/lib/gorca/addons/gorca.telegram-web` with every
+  directory, including `i18n/`, readable by your user.
+- Planned, recorded as design decisions (no code yet): ADR-0028 (accepted), virtual actions, which
+  make mouse-only affordances reachable from the keyboard through one actions menu opened with
+  gorca+Shift+A; and ADR-0029 (proposed), synthetic nodes, which let a plugin declare virtual
+  regions such as a chat header. ADR-0022 (one semantic model and presentation pipeline) is
+  marked Accepted.
+- Application identity helper: `gorca-identity.service` (`gorca --identity-helper`) verifies
+  application identity outside any user namespace, so `gorca.service` keeps its full sandbox
+  (`ProtectSystem`, `PrivateTmp`, `ProtectKernel*`). It uses a tagged, pipelined protocol with a
+  cache, deadlines and retry; 200 applications were verified in about 25 ms in the report's
+  measurement (`docs/reports/2026-10-26-linux-platform-identity-helper.md`). Without the helper
+  applications are unverified and only non-URL first-party plugins apply.
+- Extension interface `gorca:ext` 0.4.0: extensions read the fused entry (`role-code`, `flags`,
+  `policy-view`, and a `read-group` accessor). Secret nodes withhold every text group. The
+  interface is frozen until extensions and plugins share one ABI.
+- Generic fixes from the Telegram Web study: re-anchoring the browse cursor after a removed pane,
+  the page following the browse cursor so virtual lists load, a content-named scroll container,
+  and an inferred label for nameless web fields (a port of Orca's label inference) stored as a
+  low-trust fact.
+
+Changed
+
+- `install-dev.sh` installs both units; with `GORCA_BIN` both run the same binary.
+- Web menu popups: the extra focus Gecko fires on a `role=menu` popup is folded into the item,
+  which is now spoken with the menu name and role (Chromium too).
+
+Fixed
+
+- Doubled typing echo: Mutter 48.7 delivers keys routed through the input method twice about 1 ms
+  apart; the input lane drops an identical event within 8 ms. Synthetic input faster than 8 ms
+  would lose events.
+- A plugin job that was too large faulted (Watchdog or Malformed) on live Telegram pages;
+  background jobs are now sized from measured cost, retried smaller, and facts are owned by their
+  target.
+- `info.window_title` climbs to the window by fetching parents when the mirror lacks the
+  ancestry.
+- The input lane no longer spins on the real-time keyboard thread while a gorca modifier is held
+  for more than 1.5 s: the stale-key deadline was left in the past, so the session loop never
+  slept, and the kernel's real-time CPU limit (SIGXCPU) demoted the lane for the rest of the run.
+  See `docs/reports/input-lane-sigxcpu.md`; the lane is still not promoted again after a
+  demotion.
+- Telegram Web plugin on a live session: gorca warns when plugins run inside a private user
+  namespace, where application identity cannot be verified; an unreadable plugin message
+  catalogue now produces a warning instead of silently dropping the chat names; and a fact on a
+  node a plugin only read is admitted once (`docs/reports/telegram-web-live-diagnosis.md`).
+
+Known issues
+
+- Object navigation `next` at the end of a GTK4 list, and `next` or `previous` from a Firefox
+  check box, can say "not responding" instead of "no next" (present before the cut-over).
+- Shell flat review reads the actor "layout" as unavailable.
+- The `term_parity` test can fail under load when the first Terminal call of the VTE native hook
+  exceeds its limit.
+- Plugin latency gates were measured on a loaded, `powersave` host and are not yet confirmed on a
+  quiet one; the SPS and idle-lease goals are met on the median in some cases and not in others.
+
 ### Newest changes (2026-10-19 to 2026-10-23)
 
 Added

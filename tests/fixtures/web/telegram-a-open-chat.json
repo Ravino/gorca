@@ -1,0 +1,1874 @@
+[
+  {
+    "class": "",
+    "i": 0,
+    "name": "",
+    "p": -1,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "messages-layout",
+    "i": 1,
+    "name": "",
+    "p": 0,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "fullName _8IVW0azL",
+    "i": 2,
+    "name": "Слово0",
+    "p": 1,
+    "role": 8,
+    "tag": "h3",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 3,
+    "name": "Слово0",
+    "p": 2,
+    "role": 81,
+    "tag": "",
+    "text": "Слово0"
+  },
+  {
+    "class": "Transition",
+    "i": 4,
+    "name": "",
+    "p": 1,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Transition MessageList custom-scroll no-avatars with-default-bg scrolled with-bottom-snap",
+    "i": 5,
+    "name": "",
+    "p": 4,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "sticky-date interactive",
+    "i": 6,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 7,
+    "name": "",
+    "p": 6,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 8,
+    "name": "Слово1",
+    "p": 7,
+    "role": 81,
+    "tag": "",
+    "text": "Слово1"
+  },
+  {
+    "class": "Message message-list-item first-in-group allow-selection last-in-group has-reply shown open",
+    "i": 9,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 10,
+    "name": "",
+    "p": 9,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "DbUwzy9t peer-color-4 Cm9Nsgvf EmbeddedMessage no-selection",
+    "i": 11,
+    "name": "",
+    "p": 10,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta",
+    "i": 12,
+    "name": "",
+    "p": 10,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 13,
+    "name": "",
+    "p": 10,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "svg-appendix",
+    "i": 14,
+    "name": "",
+    "p": 10,
+    "role": 29,
+    "tag": "svg",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 15,
+    "name": "",
+    "p": 10,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-text",
+    "i": 16,
+    "name": "",
+    "p": 11,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 17,
+    "name": "Слово2",
+    "p": 12,
+    "role": 81,
+    "tag": "",
+    "text": "Слово2"
+  },
+  {
+    "class": "message-time",
+    "i": 18,
+    "name": "",
+    "p": 12,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 19,
+    "name": "Слово3",
+    "p": 15,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "embedded-text-wrapper",
+    "i": 20,
+    "name": "",
+    "p": 16,
+    "role": 1,
+    "tag": "p",
+    "text": ""
+  },
+  {
+    "class": "message-title",
+    "i": 21,
+    "name": "",
+    "p": 16,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 22,
+    "name": "01:59",
+    "p": 18,
+    "role": 81,
+    "tag": "",
+    "text": "01:59"
+  },
+  {
+    "class": "",
+    "i": 23,
+    "name": "Слово4",
+    "p": 20,
+    "role": 81,
+    "tag": "",
+    "text": "Слово4"
+  },
+  {
+    "class": "embedded-sender-wrapper",
+    "i": 24,
+    "name": "",
+    "p": 21,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "embedded-sender",
+    "i": 25,
+    "name": "",
+    "p": 24,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 26,
+    "name": "Слово5",
+    "p": 25,
+    "role": 81,
+    "tag": "",
+    "text": "Слово5"
+  },
+  {
+    "class": "Message message-list-item first-in-group allow-selection own shown open",
+    "i": 27,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 28,
+    "name": "",
+    "p": 27,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 29,
+    "name": "",
+    "p": 28,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 30,
+    "name": "",
+    "p": 28,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 31,
+    "name": "",
+    "p": 28,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta with-outgoing-icon",
+    "i": 32,
+    "name": "",
+    "p": 29,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 33,
+    "name": "Слово3",
+    "p": 31,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 34,
+    "name": "Слово6",
+    "p": 32,
+    "role": 81,
+    "tag": "",
+    "text": "Слово6"
+  },
+  {
+    "class": "message-time",
+    "i": 35,
+    "name": "",
+    "p": 32,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "MessageOutgoingStatus",
+    "i": 36,
+    "name": "",
+    "p": 32,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 37,
+    "name": "01:59",
+    "p": 35,
+    "role": 81,
+    "tag": "",
+    "text": "01:59"
+  },
+  {
+    "class": "Transition",
+    "i": 38,
+    "name": "",
+    "p": 36,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Transition_slide Transition_slide-active",
+    "i": 39,
+    "name": "",
+    "p": 38,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Message message-list-item allow-selection own shown open",
+    "i": 40,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 41,
+    "name": "",
+    "p": 40,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 42,
+    "name": "",
+    "p": 41,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 43,
+    "name": "",
+    "p": 41,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 44,
+    "name": "",
+    "p": 41,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta with-outgoing-icon",
+    "i": 45,
+    "name": "",
+    "p": 42,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 46,
+    "name": "Слово3",
+    "p": 44,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 47,
+    "name": "Слово7",
+    "p": 45,
+    "role": 81,
+    "tag": "",
+    "text": "Слово7"
+  },
+  {
+    "class": "message-time",
+    "i": 48,
+    "name": "",
+    "p": 45,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "MessageOutgoingStatus",
+    "i": 49,
+    "name": "",
+    "p": 45,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 50,
+    "name": "02:00",
+    "p": 48,
+    "role": 81,
+    "tag": "",
+    "text": "02:00"
+  },
+  {
+    "class": "Transition",
+    "i": 51,
+    "name": "",
+    "p": 49,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Transition_slide Transition_slide-active",
+    "i": 52,
+    "name": "",
+    "p": 51,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Message message-list-item allow-selection last-in-group own shown open",
+    "i": 53,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 54,
+    "name": "",
+    "p": 53,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 55,
+    "name": "",
+    "p": 54,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 56,
+    "name": "",
+    "p": 54,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "svg-appendix",
+    "i": 57,
+    "name": "",
+    "p": 54,
+    "role": 29,
+    "tag": "svg",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 58,
+    "name": "",
+    "p": 54,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta with-outgoing-icon",
+    "i": 59,
+    "name": "",
+    "p": 55,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 60,
+    "name": "Слово3",
+    "p": 58,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 61,
+    "name": "Слово8",
+    "p": 59,
+    "role": 81,
+    "tag": "",
+    "text": "Слово8"
+  },
+  {
+    "class": "message-time",
+    "i": 62,
+    "name": "",
+    "p": 59,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "MessageOutgoingStatus",
+    "i": 63,
+    "name": "",
+    "p": 59,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 64,
+    "name": "02:00",
+    "p": 62,
+    "role": 81,
+    "tag": "",
+    "text": "02:00"
+  },
+  {
+    "class": "Transition",
+    "i": 65,
+    "name": "",
+    "p": 63,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Transition_slide Transition_slide-active",
+    "i": 66,
+    "name": "",
+    "p": 65,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Message message-list-item first-in-group allow-selection shown open",
+    "i": 67,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 68,
+    "name": "",
+    "p": 67,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 69,
+    "name": "",
+    "p": 68,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 70,
+    "name": "",
+    "p": 68,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 71,
+    "name": "",
+    "p": 68,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta",
+    "i": 72,
+    "name": "",
+    "p": 69,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 73,
+    "name": "Слово3",
+    "p": 71,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 74,
+    "name": "Слово9",
+    "p": 72,
+    "role": 81,
+    "tag": "",
+    "text": "Слово9"
+  },
+  {
+    "class": "message-time",
+    "i": 75,
+    "name": "",
+    "p": 72,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 76,
+    "name": "02:00",
+    "p": 75,
+    "role": 81,
+    "tag": "",
+    "text": "02:00"
+  },
+  {
+    "class": "Message message-list-item allow-selection last-in-group shown open",
+    "i": 77,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 78,
+    "name": "",
+    "p": 77,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 79,
+    "name": "",
+    "p": 78,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 80,
+    "name": "",
+    "p": 78,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "svg-appendix",
+    "i": 81,
+    "name": "",
+    "p": 78,
+    "role": 29,
+    "tag": "svg",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 82,
+    "name": "",
+    "p": 78,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta",
+    "i": 83,
+    "name": "",
+    "p": 79,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 84,
+    "name": "Слово3",
+    "p": 82,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 85,
+    "name": "Слово10",
+    "p": 83,
+    "role": 81,
+    "tag": "",
+    "text": "Слово10"
+  },
+  {
+    "class": "message-time",
+    "i": 86,
+    "name": "",
+    "p": 83,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 87,
+    "name": "02:01",
+    "p": 86,
+    "role": 81,
+    "tag": "",
+    "text": "02:01"
+  },
+  {
+    "class": "Message message-list-item first-in-group allow-selection last-in-group own shown open",
+    "i": 88,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 89,
+    "name": "",
+    "p": 88,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 90,
+    "name": "",
+    "p": 89,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 91,
+    "name": "",
+    "p": 89,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "svg-appendix",
+    "i": 92,
+    "name": "",
+    "p": 89,
+    "role": 29,
+    "tag": "svg",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 93,
+    "name": "",
+    "p": 89,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta with-outgoing-icon",
+    "i": 94,
+    "name": "",
+    "p": 90,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 95,
+    "name": "Слово3",
+    "p": 93,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 96,
+    "name": "Слово11",
+    "p": 94,
+    "role": 81,
+    "tag": "",
+    "text": "Слово11"
+  },
+  {
+    "class": "message-time",
+    "i": 97,
+    "name": "",
+    "p": 94,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "MessageOutgoingStatus",
+    "i": 98,
+    "name": "",
+    "p": 94,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 99,
+    "name": "02:01",
+    "p": 97,
+    "role": 81,
+    "tag": "",
+    "text": "02:01"
+  },
+  {
+    "class": "Transition",
+    "i": 100,
+    "name": "",
+    "p": 98,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Transition_slide Transition_slide-active",
+    "i": 101,
+    "name": "",
+    "p": 100,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Message message-list-item first-in-group allow-selection last-in-group shown open",
+    "i": 102,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 103,
+    "name": "",
+    "p": 102,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 104,
+    "name": "",
+    "p": 103,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 105,
+    "name": "",
+    "p": 103,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "svg-appendix",
+    "i": 106,
+    "name": "",
+    "p": 103,
+    "role": 29,
+    "tag": "svg",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 107,
+    "name": "",
+    "p": 103,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta",
+    "i": 108,
+    "name": "",
+    "p": 104,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 109,
+    "name": "Слово3",
+    "p": 107,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 110,
+    "name": "Слово12",
+    "p": 108,
+    "role": 81,
+    "tag": "",
+    "text": "Слово12"
+  },
+  {
+    "class": "message-time",
+    "i": 111,
+    "name": "",
+    "p": 108,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 112,
+    "name": "02:01",
+    "p": 111,
+    "role": 81,
+    "tag": "",
+    "text": "02:01"
+  },
+  {
+    "class": "Message message-list-item first-in-group allow-selection own shown open",
+    "i": 113,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 114,
+    "name": "",
+    "p": 113,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 115,
+    "name": "",
+    "p": 114,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 116,
+    "name": "",
+    "p": 114,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 117,
+    "name": "",
+    "p": 114,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta with-outgoing-icon",
+    "i": 118,
+    "name": "",
+    "p": 115,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 119,
+    "name": "Слово3",
+    "p": 117,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 120,
+    "name": "Слово13",
+    "p": 118,
+    "role": 81,
+    "tag": "",
+    "text": "Слово13"
+  },
+  {
+    "class": "message-time",
+    "i": 121,
+    "name": "",
+    "p": 118,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "MessageOutgoingStatus",
+    "i": 122,
+    "name": "",
+    "p": 118,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 123,
+    "name": "02:01",
+    "p": 121,
+    "role": 81,
+    "tag": "",
+    "text": "02:01"
+  },
+  {
+    "class": "Transition",
+    "i": 124,
+    "name": "",
+    "p": 122,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Transition_slide Transition_slide-active",
+    "i": 125,
+    "name": "",
+    "p": 124,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Message message-list-item allow-selection last-in-group own shown open",
+    "i": 126,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 127,
+    "name": "",
+    "p": 126,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 128,
+    "name": "",
+    "p": 127,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 129,
+    "name": "",
+    "p": 127,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "svg-appendix",
+    "i": 130,
+    "name": "",
+    "p": 127,
+    "role": 29,
+    "tag": "svg",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 131,
+    "name": "",
+    "p": 127,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta with-outgoing-icon",
+    "i": 132,
+    "name": "",
+    "p": 128,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 133,
+    "name": "Слово3",
+    "p": 131,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 134,
+    "name": "Слово14",
+    "p": 132,
+    "role": 81,
+    "tag": "",
+    "text": "Слово14"
+  },
+  {
+    "class": "message-time",
+    "i": 135,
+    "name": "",
+    "p": 132,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "MessageOutgoingStatus",
+    "i": 136,
+    "name": "",
+    "p": 132,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 137,
+    "name": "02:04",
+    "p": 135,
+    "role": 81,
+    "tag": "",
+    "text": "02:04"
+  },
+  {
+    "class": "Transition",
+    "i": 138,
+    "name": "",
+    "p": 136,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Transition_slide Transition_slide-active",
+    "i": 139,
+    "name": "",
+    "p": 138,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Message message-list-item first-in-group allow-selection last-in-group shown open",
+    "i": 140,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 141,
+    "name": "",
+    "p": 140,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 142,
+    "name": "",
+    "p": 141,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-time",
+    "i": 143,
+    "name": "",
+    "p": 141,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 144,
+    "name": "",
+    "p": 141,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "svg-appendix",
+    "i": 145,
+    "name": "",
+    "p": 141,
+    "role": 29,
+    "tag": "svg",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 146,
+    "name": "",
+    "p": 141,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Button toggle-play smaller primary round has-ripple",
+    "i": 147,
+    "name": "Слово15",
+    "p": 142,
+    "role": 8,
+    "tag": "button",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 148,
+    "name": "",
+    "p": 142,
+    "role": 29,
+    "tag": "canvas",
+    "text": ""
+  },
+  {
+    "class": "Button default primary",
+    "i": 149,
+    "name": "",
+    "p": 142,
+    "role": 8,
+    "tag": "button",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 150,
+    "name": "1:50",
+    "p": 142,
+    "role": 81,
+    "tag": "",
+    "text": "1:50"
+  },
+  {
+    "class": "",
+    "i": 151,
+    "name": "02:25",
+    "p": 143,
+    "role": 81,
+    "tag": "",
+    "text": "02:25"
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 152,
+    "name": "Слово3",
+    "p": 146,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "play-pause-morph kEWAvOoF",
+    "i": 153,
+    "name": "",
+    "p": 147,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "AnimatedSticker opacity-transition slow open shown",
+    "i": 154,
+    "name": "",
+    "p": 153,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "tlottie-canvas",
+    "i": 155,
+    "name": "",
+    "p": 154,
+    "role": 29,
+    "tag": "canvas",
+    "text": ""
+  },
+  {
+    "class": "Message message-list-item first-in-group allow-selection own shown open",
+    "i": 156,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 157,
+    "name": "",
+    "p": 156,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 158,
+    "name": "",
+    "p": 157,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 159,
+    "name": "",
+    "p": 157,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 160,
+    "name": "",
+    "p": 157,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta with-outgoing-icon",
+    "i": 161,
+    "name": "",
+    "p": 158,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 162,
+    "name": "Слово3",
+    "p": 160,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 163,
+    "name": "Слово16",
+    "p": 161,
+    "role": 81,
+    "tag": "",
+    "text": "Слово16"
+  },
+  {
+    "class": "message-time",
+    "i": 164,
+    "name": "",
+    "p": 161,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "MessageOutgoingStatus",
+    "i": 165,
+    "name": "",
+    "p": 161,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 166,
+    "name": "02:28",
+    "p": 164,
+    "role": 81,
+    "tag": "",
+    "text": "02:28"
+  },
+  {
+    "class": "Transition",
+    "i": 167,
+    "name": "",
+    "p": 165,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Transition_slide Transition_slide-active",
+    "i": 168,
+    "name": "",
+    "p": 167,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Message message-list-item allow-selection last-in-group own shown open",
+    "i": 169,
+    "name": "",
+    "p": 5,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 170,
+    "name": "",
+    "p": 169,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 171,
+    "name": "",
+    "p": 170,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 172,
+    "name": "",
+    "p": 170,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "svg-appendix",
+    "i": 173,
+    "name": "",
+    "p": 170,
+    "role": 29,
+    "tag": "svg",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 174,
+    "name": "",
+    "p": 170,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta with-outgoing-icon",
+    "i": 175,
+    "name": "",
+    "p": 171,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 176,
+    "name": "Слово3",
+    "p": 174,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 177,
+    "name": "Слово17",
+    "p": 175,
+    "role": 81,
+    "tag": "",
+    "text": "Слово17"
+  },
+  {
+    "class": "message-time",
+    "i": 178,
+    "name": "",
+    "p": 175,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "MessageOutgoingStatus",
+    "i": 179,
+    "name": "",
+    "p": 175,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 180,
+    "name": "02:29",
+    "p": 178,
+    "role": 81,
+    "tag": "",
+    "text": "02:29"
+  },
+  {
+    "class": "Transition",
+    "i": 181,
+    "name": "",
+    "p": 179,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Transition_slide Transition_slide-active",
+    "i": 182,
+    "name": "",
+    "p": 181,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "middle-column-footer",
+    "i": 183,
+    "name": "",
+    "p": 4,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "x-4xZYr-",
+    "i": 184,
+    "name": "",
+    "p": 183,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Composer is-chat-composer shown mounted",
+    "i": 185,
+    "name": "",
+    "p": 183,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "MessageSelectToolbar-count",
+    "i": 186,
+    "name": "Слово18",
+    "p": 183,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "cOOnomTV ANb5lPRw JHoyt1wT IRPjDeYJ",
+    "i": 187,
+    "name": "",
+    "p": 184,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "cOOnomTV ANb5lPRw JHoyt1wT SiGdABvs",
+    "i": 188,
+    "name": "",
+    "p": 184,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Button HtxjjRCC default secondary round",
+    "i": 189,
+    "name": "Слово19",
+    "p": 184,
+    "role": 8,
+    "tag": "button",
+    "text": ""
+  },
+  {
+    "class": "Button HtxjjRCC default secondary round",
+    "i": 190,
+    "name": "Слово20",
+    "p": 184,
+    "role": 8,
+    "tag": "button",
+    "text": ""
+  },
+  {
+    "class": "Button AttachMenu--button composer-action-button default translucent round",
+    "i": 191,
+    "name": "Слово21",
+    "p": 185,
+    "role": 8,
+    "tag": "button",
+    "text": ""
+  },
+  {
+    "class": "Menu compact AttachMenu--menu fluid",
+    "i": 192,
+    "name": "Слово21",
+    "p": 185,
+    "role": 40,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Button rich-editor-button rich-editor-button-hidden smaller translucent round faded",
+    "i": 193,
+    "name": "Слово22",
+    "p": 185,
+    "role": 8,
+    "tag": "button",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 194,
+    "name": "",
+    "p": 185,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Transition_slide composer-action-buttons Transition_slide-active",
+    "i": 195,
+    "name": "",
+    "p": 185,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Menu SymbolMenu",
+    "i": 196,
+    "name": "",
+    "p": 185,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "Button composer-action-button symbol-menu-button default translucent round",
+    "i": 197,
+    "name": "Слово23",
+    "p": 185,
+    "role": 8,
+    "tag": "button",
+    "text": ""
+  },
+  {
+    "class": "Button record main-button default secondary round click-allowed",
+    "i": 198,
+    "name": "Слово24",
+    "p": 185,
+    "role": 8,
+    "tag": "button",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 199,
+    "name": "Слово18",
+    "p": 186,
+    "role": 81,
+    "tag": "",
+    "text": "Слово18"
+  },
+  {
+    "class": "Button HtxjjRCC default secondary round",
+    "i": 200,
+    "name": "Слово25",
+    "p": 187,
+    "role": 8,
+    "tag": "button",
+    "text": ""
+  },
+  {
+    "class": "Button HtxjjRCC default secondary round",
+    "i": 201,
+    "name": "Слово26",
+    "p": 188,
+    "role": 8,
+    "tag": "button",
+    "text": ""
+  },
+  {
+    "class": "shared-canvas",
+    "i": 202,
+    "name": "",
+    "p": 194,
+    "role": 29,
+    "tag": "canvas",
+    "text": ""
+  },
+  {
+    "class": "shared-canvas",
+    "i": 203,
+    "name": "",
+    "p": 194,
+    "role": 29,
+    "tag": "canvas",
+    "text": ""
+  },
+  {
+    "class": "custom-scroll input-scroller",
+    "i": 204,
+    "name": "",
+    "p": 194,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "form-control allow-selection NKP0M5xy ProseMirror",
+    "i": 205,
+    "name": "Слово27",
+    "p": 204,
+    "role": 70,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "placeholder-text",
+    "i": 206,
+    "name": "",
+    "p": 204,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "chat-list custom-scroll Transition_slide Transition_slide-active no-overscroll",
+    "i": 207,
+    "name": "",
+    "p": 0,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  }
+]

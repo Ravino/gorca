@@ -370,20 +370,34 @@ async fn wire_plugins(core: Core, opts: &Options, prewake: Arc<plugins::Prewake>
     if !settings.enabled {
         return core;
     }
-    if gorca_connector_atspi::in_private_user_ns() {
-        // A user unit with mount-namespace sandboxing (PrivateTmp=, ProtectSystem=, ...) runs in
-        // a user namespace; the kernel then refuses /proc/<pid>/exe of every other process, no
-        // application identity can be verified, and URL-scoped plugins never open.
-        tracing::warn!(
-            "gorca runs in a private user namespace (systemd PrivateTmp=, ProtectSystem=, \
-             ProtectKernelTunables= or ProtectControlGroups= in a user unit): application \
-             identities cannot be verified and URL-scoped plugins will not open; drop those options"
-        );
+    if gorca_connector_atspi::identity_uses_helper() {
+        // A hardened user unit (PrivateTmp=, ProtectSystem=, ...) runs in a private user
+        // namespace and the kernel refuses /proc/<pid>/exe of other processes there: identities
+        // come from the identity helper (gorca-identity.service), outside the sandbox.
+        let socket = gorca_connector_atspi::identity_socket();
+        if socket.as_ref().is_some_and(|p| p.exists()) {
+            tracing::info!("application identities come from the identity helper");
+        } else {
+            tracing::warn!(
+                unit = gorca_connector_atspi::IDENTITY_HELPER_UNIT,
+                "gorca runs in a private user namespace and the identity helper socket is \
+                 missing: application identities stay unverified and URL-scoped plugins will \
+                 not open until the helper unit is started"
+            );
+        }
     }
     let mut popts = opts.plugins.clone();
     popts.scheduler = match settings.scheduler {
         gorca_config::PluginScheduler::Labels => plugins::SchedulerPolicy::Labels,
         gorca_config::PluginScheduler::Sps => plugins::SchedulerPolicy::Sps,
+    };
+    popts.idle_lease = match settings.idle_lease {
+        gorca_config::PluginIdleLease::Auto => plugins::IdleLeasePolicy::Auto,
+        gorca_config::PluginIdleLease::Off => plugins::IdleLeasePolicy::Off,
+    };
+    popts.placement = match settings.placement {
+        gorca_config::PluginPlacement::Auto => plugins::PlacementPolicy::Auto,
+        gorca_config::PluginPlacement::Off => plugins::PlacementPolicy::Off,
     };
     match tokio::task::spawn_blocking(move || plugins::PluginRuntime::load_prewake(&popts, prewake))
         .await

@@ -309,7 +309,7 @@ fn web_k_in_chromium_is_named_from_its_bare_text_leaves() {
 }
 
 #[test]
-fn web_k_name_is_not_doubled_and_web_a_messages_get_the_article_role() {
+fn web_k_name_is_not_doubled_and_web_a_messages_get_the_listitem_role() {
     let rt = runtime(PluginOptions::default());
     let mut b = open_bridge(
         &rt,
@@ -334,7 +334,7 @@ fn web_k_name_is_not_doubled_and_web_a_messages_get_the_article_role() {
             o,
             FactOp::Patch {
                 node: 1,
-                write: gorca_fuse::Write::Val(gorca_fuse::Val::Role(SemRole::Article)),
+                write: gorca_fuse::Write::Val(gorca_fuse::Val::Role(SemRole::ListItem)),
                 ..
             }
         )),
@@ -592,4 +592,438 @@ fn a_sideloaded_package_is_not_loaded_by_default() {
     );
     // First party keeps working; the user directory contributes nothing.
     assert_eq!(rt.ids(), vec!["gorca.telegram-web".to_owned()]);
+}
+
+/// Probe (ignored): feed a live document dump (`GORCA_LIVE_TREE=<json>`, a list of
+/// `{i, p, role, name, cls, tag, nch}` in document order) through the real plugin and print what
+/// comes back and every fault. The dump is made with an AT-SPI script (see the diagnosis report).
+#[test]
+#[ignore = "needs GORCA_LIVE_TREE"]
+fn live_tree_probe() {
+    let Some(path) = std::env::var_os("GORCA_LIVE_TREE") else {
+        return;
+    };
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .with_test_writer()
+        .try_init();
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    let limit = std::env::var("GORCA_LIVE_LIMIT")
+        .ok()
+        .and_then(|l| l.parse::<usize>().ok())
+        .unwrap_or(usize::MAX);
+    let list: Vec<_> = v.as_array().unwrap().iter().take(limit).collect();
+    let mut nodes: Vec<N> = Vec::new();
+    let leak = |s: &str| -> &'static str { Box::leak(s.to_owned().into_boxed_str()) };
+    for x in &list {
+        let i = x["i"].as_u64().unwrap() as u32;
+        let p = x["p"].as_i64().unwrap();
+        let name = x["name"].as_str().unwrap_or("");
+        nodes.push((
+            i,
+            (p >= 0).then_some(p as u32),
+            leak(x["tag"].as_str().unwrap_or("")),
+            leak(x["cls"].as_str().unwrap_or("")),
+            leak(name),
+        ));
+    }
+    let rt = runtime(PluginOptions::default());
+    let mut b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/#1", true),
+    )
+    .expect("scope");
+    let tree = feed(&mut b, &nodes);
+    let ops = collect(&mut b, &tree, Duration::from_secs(20));
+    for (n, s) in names(&ops) {
+        println!("name {n}: {s}");
+    }
+    let mut per: std::collections::BTreeMap<u32, usize> = std::collections::BTreeMap::new();
+    for (n, _) in names(&ops) {
+        *per.entry(n).or_default() += 1;
+    }
+    println!("ops per node {per:?}");
+    println!("ops {} stats {:?}", ops.len(), b.stats());
+}
+
+/// A busy Web A chat list: 90 rows with long Cyrillic previews, derived in background batches.
+/// One call must never be asked for more than its grant can pay (Watchdog) nor for more fact
+/// text than a call may return (Malformed); every row gets its name, once.
+#[test]
+fn a_long_busy_chat_list_derives_without_faults_and_without_duplicate_facts() {
+    let rt = runtime(PluginOptions::default());
+    let mut b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/#1", true),
+    )
+    .expect("scope");
+    let long: &'static str = Box::leak(
+        "Привет, это очень длинное сообщение о ничём. "
+            .repeat(14)
+            .into_boxed_str(),
+    );
+    let mut nodes: Vec<N> = vec![(0, None, "div", "", "")];
+    let rows_n = 90u32;
+    for r in 0..rows_n {
+        let base = 1 + r * 8;
+        nodes.push((base, Some(0), "a", "ListItem-button", ""));
+        nodes.push((base + 1, Some(base), "button", "fullName", ""));
+        nodes.push((
+            base + 2,
+            Some(base + 1),
+            "",
+            "",
+            Box::leak(format!("Чат номер {r}").into_boxed_str()),
+        ));
+        nodes.push((base + 3, Some(base), "div", "time", ""));
+        nodes.push((base + 4, Some(base + 3), "", "", "22:28"));
+        nodes.push((base + 5, Some(base), "div", "last-message", ""));
+        nodes.push((base + 6, Some(base + 5), "", "", long));
+        nodes.push((base + 7, Some(base), "div", "NT-X2xr9 yf73Yld8", ""));
+    }
+    let tree = feed(&mut b, &nodes);
+    let ops = collect(&mut b, &tree, Duration::from_secs(20));
+    let got = names(&ops);
+    let mut per: HashMap<u32, usize> = HashMap::new();
+    for (n, _) in &got {
+        *per.entry(*n).or_default() += 1;
+    }
+    assert_eq!(
+        per.len(),
+        rows_n as usize,
+        "every row is named: {:?}",
+        b.stats()
+    );
+    assert!(per.values().all(|c| *c == 1), "one fact per row: {per:?}");
+}
+
+/// The rows the real document source delivered for the live Telegram Web A in Firefox ESR
+/// (2026-10-26, text anonymised; made by `live_document.rs`, which reads the real browser): three
+/// chat rows (`a.ListItem-button` with role link, a `h3.fullName` button, hashed badge classes,
+/// text runs as separate leaves) and two messages. A fixture of the wrong panel cannot pass here:
+/// the plugin must name every chat row and give every message the article role.
+#[test]
+fn the_rows_the_real_source_delivered_for_live_web_a_are_named_and_the_messages_are_list_items() {
+    let v: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(root().join("tests/fixtures/web/telegram-a-live.json")).unwrap(),
+    )
+    .unwrap();
+    let list = v.as_array().unwrap();
+    let rt = runtime(PluginOptions::default());
+    let mut b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/#1", true),
+    )
+    .expect("scope");
+    let mut kids: HashMap<u32, Vec<u32>> = HashMap::new();
+    let arc = |s: &str| (!s.is_empty()).then(|| Arc::<str>::from(s));
+    for x in list {
+        let i = x["i"].as_u64().unwrap() as u32;
+        let p = x["p"].as_i64().unwrap();
+        if p >= 0 {
+            kids.entry(p as u32).or_default().push(i);
+        }
+        b.upsert(
+            i,
+            Row {
+                role: x["role"].as_u64().unwrap() as u16,
+                name: arc(x["name"].as_str().unwrap()),
+                text: arc(x["text"].as_str().unwrap()),
+                tag: arc(x["tag"].as_str().unwrap()),
+                class: arc(x["class"].as_str().unwrap()),
+                ..Row::default()
+            },
+        );
+    }
+    let tree = Flat(kids);
+    let ops = collect(&mut b, &tree, Duration::from_secs(10));
+    let got = names(&ops);
+    let chat_rows: Vec<u32> = list
+        .iter()
+        .filter(|x| {
+            x["class"]
+                .as_str()
+                .unwrap()
+                .split_whitespace()
+                .any(|t| t == "ListItem-button")
+        })
+        .map(|x| x["i"].as_u64().unwrap() as u32)
+        .collect();
+    assert_eq!(chat_rows.len(), 3);
+    for r in &chat_rows {
+        let n = got
+            .iter()
+            .find(|(n, _)| n == r)
+            .unwrap_or_else(|| panic!("chat row {r} has no name: {ops:?}"));
+        assert!(
+            n.1.contains(", "),
+            "a computed name, not the raw one: {}",
+            n.1
+        );
+    }
+    // The first row has the hashed-class badge "9K".
+    assert!(
+        got.iter()
+            .any(|(n, s)| *n == chat_rows[0] && s.contains("9K unread")),
+        "{got:?}"
+    );
+    let articles = ops
+        .iter()
+        .filter(|o| {
+            matches!(
+                o,
+                FactOp::Patch {
+                    write: gorca_fuse::Write::Val(gorca_fuse::Val::Role(SemRole::ListItem)),
+                    ..
+                }
+            )
+        })
+        .count();
+    assert_eq!(articles, 2, "{ops:?}");
+}
+
+/// The open chat of Web A as the real document source delivered it (Firefox ESR, 2026-10-26, text
+/// anonymised; `live_document.rs` with `GORCA_DUMP_CHAT`): `div.messages-layout` holds the header
+/// title (`h3.fullName`, role button) and the `MessageList`, whose direct children are the
+/// `sticky-date` separators and the `Message` items. The message list is a list, each message a
+/// list item (outgoing ones described), the title a level-1 heading, each date separator a
+/// level-2 heading, and a synthetic unread divider is one too.
+#[test]
+fn the_open_chat_gets_a_message_list_headings_and_described_own_messages() {
+    let v: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(root().join("tests/fixtures/web/telegram-a-open-chat.json")).unwrap(),
+    )
+    .unwrap();
+    let rt = runtime(PluginOptions::default());
+    let mut b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/#1", true),
+    )
+    .expect("scope");
+    let mut kids: HashMap<u32, Vec<u32>> = HashMap::new();
+    let arc = |s: &str| (!s.is_empty()).then(|| Arc::<str>::from(s));
+    let mut class_of: HashMap<u32, String> = HashMap::new();
+    let mut list_node = 0;
+    let mut area_node = 0;
+    for x in v.as_array().unwrap() {
+        let i = x["i"].as_u64().unwrap() as u32;
+        let p = x["p"].as_i64().unwrap();
+        if p >= 0 {
+            kids.entry(p as u32).or_default().push(i);
+        }
+        let class = x["class"].as_str().unwrap();
+        if class.split_whitespace().any(|t| t == "MessageList") {
+            list_node = i;
+            area_node = p as u32;
+        }
+        class_of.insert(i, class.to_owned());
+        b.upsert(
+            i,
+            Row {
+                role: x["role"].as_u64().unwrap() as u16,
+                name: arc(x["name"].as_str().unwrap()),
+                text: arc(x["text"].as_str().unwrap()),
+                tag: arc(x["tag"].as_str().unwrap()),
+                class: arc(class),
+                ..Row::default()
+            },
+        );
+    }
+    // A divider the dump did not have (no unread messages in that chat): a child of the list.
+    let divider = 100_000;
+    kids.entry(list_node).or_default().push(divider);
+    class_of.insert(divider, "unread-divider".to_owned());
+    b.upsert(
+        divider,
+        Row {
+            role: SemRole::Generic.code(),
+            tag: arc("div"),
+            class: arc("unread-divider"),
+            ..Row::default()
+        },
+    );
+    let ops = collect(&mut b, &Flat(kids), Duration::from_secs(10));
+    let with_class = |c: &str| -> Vec<u32> {
+        let mut v: Vec<u32> = class_of
+            .iter()
+            .filter(|(_, k)| k.split_whitespace().any(|t| t == c))
+            .map(|(i, _)| *i)
+            .collect();
+        v.sort_unstable();
+        v
+    };
+    let patches = |n: u32, pick: fn(&gorca_fuse::Val) -> Option<String>| -> Vec<String> {
+        ops.iter()
+            .filter_map(|o| match o {
+                FactOp::Patch {
+                    node,
+                    write: gorca_fuse::Write::Val(v),
+                    ..
+                } if *node == n => pick(v),
+                _ => None,
+            })
+            .collect()
+    };
+    let role = |v: &gorca_fuse::Val| match v {
+        gorca_fuse::Val::Role(r) => Some(format!("{r:?}")),
+        _ => None,
+    };
+    let level = |v: &gorca_fuse::Val| match v {
+        gorca_fuse::Val::Level(l) => Some(l.to_string()),
+        _ => None,
+    };
+    let desc = |v: &gorca_fuse::Val| match v {
+        gorca_fuse::Val::Description(d) => Some(d.to_string()),
+        _ => None,
+    };
+    let name = |v: &gorca_fuse::Val| match v {
+        gorca_fuse::Val::Name(d) => Some(d.to_string()),
+        _ => None,
+    };
+    assert_eq!(patches(list_node, role), vec!["List"], "{ops:?}");
+    assert!(
+        patches(list_node, name).iter().any(|n| !n.is_empty()),
+        "the list is named from the catalog: {ops:?}"
+    );
+    let messages = with_class("Message");
+    assert!(messages.len() >= 5, "{}", messages.len());
+    let mut own = 0;
+    for m in &messages {
+        assert_eq!(patches(*m, role), vec!["ListItem"], "message {m}");
+        let is_own = class_of[m].split_whitespace().any(|t| t == "own");
+        let d = patches(*m, desc);
+        assert_eq!(d.len(), usize::from(is_own), "message {m}: {d:?}");
+        own += usize::from(is_own);
+    }
+    assert!(own >= 1, "the dump has outgoing messages");
+    // The title is the only `fullName` outside a chat-list row in this document.
+    let header = with_class("fullName");
+    assert_eq!(header.len(), 1);
+    assert_eq!(patches(header[0], role), vec!["Heading"]);
+    assert_eq!(patches(header[0], level), vec!["1"]);
+    for d in with_class("sticky-date") {
+        assert_eq!(patches(d, role), vec!["Heading"], "date separator {d}");
+        assert_eq!(patches(d, level), vec!["2"]);
+    }
+    // Landmarks, by structure: the chat list, the message area (the list's parent) and the
+    // composer, each with a catalog name.
+    for (what, n, r) in [
+        ("chat list", with_class("chat-list")[0], "List"),
+        ("message area", area_node, "Region"),
+        ("composer", with_class("Composer")[0], "Region"),
+    ] {
+        assert_eq!(patches(n, role), vec![r], "{what}");
+        assert!(
+            patches(n, name).iter().any(|s| !s.is_empty()),
+            "{what} is named: {ops:?}"
+        );
+    }
+    assert_eq!(patches(divider, role), vec!["Heading"]);
+    assert_eq!(patches(divider, level), vec!["2"]);
+}
+
+/// The chat list of Web A as the real source delivered it (2026-10-26, anonymised;
+/// `GORCA_DUMP_LIST`): `chat-list` is a list named "Chat list" inside a navigation landmark (its
+/// parent), each `div.ListItem.chat-item-clickable` (the wrapper whose siblings are the rows) is a
+/// list item, and the link inside keeps its computed name and its role (Enter still opens the chat).
+#[test]
+fn the_chat_list_is_a_list_of_list_items_inside_the_chats_landmark() {
+    let v: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(root().join("tests/fixtures/web/telegram-a-chat-list.json")).unwrap(),
+    )
+    .unwrap();
+    let rt = runtime(PluginOptions::default());
+    let mut b = open_bridge(
+        &rt,
+        scope("firefox-esr", "https://web.telegram.org/a/#1", true),
+    )
+    .expect("scope");
+    let mut kids: HashMap<u32, Vec<u32>> = HashMap::new();
+    let arc = |s: &str| (!s.is_empty()).then(|| Arc::<str>::from(s));
+    let mut class_of: HashMap<u32, String> = HashMap::new();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    for x in v.as_array().unwrap() {
+        let i = x["i"].as_u64().unwrap() as u32;
+        let p = x["p"].as_i64().unwrap();
+        if p >= 0 {
+            kids.entry(p as u32).or_default().push(i);
+            parent_of.insert(i, p as u32);
+        }
+        let class = x["class"].as_str().unwrap();
+        class_of.insert(i, class.to_owned());
+        b.upsert(
+            i,
+            Row {
+                role: x["role"].as_u64().unwrap() as u16,
+                name: arc(x["name"].as_str().unwrap()),
+                text: arc(x["text"].as_str().unwrap()),
+                tag: arc(x["tag"].as_str().unwrap()),
+                class: arc(class),
+                ..Row::default()
+            },
+        );
+    }
+    let ops = collect(&mut b, &Flat(kids), Duration::from_secs(10));
+    let with_class = |c: &str| -> Vec<u32> {
+        let mut v: Vec<u32> = class_of
+            .iter()
+            .filter(|(_, k)| k.split_whitespace().any(|t| t == c))
+            .map(|(i, _)| *i)
+            .collect();
+        v.sort_unstable();
+        v
+    };
+    let roles = |n: u32| -> Vec<String> {
+        ops.iter()
+            .filter_map(|o| match o {
+                FactOp::Patch {
+                    node,
+                    write: gorca_fuse::Write::Val(gorca_fuse::Val::Role(r)),
+                    ..
+                } if *node == n => Some(format!("{r:?}")),
+                _ => None,
+            })
+            .collect()
+    };
+    let list = with_class("chat-list");
+    assert_eq!(list.len(), 1);
+    assert_eq!(roles(list[0]), vec!["List"], "{ops:?}");
+    assert_eq!(roles(parent_of[&list[0]]), vec!["Navigation"], "{ops:?}");
+    let named = names(&ops);
+    assert!(named.iter().any(|(n, s)| *n == list[0] && !s.is_empty()));
+    assert!(
+        named
+            .iter()
+            .any(|(n, s)| *n == parent_of[&list[0]] && !s.is_empty())
+    );
+    // The rows are the list's direct children: the wrapper when Gecko exposes it, else the link.
+    let rows: Vec<u32> = parent_of
+        .iter()
+        .filter(|(_, p)| **p == list[0])
+        .map(|(i, _)| *i)
+        .filter(|i| {
+            let c = &class_of[i];
+            c.split_whitespace()
+                .any(|t| t == "chat-item-clickable" || t == "ListItem-button")
+        })
+        .collect();
+    assert!(rows.len() >= 3, "{}", rows.len());
+    for r in &rows {
+        assert_eq!(roles(*r), vec!["ListItem"], "chat row {r}");
+    }
+    let links = with_class("ListItem-button");
+    assert_eq!(links.len(), 3);
+    for l in links {
+        assert!(
+            named.iter().any(|(n, _)| *n == l),
+            "link {l} keeps its computed name"
+        );
+        // A link inside a wrapper keeps its role; a bare one is the list item itself.
+        let bare = parent_of[&l] == list[0];
+        assert_eq!(
+            roles(l),
+            if bare { vec!["ListItem"] } else { vec![] },
+            "link {l}"
+        );
+    }
 }

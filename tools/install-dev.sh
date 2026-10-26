@@ -7,6 +7,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 unit_src="$root/contrib/systemd/gorca.service"
 unit_dst="$HOME/.config/systemd/user/gorca.service"
+id_src="$root/contrib/systemd/gorca-identity.service"
+id_dst="$HOME/.config/systemd/user/gorca-identity.service"
 toggle="$root/tools/gorca-toggle.sh"
 schema=org.gnome.settings-daemon.plugins.media-keys
 base=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings
@@ -29,7 +31,8 @@ find_ours() {
 
 if [ "${1:-}" = "--uninstall" ]; then
     systemctl --user stop gorca.service 2>/dev/null || true
-    rm -f "$unit_dst"
+    systemctl --user stop gorca-identity.service 2>/dev/null || true
+    rm -f "$unit_dst" "$id_dst"
     systemctl --user daemon-reload
     ours=$(find_ours)
     if [ -n "$ours" ]; then
@@ -44,7 +47,16 @@ fi
 [ -f "$root/target/release/extensions/ext-gnome-shell/ext_gnome_shell.wasm" ] || echo "warning: the Shell policy component is not built (make ext); gorca falls back to the native build of the same policy" >&2
 
 mkdir -p "$(dirname "$unit_dst")"
-ln -sfn "$unit_src" "$unit_dst"
+if [ -n "${GORCA_BIN:-}" ]; then
+    # Both units must run the same binary: the daemon asks the helper, which is `gorca
+    # --identity-helper`. Installed as copies with the binary path rewritten in both.
+    rm -f "$unit_dst" "$id_dst"
+    sed "s|^ExecStart=%h/.local/bin/gorca|ExecStart=$GORCA_BIN|" "$unit_src" >"$unit_dst"
+    sed "s|^ExecStart=%h/.local/bin/gorca|ExecStart=$GORCA_BIN|" "$id_src" >"$id_dst"
+else
+    ln -sfn "$unit_src" "$unit_dst"
+    ln -sfn "$id_src" "$id_dst"
+fi
 systemctl --user daemon-reload
 
 ours=$(find_ours)

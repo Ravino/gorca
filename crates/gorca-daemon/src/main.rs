@@ -25,6 +25,21 @@ fn main() -> Result<ExitCode> {
         }
         return Ok(ExitCode::SUCCESS);
     }
+    // `gorca --identity-helper`: the tiny identity service of gorca-identity.service, which runs
+    // outside the daemon's sandbox (ADR-0026 section 2.7). Nothing else of the daemon starts.
+    if std::env::args().nth(1).as_deref() == Some("--identity-helper") {
+        return match gorca_connector_atspi::run_identity_helper(|k| std::env::var(k).ok()) {
+            Ok(()) => Ok(ExitCode::SUCCESS),
+            Err(e) => {
+                eprintln!("gorca identity helper: {e}");
+                Ok(ExitCode::FAILURE)
+            }
+        };
+    }
+    // Where the identity helper listens (read here, the only place that reads the environment).
+    gorca_connector_atspi::configure_identity(gorca_connector_atspi::IdentityConfig::from_env(
+        |k| std::env::var(k).ok(),
+    ));
     // Opt-in: segment text in the `debug.explain_last` log (default off, it can be private).
     if std::env::var_os("GORCA_EXPLAIN_TEXT").is_some_and(|v| v == "1") {
         gorca_core::set_explain_text(true);

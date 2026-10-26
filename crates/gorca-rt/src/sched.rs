@@ -206,6 +206,15 @@ fn set_policy(tid: u32, policy: libc::c_int, priority: i32) -> io::Result<()> {
     }
 }
 
+/// The CPU the calling thread is running on right now (`sched_getcpu`, no system call on glibc
+/// with rseq). `None` if the kernel does not say.
+#[must_use]
+pub fn current_cpu() -> Option<usize> {
+    // SAFETY: `sched_getcpu` takes no arguments; it returns -1 on failure.
+    let c = unsafe { libc::sched_getcpu() };
+    usize::try_from(c).ok()
+}
+
 /// CPUs the calling thread may run on (`sched_getaffinity`).
 #[must_use]
 pub fn allowed_cpus() -> Vec<usize> {

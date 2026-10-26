@@ -25,8 +25,9 @@ The name is a recursive backronym: Gorca Orchestrates Real-time Concurrent Acces
   its own handler, never the reader.
 - **Event storms.** Events are coalesced, deduplicated and dropped when superseded, so the reader
   keeps up with tens of thousands of AT-SPI events per second.
-- **Crash isolation.** Extensions run as WebAssembly components with CPU, memory and call-size
-  limits; a faulty extension or per-application handler cannot take down the core.
+- **Crash isolation.** Extensions and plugins run as WebAssembly components with CPU, memory and
+  call-size limits; a faulty extension, plugin or per-application handler cannot take down the
+  core. A plugin that keeps exceeding its budget is struck and then switched off.
 
 Resource use, measured on a private session with a release build and synthetic event storms
 (`docs/reports/resource-usage.md`): idle about 0.4 % of one core and about 15 MiB of memory;
@@ -73,17 +74,76 @@ Phase 1 (focus reader, speech, event ingress, test harness) and most of Phase 2 
   model is planned (ADR-0021).
 - Web semantics: icon-only buttons are reachable in browse mode, mixed (half-checked) checkboxes
   are spoken, and Firefox focus names and flat review follow the browser's accessible name.
+- One semantic model and one presentation pipeline (ADR-0022). Every source of facts (AT-SPI
+  state, web attributes, computed facts) is fused into a single typed model, and every surface
+  reads only that model and speaks through one presentation record (`PresIr`, version 1):
+  focus and change, browse mode, quick navigation and say-all, review and object navigation,
+  where-am-I, window titles and notifications, extension words and "explain". The older
+  presenters and attribute-map read paths were cut over one surface at a time, each behind an
+  automated replay gate (English and Russian, zero unclassified differences), and then deleted;
+  the last commit before each deletion is tagged `legacy/<surface>-last`. A lint in
+  `cargo xtask legacy` (rule 12) fails the build if new code reads the old carriers.
+- Passwords and secrets: a secret mark on a node is sticky, one shared test decides what is
+  secret for every spoken or logged output, and browse-mode text reading is secret-aware.
+  Another lint (rule 14) bans hand-written password checks.
 - Extensions: a WebAssembly extension host (wasmtime). The GNOME Shell and terminal policies ship
-  as extensions.
+  as extensions. The extension interface is `gorca:ext` 0.4.0, which is frozen (see Planned).
+- Plugins (experimental, off by default): a WebAssembly Component Model plugin runtime
+  (ADR-0026) that lets a plugin contribute facts about a web page or application, such as better
+  names for chat rows, to the semantic model. Each plugin runs as its own actor with a bounded
+  wait on the key path, under trust tiers, default-deny capabilities, fuel and wall-clock budgets,
+  and strikes. First-party plugins are pinned by SHA-256 in the daemon; third-party plugins are
+  not loaded in the product yet (the trust tier for them exists but is switched off). Enable with `[plugins] enabled =
+  true`. A statistical plugin scheduler (SPS) is available with `[plugins] scheduler = "sps"`;
+  the default stays `"labels"` because SPS has not yet met its acceptance gate on every
+  measure (`docs/reports/m18a-3-sps.md`). On hybrid-CPU machines `[plugins] placement` steers
+  plugin workers to suitable cores, and `[plugins] idle_lease` can hold a `/dev/cpu_dma_latency`
+  request while plugins are active (needs the optional udev rule, see Run). See
+  `docs/config-reference.md`.
+- Telegram Web plugin (early and experimental): the first first-party plugin, for Telegram Web
+  A and K in Firefox and Chromium. Chat-list rows are named "name, unread count, last message,
+  time", without the avatar's initials. In Web A an open chat becomes a list: the messages are
+  list items (so you hear a position such as "3 of 40"), your own messages are described as
+  "Your message", the chat title is a level-1 heading, date separators are level-2 headings, and
+  the page has landmarks named Chats, Messages and Message input. The words come from the
+  plugin's message catalogue (English and Russian). The plugin was fixed several times after live
+  use, is validated mostly in private-session tests, and may still miss pages or break when
+  Telegram changes its markup (`docs/reports/telegram-web-live-diagnosis.md`). To use it, set
+  `[plugins] enabled = true`, run the identity helper (see Application identity below), and
+  install the plugin package root-owned under `/usr/lib/gorca/addons/gorca.telegram-web` with
+  every directory and file, including `i18n/`, readable by your user
+  (`tools/build-plugins.sh` prepares such a package in `plugins/dist/`). gorca logs a warning when
+  it cannot read a plugin's message catalogues.
+- Application identity: plugin activation relies on a verified application identity, not on the
+  name an application reports about itself. A small helper unit, `gorca-identity.service`
+  (`gorca --identity-helper`), reads `/proc` outside any user namespace and answers over a
+  private socket, so the main `gorca.service` keeps its complete systemd sandbox. Without the
+  helper every application is treated as unverified and only non-URL first-party plugins apply.
+- Input lane: a held gorca modifier no longer makes the keyboard thread spin until the real-time
+  CPU limit demotes it (`docs/reports/input-lane-sigxcpu.md`).
 - Mouse emulation (opt-in): NVDA-style click, drag lock and route-to-review keys, using the
   `gorca-helper` GNOME Shell extension. See the [mouse guide](docs/user-guide/mouse.md).
 - Profiles: per-application settings with chords to save, cycle and announce them. See the
   [profiles guide](docs/user-guide/profiles.md).
 
-Planned, not done: braille, the Newton connector, an extension (add-on) platform with
-third-party add-ons and a store (ADR-0019, proposed), a typed semantic model and one
-presentation pipeline (ADR-0022, proposed), a settings GUI, packaging. See `docs/plan/phase-2.md` and
-`docs/plan/phase-3.md` for what is planned, and `CHANGELOG.md` for the detail.
+Planned, not done:
+
+- Braille output and the Newton connector.
+- A plugin warm hook (`gorca:ext` WIT 0.11, ADR-0026 r7.1), which the scheduler would call to
+  keep a plugin's code warm, and one ABI for both extensions and plugins; the current extension
+  interface 0.4 is frozen until then.
+- Runtime CPU feature dispatch (ADR-0027, proposed; implementation has started and is not part
+  of main as a shipped feature).
+- Virtual actions (ADR-0028, accepted): what a sighted user does with the mouse (a right-click
+  menu, a reply gesture, a hover button) becomes an actions menu on the keyboard, opened with
+  gorca+Shift+A and offered by plugins. Not implemented yet.
+- Synthetic nodes (ADR-0029, proposed): a plugin could declare virtual regions that the page does
+  not have, such as a "Chat header" that groups the avatar, title and status. Not implemented yet.
+- A plugin store and third-party plugin distribution (ADR-0019, ADR-0026), a settings GUI and
+  packaging.
+
+See `docs/plan/phase-2.md` and `docs/plan/phase-3.md` for the plan, and `CHANGELOG.md` for the
+detail.
 
 ## Architecture
 
@@ -92,16 +152,17 @@ speech and braille output and navigation. It never imports the types of an acces
 
 Text description of the architecture: accessibility sources feed the core. Today the only source
 is the AT-SPI2 connector; a Newton connector is planned and both are meant to run side by side.
-The core keeps the object model, the event bus and the state machines, and sends speech to a
-speech client, which talks to voicego or speech-dispatcher. Extensions plug into the core through
-the `gorca-ext-api` WIT interface.
+The core fuses what the sources report, and what plugins contribute, into one semantic model.
+Every output surface reads that model and builds a presentation record that the reader renders
+as speech, through a speech client that talks to voicego or speech-dispatcher. Extensions plug
+into the core through the `gorca-ext-api` WIT interface, and plugins through the plugin host.
 
 ```
 AT-SPI2 connector --\                                  /--> voicego (native protocol)
                      >--> core --> speech client ------<
 Newton connector ---/      ^                           \--> speech-dispatcher (SSIP)
 (planned)                  |
-                  WASM extensions (gorca-ext-api)
+     WASM extensions (gorca-ext-api) and plugins
 ```
 
 - **Connectors** are pluggable accessibility sources. The AT-SPI2 connector is implemented.
@@ -109,6 +170,9 @@ Newton connector ---/      ^                           \--> speech-dispatcher (S
 - **Extensions** carry app-specific behaviour (GNOME Shell, terminal). They are WebAssembly
   components built against the WIT interface in `crates/gorca-ext-api/wit/`; a native build of the
   same source is the fallback if a component is missing.
+- **Plugins** (experimental) add facts to the semantic model for a given site or application,
+  through `crates/gorca-plugin-host` and the scheduler in `crates/gorca-plugin-sched`; the core
+  has no special case for any of them. The first-party plugin source is in `plugins/`.
 - **Speech is a separate process.** gorca never synthesizes in-process. It talks to a speech
   server over a socket.
 - Rules for the crate layout and dependencies are in `docs/adr/0001-core-architecture.md`
@@ -163,8 +227,15 @@ target/release/gorca --help
   key is set. It sets `IsEnabled` only.
 - `contrib/systemd/gorca.service` is a development unit; it expects the binary in
   `~/.local/bin/gorca` and the extensions in `~/.local/lib/gorca/extensions`, so adjust it to your
-  install. `tools/gorca-toggle.sh` and `tools/install-dev.sh` toggle it with
-  Super+Alt+G.
+  install. It keeps the full systemd sandbox and wants a second unit,
+  `contrib/systemd/gorca-identity.service` (`gorca --identity-helper`, started automatically),
+  which verifies application identity outside the sandbox. Both units must run the same binary.
+  `tools/install-dev.sh` installs both (set `GORCA_BIN` to use another binary path), and
+  `tools/gorca-toggle.sh` toggles the service with Super+Alt+G.
+- Optional, for plugins only: `packaging/udev/70-gorca-cpu-dma-latency.rules` lets your user open
+  `/dev/cpu_dma_latency` for the idle-state lease. It is never installed for you; the steps are
+  in `packaging/udev/README.md`. Without it gorca logs one line and carries on, and
+  `[plugins] idle_lease = "off"` disables the feature.
 - A small GNOME Shell helper extension is in `contrib/gnome-shell-extension/` (see its README).
 
 ## Test

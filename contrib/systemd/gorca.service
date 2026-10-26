@@ -2,7 +2,9 @@
 Description=gorca screen reader (development unit)
 Documentation=https://github.com/Ravino/gorca/blob/main/docs/adr/0001-core-architecture.md
 PartOf=graphical-session.target
-After=graphical-session.target
+After=graphical-session.target gorca-identity.service
+# Application identity helper (see Hardening below); gorca still runs, unverified, without it.
+Wants=gorca-identity.service
 
 [Service]
 Type=simple
@@ -22,14 +24,20 @@ TimeoutStopSec=5
 # Hardening. Deliberately NOT set: PrivateDevices (evdev/libei fallback, audio),
 # PrivateNetwork/PrivateUsers (D-Bus sockets under XDG_RUNTIME_DIR), RestrictRealtime
 # and MemoryDenyWriteExecute (RT scheduling, wasmtime JIT).
-# Also NOT set: ProtectSystem, ProtectKernelTunables, ProtectKernelModules, ProtectControlGroups,
-# PrivateTmp. In a *user* unit each of them puts the service in a user namespace of its own, and
-# the kernel then refuses /proc/<pid>/exe and /proc/<pid>/ns/* of every process outside it: gorca
-# could not verify any application identity, and URL-scoped plugins (Telegram Web) never open.
+# In a *user* unit ProtectSystem/ProtectKernel*/ProtectControlGroups/PrivateTmp put the service in
+# a user namespace of its own, and the kernel then refuses /proc/<pid>/exe and /proc/<pid>/ns/* of
+# every process outside it. Application identity (ADR-0026 section 2.7) therefore comes from
+# gorca-identity.service, a tiny helper outside the sandbox (this unit wants it and asks it over
+# %t/gorca/identity.sock); the sandbox here stays complete.
 NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 RestrictNamespaces=yes
 LockPersonality=yes
+PrivateTmp=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 SystemCallArchitectures=native
 

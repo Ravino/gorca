@@ -1,0 +1,4 @@
+cpu_dma_latency during run: 2000000000
+cpu_dma_latency during run: 2000000000
+cpu_dma_latency during run: 20
+cpu_dma_latency during run: 20

@@ -371,7 +371,7 @@ pub trait PointerSink: Send + Sync {
 
 ### 2.10 Invariants
 
-- **MI-1** Every injection traces to a user command key event of this session. No automatic clicks; no WIT world or
+- **MI-1** Every injection traces to a user command key event of this session. *(2026-10-26: the pointer effect of a WIT world / extension that this clause asks a new ADR for is ADR-0028, virtual actions: host-performed, declarative, first-party only, still one user command per injection.)* No automatic clicks; no WIT world or
   extension effect can inject pointer input (ADR-0019: no pointer effect exists; adding one needs a new ADR); page
   content can only influence *where* a user-requested click lands, through its extents.
 - **MI-2** Pointer I/O never blocks the Reader or the input lane (EX-1).

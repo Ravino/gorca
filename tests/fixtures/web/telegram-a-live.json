@@ -1,0 +1,722 @@
+[
+  {
+    "class": "",
+    "i": 0,
+    "name": "",
+    "p": -1,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "ListItem-button",
+    "i": 1,
+    "name": "Слово0",
+    "p": 0,
+    "role": 31,
+    "tag": "a",
+    "text": ""
+  },
+  {
+    "class": "Avatar size-large peer-color-5",
+    "i": 2,
+    "name": "",
+    "p": 1,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "fullName _8IVW0azL",
+    "i": 3,
+    "name": "Слово1",
+    "p": 1,
+    "role": 8,
+    "tag": "h3",
+    "text": ""
+  },
+  {
+    "class": "VerifiedIcon",
+    "i": 4,
+    "name": "",
+    "p": 1,
+    "role": 29,
+    "tag": "svg",
+    "text": ""
+  },
+  {
+    "class": "time",
+    "i": 5,
+    "name": "",
+    "p": 1,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "last-message shared-canvas-container",
+    "i": 6,
+    "name": "",
+    "p": 1,
+    "role": 1,
+    "tag": "p",
+    "text": ""
+  },
+  {
+    "class": "NT-X2xr9 yf73Yld8 npoDLolY",
+    "i": 7,
+    "name": "",
+    "p": 1,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "inner",
+    "i": 8,
+    "name": "",
+    "p": 2,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 9,
+    "name": "Слово1",
+    "p": 3,
+    "role": 81,
+    "tag": "",
+    "text": "Слово1"
+  },
+  {
+    "class": "",
+    "i": 10,
+    "name": "Слово2",
+    "p": 5,
+    "role": 81,
+    "tag": "",
+    "text": "Слово2"
+  },
+  {
+    "class": "last-message-summary",
+    "i": 11,
+    "name": "",
+    "p": 6,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 12,
+    "name": "9K",
+    "p": 7,
+    "role": 81,
+    "tag": "",
+    "text": "9K"
+  },
+  {
+    "class": "Avatar__media avatar-media opacity-transition slow shown open",
+    "i": 13,
+    "name": "Слово1",
+    "p": 8,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 14,
+    "name": "Слово3",
+    "p": 11,
+    "role": 81,
+    "tag": "",
+    "text": "Слово3"
+  },
+  {
+    "class": "emoji emoji-small opacity-transition slow shown open",
+    "i": 15,
+    "name": "Слово4",
+    "p": 11,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 16,
+    "name": " Слово5",
+    "p": 11,
+    "role": 81,
+    "tag": "",
+    "text": " Слово5"
+  },
+  {
+    "class": "ListItem-button",
+    "i": 17,
+    "name": "Слово6",
+    "p": 0,
+    "role": 31,
+    "tag": "a",
+    "text": ""
+  },
+  {
+    "class": "Avatar size-large peer-color-1",
+    "i": 18,
+    "name": "",
+    "p": 17,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "fullName _8IVW0azL",
+    "i": 19,
+    "name": "Слово7",
+    "p": 17,
+    "role": 8,
+    "tag": "h3",
+    "text": ""
+  },
+  {
+    "class": "time",
+    "i": 20,
+    "name": "",
+    "p": 17,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "last-message shared-canvas-container",
+    "i": 21,
+    "name": "",
+    "p": 17,
+    "role": 1,
+    "tag": "p",
+    "text": ""
+  },
+  {
+    "class": "NT-X2xr9 yf73Yld8 npoDLolY",
+    "i": 22,
+    "name": "",
+    "p": 17,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "inner",
+    "i": 23,
+    "name": "",
+    "p": 18,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 24,
+    "name": "Слово7",
+    "p": 19,
+    "role": 81,
+    "tag": "",
+    "text": "Слово7"
+  },
+  {
+    "class": "",
+    "i": 25,
+    "name": "Слово2",
+    "p": 20,
+    "role": 81,
+    "tag": "",
+    "text": "Слово2"
+  },
+  {
+    "class": "last-message-summary",
+    "i": 26,
+    "name": "",
+    "p": 21,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 27,
+    "name": "2,2K",
+    "p": 22,
+    "role": 81,
+    "tag": "",
+    "text": "2,2K"
+  },
+  {
+    "class": "Avatar__media avatar-media opacity-transition slow shown open",
+    "i": 28,
+    "name": "Слово7",
+    "p": 23,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 29,
+    "name": "Слово8",
+    "p": 26,
+    "role": 81,
+    "tag": "",
+    "text": "Слово8"
+  },
+  {
+    "class": "ListItem-button",
+    "i": 30,
+    "name": "Слово9",
+    "p": 0,
+    "role": 31,
+    "tag": "a",
+    "text": ""
+  },
+  {
+    "class": "Avatar size-large peer-color-3",
+    "i": 31,
+    "name": "",
+    "p": 30,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "fullName _8IVW0azL",
+    "i": 32,
+    "name": "Слово10",
+    "p": 30,
+    "role": 8,
+    "tag": "h3",
+    "text": ""
+  },
+  {
+    "class": "time",
+    "i": 33,
+    "name": "",
+    "p": 30,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "last-message shared-canvas-container",
+    "i": 34,
+    "name": "",
+    "p": 30,
+    "role": 1,
+    "tag": "p",
+    "text": ""
+  },
+  {
+    "class": "NT-X2xr9 yf73Yld8 npoDLolY",
+    "i": 35,
+    "name": "",
+    "p": 30,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "inner",
+    "i": 36,
+    "name": "",
+    "p": 31,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 37,
+    "name": "Слово10",
+    "p": 32,
+    "role": 81,
+    "tag": "",
+    "text": "Слово10"
+  },
+  {
+    "class": "",
+    "i": 38,
+    "name": "Слово2",
+    "p": 33,
+    "role": 81,
+    "tag": "",
+    "text": "Слово2"
+  },
+  {
+    "class": "sender-name",
+    "i": 39,
+    "name": "",
+    "p": 34,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "colon",
+    "i": 40,
+    "name": "",
+    "p": 34,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "last-message-summary",
+    "i": 41,
+    "name": "",
+    "p": 34,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 42,
+    "name": "2,3K",
+    "p": 35,
+    "role": 81,
+    "tag": "",
+    "text": "2,3K"
+  },
+  {
+    "class": "Avatar__media avatar-media opacity-transition slow shown open",
+    "i": 43,
+    "name": "Слово10",
+    "p": 36,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 44,
+    "name": "Слово11",
+    "p": 39,
+    "role": 81,
+    "tag": "",
+    "text": "Слово11"
+  },
+  {
+    "class": "",
+    "i": 45,
+    "name": ":",
+    "p": 40,
+    "role": 81,
+    "tag": "",
+    "text": ":"
+  },
+  {
+    "class": "emoji emoji-small opacity-transition slow shown open",
+    "i": 46,
+    "name": "Слово12",
+    "p": 41,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "emoji emoji-small",
+    "i": 47,
+    "name": "Слово13",
+    "p": 41,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 48,
+    "name": " Слово14",
+    "p": 41,
+    "role": 81,
+    "tag": "",
+    "text": " Слово14"
+  },
+  {
+    "class": "emoji emoji-small",
+    "i": 49,
+    "name": "Слово15",
+    "p": 41,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "emoji emoji-small opacity-transition slow shown open",
+    "i": 50,
+    "name": "Слово16",
+    "p": 41,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 51,
+    "name": " Слово17",
+    "p": 41,
+    "role": 81,
+    "tag": "",
+    "text": " Слово17"
+  },
+  {
+    "class": "emoji emoji-small opacity-transition slow shown open",
+    "i": 52,
+    "name": "Слово18",
+    "p": 41,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "emoji emoji-small opacity-transition slow shown open",
+    "i": 53,
+    "name": "Слово19",
+    "p": 41,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 54,
+    "name": " ",
+    "p": 41,
+    "role": 81,
+    "tag": "",
+    "text": " "
+  },
+  {
+    "class": "emoji emoji-small opacity-transition slow shown open",
+    "i": 55,
+    "name": "Слово20",
+    "p": 41,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 56,
+    "name": "...",
+    "p": 41,
+    "role": 81,
+    "tag": "",
+    "text": "..."
+  },
+  {
+    "class": "Message message-list-item first-in-group allow-selection shown open",
+    "i": 57,
+    "name": "",
+    "p": 0,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 58,
+    "name": "",
+    "p": 57,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 59,
+    "name": "",
+    "p": 58,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 60,
+    "name": "",
+    "p": 58,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 61,
+    "name": "",
+    "p": 58,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta",
+    "i": 62,
+    "name": "",
+    "p": 59,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 63,
+    "name": "Слово21",
+    "p": 61,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 64,
+    "name": "Слово22",
+    "p": 62,
+    "role": 81,
+    "tag": "",
+    "text": "Слово22"
+  },
+  {
+    "class": "emoji emoji-small opacity-transition slow shown open",
+    "i": 65,
+    "name": "Слово23",
+    "p": 62,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 66,
+    "name": "Слово24",
+    "p": 62,
+    "role": 81,
+    "tag": "",
+    "text": "Слово24"
+  },
+  {
+    "class": "message-time",
+    "i": 67,
+    "name": "",
+    "p": 62,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 68,
+    "name": "10:00",
+    "p": 67,
+    "role": 81,
+    "tag": "",
+    "text": "10:00"
+  },
+  {
+    "class": "Message message-list-item allow-selection shown open",
+    "i": 69,
+    "name": "",
+    "p": 0,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-content-wrapper can-select-text",
+    "i": 70,
+    "name": "",
+    "p": 69,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "content-inner",
+    "i": 71,
+    "name": "",
+    "p": 70,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "message-action-buttons message-action-button-sticky",
+    "i": 72,
+    "name": "",
+    "p": 70,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "quick-reaction no-selection",
+    "i": 73,
+    "name": "",
+    "p": 70,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "text-content clearfix with-meta",
+    "i": 74,
+    "name": "",
+    "p": 71,
+    "role": 1,
+    "tag": "div",
+    "text": ""
+  },
+  {
+    "class": "media opacity-transition slow shown open",
+    "i": 75,
+    "name": "Слово21",
+    "p": 73,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 76,
+    "name": "Слово25",
+    "p": 74,
+    "role": 81,
+    "tag": "",
+    "text": "Слово25"
+  },
+  {
+    "class": "emoji emoji-small opacity-transition slow shown open",
+    "i": 77,
+    "name": "Слово26",
+    "p": 74,
+    "role": 29,
+    "tag": "img",
+    "text": ""
+  },
+  {
+    "class": "message-time",
+    "i": 78,
+    "name": "",
+    "p": 74,
+    "role": 1,
+    "tag": "span",
+    "text": ""
+  },
+  {
+    "class": "",
+    "i": 79,
+    "name": "10:00",
+    "p": 78,
+    "role": 81,
+    "tag": "",
+    "text": "10:00"
+  }
+]

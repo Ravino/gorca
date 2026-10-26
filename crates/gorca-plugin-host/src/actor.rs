@@ -506,10 +506,12 @@ fn worker_main(
                     return;
                 }
                 actor.running_since.store(0, Release);
-                let fault = r.unwrap_or_else(|_| {
+                let fault = if let Ok(f) = r {
+                    f
+                } else {
                     exec.reset();
                     Some(FaultKind::Trap)
-                });
+                };
                 if let Some(kind) = fault {
                     sink.send(PluginReply::Fault {
                         plugin: job.plugin,
@@ -565,6 +567,28 @@ struct Core {
     stop_word: AtomicU32,
     ready: Arc<AtomicU32>,
     next_tag: AtomicU32,
+    place: Option<WorkerPlacement>,
+}
+
+/// Where the worker threads run on a hybrid CPU (M18a-5): one soft affinity mask per plugin id,
+/// chosen by the daemon from the CPU classes and the plugin's role. The mask is set by the worker
+/// thread itself when it starts (replacements of a wedged actor included). It is a set of cores,
+/// never a single-core pin.
+#[derive(Clone, Debug, Default)]
+pub struct WorkerPlacement {
+    /// Per plugin id: the CPUs its worker may use, `None` for no restriction. Ids beyond the list
+    /// are unrestricted.
+    pub cpus: Vec<Option<Vec<usize>>>,
+}
+
+impl WorkerPlacement {
+    fn cpus(&self, plugin: PluginId) -> Option<Vec<usize>> {
+        usize::try_from(plugin)
+            .ok()
+            .and_then(|i| self.cpus.get(i))
+            .cloned()
+            .flatten()
+    }
 }
 
 impl Core {
@@ -573,9 +597,15 @@ impl Core {
         let g = Arc::clone(&self.gate);
         let cfg = self.cfg;
         let ready = Arc::clone(&self.ready);
+        let cpus = self.place.as_ref().and_then(|p| p.cpus(actor.plugin));
         let h = std::thread::Builder::new()
             .name(format!("gorca-plugin-{}", actor.plugin))
-            .spawn(move || worker_main(&a, inc, exec, &g, cfg, &ready))?;
+            .spawn(move || {
+                if let Some(c) = &cpus {
+                    gorca_rt::topology::pin_current(c);
+                }
+                worker_main(&a, inc, exec, &g, cfg, &ready);
+            })?;
         lock(&self.threads).push(h);
         Ok(())
     }
@@ -710,6 +740,16 @@ impl ActorRunner {
         maker: Maker,
         cfg: Config,
     ) -> std::io::Result<Self> {
+        Self::new_placed(execs, maker, cfg, None)
+    }
+
+    /// As [`ActorRunner::new`], with the workers placed on the CPU classes of `place`.
+    pub fn new_placed(
+        execs: Vec<(PluginId, Box<dyn Exec>)>,
+        maker: Maker,
+        cfg: Config,
+        place: Option<WorkerPlacement>,
+    ) -> std::io::Result<Self> {
         let parking = Arc::new(Parking::default());
         let mut actors = Vec::with_capacity(execs.len());
         let mut pending = Vec::with_capacity(execs.len());
@@ -729,6 +769,7 @@ impl ActorRunner {
             stop_word: AtomicU32::new(0),
             ready: Arc::new(AtomicU32::new(0)),
             next_tag: AtomicU32::new(0),
+            place,
         });
         let n = u32::try_from(pending.len()).unwrap_or(u32::MAX);
         for (a, e) in pending {

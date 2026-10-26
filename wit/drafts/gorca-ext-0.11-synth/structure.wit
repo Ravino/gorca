@@ -1,0 +1,67 @@
+package gorca:ext@0.11.0;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+// DRAFT (paper only, ADR-0029). Not built, not linked. Part of the single 0.11 bump (slice
+// WIT-11, together with `warmup` of ADR-0026 §2.4.8 and `vactions` of ADR-0028): the slice moves
+// this interface into host.wit and adds `import structure;` to `app-module` (and so to `site`).
+// Owner rule (2026-10-25): no backward compatibility, no version negotiation.
+//
+// A plugin DECLARES a virtual container over a contiguous run of sibling nodes; the host builds,
+// re-anchors and dissolves it. The DOM and the observed view are never changed: selectors, W-lane
+// reads and other plugins keep seeing the source structure (ADR-0026 PF-2).
+
+/// Writer lane, buffered like `facts`; admitted under the call's revision token and dropped with
+/// the plugin's source (ADR-0029 §2.3). Needs the `structure` grant.
+interface structure {
+  use types.{node-ref, selector-id, msg-ref};
+  use facts.{fact-target};
+
+  /// Registry code (append-only, `gorca-model` `SynthRole`). Unknown codes are refused.
+  ///   1 region (a name is required), 2 group, 3 toolbar, 4 list (members must already be list
+  ///   items in the published view, else the container is not built), 16 banner, 17 navigation,
+  ///   18 main, 19 complementary, 20 contentinfo, 21 search, 22 form.
+  type synth-role = u8;
+
+  /// One end of the run, among the children of the declared parent (observed view).
+  variant member-spec {
+    /// A child of the parent (a handle from this call's reads).
+    node(node-ref),
+    /// The first child of the parent.
+    first-child,
+    /// The first child that matches this manifest selector.
+    first-match(selector-id),
+    /// The last child that matches this manifest selector.
+    last-match(selector-id),
+  }
+
+  /// Which children form the run. Resolved by the host on every change of the parent's children;
+  /// the result must be at least 2 contiguous siblings, else the container is dissolved.
+  variant span {
+    /// From `first` to `last`, both included.
+    range(tuple<member-spec, member-spec>),
+    /// From `first` up to, not including, the first later sibling that matches the selector
+    /// (or to the last child when none does).
+    until(tuple<member-spec, selector-id>),
+    /// Exactly the children that match the selector; they must be contiguous.
+    set(selector-id),
+  }
+
+  record vgroup {
+    /// Plugin-local id, unique per parent.
+    id: u16,
+    role: synth-role,
+    /// A message of the plugin's own catalog, resolved at render (ru, en, ...).
+    name: msg-ref,
+    span: span,
+  }
+
+  /// At most 64 containers per scope and plugin, at most 16 offers per call.
+  group: func(parent: fact-target, g: vgroup);
+  ungroup: func(parent: fact-target, id: u16);
+}
+
+/// Sketch of the 0.11 world change. Standalone so the draft parses next to 0.10's types.wit
+/// and facts interface.
+world structure-sketch {
+  import structure;
+}

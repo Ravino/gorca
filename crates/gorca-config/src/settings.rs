@@ -775,6 +775,71 @@ pub struct PluginsSettings {
     pub enabled: bool,
     /// How the interactive handoff to plugins is scheduled (ADR-0026 section 2.4.7).
     pub scheduler: PluginScheduler,
+    /// Where the interactive plugin path runs on a hybrid CPU (P, E and LP-E cores).
+    pub placement: PluginPlacement,
+    /// Whether gorca holds a `/dev/cpu_dma_latency` lease while plugins are active.
+    pub idle_lease: PluginIdleLease,
+}
+
+/// `[plugins] idle_lease`: keep the CPUs out of deep idle states while plugins are active.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum PluginIdleLease {
+    /// Hold the lease while an interactive plugin scope is active and release it 2 s after the
+    /// last key; a no-op (one info line) when the device is not writable.
+    #[default]
+    Auto,
+    /// Never touch the device.
+    Off,
+}
+
+impl PluginIdleLease {
+    pub const NAMES: &'static str = "\"auto\" or \"off\"";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "auto" => Some(PluginIdleLease::Auto),
+            "off" => Some(PluginIdleLease::Off),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            PluginIdleLease::Auto => "auto",
+            PluginIdleLease::Off => "off",
+        }
+    }
+}
+
+/// `[plugins] placement`: CPU placement of the threads on the interactive plugin path.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum PluginPlacement {
+    /// With `scheduler = "sps"` on a hybrid CPU: the writer's wait and the plugins it waits for
+    /// run on the performance cores, refinement and third-party plugins on the efficiency cores;
+    /// elsewhere (and with `scheduler = "labels"`) a no-op.
+    #[default]
+    Auto,
+    /// Leave every thread to the kernel's scheduler.
+    Off,
+}
+
+impl PluginPlacement {
+    pub const NAMES: &'static str = "\"auto\" or \"off\"";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "auto" => Some(PluginPlacement::Auto),
+            "off" => Some(PluginPlacement::Off),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            PluginPlacement::Auto => "auto",
+            PluginPlacement::Off => "off",
+        }
+    }
 }
 
 /// `[plugins] scheduler`: the policy of the interactive plugin handoff.
@@ -1231,6 +1296,18 @@ pub static SETTINGS: &[SettingDef] = &[
         SettingType::Enum(PluginScheduler::NAMES),
         "\"labels\"",
     ),
+    row(
+        "plugins",
+        "placement",
+        SettingType::Enum(PluginPlacement::NAMES),
+        "\"auto\"",
+    ),
+    row(
+        "plugins",
+        "idle_lease",
+        SettingType::Enum(PluginIdleLease::NAMES),
+        "\"auto\"",
+    ),
     row("mouse", "enabled", SettingType::Bool, "true"),
     row(
         "mouse",
@@ -1409,6 +1486,16 @@ static DOCS: &[(&str, &str, &str)] = &[
         "plugins",
         "scheduler",
         "How gorca waits for plugins when focus moves: \"labels\" wakes every plugin worker on a key and waits for each one that is not marked refinement; \"sps\" learns from the plugins' replies which workers to wake and how long to wait for each, and spends far less CPU. Takes effect when gorca starts.",
+    ),
+    (
+        "plugins",
+        "placement",
+        "Where the threads of the interactive plugin path run on a CPU with performance and efficiency cores: \"auto\" keeps the writer's wait and the plugins it waits for on the performance cores (as a soft mask, the kernel still balances them; never the low-power cores) and refinement and third-party plugins on the efficiency cores, and does nothing on a CPU without that split or when scheduler is \"labels\"; \"off\" leaves every thread to the kernel. Takes effect when gorca starts.",
+    ),
+    (
+        "plugins",
+        "idle_lease",
+        "Whether gorca asks the kernel to keep the CPUs out of deep idle states (a /dev/cpu_dma_latency lease of 20 microseconds) while plugins are active: \"auto\" holds it from a key that wakes plugin workers until 2 seconds after the last one, and does nothing (one log line) unless the device is writable by you, see packaging/udev/README.md; \"off\" never opens the device. It costs some power and heat only while held. Takes effect when gorca starts.",
     ),
     (
         "mouse",

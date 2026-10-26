@@ -1,6 +1,6 @@
 # ADR-0026: WASM plugin model on the fused semantic model (M18a)
 
-Status: **Proposed** (r7.1 owner answers QW-1..QW-4 and the warm-hook model numbers folded into §2.4.8, 2026-10-25; r7 warm hook and startup preload §2.4.8, replaces the M18a-4 replay; DP-1 (b) approved by the owner, 2026-10-25; r6.1 SPS implemented behind `[plugins] scheduler`, default `labels`, 2026-10-25; r6, 2026-10-25, SPS scheduling §2.4.7, DP-1 pending owner; r5 implementation notes, 2026-10-25; r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
+Status: **Proposed** (r8 pointer to ADR-0028 virtual actions, 2026-10-26; r7.1 owner answers QW-1..QW-4 and the warm-hook model numbers folded into §2.4.8, 2026-10-25; r7 warm hook and startup preload §2.4.8, replaces the M18a-4 replay; DP-1 (b) approved by the owner, 2026-10-25; r6.1 SPS implemented behind `[plugins] scheduler`, default `labels`, 2026-10-25; r6, 2026-10-25, SPS scheduling §2.4.7, DP-1 pending owner; r5 implementation notes, 2026-10-25; r4, 2026-10-24; r3 2026-10-24; r2 2026-10-23; r1 2026-10-23). Owner: architect. Changelog: §8.
 r4 applies the r3 review (`docs/reports/adr-0026-review.md`, section r3): deadline from the turn start, timer slack,
 wait mechanism, one wait per keypress path, tighter benign gates. r3 follows the owner decision of 2026-10-24 (canonical actor model: plugins are actors, **B' is the design
 target**, §2.4.6, §5) and records QP-1..QP-5 as confirmed (§6).
@@ -675,12 +675,15 @@ mechanisms and replaces the policies:
 | Gap 7 (busy actor not skipped) and gap 8 (2 ms governor window plus 20 ms limit) | Kept unchanged. The governor window stays until the input layer supplies a keypress id; SPS runs inside the one wait |
 | Review findings S-1, S-2, C-1, P-1 | Independent of SPS and gating; they land before anyone enables plugins (M18a-2 acceptance) |
 
-##### 2.4.7.10 Host idle states: a decision for the owner (DP-1, **(b) APPROVED by the owner 2026-10-25**)
+##### 2.4.7.10 Host idle states: a decision for the owner (DP-1, **DECIDED 2026-10-25: option (b)**)
 
-**r7:** the owner approved option (b), the `cpu_dma_latency` lease while plugins are active, on
-2026-10-25 (`docs/decisions.md`). The access method (recommended: udev `uaccess`) and P-core placement
-of plugin workers (in progress) are the owner's; slice M18a-2e implements the lease as specified below.
-The text below is the r6 analysis, unchanged.
+**Owner decision, 2026-10-25: DP-1 = (b), a `/dev/cpu_dma_latency` lease held by gorca only while plugins
+are active, access by the udev `uaccess` rule shipped as `packaging/udev/70-gorca-cpu-dma-latency.rules`
+(the owner installs it). Implemented in M18a-5 as `gorca_rt::pmqos::PmQosLease` behind `IdleStateHook`, config
+`[plugins] idle_lease = "auto" | "off"` (default `auto`; a no-op with one `pm-qos-unavailable` info line when
+the device is not writable): taken by a key-down that arms workers, released 2 s after the last one, cut and
+retaken after 30 s of continuous holding, target 20 us (never lower). The text below is the analysis as it
+stood when the question was open.**
 
 **Finding.** Deep C-state exit latency dominates the p99. This host (16 CPUs, `intel_idle` driver,
 `menu` governor) has C2 127 µs and **C3 1048 µs** exit latency, all enabled. A parked pool thread
@@ -1376,6 +1379,18 @@ connector establishes the **verified identity** of the bus peer (`AppInfo::exe`)
 
 Comparison with a manifest `[match] apps` entry is **case-sensitive**.
 
+*Note 2026-10-26 (identity inside the systemd sandbox).* The evidence above is read from `/proc`. A
+systemd user unit with `ProtectSystem=`, `PrivateTmp=`, `ProtectKernel*=` or `ProtectControlGroups=` runs
+in a private user namespace, where the kernel refuses `/proc/<pid>/exe`, `root` and `ns/*` of every
+process outside it; the shipped unit must keep those options (owner decision), so the reads are made by
+`gorca --identity-helper` (`gorca-identity.service`, no namespace, filtered syscalls, AF_UNIX only) and
+asked over one persistent, pipelined connection to `$XDG_RUNTIME_DIR/gorca/identity.sock` (`ID <tag> <pid> <start>` -> `OK <tag> <identity>` | `NO <tag>`, answered concurrently, cached per `(pid, start)`, no request refused). The
+helper applies the checks above unchanged (same function), both ends verify the peer's systemd unit through
+`SO_PEERCRED` and `/proc/<pid>/cgroup`, and a missing or wrong helper yields *unverified*, never an
+in-sandbox guess (the readable cgroup scope, `cmdline`, `comm` and broker credentials do not prove the
+executable). Outside a private user namespace the daemon reads `/proc` itself. The threat model is
+unchanged. Measurements and rejected options: `docs/reports/2026-10-26-linux-platform-identity-helper.md`.
+
 *Consequence.* A scope whose identity is unverified (or sandboxed-unverified) is served **first-party
 plugins that are not URL-scoped only**; no third-party plugin and no URL-scoped plugin (a URL match
 reads page content) is activated for it. The decision is the plugin service's, taken when the scope
@@ -1454,6 +1469,7 @@ cue files declared in the plugin's manifest theme only.
   plugin is in flight, or in a `reactor.deliver` of a request issued by that command in the same
   epoch. `derive`, timers and other deliveries can never act or change settings. Every action
   re-validates the target at apply time and the ADR-0024 §2.3.3 "act on what was spoken" check.
+- *Note r8 (2026-10-26): AC-4 and the `actions` row of §2.3 are superseded for 0.11 by ADR-0028 (virtual actions): `activate`, `focus` and `pointer-click` become `actions.perform(n, steps)` over the closed step set and the same executor as virtual actions; the `pointer` rules below carry over unchanged (T2 only, helper cap, AC-3, rate).*
 - **AC-4 Pointer**: `pointer-click` = gorca's ADR-0025 click on the node's centre through the helper.
   It requires all of: permission `pointer` (T2 only), the helper's allow-list `pointer` cap for gorca
   (AL-1), the user's pointer setting on, AC-3, ≤ 2 clicks/s. Plugins never talk to the helper.
@@ -1812,6 +1828,8 @@ WASM engineer (M18a-0 unless noted):
 
 ## 8. Changelog
 
+**r8 (2026-10-26)** — pointer to ADR-0028 (virtual actions): plugins offer declarative actions through a new W-lane `vactions` import; the 0.10 `actions` interface is replaced in 0.11 by `perform` over the same closed step set (draft `wit/drafts/gorca-ext-0.11-vactions/`); new permissions `offer-actions` and `keys`. No other change.
+
 **r7.1 (2026-10-25)** — folds in the owner's answers QW-1..QW-4 and the numbers of
 `docs/reports/plugin-warm-hook-model.md`; §2.4.8 rewritten as one text. No change to the fact model, the
 lanes or the required-export decision.
@@ -1851,6 +1869,7 @@ call model or the placement decision (B').
 | Guarantees | SPS-1..SPS-9 with test obligations; invariant I-P9; I-P8 updated |
 | M18a-2 review §2 | interaction table with the in-flight fixes (§2.4.7.9); the C-state finding becomes owner decision **DP-1** (§2.4.7.10), recommendation (b) via udev `uaccess`, **pending owner** |
 | Slices and metrics | M18a-2a..2f (§2.4.7.12, §2.9 pointer), C-4 A/B, PX-6 default-idle-state rule, PX-10..PX-13, WQ-7, QS-1 |
+| DP-1 decided (2026-10-25) | owner chose (b); `[plugins] idle_lease` replaces the proposed `pm_qos` key; M18a-5 implements the lease and the hybrid-CPU placement (`[plugins] placement`), see `docs/reports/m18a-5-placement.md` |
 
 **r4 (2026-10-24)** — applies the r3 review (`docs/reports/adr-0026-review.md`, section r3). No change to
 the fact model or the placement decision.

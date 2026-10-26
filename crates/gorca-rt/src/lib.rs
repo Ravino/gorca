@@ -20,10 +20,12 @@ pub mod epoch;
 pub mod focused;
 pub mod guard;
 pub mod lane;
+pub mod pmqos;
 pub mod process;
 pub mod sched;
 pub mod stage;
 pub mod supervisor;
+pub mod topology;
 pub mod wait;
 pub mod watchdog;
 

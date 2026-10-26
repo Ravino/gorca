@@ -1,0 +1,158 @@
+package gorca:ext@0.11.0;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+// DRAFT (paper only, ADR-0028). Not built, not linked. Lands with the 0.11 bump of ADR-0026
+// §2.4.8 (slice M18a-4w renames wit/gorca-ext-0.10/ to wit/gorca-ext-0.11/). The implementing
+// slice WIT-11 (one bump together with the warmup export, ADR-0028 §2.6) moves `vtypes` and `vactions` into host.wit, REPLACES the 0.10 `actions` interface
+// by the one below (0.10 `activate`, `focus` and `pointer-click` are deleted, not kept beside
+// it), adds `import vactions;` to `app-module` (and so to `site`), and ports every guest in the
+// same change. Owner rule (2026-10-25): no backward compatibility, no version negotiation.
+//
+// The guest DECLARES what an action does; the host PERFORMS it. No plugin code runs between the
+// user's gesture and the effect (ADR-0028 VA-2). Every step is re-validated at run time.
+// `types` refers to wit/gorca-ext-0.10/types.wit bumped to 0.11.0 (unchanged).
+
+/// Shapes of a virtual action (ADR-0028 §2.1, §2.3).
+interface vtypes {
+  use types.{node-ref, action-code, selector-id, msg-ref};
+
+  /// Registry code (append-only, `gorca-model` `VActKind`; ADR-0028 §2.1). The host speaks the
+  /// kind with its own words in the actions list for third-party plugins and decides whether
+  /// the action needs confirmation from the kind. Unknown codes are `other`.
+  ///   0 other, 1 activate, 2 open-menu, 3 reply, 4 open, 5 expand, 6 toggle, 7 copy, 8 react,
+  ///   9 forward, 10 edit, 11 select; 64 delete, 65 leave, 66 block, 67 send, 68 report
+  ///   (64 and above are destructive: always confirmed, never the Enter action).
+  type vaction-kind = u8;
+
+  /// The node a step acts on. Never an arbitrary node: the host checks at admission and again
+  /// at run time that it is the host node, a node of the host's observed subtree (depth <= 8),
+  /// or the node the plan's own `await-node` step found.
+  variant step-target {
+    /// The node the action is attached to.
+    host,
+    /// A node of the host's observed subtree (a handle from this call's reads).
+    sub(node-ref),
+    /// The first node of the host's observed subtree that matches this manifest selector,
+    /// resolved at run time (this is the form manifest `[[vaction]]` data rows use).
+    sub-match(selector-id),
+    /// The node the last `await-node` step of this plan found.
+    awaited,
+  }
+
+  /// Where a pointer step aims inside its target. The host's resolver computes the point
+  /// (ADR-0025 §2.4); the guest never sees or supplies coordinates.
+  variant aim {
+    /// Centre of the target's visible part.
+    centre,
+    /// A point of the target's visible rectangle, both coordinates in 1/1000 (0..=1000).
+    at(tuple<u16, u16>),
+    /// A point inside the target and outside the rectangle of this node of the target's
+    /// subtree (the host takes the wider side margin at the excluded node's vertical centre).
+    outside(step-target),
+  }
+
+  /// Logical button; the backend swaps for a left-handed user (ADR-0025 §16 item 6).
+  enum button { left, middle, right }
+
+  record pointer-step {
+    target: step-target,
+    button: button,
+    /// 1 or 2; anything else is malformed.
+    clicks: u8,
+    aim: aim,
+  }
+
+  /// One chord: an X keysym and a modifier mask (bit 0 shift, 1 control, 2 alt, 3 super).
+  /// Printable keysyms without control, alt or super are refused (no text entry, ADR-0028 VS-7).
+  record key-chord { keysym: u32, mods: u8 }
+
+  record await-step {
+    /// A manifest selector; only nodes that appear after the previous step count.
+    selector: selector-id,
+    /// 50..=1500.
+    within-ms: u16,
+  }
+
+  /// The closed set of host-performed effects (ADR-0028 §2.3). A new effect is a new type:
+  /// a major bump, never a silent addition.
+  variant step {
+    /// The connector action of this class on the target (AT-SPI Action, AccessKit action).
+    invoke(tuple<step-target, action-code>),
+    /// Give the target keyboard focus.
+    focus(step-target),
+    scroll-into-view(step-target),
+    /// Synthetic pointer through the ADR-0025 path (first-party plugins only).
+    pointer(pointer-step),
+    /// Keys to the target's application while it has focus; at most 4 chords
+    /// (first-party plugins only; not available until a key injector exists, ADR-0028 G-6).
+    keys(list<key-chord>),
+    /// Wait for a new node; the plan fails with "not available" on timeout.
+    await-node(await-step),
+    /// Move the browse or review cursor to the target (the core speaks it).
+    cursor(step-target),
+  }
+
+  /// How the action is presented (ADR-0028 §2.2).
+  enum show-as {
+    /// Listed in "list actions" and announced by the node's actions hint.
+    attached,
+    /// Additionally a virtual button after the host in browse mode and object navigation
+    /// (first-party plugins only; a third-party request degrades to `attached`).
+    button,
+  }
+
+  record vaction {
+    /// Plugin-local id, unique per host node.
+    id: u16,
+    /// A message of the plugin's own catalog (ru, en, ...), resolved at render.
+    label: msg-ref,
+    kind: vaction-kind,
+    /// The action Enter/Space runs in browse mode when the host has no native activation
+    /// (first-party only; at most one per host node; never for destructive kinds).
+    primary: bool,
+    show: show-as,
+    /// 1..=4 steps.
+    steps: list<step>,
+  }
+}
+
+/// Writer lane, buffered like `facts` (ADR-0026 §2.3): actions are facts of the plugin's
+/// source, admitted under the call's revision token and dropped with the source (mask,
+/// backoff, disable, unload, hot reload, scope close). Needs `offer-actions`.
+interface vactions {
+  use types.{node-ref};
+  use facts.{fact-target};
+  use vtypes.{vaction};
+
+  /// At most 8 actions per host node, at most 64 offers per call.
+  offer: func(host: fact-target, a: vaction);
+  withdraw: func(host: fact-target, id: u16);
+}
+
+/// 0.11 replacement of the 0.10 `actions` interface (R lane, command context only, AC-3).
+/// Imperative effects inside a plugin command use the SAME closed step set and the same
+/// executor as virtual actions; `activate`, `focus` and `pointer-click` no longer exist.
+interface actions {
+  use types.{node-ref};
+  use vtypes.{step};
+
+  enum mode { browse, focus }
+
+  /// Run these steps with `host` = n, once the command returns (buffered). Same tier rules,
+  /// checks, rate limits and audit as a virtual action, attributed to the running command.
+  perform: func(n: node-ref, steps: list<step>);
+  /// Needs `navigate`: move the browse or review cursor; the core speaks the node.
+  move-cursor: func(n: node-ref);
+  /// Needs `navigate`: below the user's toggle (ADR-0024 PS-3).
+  request-mode: func(m: mode);
+  /// Inside a command: hand the key back to the application (pass-through).
+  pass-key: func();
+}
+
+/// Sketch of the 0.11 world change: `app-module` gains `import vactions;` and keeps
+/// `import actions;` (the replacement above). Standalone so the draft parses next to 0.10's
+/// types.wit and facts interface.
+world vactions-sketch {
+  import vactions;
+  import actions;
+}

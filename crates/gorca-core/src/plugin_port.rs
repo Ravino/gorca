@@ -44,6 +44,14 @@ pub const WAIT_EVERY_NS: u64 = 20_000_000;
 pub const MAX_INTERACTIVE_NODES: usize = 16;
 /// Nodes per background job.
 pub const MAX_BATCH: usize = 64;
+
+/// Dirty nodes in a plugin's first background job, before its cost per node is known.
+const BG_BATCH_START: usize = 4;
+/// Largest adaptive background job: bounded by what a call may return in text (B-6) as well.
+const BG_BATCH_MAX: u32 = 32;
+/// The share of the background grant (1 ms) one job is sized for, in microseconds: the host
+/// watchdog traps at four grants, and the plugin thread shares the machine with the desktop.
+const BG_JOB_TARGET_US: f64 = 250.0;
 /// Dirty nodes held per plugin; beyond it the oldest are dropped (counted).
 pub const MAX_PENDING: usize = 4096;
 /// Depth and size of the subtree snapshot taken for a target (the import bounds).
@@ -287,11 +295,15 @@ pub enum ReplyBody {
         reads: Vec<u32>,
         /// More than the cap was read: the scope-wide stamp applies.
         overflow: bool,
+        /// Microseconds the call took in the plugin (0: not measured). Sizes the next batch.
+        exec_us: u32,
     },
     /// Dropped without facts (fault, overrun, skipped slot, cancelled/displaced by a newer job).
     Failed {
         /// The targets still need a derivation (displaced, skipped).
         requeue: bool,
+        /// The call itself failed (watchdog, fuel, malformed): the next batch is smaller.
+        fault: bool,
     },
     /// The plugin was masked (backoff, disabled, quarantined): its facts leave the model.
     Masked,
@@ -553,6 +565,10 @@ pub struct PluginBridge {
     replies: Vec<Reply>,
     /// Replies taken by the last [`PluginBridge::drain`].
     drained: u32,
+    /// Dirty nodes per plugin a background job may carry (adapts to the measured cost per node).
+    bg_cap: Vec<usize>,
+    /// Smoothed microseconds per node of a plugin's calls (0: unknown).
+    node_cost_us: Vec<f64>,
 }
 
 impl std::fmt::Debug for PluginBridge {
@@ -596,6 +612,8 @@ impl PluginBridge {
             stats: BridgeStats::default(),
             replies: Vec::new(),
             drained: 0,
+            bg_cap: vec![BG_BATCH_START; n],
+            node_cost_us: vec![0.0; n],
         }
     }
 
@@ -967,7 +985,8 @@ impl PluginBridge {
                 pend.clear();
                 continue;
             }
-            for _ in 0..MAX_BATCH {
+            let cap = self.bg_cap.get(p).copied().unwrap_or(BG_BATCH_START);
+            for _ in 0..cap.min(MAX_BATCH) {
                 let Some((node, (watch, c))) = pend.pop_first() else {
                     break;
                 };
@@ -1079,8 +1098,18 @@ impl PluginBridge {
                     self.mark_dirty(r.plugin, n, w, cause::ATTACH);
                 }
             }
-            ReplyBody::Failed { requeue } => {
-                if requeue {
+            ReplyBody::Failed { requeue, fault } => {
+                if fault {
+                    // Half the work per call from now on; the nodes are tried again in smaller
+                    // jobs (a plugin that keeps faulting is masked by its strikes).
+                    if let Some(c) = self.bg_cap.get_mut(r.plugin) {
+                        *c = (*c / 2).max(1);
+                    }
+                    if let Some(k) = self.node_cost_us.get_mut(r.plugin) {
+                        *k = (*k * 2.0).max(BG_JOB_TARGET_US / 8.0);
+                    }
+                }
+                if requeue || fault {
                     for tgt in r.targets {
                         if let Some((w, _)) = self
                             .watched
@@ -1098,8 +1127,33 @@ impl PluginBridge {
                 effects,
                 reads,
                 overflow,
-            } => self.admit_done(r.plugin, r.t, &r.targets, &effects, reads, overflow),
+                exec_us,
+            } => {
+                self.learn_cost(r.plugin, exec_us, r.targets.len());
+                self.admit_done(r.plugin, r.t, &r.targets, &effects, reads, overflow);
+            }
         }
+    }
+
+    /// Size the next background job of `plugin` from what a call of `nodes` targets cost.
+    fn learn_cost(&mut self, plugin: usize, exec_us: u32, nodes: usize) {
+        let nodes = u32::try_from(nodes).unwrap_or(u32::MAX);
+        if exec_us == 0 || nodes == 0 {
+            return;
+        }
+        let per = (f64::from(exec_us) / f64::from(nodes)).max(1.0);
+        let (Some(k), Some(cap)) = (
+            self.node_cost_us.get_mut(plugin),
+            self.bg_cap.get_mut(plugin),
+        ) else {
+            return;
+        };
+        *k = if *k == 0.0 { per } else { 0.7 * *k + 0.3 * per };
+        let fit = (BG_JOB_TARGET_US / *k).clamp(1.0, f64::from(BG_BATCH_MAX));
+        // `fit` is within 1..=BG_BATCH_MAX: the conversion cannot lose anything that matters.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let n = fit as usize;
+        *cap = n;
     }
 
     fn admit_done(
@@ -1152,9 +1206,18 @@ impl PluginBridge {
             .get(plugin)
             .map_or_else(|| Arc::from(""), |m| Arc::clone(&m.name));
         // Per target: the new fact set replaces the old one (a missing fact is a retract).
+        // A fact on a node that is nobody's target (a node a call read) is admitted once, by the
+        // first target: the read set is the union of the batch's, so every target "owns" it.
+        let mut claimed: Vec<usize> = Vec::new();
         for tgt in targets {
             let mut new_facts: Vec<(u32, Group, bool)> = Vec::new();
-            for e in effects.iter().filter(|e| owned_by(e.node, *tgt, &reads)) {
+            for (ei, e) in effects.iter().enumerate() {
+                if !owned_by(e.node, *tgt, &reads, targets) || claimed.contains(&ei) {
+                    continue;
+                }
+                if e.node != *tgt {
+                    claimed.push(ei);
+                }
                 if self
                     .rows
                     .get(ix(e.node))
@@ -1205,7 +1268,7 @@ impl PluginBridge {
             // Explicit retracts of the call.
             for e in effects
                 .iter()
-                .filter(|e| e.value.is_none() && owned_by(e.node, *tgt, &reads))
+                .filter(|e| e.value.is_none() && owned_by(e.node, *tgt, &reads, targets))
             {
                 if let Some(GroupClass::Semantic(group)) = Some(GroupCode(e.group).classify()) {
                     for patch in [true, false] {
@@ -1251,9 +1314,11 @@ impl PluginBridge {
     }
 }
 
-/// A fact belongs to the target's call when it names the target or a node the call read.
-fn owned_by(node: u32, target: u32, reads: &[u32]) -> bool {
-    node == target || reads.contains(&node)
+/// A fact belongs to the target's call when it names the target or a node the call read. In a
+/// call with several targets the read set is the union of theirs, so a fact on one of the other
+/// targets is theirs alone: counting it for every target multiplied the batch's facts by its size.
+fn owned_by(node: u32, target: u32, reads: &[u32], targets: &[u32]) -> bool {
+    node == target || (reads.contains(&node) && !targets.contains(&node))
 }
 
 /// A fact value as the fusion's typed write; `None` for a group or shape this slice does not
