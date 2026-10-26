@@ -205,11 +205,12 @@ semantics.
 Two classes, each with one rule:
 
 1. **Inside `Semantics`** (affect `sem_rev`): name from content, relation target text, computed
-   positions, selector matches. Each has an explicit dependency edge maintained by the writer:
+   positions (**amended by ADR-0030 §2.6: computed positions are class 2, never stored in `Semantics`**),
+   selector matches. Each has an explicit dependency edge maintained by the writer:
    child → parent (content name, stops at the first ancestor not named from content, typically
    ≤ 3), relation target → sources (reverse index, fan-out cap 64; beyond it dependents are
    recomputed in background chunks with `stale` set and ST rules ignore stale groups), parent's
-   children list → siblings (positions, dirtied on `children-changed`), selector read set → matched
+   children list → siblings (positions, dirtied on `children-changed`; edge removed by ADR-0030), selector read set → matched
    nodes. A change at the far end of an edge dirties the dependent and bumps its `sem_rev` if the
    effective value changes. The presentation cache key `(node, sem_rev, name_rev, report_epoch,
    lang_epoch)` is therefore complete.
@@ -248,7 +249,8 @@ Invariants:
   `compose(BrowseLine)`.
 - **PR-4 (new)** Position info ("2 of 5") per the audit G2 rule: spoken for Focus and WhereAmI,
   never in BrowseLine/QuickNav/SayAll by default; `setsize ≤ 0`, `posinset > setsize` and
-  container-level `setsize` are ignored.
+  container-level `setsize` are ignored. **Amended by ADR-0030** (precedence, honest totals for virtual lists,
+  `report.position` / `report.list_item_count`; plugins never assert positions).
 - **PR-5 (new)** `aria-roledescription` is honoured (QA-3) but never hides the native role from the
   object-info/where-am-I key; ignored when empty, equal to the name, or longer than 64 scalars.
 
