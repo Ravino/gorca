@@ -101,15 +101,26 @@ Phase 1 (focus reader, speech, event ingress, test harness) and most of Phase 2 
   request while plugins are active (needs the optional udev rule, see Run). See
   `docs/config-reference.md`.
 - Telegram Web plugin (early and experimental): the first first-party plugin, for Telegram Web
-  A and K in Firefox and Chromium. It gives chat rows their names with unread count, preview and
-  time, and treats Web A messages as articles. It was fixed several times after live use, is
-  validated mostly in private-session tests, and may still miss pages or break when Telegram
-  changes its markup (`docs/reports/telegram-web-live-diagnosis.md`).
+  A and K in Firefox and Chromium. Chat-list rows are named "name, unread count, last message,
+  time", without the avatar's initials. In Web A an open chat becomes a list: the messages are
+  list items (so you hear a position such as "3 of 40"), your own messages are described as
+  "Your message", the chat title is a level-1 heading, date separators are level-2 headings, and
+  the page has landmarks named Chats, Messages and Message input. The words come from the
+  plugin's message catalogue (English and Russian). The plugin was fixed several times after live
+  use, is validated mostly in private-session tests, and may still miss pages or break when
+  Telegram changes its markup (`docs/reports/telegram-web-live-diagnosis.md`). To use it, set
+  `[plugins] enabled = true`, run the identity helper (see Application identity below), and
+  install the plugin package root-owned under `/usr/lib/gorca/addons/gorca.telegram-web` with
+  every directory and file, including `i18n/`, readable by your user
+  (`tools/build-plugins.sh` prepares such a package in `plugins/dist/`). gorca logs a warning when
+  it cannot read a plugin's message catalogues.
 - Application identity: plugin activation relies on a verified application identity, not on the
   name an application reports about itself. A small helper unit, `gorca-identity.service`
   (`gorca --identity-helper`), reads `/proc` outside any user namespace and answers over a
   private socket, so the main `gorca.service` keeps its complete systemd sandbox. Without the
   helper every application is treated as unverified and only non-URL first-party plugins apply.
+- Input lane: a held gorca modifier no longer makes the keyboard thread spin until the real-time
+  CPU limit demotes it (`docs/reports/input-lane-sigxcpu.md`).
 - Mouse emulation (opt-in): NVDA-style click, drag lock and route-to-review keys, using the
   `gorca-helper` GNOME Shell extension. See the [mouse guide](docs/user-guide/mouse.md).
 - Profiles: per-application settings with chords to save, cycle and announce them. See the
@@ -123,6 +134,11 @@ Planned, not done:
   interface 0.4 is frozen until then.
 - Runtime CPU feature dispatch (ADR-0027, proposed; implementation has started and is not part
   of main as a shipped feature).
+- Virtual actions (ADR-0028, accepted): what a sighted user does with the mouse (a right-click
+  menu, a reply gesture, a hover button) becomes an actions menu on the keyboard, opened with
+  gorca+Shift+A and offered by plugins. Not implemented yet.
+- Synthetic nodes (ADR-0029, proposed): a plugin could declare virtual regions that the page does
+  not have, such as a "Chat header" that groups the avatar, title and status. Not implemented yet.
 - A plugin store and third-party plugin distribution (ADR-0019, ADR-0026), a settings GUI and
   packaging.
 
