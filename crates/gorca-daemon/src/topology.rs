@@ -1134,25 +1134,91 @@ mod tests {
         assert_eq!(json_str("a\"b\\c\nd"), "\"a\\\"b\\\\c d\"");
     }
 
+    /// A host that grants `RLIMIT_RTPRIO` (a `realtime` group, for example) takes the rlimit
+    /// path and never reaches the no-rtkit fallback, and the limit is process-wide, so the
+    /// scenario runs in a child process that lowers it to 0 first.
     #[test]
     fn a_missing_rtkit_does_not_stop_the_arm() {
+        let exe = std::env::current_exe().unwrap();
+        let out = std::process::Command::new(exe)
+            .args([
+                "--exact",
+                "topology::tests::no_rtkit_child",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("GORCA_TEST_NO_RTKIT_CHILD", "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success() && stdout.contains("NO-RTKIT-RESULT: "),
+            "child status {:?}: {stdout}",
+            out.status
+        );
+        eprintln!(
+            "{}",
+            stdout
+                .lines()
+                .find(|l| l.contains("NO-RTKIT-RESULT"))
+                .unwrap_or("")
+        );
+    }
+
+    /// Child half of [`a_missing_rtkit_does_not_stop_the_arm`]: runs only when re-executed.
+    #[test]
+    fn no_rtkit_child() {
+        if std::env::var_os("GORCA_TEST_NO_RTKIT_CHILD").is_none() {
+            return;
+        }
+        let verdict = no_rtkit_scenario();
+        println!("NO-RTKIT-RESULT: {verdict}");
+        let ok = verdict.starts_with("OK") || verdict.starts_with("SKIP");
+        std::process::exit(i32::from(!ok));
+    }
+
+    fn no_rtkit_scenario() -> String {
+        if let Err(e) = sched::set_rtprio_soft_limit(0) {
+            return format!("FAIL: lowering RLIMIT_RTPRIO: {e}");
+        }
+        // CAP_SYS_NICE ignores the limit, so such a host cannot reach the fallback either.
+        let fifo_still_allowed = std::thread::spawn(|| {
+            let tid = sched::current_tid();
+            let ok = sched::set_fifo(tid, 1).is_ok();
+            let _ = sched::demote_tid(tid);
+            ok
+        })
+        .join()
+        .unwrap_or(true);
+        if fifo_still_allowed {
+            return "SKIP: SCHED_FIFO is still allowed (CAP_SYS_NICE)".to_owned();
+        }
         let p = Placement::plan(
             Arm::LanesRt,
             None,
             Some("unix:path=/nonexistent/system_bus_socket"),
             16,
         );
-        assert!(p.rtkit.is_none());
-        assert!(p.rt_status.starts_with("unavailable"), "{}", p.rt_status);
+        if p.rtkit.is_some() {
+            return "FAIL: rtkit connected to a nonexistent bus".to_owned();
+        }
+        if !p.rt_status.starts_with("unavailable") {
+            return format!("FAIL: rt_status {}", p.rt_status);
+        }
         // placing a lane without rtkit leaves it plain and records why
         std::thread::spawn(move || {
             p.place_lane(Lane::Input);
             let g = p.grants.lock().unwrap();
-            assert_eq!(g[0].granted, "none");
-            assert!(g[0].error.is_some());
+            if g[0].granted != "none" {
+                return format!("FAIL: granted {} via {}", g[0].granted, g[0].via);
+            }
+            if g[0].error.is_none() {
+                return "FAIL: no error recorded".to_owned();
+            }
+            "OK: plain lane, error recorded".to_owned()
         })
         .join()
-        .unwrap();
+        .unwrap_or_else(|_| "FAIL: the lane thread panicked".to_owned())
     }
 
     /// The lane arms start their lane threads and run tasks placed on them.
